@@ -50,6 +50,7 @@ export const CONSECUTIVE_FAILURE_THRESHOLD = 3;
 /**
  * @typedef {{ validation_outcome: string, created_at: string }} TraceRow
  * @typedef {"healthy" | "failing" | "no_signal"} SignalState
+ * @typedef {SignalState | "misconfigured"} ProbeState
  */
 
 /**
@@ -113,11 +114,22 @@ export function decideProbeAction(signal) {
  * @param {{ ok: boolean, httpStatus: number, parser?: string, degraded?: boolean } | null} result
  *   `null` means the probe itself could not be attempted (e.g. no fetch
  *   possible) and should be treated as no additional evidence gathered.
- * @returns {SignalState}
+ * @returns {ProbeState}
  */
 export function classifySyntheticProbe(result) {
   if (!result) {
     return "no_signal";
+  }
+
+  // A 401/403 means the probe itself was rejected before reaching the
+  // provider -- e.g. the unauthenticated synthetic request tripping
+  // /api/parse-capture's auth gate (#684, HIGH-1). That is a canary
+  // configuration problem, NOT evidence the AI provider is down, and must
+  // never be conflated with "failing" (see 2026-07-18 incident: every
+  // probe 401'd and the canary reported a false provider outage for three
+  // weeks straight).
+  if (result.httpStatus === 401 || result.httpStatus === 403) {
+    return "misconfigured";
   }
 
   if (!result.ok || result.httpStatus >= 500 || result.httpStatus === 429) {
@@ -140,14 +152,23 @@ export function classifySyntheticProbe(result) {
  * one final state for this canary tick.
  *
  * @param {SignalState} traceState
- * @param {SignalState | null} probeState  null when no probe was run
- * @returns {"healthy" | "failing"} final state; "no_signal" alone (no probe
- *   run, e.g. probe attempt failed to execute) degrades safely to "healthy"
- *   -- absence of evidence must never raise a false alarm.
+ * @param {ProbeState | null} probeState  null when no probe was run
+ * @returns {"healthy" | "failing" | "misconfigured"} final state.
+ *   "no_signal" (no probe run, or the probe attempt failed to execute) and
+ *   "misconfigured" (the probe was rejected by an auth gate rather than the
+ *   provider) are not evidence either way and fall back to the trace
+ *   signal -- absence, or an unrelated auth problem, must never raise (or
+ *   mask) a false alarm. A trace-confirmed "failing" wins over a
+ *   misconfigured probe so a real outage is never hidden behind the
+ *   canary's own auth setup.
  */
 export function resolveFinalState(traceState, probeState) {
-  if (probeState) {
+  if (probeState === "healthy" || probeState === "failing") {
     return probeState;
+  }
+
+  if (probeState === "misconfigured" && traceState !== "failing") {
+    return "misconfigured";
   }
 
   return traceState === "failing" ? "failing" : "healthy";
@@ -316,6 +337,19 @@ async function main() {
       "::error::Provider canary detected the AI parse provider is down.",
     );
     process.exitCode = 1;
+  }
+
+  if (finalState === "misconfigured") {
+    // Not a provider outage -- the synthetic probe itself was rejected by
+    // /api/parse-capture's auth gate. Warn (not error/exit 1) so this
+    // doesn't page anyone or open a false incident issue every 30 minutes;
+    // it's a canary setup gap for the owner to fix on their own time.
+    console.log(
+      "::warning::Provider canary probe is unauthenticated and was rejected " +
+        "(401/403) by /api/parse-capture's auth gate, so this tick proves " +
+        "nothing about provider health. See the PR that introduced this " +
+        "state for the owner action needed to authenticate the probe.",
+    );
   }
 }
 

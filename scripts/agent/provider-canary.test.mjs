@@ -93,6 +93,25 @@ test("classifySyntheticProbe: null result (probe could not run) => no_signal", (
   assert.equal(classifySyntheticProbe(null), "no_signal");
 });
 
+test("classifySyntheticProbe: HTTP 401 => misconfigured, NOT failing (#684 regression)", () => {
+  // 2026-07-18 incident: PR #684 added an auth gate to /api/parse-capture;
+  // the unauthenticated synthetic probe 401'd on every tick and this used
+  // to classify that as "failing", reporting a false provider outage for
+  // three weeks straight. A 401 proves the canary itself is misconfigured,
+  // not that the provider is down.
+  assert.equal(
+    classifySyntheticProbe({ ok: false, httpStatus: 401 }),
+    "misconfigured",
+  );
+});
+
+test("classifySyntheticProbe: HTTP 403 => misconfigured, NOT failing", () => {
+  assert.equal(
+    classifySyntheticProbe({ ok: false, httpStatus: 403 }),
+    "misconfigured",
+  );
+});
+
 test("classifySyntheticProbe: HTTP 429 => failing", () => {
   assert.equal(
     classifySyntheticProbe({ ok: false, httpStatus: 429 }),
@@ -149,6 +168,18 @@ test("resolveFinalState: no probe run falls back to trace signal, never false-al
   assert.equal(resolveFinalState("no_signal", null), "healthy");
   assert.equal(resolveFinalState("failing", null), "failing");
   assert.equal(resolveFinalState("healthy", null), "healthy");
+});
+
+test("resolveFinalState: misconfigured probe (auth-blocked) surfaces distinctly, not as failing", () => {
+  assert.equal(resolveFinalState("healthy", "misconfigured"), "misconfigured");
+  assert.equal(
+    resolveFinalState("no_signal", "misconfigured"),
+    "misconfigured",
+  );
+});
+
+test("resolveFinalState: a trace-confirmed failure is never hidden behind an auth-blocked probe", () => {
+  assert.equal(resolveFinalState("failing", "misconfigured"), "failing");
 });
 
 test("decideTransition: healthy -> failing opens an issue", () => {
