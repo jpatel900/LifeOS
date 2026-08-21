@@ -923,9 +923,9 @@ test("desktop: the keyboard legend's palette hint prints the working key for thi
   await page.goto("/");
   await expect(page.getByTestId("today-moments")).toBeVisible();
 
-  await expect(
-    page.getByTestId("keyboard-legend-palette-button"),
-  ).toHaveText(/Ctrl\+K/);
+  await expect(page.getByTestId("keyboard-legend-palette-button")).toHaveText(
+    /Ctrl\+K/,
+  );
 });
 
 /**
