@@ -53,11 +53,12 @@ describe("handoff cockpit area accents", () => {
   });
 
   it("re-derives root variables when the active area changes", async () => {
-    render(
-      <AppShell>
-        <CapturePage />
-      </AppShell>,
-    );
+    // CapturePage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const capturePageElement = await CapturePage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<AppShell>{capturePageElement}</AppShell>);
 
     const cockpit = await screen.findByTestId("lifeos-cockpit");
     // R2-C (#483 round 2): mock area colors retuned off raw Tailwind seed

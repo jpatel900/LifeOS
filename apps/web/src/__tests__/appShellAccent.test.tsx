@@ -37,11 +37,12 @@ describe("handoff cockpit accent", () => {
   });
 
   it("derives cockpit accent variables from the active area", async () => {
-    render(
-      <AppShell>
-        <CapturePage />
-      </AppShell>,
-    );
+    // CapturePage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const capturePageElement = await CapturePage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<AppShell>{capturePageElement}</AppShell>);
 
     const shell = await screen.findByTestId("lifeos-cockpit");
     // R2-C (#483 round 2): mock area colors retuned off raw Tailwind seed
@@ -54,11 +55,10 @@ describe("handoff cockpit accent", () => {
   });
 
   it("uses data-theme light only on the cockpit root", async () => {
-    render(
-      <AppShell>
-        <CapturePage />
-      </AppShell>,
-    );
+    const capturePageElement = await CapturePage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<AppShell>{capturePageElement}</AppShell>);
 
     const shell = await screen.findByTestId("lifeos-cockpit");
     expect(shell.getAttribute("data-theme")).toBeNull();

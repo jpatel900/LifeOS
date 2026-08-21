@@ -207,6 +207,37 @@ test("arriving via a legacy bookmark and closing its sheet returns to the bare m
   await expect(page.getByTestId("lifeos-cockpit")).toHaveCount(0);
 });
 
+/**
+ * #687 round-8 finding 2 (fresh-eyes judge, score 7.3/9): "legacy bookmarks
+ * silently discard their query params" — `/plan?area=area-personal` landed
+ * on Main Job, 5/5 legacy routes affected. The judge's own control proved
+ * the shim, not the moments home, was at fault: the canonical
+ * `/?sheet=plan&area=area-personal` already landed on Personal correctly.
+ * This is the real-browser proof for the exact repro, plus its own control
+ * (the canonical URL) run back to back for direct comparison — both must
+ * agree, and before this fix only the second one did.
+ */
+test("legacy bookmark /plan?area= carries the area through, matching the canonical URL's behavior", async ({
+  page,
+}) => {
+  await page.goto("/plan?area=area-personal");
+
+  await expect(page.getByTestId("plan-sheet")).toBeVisible();
+  await expectParam(page, "sheet", "plan");
+  await expectParam(page, "area", "area-personal");
+  await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+    "Personal",
+  );
+
+  // The control: the canonical URL the judge used to prove the moments home
+  // itself was never the bug — both must land on the identical state.
+  await page.goto("/?sheet=plan&area=area-personal");
+  await expect(page.getByTestId("plan-sheet")).toBeVisible();
+  await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+    "Personal",
+  );
+});
+
 // C2-S6 RE-ANCHOR of "cockpit stage rail's Capture node lands on the moments
 // home, not a legacy shell": the old version proved a REDIRECT never landed
 // on the legacy shell. Now there is no redirect to prove — the pipeline

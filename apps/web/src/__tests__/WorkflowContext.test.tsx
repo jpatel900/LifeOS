@@ -215,11 +215,12 @@ describe("WorkflowProvider storage fallback", () => {
       getItem: vi.fn(() => JSON.stringify(invalidState)),
     });
 
-    render(
-      <WorkflowProvider>
-        <TriagePage />
-      </WorkflowProvider>,
-    );
+    // TriagePage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const triagePageElement = await TriagePage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<WorkflowProvider>{triagePageElement}</WorkflowProvider>);
 
     expect(await screen.findByText("Inbox clear")).toBeDefined();
   });

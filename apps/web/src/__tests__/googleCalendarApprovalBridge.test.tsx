@@ -116,13 +116,16 @@ function stateWithGoogleScheduledBlock(eventId: string = GOOGLE_EVENT_ID) {
   };
 }
 
-function renderPlanStage(state: ReturnType<typeof stateWithSyncedProposal>) {
+// CalendarPage is an async Server Component (Next 15 `searchParams` is a
+// Promise) — resolve it before handing the element to `render`.
+async function renderPlanStage(
+  state: ReturnType<typeof stateWithSyncedProposal>,
+) {
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  return render(
-    <WorkflowProvider>
-      <CalendarPage />
-    </WorkflowProvider>,
-  );
+  const calendarPageElement = await CalendarPage({
+    searchParams: Promise.resolve({}),
+  });
+  return render(<WorkflowProvider>{calendarPageElement}</WorkflowProvider>);
 }
 
 // C2-S6 (#687): `/calendar` is a flag-gated redirect shim now — this file
@@ -169,7 +172,7 @@ describe("Google Calendar approval bridge", () => {
         }),
     });
 
-    renderPlanStage(stateWithSyncedProposal());
+    await renderPlanStage(stateWithSyncedProposal());
 
     const approveButton = await screen.findByRole("button", {
       name: `Approve Google event for ${TASK_TITLE}`,
@@ -184,7 +187,7 @@ describe("Google Calendar approval bridge", () => {
     mocks.createSupabaseBrowserClient.mockReturnValue(null);
     stubFetch({});
 
-    renderPlanStage(stateWithSyncedProposal());
+    await renderPlanStage(stateWithSyncedProposal());
 
     const approveButton = await screen.findByRole("button", {
       name: `Approve Google event for ${TASK_TITLE}`,
@@ -207,7 +210,7 @@ describe("Google Calendar approval bridge", () => {
         }),
     });
 
-    renderPlanStage(stateWithSyncedProposal());
+    await renderPlanStage(stateWithSyncedProposal());
 
     const approveButton = await screen.findByRole("button", {
       name: `Approve Google event for ${TASK_TITLE}`,
@@ -258,7 +261,7 @@ describe("Google Calendar approval bridge", () => {
             }),
     });
 
-    renderPlanStage(stateWithSyncedProposal());
+    await renderPlanStage(stateWithSyncedProposal());
 
     const approveButton = await screen.findByRole("button", {
       name: `Approve Google event for ${TASK_TITLE}`,
@@ -302,7 +305,7 @@ describe("Google Calendar approval bridge", () => {
         jsonResponse(409, { ok: false, error: driftMessage }),
     });
 
-    renderPlanStage(stateWithGoogleScheduledBlock());
+    await renderPlanStage(stateWithGoogleScheduledBlock());
 
     const cancelButton = await screen.findByRole("button", {
       name: `Cancel Google event for ${TASK_TITLE}`,
@@ -340,7 +343,7 @@ describe("Google Calendar approval bridge", () => {
         }),
     });
 
-    renderPlanStage(stateWithGoogleScheduledBlock());
+    await renderPlanStage(stateWithGoogleScheduledBlock());
 
     const cancelButton = await screen.findByRole("button", {
       name: `Cancel Google event for ${TASK_TITLE}`,
@@ -367,7 +370,9 @@ describe("Google Calendar approval bridge", () => {
       "/api/google-calendar/connection": connectedResponse,
     });
 
-    renderPlanStage(stateWithGoogleScheduledBlock("external-event-id-123"));
+    await renderPlanStage(
+      stateWithGoogleScheduledBlock("external-event-id-123"),
+    );
 
     expect(await screen.findByTestId("google-approval-bridge")).toBeDefined();
     expect(

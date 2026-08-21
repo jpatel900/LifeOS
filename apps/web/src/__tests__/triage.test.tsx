@@ -94,11 +94,12 @@ describe("Triage cockpit", () => {
   const JOURNEY_TEST_TIMEOUT_MS = 30_000;
 
   it("shows the empty verdict-first triage state", async () => {
-    render(
-      <AppShell>
-        <TriagePage />
-      </AppShell>,
-    );
+    // TriagePage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const triagePageElement = await TriagePage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<AppShell>{triagePageElement}</AppShell>);
 
     expect(await screen.findByText("Inbox clear")).toBeDefined();
     expect(screen.getByRole("button", { name: "Plan the day" })).toBeDefined();
@@ -108,11 +109,12 @@ describe("Triage cockpit", () => {
     "lets a captured item move to Someday",
     async () => {
       mockPathname.mockReturnValue("/capture");
-      render(
-        <AppShell>
-          <CapturePage />
-        </AppShell>,
-      );
+      // CapturePage is an async Server Component (Next 15 `searchParams` is
+      // a Promise) — resolve it before handing the element to `render`.
+      const capturePageElement = await CapturePage({
+        searchParams: Promise.resolve({}),
+      });
+      render(<AppShell>{capturePageElement}</AppShell>);
 
       await captureThenSortIntoTriage("Review old someday notes");
 
@@ -133,11 +135,12 @@ describe("Triage cockpit", () => {
     "shows the anti-procrastination breakdown on a parsed task draft",
     async () => {
       mockPathname.mockReturnValue("/capture");
-      render(
-        <AppShell>
-          <CapturePage />
-        </AppShell>,
-      );
+      // CapturePage is an async Server Component (Next 15 `searchParams` is
+      // a Promise) — resolve it before handing the element to `render`.
+      const capturePageElement = await CapturePage({
+        searchParams: Promise.resolve({}),
+      });
+      render(<AppShell>{capturePageElement}</AppShell>);
 
       await captureThenSortIntoTriage("Prepare the sponsor update deck");
 
@@ -172,11 +175,12 @@ describe("Triage cockpit", () => {
     "renders split drafts without a breakdown section",
     async () => {
       mockPathname.mockReturnValue("/capture");
-      render(
-        <AppShell>
-          <CapturePage />
-        </AppShell>,
-      );
+      // CapturePage is an async Server Component (Next 15 `searchParams` is
+      // a Promise) — resolve it before handing the element to `render`.
+      const capturePageElement = await CapturePage({
+        searchParams: Promise.resolve({}),
+      });
+      render(<AppShell>{capturePageElement}</AppShell>);
 
       await captureThenSortIntoTriage("Tidy the garage shelves");
 

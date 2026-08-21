@@ -43,6 +43,28 @@ function AdminShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* #687 round-8 finding 3 (fresh-eyes judge): settings had no skip
+          link at all — home's `#stage-content` skip link (MomentsThemeShell.tsx)
+          is the first focusable element on the page; this matches that
+          contract. Placed here, before the nav `<header>` below, so it is
+          ALSO the first focusable element in the settings shell — a skip
+          link placed after the thing it is meant to let you skip past would
+          not skip anything. Targets `settings/areas/page.tsx`'s own
+          `id="stage-content"` `<main>` (that page owns its single main
+          landmark, matching the codebase's existing convention of each real
+          page supplying its own — see that file's own comment — rather than
+          this shared shell wrapping `{children}` in a second one, which
+          would double up with `not-found.tsx`'s own `<main>` when an unknown
+          `/settings/*` route renders the 404 through this same shell).
+          Global `bg-primary`/`text-primary-foreground` tokens, not the
+          `.lifeos-cockpit`-scoped `--btn`/`--btn-fg` MomentsThemeShell.tsx
+          uses — this shell is never inside that scope. */}
+      <a
+        href="#stage-content"
+        className="sr-only rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+      >
+        Skip to stage content
+      </a>
       <header className="border-b border-border bg-card/95 px-4 py-3">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-baseline gap-3">

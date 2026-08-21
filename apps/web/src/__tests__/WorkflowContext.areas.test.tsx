@@ -367,11 +367,12 @@ describe("WorkflowProvider persisted area sync", () => {
       areas: [],
     });
 
-    render(
-      <WorkflowProvider>
-        <CapturePage />
-      </WorkflowProvider>,
-    );
+    // CapturePage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const capturePageElement = await CapturePage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<WorkflowProvider>{capturePageElement}</WorkflowProvider>);
 
     await waitFor(() => {
       expect(screen.getByText("Create an area before capture")).toBeDefined();
