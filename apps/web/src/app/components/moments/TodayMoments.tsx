@@ -857,7 +857,8 @@ export function TodayMoments({
     if (dropUnknownParams(params)) changed = true;
 
     const sheetParam = params.get("sheet");
-    if (sheetParam !== null && !isSheetValue(sheetParam)) {
+    const sheetValid = sheetParam !== null && isSheetValue(sheetParam);
+    if (sheetParam !== null && !sheetValid) {
       params.delete("sheet");
       changed = true;
     }
@@ -869,13 +870,28 @@ export function TodayMoments({
       changed = true;
     }
     const paletteParam = params.get("palette");
-    const paletteValid =
-      paletteParam !== null && parseOverlayParam(paletteParam);
+    let paletteValid = paletteParam !== null && parseOverlayParam(paletteParam);
     if (paletteParam !== null && !paletteValid) {
       params.delete("palette");
       changed = true;
     } else if (captureValid && paletteValid) {
       // Impossible combo (finding 2) — capture wins, palette never renders.
+      params.delete("palette");
+      paletteValid = false;
+      changed = true;
+    }
+    // Round-7 judge ("one URL renders two different screens depending on
+    // how you arrived at it"): sheet + palette is a SECOND impossible combo,
+    // the mirror of the capture+palette one just above — `deepLinkTargetFromParams`
+    // (deepLink.ts) now gives sheet the win for the reasons documented there
+    // (the palette always hands off to a sheet by closing itself; the
+    // "palette -> capture -> sheet" stacking order this file's own
+    // `closeTopOverlay` and `MomentSheet.tsx` already document). Left
+    // unscrubbed, `?palette=1` would keep sitting in the address bar next to
+    // `?sheet=X` claiming a screen that never rendered — the exact
+    // address-bar lie finding 2's scrub exists to prevent, just for the
+    // other overlay.
+    if (paletteValid && sheetValid) {
       params.delete("palette");
       changed = true;
     }

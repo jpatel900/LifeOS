@@ -22,10 +22,41 @@ import { HIT_TARGET_INVISIBLE } from "./hitTarget";
  *
  * Escape handling mirrors CaptureOverlay/CommandPalette: focus lands on the
  * dialog on open, and Escape is handled via onKeyDown on the focused
- * element — not a global window listener. This keeps the palette → capture
- * → sheet stacking order correct for free, since CaptureAffordance is
- * always rendered and capture can open on top of an open sheet; whichever
- * overlay currently owns focus is the one Escape closes.
+ * element — not a global window listener. Whichever overlay owns focus is
+ * the one Escape closes, which is why `closeTopOverlay`
+ * (`TodayMoments.tsx`) is a defensive fallback for the palette → capture →
+ * sheet order rather than the live Escape path.
+ *
+ * This comment used to add that the arrangement keeps that stacking order
+ * "correct for free, since CaptureAffordance is always rendered and capture
+ * can open on top of an open sheet". That second half is wrong, and #912
+ * (one URL renders one screen, however you arrived at it) probed it against
+ * the dev server rather than by reading:
+ *
+ * - `CaptureAffordance` and `BottomNavigator`'s capture button are both
+ *   `z-40`; every sheet is `z-50` with a full-viewport `absolute inset-0`
+ *   scrim. On `/?sheet=triage`, `document.elementFromPoint` at the pill's
+ *   own centre returns `moment-sheet-scrim` at 1280×800 and
+ *   `moment-sheet-dialog` at 375×812. Clicking where capture LOOKS like it
+ *   sits closes the sheet — it never opens capture.
+ * - The "C" shortcut is gated off while a sheet is open
+ *   (`topbarShortcutsEnabled` requires `!activeSheet`).
+ *
+ * So capture cannot be opened on top of a sheet by click or by key. The only
+ * way to hold both at once is a URL naming both (`?sheet=X&capture=1`, which
+ * `deepLink.ts` deliberately still composes) — and even then capture does
+ * not stack on top. `CaptureOverlay` is `z-50` too, but renders BEFORE the
+ * sheets in `TodayMoments`' tree, so equal z-index plus sibling order puts
+ * the sheet in front: probed on `/?sheet=triage&capture=1`,
+ * `elementFromPoint` at the capture dialog's own centre also returns
+ * `moment-sheet-scrim`, both dialogs carry `aria-modal="true"`, focus lands
+ * on `<body>`, and Escape closes neither. Closing the sheet is what makes
+ * capture reachable again.
+ *
+ * Left standing on purpose. Sheets and CaptureOverlay are both modal dialogs
+ * with their own focus trap, so raising the pill above `z-50` would not make
+ * the old claim true — it would open a second live modal underneath this
+ * one. The URL pair is `deepLink.ts`'s exemption to weigh, not this shell's.
  */
 
 export interface MomentSheetProps {
