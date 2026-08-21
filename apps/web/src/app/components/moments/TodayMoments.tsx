@@ -74,7 +74,7 @@ import {
 } from "./useAreaUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
-import { dropUnknownParams } from "./deepLink";
+import { deepLinkTargetFromSearch, dropUnknownParams } from "./deepLink";
 import type { ToastAction } from "./toast";
 import { useFlowFocusSession } from "./useFlowFocusSession";
 import { RunningSessionReturn } from "./RunningSessionReturn";
@@ -701,21 +701,39 @@ export function TodayMoments({
   // run.
   const deepLinkAppliedRef = useRef(false);
   useEffect(() => {
-    if (!deepLink) return;
     if (deepLinkAppliedRef.current) return;
     if (ritualActive || ritual.pending) return;
     if (onboardingActive || onboarding.pending) return;
+    if (typeof window === "undefined") return;
+
+    // C2-S13 (#687 round-7 judge, "sheet renders with no sheet param"):
+    // re-derive the target from the LIVE `window.location.search`
+    // (`deepLinkTargetFromSearch`, deepLink.ts) rather than trusting the
+    // `deepLink` PROP. `deepLink` is computed server-side, once, from
+    // whatever `searchParams` this route's RSC payload carried at render
+    // time — a Back/Forward walk crossing `/settings/areas` (a real
+    // `next/link` navigation, the one kind Next's router actually tracks;
+    // every param write on `/` itself is a raw, router-invisible history
+    // write — see `lib/rawHistory.ts`) can have Next's client Router Cache
+    // serve a STALE cached render for `/` on the way back, one baked from an
+    // earlier visit, before this file's own raw writes moved the address
+    // bar on in ways Next's router never learned about. See deepLink.ts's
+    // own doc comment on `deepLinkTargetFromSearch` for the full red-first
+    // repro. `window.location.search` is never subject to that cache.
+    const liveDeepLink = deepLinkTargetFromSearch(
+      new URLSearchParams(window.location.search),
+    );
+    if (!liveDeepLink) return;
 
     deepLinkAppliedRef.current = true;
     // The URL ALREADY carries this moment (the redirect shim put it there
     // before this component mounted) — adopt it without pushing a second,
     // redundant history entry. Mirrors `adoptSheetFromUrl` below.
-    if (deepLink.moment) adoptMomentFromUrl(deepLink.moment);
-    if (deepLink.overlay === "capture") adoptCaptureFromUrl(true);
-    if (deepLink.overlay === "palette") adoptPaletteFromUrl(true);
-    if (deepLink.sheet) adoptSheetFromUrl(deepLink.sheet);
+    if (liveDeepLink.moment) adoptMomentFromUrl(liveDeepLink.moment);
+    if (liveDeepLink.overlay === "capture") adoptCaptureFromUrl(true);
+    if (liveDeepLink.overlay === "palette") adoptPaletteFromUrl(true);
+    if (liveDeepLink.sheet) adoptSheetFromUrl(liveDeepLink.sheet);
   }, [
-    deepLink,
     ritualActive,
     ritual.pending,
     onboardingActive,
