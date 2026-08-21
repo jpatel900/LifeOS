@@ -516,30 +516,6 @@ describe("TodayMoments", () => {
     expect(screen.getByTestId("today-moments")).toBeInTheDocument();
   });
 
-  // C2-S12A finishing the C2-S12B AGENT-TODO (#687 round-6, finding 3): the
-  // sibling lane built `dropUnknownParams` (deepLink.ts) as a pure,
-  // fully-unit-tested function but could not wire it in — TodayMoments.tsx
-  // is this lane's manifest, not theirs. This is that wiring, live: a
-  // case-variant like `?MOMENT=flow` is invisible to `deepLinkTargetFromParams`
-  // (read case-sensitively), so it rendered nothing while still sitting in
-  // the bar next to the `moment` key the app actually honors — a URL naming
-  // a key it ignores right beside the one it reads.
-  it("scrubs an uppercase case-variant key (?MOMENT=) that the app never reads, keeping the real ?moment= key", async () => {
-    window.history.replaceState(null, "", "/?MOMENT=flow&moment=start");
-
-    renderToday({ initialMoment: "start" });
-
-    await waitFor(() => {
-      expect(new URL(window.location.href).searchParams.has("MOMENT")).toBe(
-        false,
-      );
-    });
-    expect(new URL(window.location.href).searchParams.get("moment")).toBe(
-      "start",
-    );
-    expect(screen.getByTestId("start-moment")).toBeInTheDocument();
-  });
-
   it("scrubs unknown ?capture= / ?palette= values the same way, without touching a valid neighbor param", async () => {
     window.history.replaceState(
       null,
@@ -1659,85 +1635,6 @@ describe("TodayMoments — P5 pipeline rail and sheets", () => {
     );
   });
 
-  // C2-S12A (#687 round-6 judge, palette gaps): "Settings is the only core
-  // surface with no palette command" — this is that command, landing on the
-  // same /settings/areas target the masthead/BottomNavigator links already
-  // use. A real `window.location.assign`, not `router.push` — see the
-  // runPaletteAction "open-settings" case comment for the history-race
-  // `router.push` would hit against the palette's own close-on-run behavior
-  // (proven red-first against the real dev server in nav-truth.spec.ts, not
-  // reproducible in jsdom). jsdom throws on a real `location.assign`, so this
-  // stubs just that one method — scoped to this test only, restored (in a
-  // `finally`, so a failed assertion can never leak the stub into every test
-  // that runs after it) before it ends.
-  //
-  // The palette itself deliberately stays OPEN in the DOM here (its own
-  // onClose is skipped — CommandPaletteAction.closesPalette: false, and
-  // CommandPalette.test.tsx pins that mechanism directly): in a real browser
-  // the whole document unloads a moment later, so there is nothing left to
-  // "close"; jsdom cannot simulate that unload, so this only asserts the
-  // navigation call itself.
-  it("the command palette offers 'Open settings', navigating to /settings/areas", () => {
-    renderToday({ initialMoment: "start" });
-
-    const assignMock = vi.fn();
-    vi.stubGlobal("location", { ...window.location, assign: assignMock });
-
-    try {
-      fireEvent.keyDown(window, { key: "k", metaKey: true });
-      fireEvent.click(
-        screen.getByTestId("command-palette-option-open-settings"),
-      );
-
-      expect(assignMock).toHaveBeenCalledWith("/settings/areas");
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-
-  // C2-S12A (#687 round-6 judge, palette gaps): typing "today" or "home"
-  // used to return "No commands match" even though Start (the app's landing
-  // moment) already exists as a command — a missing alias, not a missing
-  // surface.
-  it("typing 'today' or 'home' into the palette search surfaces 'Switch to Start'", () => {
-    renderToday({ initialMoment: "flow" });
-
-    fireEvent.keyDown(window, { key: "k", metaKey: true });
-    let input = screen.getByTestId("command-palette-input");
-    fireEvent.change(input, { target: { value: "today" } });
-    expect(
-      screen.getByTestId("command-palette-option-switch-start"),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/No commands match/)).not.toBeInTheDocument();
-
-    fireEvent.change(input, { target: { value: "home" } });
-    expect(
-      screen.getByTestId("command-palette-option-switch-start"),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/No commands match/)).not.toBeInTheDocument();
-  });
-
-  // C2-S12A: the palette must never offer a dead "Sign in" door — in this
-  // suite's default (unconfigured, local-only) environment there is no
-  // sign-in flow to reach at all (AuthAffordance.tsx renders nothing for the
-  // same reason), so the command must not appear either. The positive case
-  // (configured + actually signed out, gated on the same `syncStatus
-  // .signedOut` truth signal AuthAffordance's own `client.auth.getUser()`
-  // check converges to) is UNVERIFIED by an automated test in this PR — see
-  // the PR body.
-  it("does not offer 'Sign in' when there is no configured backend to sign into", () => {
-    renderToday({ initialMoment: "start" });
-
-    fireEvent.keyDown(window, { key: "k", metaKey: true });
-    const input = screen.getByTestId("command-palette-input");
-    fireEvent.change(input, { target: { value: "sign in" } });
-
-    expect(
-      screen.queryByTestId("command-palette-option-sign-in"),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText(/No commands match/)).toBeInTheDocument();
-  });
-
   // C2-S11 (#687 round-5 judge): pins the palette's own fuzzy-match search
   // actually surfaces "Open review" for the query the judge typed —
   // reproduces "typing 'review' returns No commands match" as a red-first
@@ -1814,22 +1711,6 @@ describe("TodayMoments — P5 pipeline rail and sheets", () => {
     expect(new URLSearchParams(window.location.search).get("sheet")).toBe(
       "areas",
     );
-  });
-
-  // C2-S12A (#687 round-6 judge, WORST-DEFECT-ADJACENT finding): the legend's
-  // "⌘K palette" hint used to be inside a `pointer-events-none` group, so a
-  // desktop user with a mouse and no keyboard shortcut muscle memory had NO
-  // way to open the palette at all. This is the real pointer door now —
-  // same idea as BottomNavigator's "More" button just above, extended to
-  // `sm`+ instead of a second competing control.
-  it("the keyboard legend's palette hint is a real button that opens the command palette (the desktop pointer route)", () => {
-    renderToday({ initialMoment: "start" });
-
-    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId("keyboard-legend-palette-button"));
-
-    expect(screen.getByTestId("command-palette")).toBeInTheDocument();
   });
 });
 

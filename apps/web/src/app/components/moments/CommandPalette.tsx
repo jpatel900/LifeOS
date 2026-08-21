@@ -33,33 +33,6 @@ export interface CommandPaletteAction {
   id: string;
   label: string;
   hint?: string;
-  /**
-   * C2-S12A (#687 round-6 judge, palette gaps): plain-language synonyms a
-   * user might type instead of the action's own label — e.g. "today"/"home"
-   * for "Switch to Start". Matched the same way the label is (case-
-   * insensitive substring, nothing fancier — this is an alias list, not a
-   * search engine). Never shown in the UI; `label`/`hint` remain the only
-   * rendered text.
-   */
-  keywords?: string[];
-  /**
-   * C2-S12A: defaults to true (every existing action already relies on this
-   * — running it also closes the palette). Set false for an action that
-   * navigates to an entirely different page via a real browser navigation
-   * (`window.location.assign`, not `router.push` — see
-   * TodayMoments.tsx's "open-settings"/"sign-in" cases for why `router.push`
-   * loses this race). `onClose` (`useOverlayUrlState.closeOverlay`) may call
-   * `window.history.back()` synchronously, in the SAME tick, to restore the
-   * URL to before the palette opened — a real navigation scheduled just
-   * before that has not committed yet at that instant, and `back()` wins the
-   * race, reverting the navigation before it ever renders (caught red-first
-   * against the real dev server, not reproducible in jsdom: nav-truth.spec.ts
-   * showed the URL/screen snap back to Today with Settings never appearing).
-   * Skipping `onClose` for these leaves `?palette=1` transiently in the bar
-   * for the instant before the whole document unloads — harmless, since nothing
-   * is left standing to show a stale palette.
-   */
-  closesPalette?: boolean;
 }
 
 export interface CommandPaletteProps {
@@ -88,11 +61,7 @@ export function CommandPalette({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return actions;
-    return actions.filter(
-      (action) =>
-        action.label.toLowerCase().includes(q) ||
-        action.keywords?.some((keyword) => keyword.toLowerCase().includes(q)),
-    );
+    return actions.filter((action) => action.label.toLowerCase().includes(q));
   }, [actions, query]);
 
   useEffect(() => {
@@ -143,9 +112,7 @@ export function CommandPalette({
       const action = filtered[highlighted];
       if (action) {
         onRun(action.id);
-        if (action.closesPalette !== false) {
-          onClose();
-        }
+        onClose();
       }
       return;
     }
@@ -224,9 +191,7 @@ export function CommandPalette({
                   onMouseEnter={() => setHighlighted(index)}
                   onClick={() => {
                     onRun(action.id);
-                    if (action.closesPalette !== false) {
-                      onClose();
-                    }
+                    onClose();
                   }}
                   className={cn(
                     HIT_TARGET_ROW,

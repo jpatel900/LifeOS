@@ -1,14 +1,9 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import {
   MOMENT_KEY_BINDINGS,
   type MomentKeyActionId,
   momentKeyLabel,
 } from "@/lib/keys/keymap";
-import { cn } from "@/lib/utils";
 import { KBD_CHIP_NEUTRAL } from "./kbdChip";
-import { HIT_TARGET_INVISIBLE } from "./hitTarget";
 
 /**
  * D-6 (#483) — quiet bottom-left keyboard legend, ported from the prototype's
@@ -46,31 +41,6 @@ import { HIT_TARGET_INVISIBLE } from "./hitTarget";
  * hover-reveal wrapper) — unlike the per-control masthead hints, which now
  * only appear on hover/focus of their own control, this bottom-left strip
  * is deliberately the one always-on reference.
- *
- * C2-S12A (#687 round-6 judge, two findings fixed here):
- *
- * 1. "Desktop has no pointer route to the palette" — this whole group used
- *    to be `pointer-events-none`, so ⌘K/Ctrl+K was the ONLY way into the
- *    palette on a device with a mouse and no touch. That is now a real
- *    `<button>` for the "palette" group specifically (the mobile answer,
- *    BottomNavigator's "More" button, already does this below `sm` — this
- *    extends the same idea to `sm`+ instead of inventing a second control).
- *    It opts back into pointer events itself (`pointer-events-auto`) while
- *    every OTHER chip/group in this legend stays exactly as inert as before
- *    — the parent's `pointer-events-none` shield is untouched, this is the
- *    one deliberate, tested escape hatch. Sized via `HIT_TARGET_INVISIBLE`
- *    (a negative-margin hit box that only grows the tappable area, never the
- *    painted pixels) so the always-quiet legend stays exactly as quiet.
- *
- * 2. "Legend shows the Mac glyph on Windows" — `momentKeyLabel` for
- *    `open-command-palette` is the keymap's canonical (Mac-first) "⌘K", but
- *    `matchesMomentKeyBinding` already accepts `metaKey || ctrlKey` for this
- *    binding (keymap.ts), so "Ctrl+K" is truthful on every platform,
- *    including a Mac. `paletteKeyLabel` renders that truthful default on
- *    every first paint (server and client — no hydration mismatch, the same
- *    class of bug this campaign already spent two rounds fixing elsewhere)
- *    and upgrades to the native "⌘K" glyph only after mount, only when an
- *    Apple platform is actually detected.
  */
 
 const DISPLAYED_ACTION_IDS: readonly MomentKeyActionId[] = [
@@ -118,38 +88,7 @@ function buildLegendGroups(): LegendGroup[] {
 
 const LEGEND_GROUPS = buildLegendGroups();
 
-function isApplePlatform(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const uaDataPlatform = (
-    navigator as Navigator & { userAgentData?: { platform?: string } }
-  ).userAgentData?.platform;
-  const platform = uaDataPlatform || navigator.platform || navigator.userAgent;
-  return /Mac|iPhone|iPad|iPod/i.test(platform);
-}
-
-/**
- * "Ctrl+K" until mount (matches server + first client paint, so there is no
- * hydration mismatch), then the keymap's own "⌘K" label once a real Apple
- * platform is detected client-side. Never wrong at any instant it's shown.
- */
-function paletteKeyLabel(mounted: boolean): string {
-  if (mounted && isApplePlatform()) {
-    return momentKeyLabel("open-command-palette");
-  }
-  return "Ctrl+K";
-}
-
-export interface KeyboardLegendProps {
-  /** Opens the command palette — the legend's one clickable affordance. */
-  onOpenPalette(): void;
-}
-
-export function KeyboardLegend({ onOpenPalette }: KeyboardLegendProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
+export function KeyboardLegend() {
   return (
     <div
       role="group"
@@ -157,45 +96,16 @@ export function KeyboardLegend({ onOpenPalette }: KeyboardLegendProps) {
       className="pointer-events-none fixed bottom-6 left-6 z-30 hidden items-center gap-3 text-xs text-muted-foreground sm:flex"
       data-testid="keyboard-legend"
     >
-      {LEGEND_GROUPS.map((group) => {
-        const isPaletteGroup = group.ids.includes("open-command-palette");
-
-        if (isPaletteGroup) {
-          return (
-            <button
-              key={group.description}
-              type="button"
-              onClick={onOpenPalette}
-              aria-label="Open command palette"
-              className={cn(
-                HIT_TARGET_INVISIBLE,
-                "gap-1.5 rounded-md pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-              )}
-              data-testid="keyboard-legend-palette-button"
-            >
-              {group.ids.map((id) => (
-                <kbd key={id} className={KBD_CHIP_NEUTRAL}>
-                  {id === "open-command-palette"
-                    ? paletteKeyLabel(mounted)
-                    : momentKeyLabel(id)}
-                </kbd>
-              ))}
-              <span>{group.description}</span>
-            </button>
-          );
-        }
-
-        return (
-          <span key={group.description} className="flex items-center gap-1.5">
-            {group.ids.map((id) => (
-              <kbd key={id} className={KBD_CHIP_NEUTRAL}>
-                {momentKeyLabel(id)}
-              </kbd>
-            ))}
-            <span>{group.description}</span>
-          </span>
-        );
-      })}
+      {LEGEND_GROUPS.map((group) => (
+        <span key={group.description} className="flex items-center gap-1.5">
+          {group.ids.map((id) => (
+            <kbd key={id} className={KBD_CHIP_NEUTRAL}>
+              {momentKeyLabel(id)}
+            </kbd>
+          ))}
+          <span>{group.description}</span>
+        </span>
+      ))}
     </div>
   );
 }

@@ -74,7 +74,6 @@ import {
 } from "./useAreaUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
-import { dropUnknownParams } from "./deepLink";
 import type { ToastAction } from "./toast";
 import { useFlowFocusSession } from "./useFlowFocusSession";
 import { RunningSessionReturn } from "./RunningSessionReturn";
@@ -812,12 +811,6 @@ export function TodayMoments({
     for (const key of MOMENTS_URL_KEYS) {
       if (dedupeParam(params, key)) changed = true;
     }
-    // C2-S12B (#687 round-6, finding 3): drops any param key outside the
-    // allowlist (deepLink.ts), INCLUDING a case-variant near-miss of a known
-    // key (e.g. `?MOMENT=flow` alongside the `moment` this app actually
-    // reads) — the sibling lane built this as a pure function without a live
-    // wiring site in its own manifest (TodayMoments.tsx is this lane's).
-    if (dropUnknownParams(params)) changed = true;
 
     const sheetParam = params.get("sheet");
     if (sheetParam !== null && !isSheetValue(sheetParam)) {
@@ -1259,11 +1252,6 @@ export function TodayMoments({
         id: "switch-start",
         label: "Switch to Start",
         hint: momentKeyLabel("switch-start"),
-        // C2-S12A (#687 round-6 judge, palette gaps): "today"/"home" both
-        // returned "No commands match" — Start is the app's landing moment
-        // (the brand itself reads "LifeOS Today"), so both are plain-
-        // language names for the same destination this command already is.
-        keywords: ["today", "home"],
       },
       {
         id: "switch-flow",
@@ -1303,37 +1291,9 @@ export function TodayMoments({
       // below 1024px, so the palette is the entry that is the same distance
       // away at 390px as at 1440px.
       { id: "open-areas", label: "Open all areas" },
-      // C2-S12A (#687 round-6 judge, palette gaps): "Settings is the only
-      // core surface with no palette command" — the masthead/BottomNavigator
-      // link is the only way in otherwise. Same target both already use.
-      {
-        id: "open-settings",
-        label: "Open settings",
-        keywords: ["preferences"],
-        // A real navigation (window.location.assign in runPaletteAction) —
-        // let CommandPalette skip its own onClose so its history.back() does
-        // not race and revert it. See CommandPaletteAction.closesPalette.
-        closesPalette: false,
-      },
     ];
     if (moment === "start" && startVM.firstMove) {
       actions.push({ id: "start-first-move", label: "Start first move" });
-    }
-    // C2-S12A (#687 round-6 judge): typing "sign in" also returned "No
-    // commands match" — the auth door (AuthAffordance.tsx) had zero palette
-    // presence. Gated on the exact same truth signal that door itself reads
-    // (`syncStatus.signedOut`, set only when a backend is configured AND
-    // nobody is signed in) so this command is never offered as a dead end
-    // when there's no sign-in flow to reach, and never hidden while the
-    // masthead's own "Sign in" pill is live.
-    if (syncStatus.signedOut) {
-      actions.push({
-        id: "sign-in",
-        label: "Sign in",
-        keywords: ["login", "log in", "account"],
-        // Same reasoning as "open-settings" above — a real navigation.
-        closesPalette: false,
-      });
     }
     if (session.activeTaskId !== null || session.total > 0) {
       actions.push({
@@ -1373,7 +1333,6 @@ export function TodayMoments({
     session.total,
     session.running,
     timeDisplay,
-    syncStatus.signedOut,
   ]);
 
   const runPaletteAction = useCallback(
@@ -1405,28 +1364,6 @@ export function TodayMoments({
           break;
         case "open-areas":
           openSheet("areas");
-          break;
-        case "open-settings":
-          // A real navigation, not `router.push`: CommandPalette's own click
-          // handler calls `onRun` then `onClose` synchronously, and `onClose`
-          // (`useOverlayUrlState.closeOverlay`) decides whether to
-          // `history.back()` by checking, at that same instant, whether the
-          // palette still owns the current history entry. Next's client-side
-          // router.push defers its actual history write past that check
-          // (documented at length in lib/rawHistory.ts), so the palette's
-          // close would still see itself as "current" and back() OVER the
-          // in-flight settings navigation — caught red-first against the
-          // real dev server (nav-truth.spec.ts), not guessed: the URL
-          // reverted to "/" and Settings never rendered. A real navigation
-          // sidesteps that race entirely — it supersedes any pending
-          // same-document history traversal, unlike a second SPA push.
-          window.location.assign("/settings/areas");
-          break;
-        case "sign-in":
-          // Same reasoning as "open-settings" directly above.
-          window.location.assign(
-            `/login?next=${encodeURIComponent(window.location.pathname)}`,
-          );
           break;
         case "start-first-move":
           if (startVM.firstMove) handleStartMove(startVM.firstMove);
@@ -1786,7 +1723,7 @@ export function TodayMoments({
         </>
       )}
 
-      <KeyboardLegend onOpenPalette={() => openPalette()} />
+      <KeyboardLegend />
 
       {/* #703: capture is never blocked. It used to be disabled while a
           parse was in flight; parsing now happens in triage, and a sort
