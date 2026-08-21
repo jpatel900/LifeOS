@@ -24,7 +24,21 @@ vi.mock("@/lib/reEntry/briefView", () => ({
   createBriefViewRecorder: () => ({ recordIfNeeded: vi.fn() }),
 }));
 
-import { renderToday } from "@/__tests__/helpers/todayMomentsHarness";
+import {
+  renderToday,
+  resetTodayMomentsMountTracking,
+} from "@/__tests__/helpers/todayMomentsHarness";
+
+// C2-S13 (#687): FILE-LEVEL, applies to every `describe` below regardless of
+// nesting. `resetTodayMomentsMountTracking` (harness) resets both
+// `window.history` and deepLink.ts's module-level remount-tracking flag —
+// Vitest keeps ONE module instance loaded for every `it()` in a file, so
+// without this the flag would read `true` (a "remount") for every test
+// after the first real TodayMoments mount in the file. See the harness
+// export's own doc comment for the full mechanism.
+afterEach(() => {
+  resetTodayMomentsMountTracking();
+});
 
 describe("TodayMoments", () => {
   beforeEach(() => {

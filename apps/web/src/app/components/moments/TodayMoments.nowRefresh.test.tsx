@@ -41,8 +41,18 @@ import { TodayMoments } from "./TodayMoments";
 import {
   FIXED_NOW,
   ReEntrySeedBridge,
+  resetTodayMomentsMountTracking,
   TaskSeedBridge,
 } from "@/__tests__/helpers/todayMomentsHarness";
+
+// C2-S13 (#687 round-7): FILE-LEVEL, applies regardless of describe nesting
+// — every split file that mounts TodayMoments more than once needs this
+// reset (deepLink.ts's module-level remount-tracking flag survives across
+// `it()`s in the same file); see the harness export's own doc comment for
+// the full mechanism.
+afterEach(() => {
+  resetTodayMomentsMountTracking();
+});
 
 /**
  * SP-10: a `now` frozen at mount goes stale in a long-lived tab — relative

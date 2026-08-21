@@ -24,7 +24,19 @@ vi.mock("@/lib/reEntry/briefView", () => ({
   createBriefViewRecorder: () => ({ recordIfNeeded: vi.fn() }),
 }));
 
-import { renderToday } from "@/__tests__/helpers/todayMomentsHarness";
+import {
+  renderToday,
+  resetTodayMomentsMountTracking,
+} from "@/__tests__/helpers/todayMomentsHarness";
+
+// C2-S13 (#687 round-7): FILE-LEVEL, applies regardless of describe nesting
+// — every split file that mounts TodayMoments more than once needs this
+// reset (deepLink.ts's module-level remount-tracking flag survives across
+// `it()`s in the same file); see the harness export's own doc comment for
+// the full mechanism.
+afterEach(() => {
+  resetTodayMomentsMountTracking();
+});
 
 /**
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.

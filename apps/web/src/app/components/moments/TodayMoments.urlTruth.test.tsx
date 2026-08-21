@@ -27,7 +27,19 @@ vi.mock("@/lib/reEntry/briefView", () => ({
 import {
   pressCaptureShortcut,
   renderToday,
+  resetTodayMomentsMountTracking,
 } from "@/__tests__/helpers/todayMomentsHarness";
+
+// C2-S13 (#687 round-7): FILE-LEVEL, applies regardless of describe nesting
+// — every split file that mounts TodayMoments more than once needs this
+// reset (deepLink.ts's module-level remount-tracking flag survives across
+// `it()`s in the same file); see the harness export's own doc comment for
+// the full mechanism. This file's own describe-level afterEach already
+// resets `window.history` for the same reason; this adds the flag reset
+// that history alone cannot cover.
+afterEach(() => {
+  resetTodayMomentsMountTracking();
+});
 
 /**
  * #687 finding 1: the URL is the single source of truth for capture/palette

@@ -139,13 +139,27 @@
  * (`startTransition`), can commit AFTER `back()` already moved position —
  * exactly the race this file's own header documents above. Turned on, the
  * write is allowed to resync — safe at any call site verified (by grep) to
- * never call `history.back()` synchronously in the same function: today
- * that is `useSheetUrlState`'s `openSheet`/`closeSheet` only. Every other
- * caller (`useMomentUrlState`, `useAreaUrlState`, `WorkflowContext`,
- * `TodayMoments`'s own `historyReplaceState` calls) is left off for now —
- * they share this same staleness defect in principle, but flipping them
- * needs the same one-call-site-at-a-time safety check this comment just
- * did, not a blind sweep.
+ * never call `history.back()` synchronously in the same function: that is
+ * `useSheetUrlState`'s `openSheet`/`closeSheet`, and (C2-S13, #687 round-7
+ * judge) `useOverlayUrlState.closeOverlay`'s NON-owning branch — the one
+ * that strips its own param without a following `back()` because something
+ * else (e.g. a sheet opened FROM the palette) pushed since. That branch used
+ * to leave this off, which was itself the bug: `openSheet`'s own
+ * resync-enabled push schedules a transition targeting the URL at ITS push
+ * time (still carrying the palette's param), and a bare, non-resyncing strip
+ * right after it is invisible to Next's detection (this entry's `__NA` is
+ * already truthy, carried forward from the sheet's push) — so the earlier
+ * transition flushes anyway and re-stamps its stale target over the strip a
+ * few milliseconds later. Passing `resyncNextRouter: true` here lets the
+ * strip's OWN dispatch land in the same synchronous tick and win instead of
+ * being silently overwritten. The owning branch above (`stillOnOurEntry`)
+ * must keep this off — it always follows with a synchronous `back()`, which
+ * is exactly what turning this on would race. Every other caller
+ * (`useMomentUrlState`, `useAreaUrlState`, `WorkflowContext`, `TodayMoments`'s
+ * own `historyReplaceState` calls) is left off for now — they share this
+ * same staleness defect in principle, but flipping them needs the same
+ * one-call-site-at-a-time safety check this comment just did, not a blind
+ * sweep.
  *
  * `startTransition`'s deferral is NOT undone by this fix: a resync is
  * scheduled at TRANSITION priority, not applied synchronously, so a window
