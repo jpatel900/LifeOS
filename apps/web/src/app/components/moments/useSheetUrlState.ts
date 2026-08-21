@@ -149,7 +149,12 @@ export function useSheetUrlState(): SheetUrlState {
     ) {
       return;
     }
-    historyPushState(urlWithSheet(window.location, sheet));
+    // #897: resync Next's own `canonicalUrl` to this write rather than
+    // leaving it stale — safe here because `openSheet` never follows this
+    // write with a synchronous `history.back()` (see rawHistory.ts header).
+    historyPushState(urlWithSheet(window.location, sheet), {
+      resyncNextRouter: true,
+    });
     pushedRef.current = true;
   }, []);
 
@@ -161,7 +166,14 @@ export function useSheetUrlState(): SheetUrlState {
       window.history.back();
       return;
     }
-    historyReplaceState(urlWithSheet(window.location, null));
+    // #897: same resync as `openSheet` above, and safe for the same reason —
+    // this branch never calls `history.back()` in the same invocation.
+    // Without it, Next's `canonicalUrl` stays pointed at the pre-close URL
+    // until some unrelated later navigation stamps it back onto the address
+    // bar, reopening a sheet the screen already closed.
+    historyReplaceState(urlWithSheet(window.location, null), {
+      resyncNextRouter: true,
+    });
   }, []);
 
   const adoptSheetFromUrl = useCallback((sheet: SheetValue | null) => {
