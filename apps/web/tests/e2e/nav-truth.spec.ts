@@ -1244,6 +1244,77 @@ test("a stray uppercase ?MOMENT= key is scrubbed from the URL, keeping the real 
 });
 
 /**
+ * Fresh-eyes judge finding (#687, diagnosed by the lane that fixed PR #911's
+ * three siblings, left out of that PR's scope as a DIFFERENT root cause):
+ * "one URL renders two different screens depending on how you arrived at
+ * it." `/?palette=1&sheet=plan` entered directly used to adopt BOTH fields
+ * (`deepLinkTargetFromParams` composed them with no exclusivity check),
+ * rendering the command palette stacked on top of the Plan sheet — two
+ * full-screen dialogs live on a real dev server, confirmed before this fix.
+ * Reaching the identical URL by opening the palette and picking "Open plan"
+ * always rendered ONE screen, because the write path already treats the
+ * palette as a launcher that closes itself the instant it hands off to a
+ * destination (`runPaletteAction`'s `openSheet` call, then `CommandPalette`
+ * running `onClose`). The read path (this mount-time parse) never enforced
+ * that same rule for a URL entered directly — that mismatch WAS the bug.
+ *
+ * Fix: `deepLinkTargetFromParams` (deepLink.ts) now gives the sheet the win
+ * over palette specifically (capture is exempt — sheet + capture keeps
+ * composing, a real supported combo pinned in TodayMoments.test.tsx), the
+ * same "palette -> capture -> sheet" stacking order `MomentSheet.tsx` and
+ * `TodayMoments.tsx`'s `closeTopOverlay` already document. TodayMoments.tsx's
+ * existing `invalidParamsScrubbedRef` pass scrubs the losing `palette` param
+ * the same way it already scrubs the losing half of a capture+palette combo.
+ *
+ * Also proves the interaction with PR #911's own fix (merged into this
+ * branch ahead of this one, per this lane's conflict-resolution order):
+ * #911 fixed a SEPARATE write-path race ("palette stranding") where
+ * `useOverlayUrlState.closeOverlay`'s hand-off strip lost a same-tick race
+ * against a Next.js router resync, leaving `palette=1` stranded beside
+ * `sheet=plan` in the address bar even though only the sheet ever rendered.
+ * Before #911 merged, the click-through path below rendered one screen but
+ * the URL still read `?palette=1&sheet=plan` at both 300ms and 1500ms after
+ * the click — confirmed live against a dev server carrying #912 alone. With
+ * both fixes present, the URL now agrees with the screen on both arrival
+ * paths, asserted below.
+ */
+test("direct URL naming both sheet and palette renders one screen, matching the palette-pick arrival path", async ({
+  page,
+}) => {
+  // Arrival path 1: a direct/hard-loaded URL naming both.
+  await page.goto("/?palette=1&sheet=plan");
+  await expect(page.getByTestId("plan-sheet")).toBeVisible();
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+  await expect(async () => {
+    const params = new URL(page.url()).searchParams;
+    expect(params.get("sheet")).toBe("plan");
+    expect(params.get("palette")).toBeNull();
+  }).toPass({ timeout: 30_000 });
+
+  // Arrival path 2: open the palette, then pick "Open plan" from inside it —
+  // the real, shipped route to the same destination.
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  await page.keyboard.press("Control+k");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  await page.getByTestId("command-palette-option-open-plan").click();
+
+  // Both arrival paths render the identical single screen.
+  await expect(page.getByTestId("plan-sheet")).toBeVisible();
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+
+  // With #911 merged in, the two arrival paths' URLs now agree too — no
+  // stranded `palette=1` beside `sheet=plan` on the click-through path.
+  // Settle window matches #911's own "picking Open <sheet>" pin just below:
+  // the stale-resync stomp this guards against landed within single-digit
+  // milliseconds when that fix was built, so asserting only the instant
+  // after the click would not catch a regression.
+  await page.waitForTimeout(500);
+  expect(new URL(page.url()).searchParams.get("sheet")).toBe("plan");
+  expect(new URL(page.url()).searchParams.get("palette")).toBeNull();
+});
+
+/**
  * C2-S13 (#687 round-7 judge, "PALETTE STRANDING" — the round's WORST
  * DEFECT): picking any of the five sheet commands from the palette used to
  * leave `palette=1` sitting in the URL beside `sheet=<value>` — the palette

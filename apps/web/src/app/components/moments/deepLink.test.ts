@@ -87,10 +87,38 @@ describe("deepLinkTargetFromParams", () => {
       ).toEqual({ moment: "close", overlay: "capture" });
     });
 
-    it("sheet + overlay both land", () => {
+    it("sheet + capture overlay both land — the one pair that genuinely coexists", () => {
+      expect(
+        deepLinkTargetFromParams({ sheet: "review", capture: "1" }),
+      ).toEqual({ sheet: "review", overlay: "capture" });
+    });
+
+    // Round-7 judge ("one URL renders two different screens depending on how
+    // you arrived at it"): sheet + PALETTE is the one impossible pair.
+    // `?sheet=review&palette=1` used to compose both, adopting the palette
+    // on top of the sheet on a direct/refresh visit — two full-screen
+    // dialogs — while reaching that same URL by opening the palette and
+    // picking "Open review" only ever rendered the sheet (the palette closes
+    // itself the instant it hands off to a destination — see
+    // `runPaletteAction`'s "open-<sheet>" cases and
+    // `useOverlayUrlState.closeOverlay`). Sheet wins here too now, matching
+    // that hand-off and the "palette -> capture -> sheet" stacking order
+    // documented on `MomentSheet.tsx` and `TodayMoments.tsx`'s
+    // `closeTopOverlay`.
+    it("sheet wins over palette — the one composition that does not survive", () => {
       expect(
         deepLinkTargetFromParams({ sheet: "review", palette: "1" }),
-      ).toEqual({ sheet: "review", overlay: "palette" });
+      ).toEqual({ sheet: "review" });
+    });
+
+    it("capture still wins over palette even when a sheet is also named", () => {
+      expect(
+        deepLinkTargetFromParams({
+          sheet: "triage",
+          capture: "1",
+          palette: "1",
+        }),
+      ).toEqual({ sheet: "triage", overlay: "capture" });
     });
 
     it("moment + sheet + overlay all land together", () => {

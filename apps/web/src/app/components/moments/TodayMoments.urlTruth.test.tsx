@@ -298,10 +298,47 @@ describe("TodayMoments — URL and deep-link parameter truth (#687 finding 1)", 
     });
   });
 
-  // Sheet + overlay is a REAL, supported combo (S6's own composition
-  // contract) — pinning that this scrub never touches it, so finding 2's
-  // fix cannot regress into over-scrubbing a combo that DOES render both
-  // halves.
+  // Round-7 judge ("one URL renders two different screens depending on how
+  // you arrived at it"): unlike capture, sheet + PALETTE is impossible —
+  // MomentSheet and CommandPalette are both full-screen dialogs, so a
+  // hand-crafted `?sheet=X&palette=1` used to adopt both, rendering the
+  // palette stacked on the sheet. `deepLinkTargetFromParams`'s own precedence
+  // (deepLink.ts) now gives sheet the win, matching what the palette itself
+  // always hands off to (`runPaletteAction`'s "open-<sheet>" cases close the
+  // palette the same tick they open the sheet). The URL used to keep
+  // claiming `palette=1` regardless; it must now be scrubbed too, matching
+  // this file's own capture+palette scrub just above.
+  it("scrubs the losing palette when a sheet is also named — sheet wins, palette never renders", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/?sheet=plan&palette=1&moment=start",
+    );
+
+    renderToday({
+      initialMoment: "start",
+      deepLink: { moment: "start", sheet: "plan" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("plan-sheet")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      const params = new URL(window.location.href).searchParams;
+      expect(params.get("sheet")).toBe("plan");
+      expect(params.get("palette")).toBeNull();
+    });
+  });
+
+  // Sheet + capture is the pair the scrub deliberately leaves alone (S6's
+  // own composition contract) — pinning that finding 2's fix cannot regress
+  // into over-scrubbing it. Read the assertion narrowly: BOTH halves mount,
+  // which is all jsdom can see. It is NOT a claim that both are usable.
+  // Live, the sheet paints in front of the capture dialog (equal `z-50`,
+  // overlay renders first in the tree), so capture is buried until the
+  // sheet closes — measured in `MomentSheet.tsx`'s header comment.
   it("does not touch a real sheet+overlay combo that genuinely renders both", async () => {
     window.history.replaceState(
       null,
