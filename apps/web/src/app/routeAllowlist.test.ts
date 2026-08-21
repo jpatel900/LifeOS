@@ -13,12 +13,9 @@ import { describe, expect, it } from "vitest";
  * `page.tsx` in the app router and fails on strict set equality against the
  * 12 known files, so an addition, a removal, or a rename all fail loudly.
  *
- * The 13: `/` (moments home), `/login`, `/settings/areas` (owner-ratified
- * keep, out of C2-S6 scope), `/settings` (C2-S12B, #687 round-6 finding 2: a
- * NEW unconditional redirect shim to `/settings/areas` — unlike the 9 below,
- * NOT gated behind `NEXT_PUBLIC_MOMENTS_HOME`, since `/settings` never had a
- * cockpit-stage equivalent to roll back to), plus the 9 flag-gated redirect
- * shims — `/today`, `/capture`, `/triage`, `/execute`, `/calendar`, `/plan`
+ * The 12: `/` (moments home), `/login`, `/settings/areas` (owner-ratified
+ * keep, out of C2-S6 scope), plus the 9 flag-gated redirect shims —
+ * `/today`, `/capture`, `/triage`, `/execute`, `/calendar`, `/plan`
  * (C2-S10, #687 round-4: joins its siblings — `/calendar` is `/plan`'s own
  * legacy stage name, kept as a working old bookmark, not replaced),
  * `/review`, `/health`, `/areas`.
@@ -31,7 +28,6 @@ const APP_DIR = [
 const EXPECTED_ROUTES = [
   "",
   "login",
-  "settings",
   "settings/areas",
   "today",
   "capture",
@@ -80,10 +76,7 @@ describe("filesystem route allowlist (#687 C2-S6)", () => {
     expect(pageFiles.length).toBe(EXPECTED_ROUTES.length);
   });
 
-  // C2-S12B (#687 round-6): this title already said "11" while
-  // `EXPECTED_ROUTES` held 12 entries before this lane's `/settings` addition
-  // — a pre-existing drift, not introduced here. Now correctly 13.
-  it("the route set is exactly the 13 allowed routes — no more, no less", () => {
+  it("the route set is exactly the 11 allowed routes — no more, no less", () => {
     const found = pageFiles.map(routeFor).sort();
     expect(found).toEqual(EXPECTED_ROUTES);
   });

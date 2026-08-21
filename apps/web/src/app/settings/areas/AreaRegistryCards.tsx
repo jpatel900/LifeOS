@@ -356,44 +356,6 @@ export function AreaRegistryCards({
                           Capture here
                         </Link>
                       </Button>
-                      {/* C2-S12B (#687 round-6 finding 4): moved here from
-                          inside the "Registry actions and settings"
-                          disclosure below. The href/onClick pattern was
-                          already correct (C2-S9 gave these the same
-                          `?area=`-carrying `Link` as "Capture here" above) —
-                          the actual defect was location: a collapsed
-                          `<details>` (DiagnosticsDisclosure) does not render
-                          its content until a first click opens it, so
-                          reaching either link cost a click-to-expand PLUS
-                          the link click, and — because the anchor plainly
-                          isn't in the rendered/clickable DOM until then — a
-                          middle-click, "open in new tab", or copy-link-address
-                          had nothing to act on. Sitting beside "Capture here"
-                          in this always-visible tray drops both to the same
-                          single click and makes them real, always-present
-                          anchors like their sibling. */}
-                      <Button asChild variant="outline">
-                        <Link
-                          href={urlWithArea(
-                            { pathname: "/", search: "?sheet=plan" },
-                            workflowAreaId,
-                          )}
-                          onClick={() => setSelectedAreaId(workflowAreaId)}
-                        >
-                          Plan area
-                        </Link>
-                      </Button>
-                      <Button asChild variant="outline">
-                        <Link
-                          href={urlWithArea(
-                            { pathname: "/", search: "?sheet=review" },
-                            workflowAreaId,
-                          )}
-                          onClick={() => setSelectedAreaId(workflowAreaId)}
-                        >
-                          Review area
-                        </Link>
-                      </Button>
                     </div>
                   </div>
 
@@ -420,6 +382,37 @@ export function AreaRegistryCards({
                         </p>
                       </Alert>
                     ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      {/* C2-S6 (#687): /calendar and /review are retired
+                          redirect shims now — link straight to the moments
+                          home sheets they redirect to, so `noLegacyRouteLinks`
+                          stays enforceable against the legacy paths. */}
+                      <Button asChild variant="outline" size="sm">
+                        {/* C2-S9: same href-carries-`area=` fix as "Capture
+                            here" above — see that Link's comment. */}
+                        <Link
+                          href={urlWithArea(
+                            { pathname: "/", search: "?sheet=plan" },
+                            workflowAreaId,
+                          )}
+                          onClick={() => setSelectedAreaId(workflowAreaId)}
+                        >
+                          Plan area
+                        </Link>
+                      </Button>
+                      <Button asChild variant="outline" size="sm">
+                        <Link
+                          href={urlWithArea(
+                            { pathname: "/", search: "?sheet=review" },
+                            workflowAreaId,
+                          )}
+                          onClick={() => setSelectedAreaId(workflowAreaId)}
+                        >
+                          Review area
+                        </Link>
+                      </Button>
+                    </div>
+
                     <div
                       data-testid="areas-color-panel"
                       className="workflow-admin-card rounded-[var(--surface-radius-sm)] p-3"
