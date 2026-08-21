@@ -3,7 +3,11 @@
 // path would take the "the device refused to hold it" branch.
 import "fake-indexeddb/auto";
 
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
