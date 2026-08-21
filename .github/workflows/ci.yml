@@ -80,6 +80,9 @@ jobs:
       - name: turbo test-inputs coverage self-test
         run: node scripts/agent/check-turbo-test-inputs.mjs --self-test
 
+      - name: check-migration-drift self-test
+        run: node scripts/agent/check-migration-drift.mjs --self-test
+
   migration-timestamp-collision:
     name: Migration timestamp collision precheck
     if: github.event_name == 'pull_request'

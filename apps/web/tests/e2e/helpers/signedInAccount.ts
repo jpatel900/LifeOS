@@ -191,6 +191,67 @@ export async function signIn(page: Page, user: SeededUser): Promise<void> {
  * SUCCESS predicate (`rowsLoaded`) stays exactly as narrow as before,
  * scoped to `capture_items` only: widening what can trigger a retry does
  * not widen what counts as "the account arrived".
+ *
+ * ## #883, reopened — detection was instant; ACTING on it was not
+ *
+ * The widened detection above shipped and worked: PR #899's CI (job
+ * 96699259913) logged the `[signed-in] PGRST303 … attempt 1/3 — settling
+ * 1500ms` line, proving `areas` was the request that skewed and that it was
+ * caught. It still died at "Test timeout of 60000ms exceeded" one line
+ * later. The reopening comment reads that as "1500ms was too small a
+ * guess" — true, but not the load-bearing bug. Tracing the OLD code: the
+ * `page.on("response", …)` listener sets `sawPgrst303` within
+ * milliseconds of the 401 landing, but the retry loop only ever CONSULTED
+ * that flag inside the `catch` of `await rowsLoaded` — and `rowsLoaded` is
+ * `page.waitForResponse(…, { timeout: 60_000 })` for a `capture_items` GET
+ * that (per the diagnosis above) is never going to arrive once `areas`
+ * 401s. So the flag was set almost instantly, but the code didn't ACT on
+ * it until this attempt's own internal 60s timeout finally expired and
+ * rejected — which by itself exceeds `apps/web/playwright.config.ts`'s
+ * per-test `timeout: 60_000`. One "attempt 1/3" log line, then the bare
+ * Playwright test timeout, is exactly that arithmetic: attempt 1 alone
+ * burned the whole test's clock before the retry ever got a turn.
+ * Replacing the fixed 1500ms with a bigger (or measured) guess, alone,
+ * would NOT have fixed this — the wait would still never run inside the
+ * remaining budget.
+ *
+ * The fix below has two parts, in order of importance:
+ *
+ *  1. **Race detection against the wait, instead of gating it behind the
+ *     wait's own timeout.** `pgrst303Detected` resolves the instant
+ *     `onResponse` confirms the PGRST303 shape, and `Promise.race([
+ *     rowsLoaded, pgrst303Detected])` acts on whichever happens first. This
+ *     is the change that actually removes the race: detection is now
+ *     USEABLE the moment it happens.
+ *  2. **Measure the wait instead of guessing it**, so the SIZE of the wait
+ *     matches the actual skew (see `measurePgrst303Skew` below) — this
+ *     makes a real, larger skew recoverable and makes an unrecoverable one
+ *     fail fast with the measured number instead of a bare timeout.
+ *
+ * A stray PGRST303 on traffic THIS function does not gate — the app's own
+ * background reads, e.g. the `rollup_summaries` 401 `watchAccountFailures`
+ * documents below — must not turn a run that was always going to pass into
+ * a false retry or a false fail-fast. So detection winning the race does
+ * NOT immediately mean failure: `rowsLoadedOk` (set the moment the REAL
+ * `capture_items` success lands, independent of the race) is checked
+ * first and wins unconditionally, and only if it is still false after a
+ * short, bounded `PGRST303_GRACE_MS` grace period does this function
+ * treat the 401 as blocking and move to measure-and-retry.
+ *
+ * ## Budget arithmetic — why `MAX_RECOVERABLE_SKEW_WAIT_MS` is 20s
+ *
+ * The whole Playwright TEST (not just this function) has a 60_000ms
+ * timeout (`apps/web/playwright.config.ts` `timeout: 60_000`). `signIn()`
+ * spends time on the login form fill/click/`waitForURL` (a few seconds,
+ * historically) BEFORE calling this function, and AFTER this function
+ * returns it awaits `today-moments` becoming visible with its OWN 30_000ms
+ * timeout. Worst case: 60_000 − ~5_000 (login steps) − 30_000 (post-return
+ * visibility assertion) ≈ 25_000ms is what this function can safely spend
+ * in total. `MAX_RECOVERABLE_SKEW_WAIT_MS` reserves 20_000ms of that for
+ * actual settle-waiting (grace + measured waits, summed across attempts),
+ * leaving ~5_000ms for the `page.goto()` calls and detection round trips
+ * themselves. A skew that would need more than its share of that 25s is
+ * not "wait a bit longer and hope" — it is named and failed immediately.
  */
 export async function gotoWithAccountSync(
   page: Page,
@@ -208,19 +269,34 @@ export async function gotoWithAccountSync(
     response.url().includes("/rest/v1/") &&
     response.request().method() === "GET";
 
+  // Summed across every attempt THIS call makes — see the "Budget
+  // arithmetic" doc comment above for why 20s is the reserved share of the
+  // whole test's 60s timeout, not a per-attempt allowance.
+  let cumulativeWaitMs = 0;
+
   for (let attempt = 1; attempt <= PGRST303_MAX_ATTEMPTS; attempt++) {
     let sawPgrst303 = false;
     let pgrst303Path = "";
+    let pgrst303Response: Response | undefined;
+    // Resolved by `onResponse` the instant a PGRST303 is confirmed — see the
+    // "detection was instant; ACTING on it was not" doc comment above for
+    // why this is the load-bearing part of the fix.
+    let signalPgrst303Detected!: () => void;
+    const pgrst303Detected = new Promise<void>((resolve) => {
+      signalPgrst303Detected = resolve;
+    });
+
     const onResponse = (response: Response) => {
-      if (!isTrackedRestGet(response) || response.ok()) return;
+      if (sawPgrst303 || !isTrackedRestGet(response) || response.ok()) return;
       void response
         .text()
         .catch(() => "")
         .then((body) => {
-          if (isPgrst303(response.status(), body)) {
-            sawPgrst303 = true;
-            pgrst303Path = response.url().split("?")[0]!;
-          }
+          if (sawPgrst303 || !isPgrst303(response.status(), body)) return;
+          sawPgrst303 = true;
+          pgrst303Path = response.url().split("?")[0]!;
+          pgrst303Response = response;
+          signalPgrst303Detected();
         });
     };
     page.on("response", onResponse);
@@ -229,24 +305,125 @@ export async function gotoWithAccountSync(
       (response) => isCaptureItemsGet(response) && response.ok(),
       { timeout: 60_000 },
     );
+    // `rowsLoadedOk` flips the instant the REAL success signal lands,
+    // independent of which promise wins the race below — this is what lets
+    // "success always wins" hold even when a stray PGRST303 on unrelated
+    // background traffic (e.g. `rollup_summaries`, see `watchAccountFailures`
+    // below) also fires in the same window. The `.then` here also marks
+    // `rowsLoaded` as handled, so abandoning it below (when detection wins
+    // the race instead) never produces an unhandled rejection.
+    let rowsLoadedOk = false;
+    rowsLoaded.then(
+      () => {
+        rowsLoadedOk = true;
+      },
+      () => {
+        // A genuine rejection is handled via the catch below when it wins
+        // the race; if detection won instead, this rejection is expected
+        // and intentionally ignored.
+      },
+    );
 
     try {
       await page.goto(path);
-      await rowsLoaded;
-      return;
+      // Race the real success signal against fast PGRST303 detection so a
+      // clock-skew 401 is acted on the moment it is SEEN, not after this
+      // attempt's entire internal 60s `waitForResponse` timeout has already
+      // burned the whole per-test budget (`playwright.config.ts`
+      // `timeout: 60_000`) — that silent-until-timeout gap, not the fixed
+      // 1500ms guess, is what #883's reopening evidence actually showed.
+      await Promise.race([rowsLoaded, pgrst303Detected]);
     } catch (err) {
-      if (!sawPgrst303 || attempt === PGRST303_MAX_ATTEMPTS) {
+      // `rowsLoaded` rejected (its own timeout, or any other failure) before
+      // any PGRST303 was ever observed at all — a genuine failure, unrelated
+      // to the clock race. Rethrow unchanged, exactly as before this retry
+      // existed. If a PGRST303 WAS seen (even on the last attempt), fall
+      // through to the shared grace/measure/exhausted-message handling below
+      // instead — that is what replaces a bare timeout with a message naming
+      // the measured skew (#883 point 5), so "last attempt" must not
+      // short-circuit back to the raw `err` here.
+      if (!sawPgrst303) {
         throw err;
       }
-      console.log(
-        `[signed-in] PGRST303 (JWT not yet valid) on ${pgrst303Path || "(unknown /rest/v1 path)"} during gotoWithAccountSync(${path}), attempt ${attempt}/${PGRST303_MAX_ATTEMPTS} — settling ${PGRST303_SETTLE_WAIT_MS}ms and retrying the navigation.`,
-      );
-      await new Promise((resolve) =>
-        setTimeout(resolve, PGRST303_SETTLE_WAIT_MS),
-      );
     } finally {
       page.off("response", onResponse);
     }
+
+    if (rowsLoadedOk) {
+      return;
+    }
+
+    if (!sawPgrst303) {
+      // Structurally unreachable (the race above only resolves without
+      // throwing when one of `rowsLoaded/pgrst303Detected` settles, and
+      // `rowsLoadedOk` false + `sawPgrst303` false means neither did) — a
+      // guard against a future edit silently regressing this, rather than
+      // a real case this file has ever observed.
+      throw new Error(
+        `[signed-in] gotoWithAccountSync(${path}): internal invariant broken — the wait settled without rows loading and without a PGRST303 being observed. This is a bug in the helper, not the app.`,
+      );
+    }
+
+    // A PGRST303 was seen and the real success signal has not (yet) landed.
+    // Give the already in-flight `capture_items` read a short, bounded grace
+    // window to land on its own before treating this as a blocking skew —
+    // this is what keeps a stray 401 on UNRELATED background traffic (the
+    // app's own `rollup_summaries` poll is a live-observed example, see
+    // `watchAccountFailures` below) from turning a run that was always going
+    // to pass into a false retry or a false fail-fast.
+    await new Promise((resolve) => setTimeout(resolve, PGRST303_GRACE_MS));
+    cumulativeWaitMs += PGRST303_GRACE_MS;
+    if (rowsLoadedOk) {
+      return;
+    }
+
+    const measurement = await measurePgrst303Skew(page, pgrst303Response!);
+    // Measurement REFINES the wait upward when the skew demands it; it never
+    // waits LESS than the previously-known settle wait, so an unmeasurable
+    // or zero-looking reading can't silently regress below what used to
+    // "work" (however insufficiently) before this fix.
+    const waitMs = Math.max(
+      PGRST303_SETTLE_WAIT_MS,
+      (measurement.measured ? Math.max(0, measurement.skewMs) : 0) +
+        SKEW_SETTLE_MARGIN_MS,
+    );
+
+    if (attempt === PGRST303_MAX_ATTEMPTS) {
+      // #883 point 5: name the measured skew instead of letting Playwright
+      // report a bare 60s timeout.
+      throw new Error(
+        `[signed-in] gotoWithAccountSync(${path}) gave up after ${PGRST303_MAX_ATTEMPTS} attempts: ` +
+          `PGRST303 (JWT not yet valid) on ${pgrst303Path}. ${describeSkewMeasurement(measurement)}. ` +
+          `Cumulative settle-wait spent this call: ${cumulativeWaitMs}ms. This is the #841/#883 ` +
+          `clock-skew race; it did not clear within the attempt/time budget this helper allows.`,
+      );
+    }
+
+    if (
+      measurement.measured &&
+      cumulativeWaitMs + waitMs > MAX_RECOVERABLE_SKEW_WAIT_MS
+    ) {
+      // The skew IS measured, and it is too large to recover inside this
+      // call's reserved share of the test budget — fail fast and loudly with
+      // the measured number, per #883 point 3, instead of retrying into a
+      // bare Playwright timeout that names nothing.
+      throw new Error(
+        `[signed-in] gotoWithAccountSync(${path}): PGRST303 (JWT not yet valid) on ${pgrst303Path}. ` +
+          `${describeSkewMeasurement(measurement)}, which needs a ${waitMs}ms settle-wait — pushing ` +
+          `this call's cumulative wait to ${cumulativeWaitMs + waitMs}ms, over the ` +
+          `${MAX_RECOVERABLE_SKEW_WAIT_MS}ms budget this function reserves from the whole test's ` +
+          `60_000ms timeout (apps/web/playwright.config.ts \`timeout\`). Failing fast with the ` +
+          `measured number instead of waiting into a bare timeout.`,
+      );
+    }
+
+    cumulativeWaitMs += waitMs;
+    console.log(
+      `[signed-in] PGRST303 (JWT not yet valid) on ${pgrst303Path} during gotoWithAccountSync(${path}), ` +
+        `attempt ${attempt}/${PGRST303_MAX_ATTEMPTS} — ${describeSkewMeasurement(measurement)}, waiting ` +
+        `${waitMs}ms (cumulative ${cumulativeWaitMs}ms) and retrying the navigation.`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 }
 
@@ -351,6 +528,10 @@ export interface AccountClient {
  * swallow one of those would be exactly that.
  */
 const PGRST303_MAX_ATTEMPTS = 3;
+// Used by `sendWithPgrst303Retry` below as its fixed settle wait (unchanged),
+// AND by `gotoWithAccountSync` as the FLOOR under its measured wait (#883,
+// reopened) — see that function's doc comment for why a measured-but-zero or
+// unmeasurable reading must never wait LESS than this previously-known value.
 const PGRST303_SETTLE_WAIT_MS = 1_500;
 
 function isPgrst303(status: number, body: string): boolean {
@@ -361,6 +542,163 @@ function isPgrst303(status: number, body: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * #883 (reopened) — `gotoWithAccountSync`'s own constants for the
+ * measure-instead-of-guess retry. Kept separate from `PGRST303_MAX_ATTEMPTS`/
+ * `PGRST303_SETTLE_WAIT_MS` above (which `sendWithPgrst303Retry` still uses
+ * unchanged) because this function's failure mode — a whole Playwright TEST
+ * timing out, not just one PostgREST call — is materially different and
+ * needed its own budget reasoning (see the doc comment on
+ * `gotoWithAccountSync` for the arithmetic).
+ */
+// Bounded time given to the already in-flight `capture_items` read to land
+// on its own after a PGRST303 is seen, before treating it as blocking. Long
+// enough that a real network response has time to arrive; short enough that
+// it does not itself threaten the budget below.
+export const PGRST303_GRACE_MS = 2_000;
+// Added on top of the measured skew before flooring against
+// `PGRST303_SETTLE_WAIT_MS`. The failing response's `Date` header (RFC 7231)
+// has only whole-SECOND resolution, so up to 999ms of the "measured" skew is
+// rounding noise this margin absorbs, plus a little slack for the retry's own
+// `page.goto()` overhead.
+export const SKEW_SETTLE_MARGIN_MS = 1_000;
+// Cumulative cap, across every attempt ONE `gotoWithAccountSync` call makes,
+// on how much settle-waiting (grace + measured waits) it may spend. See the
+// "Budget arithmetic" doc comment on `gotoWithAccountSync` for the full
+// 60_000ms-test-timeout accounting behind this number.
+export const MAX_RECOVERABLE_SKEW_WAIT_MS = 20_000;
+
+/**
+ * Decode a JWT's payload WITHOUT verifying its signature.
+ *
+ * Safe here specifically because this only ever reads back a token this same
+ * test process already holds via its own signed-in browser session (`GoTrue`
+ * minted it, not this file — see `measurePgrst303Skew`'s doc comment for why
+ * that rules out backdating the claims as a fix) purely to read `nbf`/`iat`
+ * for a DIAGNOSTIC wait calculation. No authorization or trust decision is
+ * ever made from the result — that would require verification.
+ */
+export function decodeJwtPayloadUnsafe(token: string): Record<string, unknown> {
+  const parts = token.split(".");
+  if (parts.length !== 3) {
+    throw new Error(
+      `Expected a 3-part JWT (header.payload.signature), got ${parts.length} part(s).`,
+    );
+  }
+  const json = Buffer.from(parts[1]!, "base64url").toString("utf8");
+  return JSON.parse(json) as Record<string, unknown>;
+}
+
+export interface SkewMeasurement {
+  /**
+   * `false` when the skew could not be measured at all (no usable `Date`
+   * header on the failing response, or the session JWT could not be read or
+   * decoded) — this is DELIBERATELY not the same as "measured, skew is 0":
+   * an unmeasurable reading must fall back to the `PGRST303_SETTLE_WAIT_MS`
+   * floor, not be treated as "no skew" or "too large to recover".
+   */
+  measured: boolean;
+  /** Milliseconds the `nbf`/`iat` claim is ahead of the server's own clock. 0 when `measured` is false, or when neither claim is in the future. */
+  skewMs: number;
+  /** Human-readable explanation, always present, for the CI log line. */
+  detail: string;
+}
+
+/**
+ * Measure the PGRST303 clock skew from the token's own claims and the
+ * failing response's own clock — not the test runner's clock, which may be
+ * skewed against BOTH the token issuer (GoTrue) and the validator
+ * (PostgREST) in a different direction or amount.
+ *
+ * ## Why this measures rather than backdates
+ *
+ * `signIn()` gets its session through the app's real `/login` form, which
+ * calls `supabase.auth.signInWithPassword()` — a real Supabase GoTrue auth
+ * service call (`apps/web/src/app/login/page.tsx:74`), not a token minted by
+ * this test harness. This file cannot choose the token's `nbf`/`iat`, so
+ * backdating them (the structurally simplest fix, per #883's own guidance,
+ * when a harness mints its own tokens) is not available here — measuring the
+ * ACTUAL skew and waiting exactly that long is the honest alternative.
+ *
+ * ## Why the response's `Date` header, not `Date.now()`
+ *
+ * The token was minted by GoTrue's clock and is rejected by PostgREST's
+ * clock; the TEST RUNNER's clock is a third party to that disagreement and
+ * proves nothing about either. The failing response's own `Date` header is
+ * generated by whichever service actually composed that HTTP response, at
+ * the moment it was doing so — the closest available proxy for "the clock
+ * PostgREST just validated `nbf`/`iat` against".
+ */
+export async function measurePgrst303Skew(
+  page: Page,
+  response: Response,
+): Promise<SkewMeasurement> {
+  let headers: Record<string, string>;
+  try {
+    headers = await response.headers();
+  } catch (err) {
+    return {
+      measured: false,
+      skewMs: 0,
+      detail: `could not read the failing response's headers: ${(err as Error).message}`,
+    };
+  }
+  const dateHeader = headers["date"];
+  const serverNowMs = dateHeader ? Date.parse(dateHeader) : NaN;
+  if (!Number.isFinite(serverNowMs)) {
+    return {
+      measured: false,
+      skewMs: 0,
+      detail: `the PGRST303 response carried no usable Date header (got ${JSON.stringify(dateHeader ?? null)})`,
+    };
+  }
+
+  let token: string;
+  try {
+    token = await accessToken(page);
+  } catch (err) {
+    return {
+      measured: false,
+      skewMs: 0,
+      detail: `could not read the session JWT to measure the skew: ${(err as Error).message}`,
+    };
+  }
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = decodeJwtPayloadUnsafe(token);
+  } catch (err) {
+    return {
+      measured: false,
+      skewMs: 0,
+      detail: `could not decode the session JWT payload: ${(err as Error).message}`,
+    };
+  }
+
+  let skewMs = 0;
+  let detail =
+    "no nbf/iat claim in the session JWT is ahead of the server's Date header";
+  for (const claim of ["nbf", "iat"] as const) {
+    const value = payload[claim];
+    if (typeof value !== "number") continue;
+    const claimMs = value * 1_000;
+    const claimSkewMs = claimMs - serverNowMs;
+    if (claimSkewMs > skewMs) {
+      skewMs = claimSkewMs;
+      detail = `${claim}=${new Date(claimMs).toISOString()} is ahead of the server's Date header (${new Date(serverNowMs).toISOString()})`;
+    }
+  }
+
+  return { measured: true, skewMs, detail };
+}
+
+/** One-line summary of a `SkewMeasurement`, for CI log lines and thrown errors. */
+export function describeSkewMeasurement(measurement: SkewMeasurement): string {
+  return measurement.measured
+    ? `measured skew ${measurement.skewMs}ms (${measurement.detail})`
+    : `skew could not be measured (${measurement.detail}) — falling back to the ${PGRST303_SETTLE_WAIT_MS}ms floor`;
 }
 
 /**
