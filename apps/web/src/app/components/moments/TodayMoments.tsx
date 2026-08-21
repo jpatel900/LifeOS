@@ -74,7 +74,11 @@ import {
 } from "./useAreaUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
-import { deepLinkTargetFromSearch, dropUnknownParams } from "./deepLink";
+import {
+  consumeIsRemount,
+  deepLinkTargetFromSearch,
+  dropUnknownParams,
+} from "./deepLink";
 import type { ToastAction } from "./toast";
 import { useFlowFocusSession } from "./useFlowFocusSession";
 import { RunningSessionReturn } from "./RunningSessionReturn";
@@ -699,6 +703,33 @@ export function TodayMoments({
   // even when an absence is about to latch, so an overlay/sheet target
   // would pop on top of the ritual before its own effect has a chance to
   // run.
+  // C2-S13 (#687 round-7 judge, "sheet renders with no sheet param"):
+  // `consumeIsRemount` (deepLink.ts) reads a MODULE-scope flag, not React
+  // state — it survives a client-side route change and back the same way
+  // `WorkflowProvider`'s own state does (mounted once at the root layout,
+  // that module is never re-evaluated by an in-app navigation; only
+  // TodayMoments' own component INSTANCE unmounts/remounts). Captured into a
+  // `useState` lazy initializer so it is read (and flipped for the NEXT
+  // mount) exactly once, synchronously, in the SAME render pass that
+  // produces this mount's first commit — before any effect has run.
+  //
+  // This distinguishes "TodayMoments has mounted before in this tab" (a
+  // Back/Forward walk crossing a real route change — `/settings/areas`,
+  // reached via `next/link`, the one navigation kind Next's router actually
+  // tracks; every moment/sheet/capture/palette/area write on `/` itself is a
+  // raw, router-invisible history write, see `lib/rawHistory.ts` — landing
+  // back on `/` can have Next's client Router Cache serve a STALE cached
+  // render, one baked from the earlier visit, with a stale `deepLink` prop)
+  // from "this is the very first mount `/` has ever had in this tab" (a hard
+  // load, a redirect-shim landing, or any of this file's own unit tests,
+  // which reset the flag between tests — see deepLink.ts's own doc comment
+  // on `resetTodayMomentsMountTrackingForTests` for why unit tests need
+  // that reset and `window.location` resets do not suffice). Only the
+  // FORMER needs the live URL cross-checked against `deepLink` at all — a
+  // fresh mount has nothing to distrust, `deepLink` is exactly what it
+  // always was: this render's own truth. See deepLink.ts's own doc comment
+  // on `deepLinkTargetFromSearch` for the full red-first repro.
+  const [isRemount] = useState(consumeIsRemount);
   const deepLinkAppliedRef = useRef(false);
   useEffect(() => {
     if (deepLinkAppliedRef.current) return;
@@ -706,34 +737,22 @@ export function TodayMoments({
     if (onboardingActive || onboarding.pending) return;
     if (typeof window === "undefined") return;
 
-    // C2-S13 (#687 round-7 judge, "sheet renders with no sheet param"):
-    // re-derive the target from the LIVE `window.location.search`
-    // (`deepLinkTargetFromSearch`, deepLink.ts) rather than trusting the
-    // `deepLink` PROP. `deepLink` is computed server-side, once, from
-    // whatever `searchParams` this route's RSC payload carried at render
-    // time — a Back/Forward walk crossing `/settings/areas` (a real
-    // `next/link` navigation, the one kind Next's router actually tracks;
-    // every param write on `/` itself is a raw, router-invisible history
-    // write — see `lib/rawHistory.ts`) can have Next's client Router Cache
-    // serve a STALE cached render for `/` on the way back, one baked from an
-    // earlier visit, before this file's own raw writes moved the address
-    // bar on in ways Next's router never learned about. See deepLink.ts's
-    // own doc comment on `deepLinkTargetFromSearch` for the full red-first
-    // repro. `window.location.search` is never subject to that cache.
-    const liveDeepLink = deepLinkTargetFromSearch(
-      new URLSearchParams(window.location.search),
-    );
-    if (!liveDeepLink) return;
+    const target = isRemount
+      ? deepLinkTargetFromSearch(new URLSearchParams(window.location.search))
+      : deepLink;
+    if (!target) return;
 
     deepLinkAppliedRef.current = true;
     // The URL ALREADY carries this moment (the redirect shim put it there
     // before this component mounted) — adopt it without pushing a second,
     // redundant history entry. Mirrors `adoptSheetFromUrl` below.
-    if (liveDeepLink.moment) adoptMomentFromUrl(liveDeepLink.moment);
-    if (liveDeepLink.overlay === "capture") adoptCaptureFromUrl(true);
-    if (liveDeepLink.overlay === "palette") adoptPaletteFromUrl(true);
-    if (liveDeepLink.sheet) adoptSheetFromUrl(liveDeepLink.sheet);
+    if (target.moment) adoptMomentFromUrl(target.moment);
+    if (target.overlay === "capture") adoptCaptureFromUrl(true);
+    if (target.overlay === "palette") adoptPaletteFromUrl(true);
+    if (target.sheet) adoptSheetFromUrl(target.sheet);
   }, [
+    deepLink,
+    isRemount,
     ritualActive,
     ritual.pending,
     onboardingActive,

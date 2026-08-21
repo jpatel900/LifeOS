@@ -72,10 +72,7 @@ function AdminShell({ children }: { children: ReactNode }) {
                 whichever area is already current, so there is nothing for
                 app state to catch up to). */}
             <Link
-              href={urlWithArea(
-                { pathname: "/", search: "" },
-                selectedAreaId,
-              )}
+              href={urlWithArea({ pathname: "/", search: "" }, selectedAreaId)}
               className="rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
             >
               Home
