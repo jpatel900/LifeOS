@@ -39,6 +39,33 @@ import { isSheetValue, type SheetValue } from "./sheetValues";
  * share-target handler in `TodayMoments` already uses, rather than
  * `router.push`: an App Router navigation re-renders the route and would
  * remount the sheet's own state on every open and close.
+ *
+ * C2-S11 (#687 round-5 judge) audited this hook against the SAME defect
+ * class just fixed in `useOverlayUrlState.ts`: `handlePopState` here ALSO
+ * unconditionally clears its ownership tracking (`pushedRef.current =
+ * false`) on every popstate, which is exactly what broke
+ * `useOverlayUrlState` when a nested push-then-`back()` happened while it
+ * still (legitimately) owned the entry underneath. That specific failure
+ * needs a live path that PUSHES a new entry while a sheet is the CURRENT
+ * entry, then `back()`s off that push — ruled out here, not assumed:
+ * `MomentSheet` (every sheet's shared wrapper) renders as a `fixed inset-0
+ * z-50` full-screen overlay with its own scrim, structurally covering the
+ * masthead's capture pill and area switcher underneath; `TodayMoments.tsx`'s
+ * `useMomentKeyboard` — the only source of `setMoment`/`openCapture`/
+ * `openPalette` calls outside a sheet's own UI — is gated
+ * `enabled: topbarShortcutsEnabled`, which requires `!activeSheet`; and none
+ * of `TriageSheet.tsx`/`PlanSheet.tsx`/`ReviewSheet.tsx`/`HealthSheet.tsx`/
+ * `AreasSheet.tsx` themselves ever call `openCapture`/`openPalette`/
+ * `setMoment`/a raw `pushState` (grepped directly, zero hits). `pushedRef`
+ * being a single BOOLEAN (not per-sheet, since `activeSheet` is one shared
+ * union across every sheet type, so there is only ever one instance of this
+ * hook) also means the SIBLING-INSTANCE half of the original bug — one
+ * hook's `back()` corrupting a DIFFERENT hook instance's tracking via the
+ * shared `popstate` event — cannot occur here at all; there is no sibling.
+ * `AreasSheet`'s own pick-and-close composition (C2-S8) already avoids
+ * `closeSheet()`'s `back()` entirely via `adoptSheetFromUrl(null)`, for a
+ * different reason (documented on that function) but with the same effect
+ * of never exercising this path.
  */
 
 export type { SheetValue };

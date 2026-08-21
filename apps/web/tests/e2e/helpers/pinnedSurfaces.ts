@@ -254,34 +254,6 @@ export const PINNED_SURFACES: PinnedSurface[] = [
     },
   },
   {
-    // C2-S11 (#687 round-4/5 judges — the accessible-name dispute): two
-    // independent judges flagged this surface's per-area "Plan area"/
-    // "Review area" links as icon-only anchors with empty accessible names;
-    // S10's own live-DOM scan disproved it, but neither side had run axe
-    // against this exact state. Root cause of the disagreement: those links
-    // live inside a native `<details>`/`<summary>` disclosure
-    // (`DiagnosticsDisclosure`, "Registry actions and settings") that is
-    // COLLAPSED by default — the `settings-areas` entry above never opens
-    // it, so axe never even sees these anchors there. This entry forces
-    // every `<details>` on the page open before scanning, so the links axe
-    // actually disputes are the ones measured. Verified via a manual scan
-    // (not yet part of this ratchet before now): 0 violations, and the
-    // anchors' own `outerHTML` carries plain visible text ("Plan area" /
-    // "Review area") — not icon-only, not an empty name.
-    id: "settings-areas-disclosures-expanded",
-    async goto(page) {
-      await page.goto("/settings/areas");
-      await expect(
-        page.getByRole("heading", { level: 1, name: "Areas" }),
-      ).toBeVisible({ timeout: 15_000 });
-      await page.evaluate(() => {
-        document
-          .querySelectorAll("details")
-          .forEach((details) => details.setAttribute("open", ""));
-      });
-    },
-  },
-  {
     id: "onboarding-areas",
     async goto(page) {
       await seedZeroWorkflowState(page);

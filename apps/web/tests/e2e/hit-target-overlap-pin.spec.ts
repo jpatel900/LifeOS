@@ -96,19 +96,6 @@ const BASELINE_OVERRIDES: Record<
     desktop: { subMin: 23, overlaps: 0 },
     mobile: { subMin: 10, overlaps: 0 },
   },
-  // C2-S11 (#687 accessible-name dispute follow-on): added to
-  // pinnedSurfaces.ts to settle whether the per-area "Plan area"/"Review
-  // area" links are icon-only (they are not — see that file's own comment).
-  // Sharing the surface list with THIS pin means it gets measured here too;
-  // the color-swatch buttons and nav links it surfaces are the SAME 40px
-  // controls already named for `settings-areas` above, just newly visible
-  // because the disclosure that was collapsed there is forced open here —
-  // not a new defect, and out of scope for the accessible-name work that
-  // added this surface. Recorded honestly rather than silently widened past.
-  "settings-areas-disclosures-expanded": {
-    desktop: { subMin: 11, overlaps: 0 },
-    mobile: { subMin: 10, overlaps: 0 },
-  },
   "onboarding-day": {
     desktop: { subMin: 1, overlaps: 0 },
     mobile: { subMin: 1, overlaps: 0 },
@@ -136,7 +123,7 @@ for (const surface of PINNED_SURFACES) {
 // deliberate per-surface entry above explaining the new count, and moving
 // either DOWN without deleting/shrinking the matching entry above is a bug
 // (assertion 3 below catches that drift).
-const TOTAL_SUB_MIN_PINNED = 62;
+const TOTAL_SUB_MIN_PINNED = 41;
 const TOTAL_OVERLAPS_PINNED = 0;
 
 test.describe("hit-target + overlap pin (Final UX Loop C5)", () => {

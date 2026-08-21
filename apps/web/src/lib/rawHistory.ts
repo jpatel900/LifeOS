@@ -87,10 +87,24 @@
  * anything), taking Next's bypass branch on every one of our calls. Next's
  * `HistoryUpdater` then only ever fires for Next's OWN legitimate
  * navigations, never chasing ours, so it can never race a `back()` we
- * triggered. This app does not read `usePathname`/`useSearchParams` for
- * any of the state these hooks own (confirmed: every hook here reads
- * `window.location` directly), so there is nothing this bypass could
- * desync. Next's own popstate handler additionally reloads the page
+ * triggered.
+ *
+ * Blast radius, checked rather than assumed: `grep -rn "useSearchParams|
+ * usePathname" apps/web/src` finds every consumer app-wide. The five params
+ * these hooks own (`moment`/`sheet`/`capture`/`palette`/`area`) are read via
+ * `useSearchParams()` NOWHERE — the only `useSearchParams()` caller in the
+ * whole app is `app/login/page.tsx` (its own unrelated `?next=` return
+ * target), a route none of these hooks — nor `WorkflowContext.tsx`'s
+ * pathname-gated area-sync effect — ever run on (`grep -rln
+ * "useOverlayUrlState|useSheetUrlState|useMomentUrlState|useAreaUrlState"`
+ * confirms the only consumers are `TodayMoments.tsx`, mounted exclusively at
+ * `/`, and `WorkflowContext.tsx`). Several OTHER files do call
+ * `usePathname()` (`AppShell.tsx`, `HealthView.tsx`, `StatusBanners.tsx`,
+ * `LifeOSCockpit.tsx`, `AuthAffordance.tsx`, `settings/areas/page.tsx`) —
+ * unaffected regardless, since none of these hooks ever change the
+ * PATHNAME, only the search string; a bypassed resync only lets
+ * `canonicalUrl`'s query portion go stale, and `usePathname()` never reads
+ * that portion. Next's own popstate handler additionally reloads the page
  * outright if `event.state.__NA` is missing on the entry landed on, so
  * carrying this marker is load-bearing beyond just dodging the race.
  */
