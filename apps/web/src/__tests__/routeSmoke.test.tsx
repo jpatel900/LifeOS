@@ -23,6 +23,15 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: navigationMock.push }),
 }));
 
+// C2-S14 (#687 round-8, defect 1): `page.tsx` now reads `next/headers`
+// `cookies()`, a real Next.js request-scoped API this vitest environment
+// does not provide — mocked to an empty cookie jar, same shape
+// `app/page.test.tsx` uses for its own dedicated coverage of the cookie
+// tier itself.
+vi.mock("next/headers", () => ({
+  cookies: () => Promise.resolve({ get: () => undefined }),
+}));
+
 function renderThroughAppShell(children: ReactNode, pathname = "/capture") {
   navigationMock.pathname = pathname;
   return render(<AppShell>{children}</AppShell>);

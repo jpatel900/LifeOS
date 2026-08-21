@@ -246,12 +246,15 @@ const persistedTask = {
 let restoreParseCaptureFetch: () => void;
 
 beforeEach(async () => {
-  // #691: the provider now persists the area selection (and has always
-  // persisted the workflow state) to sessionStorage — each test must start
-  // from clean storage or one test's stored selection hydrates into the
-  // next (same pattern as cockpitPlanFlow.test.tsx).
+  // #691: the provider has always persisted the workflow STATE to
+  // sessionStorage (unchanged). The area SELECTION moved to the
+  // `lifeos_moments_prefs` cookie in C2-S14 (#687 round-8, defect 3) — see
+  // `lib/momentsPreferencesCookie.ts`. Each test must start from clean
+  // storage or one test's stored selection hydrates into the next (same
+  // pattern as cockpitPlanFlow.test.tsx).
   window.sessionStorage.clear();
   window.localStorage.clear();
+  document.cookie = "lifeos_moments_prefs=; Max-Age=0; Path=/";
   // C2-S8 (#687 finding 1): `?area=` now also drives mount resolution — a
   // stray param a previous test left in `window.location` would otherwise
   // hydrate into this one.
@@ -562,14 +565,16 @@ describe("WorkflowProvider persisted area sync", () => {
   });
 
   // C2-S8 (#687 finding 1): `?area=` outranks the stored device preference.
+  // C2-S14 (#687 round-8, defect 3): the stored device preference now lives
+  // in the `lifeos_moments_prefs` cookie, not `sessionStorage` — these tests
+  // prime the cookie (the current, primary path), not the legacy bridge.
   describe("?area= URL precedence", () => {
     it("a valid ?area= wins over a stored device preference on mount", async () => {
-      // sessionStorage already remembers "area-personal" from an earlier
-      // visit; the URL now names a different area — the URL must win.
-      window.sessionStorage.setItem(
-        "lifeos.phase2.selectedArea",
-        JSON.stringify("area-personal"),
-      );
+      // The cookie already remembers "area-personal" from an earlier visit;
+      // the URL now names a different area — the URL must win.
+      document.cookie = `lifeos_moments_prefs=${encodeURIComponent(
+        JSON.stringify({ area: "area-personal" }),
+      )}; Path=/`;
       window.history.replaceState(null, "", "/?area=area-volunteer");
 
       render(
@@ -586,10 +591,9 @@ describe("WorkflowProvider persisted area sync", () => {
     });
 
     it("?area=all resolves to the explicit All-areas selection, winning over a stored area preference", async () => {
-      window.sessionStorage.setItem(
-        "lifeos.phase2.selectedArea",
-        JSON.stringify("area-personal"),
-      );
+      document.cookie = `lifeos_moments_prefs=${encodeURIComponent(
+        JSON.stringify({ area: "area-personal" }),
+      )}; Path=/`;
       window.history.replaceState(null, "", "/?area=all");
 
       render(

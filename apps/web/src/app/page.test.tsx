@@ -11,13 +11,39 @@ vi.mock("./components/CockpitRoute", () => ({
   ),
 }));
 vi.mock("./components/moments/TodayMoments", () => ({
-  TodayMoments: ({ deepLink }: { deepLink?: unknown }) => (
+  TodayMoments: ({
+    deepLink,
+    cookieMoment,
+  }: {
+    deepLink?: unknown;
+    cookieMoment?: unknown;
+  }) => (
     <div
       data-testid="today-moments-home"
       data-deeplink={JSON.stringify(deepLink ?? null)}
+      data-cookie-moment={JSON.stringify(cookieMoment ?? null)}
     />
   ),
 }));
+
+// C2-S14 (#687 round-8, defect 1): `page.tsx` reads `next/headers` `cookies()`
+// — a real Next.js request-scoped API this vitest environment does not
+// provide (calling it un-mocked throws "cookies was called outside a
+// request scope"). Mocked per-test below, same shape `next/navigation` and
+// `next-themes` already get in this file.
+const { cookiesMock } = vi.hoisted(() => ({ cookiesMock: vi.fn() }));
+vi.mock("next/headers", () => ({
+  cookies: cookiesMock,
+}));
+
+function stubCookies(value?: string) {
+  cookiesMock.mockResolvedValue({
+    get: (name: string) =>
+      name === "lifeos_moments_prefs" && value !== undefined
+        ? { name, value }
+        : undefined,
+  });
+}
 
 // #501: MomentsThemeShell reads next-themes' useTheme() to mirror
 // resolvedTheme onto the shell's data-theme. Mock it per-test below so the
@@ -32,6 +58,7 @@ describe("HomePage route gate (P7a — NEXT_PUBLIC_MOMENTS_HOME)", () => {
 
   beforeEach(() => {
     useThemeMock.mockReturnValue({ resolvedTheme: "dark" });
+    stubCookies(undefined);
   });
 
   afterEach(() => {
@@ -40,6 +67,7 @@ describe("HomePage route gate (P7a — NEXT_PUBLIC_MOMENTS_HOME)", () => {
     } else {
       process.env.NEXT_PUBLIC_MOMENTS_HOME = original;
     }
+    cookiesMock.mockReset();
   });
 
   it("renders the moments home by default (P7d go-live — flag unset)", async () => {
@@ -47,6 +75,44 @@ describe("HomePage route gate (P7a — NEXT_PUBLIC_MOMENTS_HOME)", () => {
     render(await HomePage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByTestId("today-moments-home")).toBeTruthy();
     expect(screen.queryByTestId("cockpit-route")).toBeNull();
+  });
+
+  // C2-S14 (#687 round-8, defect 1 — the worst one): this is the actual fix
+  // under test — the SAME cookie value the server reads is threaded down as
+  // the `cookieMoment` prop, so `TodayMoments`' `resolvedInitialMoment`
+  // initializer can resolve it identically on the server and the client's
+  // first render (exactly like `deepLink.moment` above). No settle, no
+  // wrong-then-swap paint.
+  it("passes the remembered moment from the lifeos_moments_prefs cookie as cookieMoment", async () => {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    stubCookies(JSON.stringify({ moment: "close" }));
+    render(await HomePage({ searchParams: Promise.resolve({}) }));
+    expect(
+      screen
+        .getByTestId("today-moments-home")
+        .getAttribute("data-cookie-moment"),
+    ).toBe(JSON.stringify("close"));
+  });
+
+  it("passes no cookieMoment when the cookie is absent (fresh browser)", async () => {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    render(await HomePage({ searchParams: Promise.resolve({}) }));
+    expect(
+      screen
+        .getByTestId("today-moments-home")
+        .getAttribute("data-cookie-moment"),
+    ).toBe(JSON.stringify(null));
+  });
+
+  it("passes no cookieMoment when the cookie is malformed", async () => {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    stubCookies("{not json");
+    render(await HomePage({ searchParams: Promise.resolve({}) }));
+    expect(
+      screen
+        .getByTestId("today-moments-home")
+        .getAttribute("data-cookie-moment"),
+    ).toBe(JSON.stringify(null));
   });
 
   it('renders the stage cockpit today grid only when explicitly disabled ("false")', async () => {
@@ -101,6 +167,7 @@ describe("MomentsHomeShell data-theme (#501 — follows next-themes, not cockpit
 
   beforeEach(() => {
     delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    stubCookies(undefined);
   });
 
   afterEach(() => {
@@ -109,6 +176,7 @@ describe("MomentsHomeShell data-theme (#501 — follows next-themes, not cockpit
     } else {
       process.env.NEXT_PUBLIC_MOMENTS_HOME = original;
     }
+    cookiesMock.mockReset();
   });
 
   it('sets data-theme="light" when the app theme resolves to light', async () => {
