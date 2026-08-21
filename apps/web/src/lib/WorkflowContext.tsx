@@ -109,6 +109,7 @@ import {
   parseAreaParam,
   urlWithArea,
 } from "./areaUrlParam";
+import { historyReplaceState } from "./rawHistory";
 import { workflowAreaIdForPersistedArea } from "./workflowAreaMapping";
 import {
   STORAGE_KEY,
@@ -1629,11 +1630,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined" && isMomentsHomePathname()) {
       const params = new URLSearchParams(window.location.search);
       if (parseAreaParam(params.get("area")) !== selectedAreaId) {
-        window.history.replaceState(
-          null,
-          "",
-          urlWithArea(window.location, selectedAreaId),
-        );
+        historyReplaceState(urlWithArea(window.location, selectedAreaId));
       }
     }
   }, [hasHydratedFromStorage, selectedAreaId]);

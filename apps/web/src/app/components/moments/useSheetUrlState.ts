@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { historyPushState, historyReplaceState } from "@/lib/rawHistory";
 import { isSheetValue, type SheetValue } from "./sheetValues";
 
 /**
@@ -121,7 +122,7 @@ export function useSheetUrlState(): SheetUrlState {
     ) {
       return;
     }
-    window.history.pushState(null, "", urlWithSheet(window.location, sheet));
+    historyPushState(urlWithSheet(window.location, sheet));
     pushedRef.current = true;
   }, []);
 
@@ -133,7 +134,7 @@ export function useSheetUrlState(): SheetUrlState {
       window.history.back();
       return;
     }
-    window.history.replaceState(null, "", urlWithSheet(window.location, null));
+    historyReplaceState(urlWithSheet(window.location, null));
   }, []);
 
   const adoptSheetFromUrl = useCallback((sheet: SheetValue | null) => {
