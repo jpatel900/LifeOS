@@ -5,6 +5,7 @@ import "fake-indexeddb/auto";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
+import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 import type { ParsedWorkflowResult } from "@/lib/ai/parseCaptureWorkflow";
 
 // S3 (#255): accept-path person/commitment persistence. These tests drive the
@@ -282,7 +283,7 @@ function renderProbe() {
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   // The provider persists workflow state to sessionStorage; clear it so drafts
   // from a prior test do not leak into the next render.
   window.sessionStorage.clear();
@@ -328,10 +329,19 @@ beforeEach(() => {
       archived_at: null,
     },
   });
+  // #861: `fake-indexeddb/auto` backs ONE module-global store shared by every
+  // `it` in this file. The accept path below runs the REAL persistence sync,
+  // which journals a device-durable write before the (mocked) account layer
+  // is reached — so the journal fills up even with `@/lib/data/workflow`
+  // mocked. Left uncleared, an earlier test's write is read back by the next
+  // test's `WorkflowProvider` mount effect. Same clear
+  // `durableWinsReviewsGuard.test.tsx` has always done.
+  await clearPendingWrites();
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.clearAllMocks();
+  await clearPendingWrites();
 });
 
 describe("WorkflowProvider accept-path person/commitment persistence", () => {

@@ -37,6 +37,7 @@ import {
   ReEntrySeedBridge,
   resetTodayMomentsMountTracking,
 } from "@/__tests__/helpers/todayMomentsHarness";
+import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 
 // C2-S13 (#687 round-7): FILE-LEVEL, applies regardless of describe nesting
 // — every split file that mounts TodayMoments more than once needs this
@@ -50,21 +51,30 @@ afterEach(() => {
 describe("TodayMoments — FR-028 re-entry return ritual", () => {
   let restoreFetch: (() => void) | null = null;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     restoreFetch = stubParseCaptureFetch();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
     window.localStorage.clear();
     window.sessionStorage.clear();
+    // #861: `fake-indexeddb/auto` backs ONE module-global store shared by every
+    // `it` in this file, and the journeys below drive real WorkflowContext
+    // actions that journal device-durable writes. Left uncleared, an earlier
+    // test's write is read back by the next test's `WorkflowProvider` mount
+    // effect (`refreshJournalledDurableState`, fired un-awaited on mount), so a
+    // later test can see durable state it never created. Same clear
+    // `durableWinsReviewsGuard.test.tsx` has always done.
+    await clearPendingWrites();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     restoreFetch?.();
     restoreFetch = null;
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     window.localStorage.clear();
     window.sessionStorage.clear();
+    await clearPendingWrites();
   });
 
   /**
