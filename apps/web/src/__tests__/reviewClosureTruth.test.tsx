@@ -10,6 +10,7 @@ import ReviewPage from "../app/review/page";
 import { TodayMoments } from "../app/components/moments/TodayMoments";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
+import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 
 /**
  * #588 — report day closure only after persistence resolves.
@@ -68,7 +69,7 @@ vi.mock("@/lib/workflowContext/persistenceSync", async (importOriginal) => {
   };
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
   // C2-S6 (#687): `/review` is a flag-gated redirect shim now — this file
@@ -80,12 +81,30 @@ beforeEach(() => {
   navigationMock.pathname = "/review";
   navigationMock.push = vi.fn();
   persistReviewEntryOverride.current = null;
+  // #861: the "local-only (real fallback path)" cases below deliberately
+  // exercise the REAL persistReviewEntry (no override), which journals a
+  // device-durable write keyed by the REAL calendar day
+  // (`localIsoDate(new Date())` in WorkflowContext's `saveReview`) — NOT the
+  // fixed `now` this file passes to the component for its view-model counts.
+  // Left uncleared, that write survives: `fake-indexeddb/auto` backs one
+  // module-global store shared by every `it` in this file, so it is read
+  // back by the NEXT test's `WorkflowProvider` mount effect
+  // (`refreshJournalledDurableState`, fired un-awaited on mount) and makes
+  // that test's OWN close look already-closed for real, underneath its own
+  // view (whose `closeVM.dayClose` stays null because the leaked entry's day
+  // key doesn't match the fixed `now`). That is exactly the #861 race: the
+  // retry test's second `saveReview()` call hit `saveReview`'s own
+  // already-closed guard instead of the mocked `persistReviewEntry`, so
+  // `calls` stayed 1 forever. Clearing the journal here is what
+  // `durableWinsReviewsGuard.test.tsx` already does for the same store.
+  await clearPendingWrites();
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllEnvs();
   window.localStorage.clear();
   window.sessionStorage.clear();
+  await clearPendingWrites();
 });
 
 describe("#588 cockpit review shell: verdict gated on the resolved save", () => {
