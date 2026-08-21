@@ -74,6 +74,7 @@ import {
 } from "./useAreaUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
+import { dropUnknownParams } from "./deepLink";
 import type { ToastAction } from "./toast";
 import { useFlowFocusSession } from "./useFlowFocusSession";
 import { RunningSessionReturn } from "./RunningSessionReturn";
@@ -811,6 +812,12 @@ export function TodayMoments({
     for (const key of MOMENTS_URL_KEYS) {
       if (dedupeParam(params, key)) changed = true;
     }
+    // C2-S12B (#687 round-6, finding 3): drops any param key outside the
+    // allowlist (deepLink.ts), INCLUDING a case-variant near-miss of a known
+    // key (e.g. `?MOMENT=flow` alongside the `moment` this app actually
+    // reads) — the sibling lane built this as a pure function without a live
+    // wiring site in its own manifest (TodayMoments.tsx is this lane's).
+    if (dropUnknownParams(params)) changed = true;
 
     const sheetParam = params.get("sheet");
     if (sheetParam !== null && !isSheetValue(sheetParam)) {

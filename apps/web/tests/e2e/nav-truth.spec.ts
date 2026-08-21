@@ -1218,3 +1218,27 @@ test("settings quick link: the arrival URL carries ?area=, a moment switch keeps
     await freshContext.close();
   }
 });
+
+/**
+ * C2-S12A finishing the C2-S12B AGENT-TODO (#687 round-6, finding 3): a
+ * hand-crafted case-variant like `?MOMENT=flow` is invisible to
+ * `deepLinkTargetFromParams` (read case-sensitively) — it rendered nothing,
+ * but nothing ever told the URL that, so a refresh kept showing
+ * `?MOMENT=flow&moment=start` — a key the app ignores sitting next to the
+ * one it honors. `dropUnknownParams` (deepLink.ts, built by the sibling
+ * lane as a pure function) is now wired into TodayMoments.tsx's own
+ * `invalidParamsScrubbedRef` scrub effect, live in the browser, not just
+ * unit-tested in isolation.
+ */
+test("a stray uppercase ?MOMENT= key is scrubbed from the URL, keeping the real ?moment= key", async ({
+  page,
+}) => {
+  await page.goto("/?MOMENT=flow&moment=start");
+  await expect(page.getByTestId("start-moment")).toBeVisible();
+
+  await expect(async () => {
+    const params = new URL(page.url()).searchParams;
+    expect(params.has("MOMENT")).toBe(false);
+    expect(params.get("moment")).toBe("start");
+  }).toPass({ timeout: 30_000 });
+});

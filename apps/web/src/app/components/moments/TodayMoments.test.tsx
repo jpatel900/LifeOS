@@ -516,6 +516,30 @@ describe("TodayMoments", () => {
     expect(screen.getByTestId("today-moments")).toBeInTheDocument();
   });
 
+  // C2-S12A finishing the C2-S12B AGENT-TODO (#687 round-6, finding 3): the
+  // sibling lane built `dropUnknownParams` (deepLink.ts) as a pure,
+  // fully-unit-tested function but could not wire it in — TodayMoments.tsx
+  // is this lane's manifest, not theirs. This is that wiring, live: a
+  // case-variant like `?MOMENT=flow` is invisible to `deepLinkTargetFromParams`
+  // (read case-sensitively), so it rendered nothing while still sitting in
+  // the bar next to the `moment` key the app actually honors — a URL naming
+  // a key it ignores right beside the one it reads.
+  it("scrubs an uppercase case-variant key (?MOMENT=) that the app never reads, keeping the real ?moment= key", async () => {
+    window.history.replaceState(null, "", "/?MOMENT=flow&moment=start");
+
+    renderToday({ initialMoment: "start" });
+
+    await waitFor(() => {
+      expect(new URL(window.location.href).searchParams.has("MOMENT")).toBe(
+        false,
+      );
+    });
+    expect(new URL(window.location.href).searchParams.get("moment")).toBe(
+      "start",
+    );
+    expect(screen.getByTestId("start-moment")).toBeInTheDocument();
+  });
+
   it("scrubs unknown ?capture= / ?palette= values the same way, without touching a valid neighbor param", async () => {
     window.history.replaceState(
       null,
