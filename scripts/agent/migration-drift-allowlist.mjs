@@ -2,7 +2,8 @@
 // ledger with NO matching file under supabase/migrations/, and are KNOWN,
 // expected drift rather than a gap this repo needs to catch up on.
 //
-// This Supabase project (vpjmltajbaqxwunjjgtq, "LifeOS") is SHARED: the
+// This Supabase project (<prod-project-ref> — see the Supabase dashboard;
+// deliberately not hardcoded here, see AGENTS.md rule 9) is SHARED: the
 // RiseUp Cockpit project (a separate repo/app) applies its own migrations
 // directly to the same database. Its versions will never have a file here,
 // and that is fine — they are not this repo's migrations to track.

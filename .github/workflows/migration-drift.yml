@@ -57,9 +57,12 @@ jobs:
           # it for caching (it auto-detects the packageManager field)
           package-manager-cache: false
 
-      - name: check-migration-drift self-test
-        run: node scripts/agent/check-migration-drift.mjs --self-test
-
+      # check-migration-drift.mjs's self-test already runs on every push and PR
+      # via the `automerge-policy-self-tests` job in ci.yml — not repeated here,
+      # so an unrelated self-test failure can never block this workflow's own
+      # documented allow_skip escape hatch (the secret-check below must be able
+      # to exit 0 on its own whenever the secret is absent, regardless of node
+      # setup or self-test health).
       - name: Compare repo migrations against production (both directions)
         env:
           PROD_DB_URL: ${{ secrets.SUPABASE_PROD_DB_URL }}

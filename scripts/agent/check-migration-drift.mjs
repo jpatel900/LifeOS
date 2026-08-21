@@ -29,7 +29,15 @@ import process from "node:process";
 import { MIGRATION_DRIFT_ALLOWLIST } from "./migration-drift-allowlist.mjs";
 
 const MIGRATION_FILENAME_PATTERN = /^(\d{14})_(.+)\.sql$/;
-const LEDGER_LINE_PATTERN = /^(\d{14})\t(.+)$/;
+// Name is intentionally `(.*)` (allowed empty), not `(.+)`: every row this
+// repo's own tooling ever writes (assemble-migration-sql.mjs, `supabase db
+// push`) derives name from the migration filename and is never empty in
+// practice, but a ledger row inserted some other way with a blank name must
+// still be COMPARABLE by version, not thrown into `malformed` and used to
+// hard-fail the entire check for an unrelated reason. Malformed is reserved
+// for lines that don't even parse as "<14-digit-version><TAB><anything>" —
+// e.g. a psql connection error — where there is no version to compare at all.
+const LEDGER_LINE_PATTERN = /^(\d{14})\t(.*)$/;
 
 /**
  * Reads supabase/migrations/<dir>/*.sql and splits each filename into
@@ -64,8 +72,12 @@ export function parseLedgerLines(lines) {
   const malformed = [];
 
   for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) continue;
+    // Strip only a trailing CR (Windows line-ending artifact) — NOT a full
+    // trim(). A ledger row with an empty name is "<version><TAB>" with
+    // nothing after the tab; a blanket trim() would eat that trailing tab
+    // and turn a legitimate empty-name row into an unparseable one.
+    const line = rawLine.replace(/\r$/, "");
+    if (line.trim() === "") continue;
 
     const match = line.match(LEDGER_LINE_PATTERN);
     if (!match) {
@@ -108,7 +120,9 @@ export function computeDrift({ local, remote, allowlist }) {
 }
 
 function formatEntry({ version, name }) {
-  return `  ${version}_${name}`;
+  return name
+    ? `  ${version}_${name}`
+    : `  ${version} (ledger row has no name)`;
 }
 
 /**
@@ -272,6 +286,30 @@ function runSelfTest() {
     "an unparseable ledger line is flagged as malformed, not silently skipped",
   );
 
+  // A ledger row with an empty name (never produced by this repo's own
+  // assemble-migration-sql.mjs / `supabase db push`, but not impossible from
+  // some other channel) must still be COMPARABLE by version — it is not the
+  // same failure class as a line that doesn't parse at all (e.g. a psql
+  // connection error), so it must NOT land in `malformed` and block the
+  // whole check for an unrelated reason.
+  const { entries: parsedEmptyName, malformed: malformedEmptyName } =
+    parseLedgerLines(["20260101120000\t"]);
+  assert.equal(
+    parsedEmptyName.length,
+    1,
+    "a ledger row with an empty name still parses as a comparable version",
+  );
+  assert.equal(
+    malformedEmptyName.length,
+    0,
+    "an empty ledger name is not treated as malformed — only a fully unparseable line is",
+  );
+  assert.equal(
+    formatEntry(parsedEmptyName[0]),
+    "  20260101120000 (ledger row has no name)",
+    "an empty-name entry formats without a dangling trailing underscore",
+  );
+
   const { entries: filesOk, malformed: filesMalformedOk } = readLocalMigrations(
     ".",
     () => ["20260101120000_one.sql", "20260102120000_two.sql"],
@@ -317,7 +355,7 @@ function runSelfTest() {
 
   console.log(
     `Self-test passed (${dataCases.length} comparison cases, 4 vacuous-pass guards, ` +
-      `${MIGRATION_DRIFT_ALLOWLIST.length} allowlist entries validated).`,
+      `1 empty-ledger-name parsing case, ${MIGRATION_DRIFT_ALLOWLIST.length} allowlist entries validated).`,
   );
 }
 
