@@ -177,10 +177,15 @@ describe("area selection single source of truth (#691)", () => {
       JSON.stringify({ dark: false, areaId: "area-personal", stage: "today" }),
     );
 
+    // TodayPage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const todayPageElement = await TodayPage({
+      searchParams: Promise.resolve({}),
+    });
     render(
       <WorkflowProvider>
         <SelectionProbe />
-        <TodayPage />
+        {todayPageElement}
       </WorkflowProvider>,
     );
 

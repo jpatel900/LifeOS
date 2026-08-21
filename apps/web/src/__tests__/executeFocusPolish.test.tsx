@@ -29,11 +29,12 @@ vi.mock("next/navigation", () => ({
 
 describe("Execute cockpit", () => {
   it("keeps execution focused on the planned-block picker and timer", async () => {
-    render(
-      <AppShell>
-        <ExecutePage />
-      </AppShell>,
-    );
+    // ExecutePage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const executePageElement = await ExecutePage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<AppShell>{executePageElement}</AppShell>);
 
     expect(await screen.findByText("Focus queue")).toBeDefined();
     expect(screen.getByText("Pick a block")).toBeDefined();

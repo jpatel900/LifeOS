@@ -69,7 +69,22 @@ export default function AreasSettingsPage() {
         "None selected");
 
   return (
-    <div className="flex flex-col gap-6">
+    // #687 round-8 finding 3 (fresh-eyes judge): this page had ZERO `<main>`
+    // landmarks and, combined with `AppShell.tsx`'s own nav `<header>`
+    // sitting outside any main, TWO top-level (banner-mapped) headers —
+    // neither this page's own "Areas" header below nor AdminShell's nav
+    // header had any `<main>` ancestor. Making THIS the one `<main>` (not a
+    // second wrapper in AppShell.tsx — see that file's own comment) demotes
+    // this page's own header from `banner` to a plain nested header for
+    // free (the ARIA host-language mapping: `<header>` only maps to
+    // `banner` when it has no `main`/`article`/`aside`/`nav`/`section`
+    // ancestor), leaving AdminShell's nav header as the one remaining
+    // top-level header — matching home's own contract (one main, wrapping
+    // everything below its own masthead). `id="stage-content"` is
+    // `AppShell.tsx`'s skip-link target; `tabIndex={-1}` makes it a valid
+    // programmatic focus target without adding it to the Tab order, same as
+    // `MomentsThemeShell.tsx`'s `#stage-content` div.
+    <main id="stage-content" tabIndex={-1} className="flex flex-col gap-6">
       {/* #660 audit line S1: was `WorkflowPageHeader` — an uppercase eyebrow
           ("Ownership boundaries"), a fluid-clamp `.workflow-page-title`
           (1.9-2.9rem), and an animated gradient panel. That grammar is a
@@ -227,6 +242,6 @@ export default function AreasSettingsPage() {
           <LocalResetPanel />
         </DiagnosticsDisclosure>
       </div>
-    </div>
+    </main>
   );
 }

@@ -15,7 +15,9 @@ vi.mock("next/navigation", () => ({
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
 
-function renderCalendarWithStoredJourney() {
+// CalendarPage is an async Server Component (Next 15 `searchParams` is a
+// Promise) — resolve it before handing the element to `render`.
+async function renderCalendarWithStoredJourney() {
   let state = workflowSeed();
   state = captureWorkflow(
     state,
@@ -24,11 +26,10 @@ function renderCalendarWithStoredJourney() {
   state = acceptLatestDraft(state);
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
-  return render(
-    <WorkflowProvider>
-      <CalendarPage />
-    </WorkflowProvider>,
-  );
+  const calendarPageElement = await CalendarPage({
+    searchParams: Promise.resolve({}),
+  });
+  return render(<WorkflowProvider>{calendarPageElement}</WorkflowProvider>);
 }
 
 // C2-S6 (#687): `/calendar` is a flag-gated redirect shim now — this file
@@ -55,7 +56,7 @@ afterEach(() => {
 
 describe("cockpit plan flow", () => {
   it("schedules the only ready task from the hour rail without selecting it first", async () => {
-    renderCalendarWithStoredJourney();
+    await renderCalendarWithStoredJourney();
 
     // To place, Proposals, launch-step commitment display, and Google approvals
     // each show the ready task context.
@@ -76,7 +77,7 @@ describe("cockpit plan flow", () => {
   // visible via a `sm:grid` override, so this only asserts class state
   // (jsdom doesn't evaluate the media query itself).
   it("collapses empty hour rows behind a 'show empty hours' disclosure until toggled", async () => {
-    renderCalendarWithStoredJourney();
+    await renderCalendarWithStoredJourney();
     await screen.findAllByText(/Draft agenda/i);
 
     const emptyRow = screen.getByTestId("hour-row-11");
@@ -94,7 +95,7 @@ describe("cockpit plan flow", () => {
   });
 
   it("never collapses an hour row that already has a placed block", async () => {
-    renderCalendarWithStoredJourney();
+    await renderCalendarWithStoredJourney();
     await screen.findAllByText(/Draft agenda/i);
 
     fireEvent.click(screen.getByRole("button", { name: /10a\s+Drop here/i }));

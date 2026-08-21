@@ -105,11 +105,12 @@ describe("S9 golden-journey point 6a: sourced duration recalibration", () => {
       overRunSession("s3", GOLDEN_AREA_ID),
     ]);
 
-    render(
-      <WorkflowProvider>
-        <CalendarPage />
-      </WorkflowProvider>,
-    );
+    // CalendarPage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const calendarPageElement = await CalendarPage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<WorkflowProvider>{calendarPageElement}</WorkflowProvider>);
 
     // Hydration from sessionStorage happens in an effect — wait for the card(s).
     // The seed drafts a proposal per active task in the area, so ≥1 card shows.
@@ -144,11 +145,12 @@ describe("S9 golden-journey point 6a: sourced duration recalibration", () => {
     // floor — so the card is absent (not merely absent for lack of a proposal).
     seedWithProposal([overRunSession("s1", GOLDEN_AREA_ID)]);
 
-    render(
-      <WorkflowProvider>
-        <CalendarPage />
-      </WorkflowProvider>,
-    );
+    // CalendarPage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const calendarPageElement = await CalendarPage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<WorkflowProvider>{calendarPageElement}</WorkflowProvider>);
 
     // The proposal itself is present; only the recalibration is withheld.
     expect((await screen.findAllByText("Accept local")).length).toBeGreaterThan(

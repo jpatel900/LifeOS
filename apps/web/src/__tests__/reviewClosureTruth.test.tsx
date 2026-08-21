@@ -108,12 +108,13 @@ afterEach(async () => {
 });
 
 describe("#588 cockpit review shell: verdict gated on the resolved save", () => {
-  function renderReview() {
-    render(
-      <WorkflowProvider>
-        <ReviewPage />
-      </WorkflowProvider>,
-    );
+  // ReviewPage is an async Server Component (Next 15 `searchParams` is a
+  // Promise) — resolve it before handing the element to `render`.
+  async function renderReview() {
+    const reviewPageElement = await ReviewPage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<WorkflowProvider>{reviewPageElement}</WorkflowProvider>);
   }
 
   function clickSave() {
@@ -126,7 +127,7 @@ describe("#588 cockpit review shell: verdict gated on the resolved save", () => 
       new Promise((resolve) => {
         resolveSave = resolve;
       });
-    renderReview();
+    await renderReview();
 
     clickSave();
 
@@ -150,7 +151,7 @@ describe("#588 cockpit review shell: verdict gated on the resolved save", () => 
     // #737-A slice 2 this branch is also where the review is genuinely
     // DEVICE-DURABLE — journalled to IndexedDB, readable from a new tab —
     // which is what makes the "saved on this device" wording true.
-    renderReview();
+    await renderReview();
 
     clickSave();
 
@@ -165,7 +166,7 @@ describe("#588 cockpit review shell: verdict gated on the resolved save", () => 
   it("failure: recovery copy, no closure claim, stays on review", async () => {
     persistReviewEntryOverride.current = () =>
       Promise.reject(new Error("persist blew up"));
-    renderReview();
+    await renderReview();
 
     clickSave();
 
