@@ -711,7 +711,11 @@ describe("TodayMoments", () => {
   // claiming `palette=1` regardless; it must now be scrubbed too, matching
   // this file's own capture+palette scrub just above.
   it("scrubs the losing palette when a sheet is also named — sheet wins, palette never renders", async () => {
-    window.history.replaceState(null, "", "/?sheet=plan&palette=1&moment=start");
+    window.history.replaceState(
+      null,
+      "",
+      "/?sheet=plan&palette=1&moment=start",
+    );
 
     renderToday({
       initialMoment: "start",
