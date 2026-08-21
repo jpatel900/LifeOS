@@ -11,6 +11,7 @@ import {
 } from "@/lib/keys/keymap";
 import { HIT_TARGET_MIN } from "./hitTarget";
 import { kbdHintClass } from "./kbdChip";
+import { isTypingTarget } from "./typingTarget";
 
 /**
  * D-10 (#483, masthead audit finding #3): the prototype masthead has a
@@ -50,21 +51,6 @@ export interface MastheadThemeToggleProps {
   shortcutEnabled?: boolean;
 }
 
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  if (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    tag === "BUTTON" ||
-    tag === "A"
-  ) {
-    return true;
-  }
-  return target.isContentEditable;
-}
-
 export function MastheadThemeToggle({
   shortcutEnabled = true,
 }: MastheadThemeToggleProps) {
@@ -77,6 +63,11 @@ export function MastheadThemeToggle({
 
   const isDark = mounted ? theme !== "light" : true;
 
+  // #687 round-6 bug-echo: this listener used to carry its own
+  // isTypingTarget that (mis)classified a focused BUTTON/A as "typing",
+  // which silently killed the "D" shortcut the instant focus landed on ANY
+  // control. Now imports the one shared, fixed definition from
+  // `./typingTarget`.
   useEffect(() => {
     if (!shortcutEnabled || !mounted) return undefined;
     function handleKeyDown(event: KeyboardEvent) {

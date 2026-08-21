@@ -213,7 +213,15 @@ describe("AreaSelector", () => {
     expect(hint).toHaveClass("sm:group-hover:opacity-100");
   });
 
-  it("does not cycle on 'A' while a button elsewhere has focus (typing-target guard, matches useMomentKeyboard's convention)", () => {
+  // #687 round-6 bug-echo (bug-echo of PR #906's useMomentKeyboard fix):
+  // AreaSelector had the identical defective isTypingTarget, which
+  // (mis)classified a focused BUTTON/A as "typing" and silently killed this
+  // shortcut the instant focus landed on ANY control, not just this one's
+  // own trigger. A button is not a text-entry context — the shortcut must
+  // keep firing. Red-first: this fails against the pre-fix isTypingTarget
+  // (which returned true for tag === "BUTTON"), confirmed by temporarily
+  // reverting AreaSelector.tsx to its own local copy of that defect.
+  it("keeps cycling on 'A' while a button elsewhere has focus (not a typing context)", () => {
     const onChange = vi.fn();
     render(
       <div>
@@ -230,6 +238,38 @@ describe("AreaSelector", () => {
     // window listener with `event.target` correctly set to `other`,
     // exercising the real bubble path instead of forcing `target`.
     fireEvent.keyDown(other, { key: "a" });
+
+    expect(onChange).toHaveBeenLastCalledWith("area-1");
+  });
+
+  // Same defect, worse case: the widget's OWN trigger button focuses itself
+  // on click, so the pre-fix isTypingTarget blocked "A" from ever cycling a
+  // SECOND time without first clicking somewhere else to move focus off it.
+  it("keeps cycling on 'A' while its own trigger button holds focus", () => {
+    const onChange = vi.fn();
+    render(<AreaSelector areas={AREAS} value={null} onChange={onChange} />);
+
+    const trigger = screen.getByTestId("today-moments-area-switcher");
+    fireEvent.click(trigger); // focuses the trigger, as a real click would
+
+    fireEvent.keyDown(trigger, { key: "a" });
+    expect(onChange).toHaveBeenLastCalledWith("area-1");
+  });
+
+  // The real typing-target case must still be suppressed — only BUTTON/A
+  // were ever the bug; INPUT stays blocked.
+  it("does not cycle on 'A' while typing in a real text input", () => {
+    const onChange = vi.fn();
+    render(
+      <div>
+        <AreaSelector areas={AREAS} value={null} onChange={onChange} />
+        <input data-testid="other-input" />
+      </div>,
+    );
+
+    const input = screen.getByTestId("other-input");
+    input.focus();
+    fireEvent.keyDown(input, { key: "a" });
 
     expect(onChange).not.toHaveBeenCalled();
   });
