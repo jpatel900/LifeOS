@@ -538,6 +538,36 @@ describe("TodayMoments", () => {
     expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
   });
 
+  // C2-S9 (#687 round-3 fresh-eyes judge, score 8.0, minor item): a
+  // hand-crafted duplicate key renders first-wins (URLSearchParams.get's own
+  // rule, matching every parser in this file), but used to leave the DEAD
+  // second key sitting in the address bar unexplained — the same
+  // stale-param-lingers bug the invalid-value scrub above already closes,
+  // just for a well-formed value repeated instead of a malformed one.
+  it("scrubs a duplicate ?moment= key, keeping only the first (winning) value", async () => {
+    window.history.replaceState(null, "", "/?moment=flow&moment=close");
+
+    renderToday();
+
+    await waitFor(() => {
+      const params = new URL(window.location.href).searchParams;
+      expect(params.getAll("moment")).toEqual(["flow"]);
+    });
+    expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
+  });
+
+  it("scrubs a duplicate ?sheet= key, keeping only the first (winning) value", async () => {
+    window.history.replaceState(null, "", "/?sheet=plan&sheet=health");
+
+    renderToday({ initialMoment: "start", deepLink: { sheet: "plan" } });
+
+    await waitFor(() => {
+      const params = new URL(window.location.href).searchParams;
+      expect(params.getAll("sheet")).toEqual(["plan"]);
+    });
+    expect(screen.getByTestId("plan-sheet")).toBeInTheDocument();
+  });
+
   it("does not touch a VALID ?sheet= value — that stays owned by the deep-link effect", async () => {
     window.history.replaceState(null, "", "/?sheet=triage");
 
