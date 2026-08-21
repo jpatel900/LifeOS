@@ -34,6 +34,7 @@ import {
   resetTodayMomentsMountTracking,
 } from "@/__tests__/helpers/todayMomentsHarness";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
+import { clearStoredTaskDrafts } from "@/lib/durability/draftStore";
 
 // C2-S13 (#687 round-7): FILE-LEVEL, applies regardless of describe nesting
 // — every split file that mounts TodayMoments more than once needs this
@@ -63,6 +64,22 @@ describe("TodayMoments — moment-switching journeys", () => {
     // later test can see durable state it never created. Same clear
     // `durableWinsReviewsGuard.test.tsx` has always done.
     await clearPendingWrites();
+    // #914: a SECOND, separate IndexedDB store leaks the same way — and
+    // `clearPendingWrites()` above cannot touch it. `TaskSeedBridge` (in the
+    // shared harness) submits a capture and sorts it into a `taskDrafts`
+    // entry; `WorkflowContext`'s write-half effect mirrors every PENDING
+    // draft to `lifeos-triage-drafts` (`lib/durability/draftStore.ts`), a
+    // device-durable home for unaccepted drafts that is deliberately NOT the
+    // pending-writes journal (see that file's own doc comment for why). Left
+    // uncleared, a draft one test seeded and accepted — or one whose
+    // reconcile write had not yet settled when the test ended — is read back
+    // by the next test's `WorkflowProvider` mount (the "restore device
+    // drafts" effect), so `seed-draft-count` counts a leaked draft plus the
+    // one this test just seeded. Reproduced under shuffled order
+    // (`pnpm vitest run src/app/components/moments/TodayMoments.journeys.test.tsx
+    // --sequence.shuffle --sequence.seed=11`, also 22 and 44) before this
+    // line existed.
+    await clearStoredTaskDrafts();
   });
 
   afterEach(async () => {
@@ -73,6 +90,7 @@ describe("TodayMoments — moment-switching journeys", () => {
     window.sessionStorage.clear();
     window.history.replaceState(null, "", "/");
     await clearPendingWrites();
+    await clearStoredTaskDrafts();
   });
 
   it("start-to-first-move journey: Start now switches to Flow with a running countdown", async () => {
