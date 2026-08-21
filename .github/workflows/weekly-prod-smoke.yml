@@ -244,16 +244,64 @@ jobs:
           # via the CLI `--trace off` below -- see the secret-safety note.
           SMOKE_CAPTURE_ARTIFACTS: "1"
         run: |
+          set -o pipefail
           if [ -z "$SMOKE_BASE_URL" ]; then
             echo "::warning::SMOKE_BASE_URL secret is not set; skipping the weekly prod smoke."
             echo "outcome=skipped" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if node scripts/run-prod-smoke.mjs --trace off --reporter=list,html; then
+          # Tee the same list-reporter output to a file in RUNNER_TEMP (never
+          # the repo checkout -- see the "Extract failing smoke detail" step
+          # below) so a failing run can name its failing step in the tracking
+          # issue instead of just "still failing". `set -o pipefail` (above)
+          # keeps this `if` reading node's exit code, not tee's.
+          if node scripts/run-prod-smoke.mjs --trace off --reporter=list,html \
+            | tee "${RUNNER_TEMP}/smoke-run.log"; then
             echo "outcome=success" >> "$GITHUB_OUTPUT"
           else
             echo "outcome=failure" >> "$GITHUB_OUTPUT"
           fi
+
+      # Extend (not duplicate) the existing issue-based signal: pull the
+      # plain-language pieces the Playwright list reporter already printed
+      # -- the failing test's own (static, source-code) title and locator --
+      # so the reconcile step below can name the failing step in the tracking
+      # issue instead of a generic "still failing". This does NOT change
+      # whether the job is blocking (still green-by-design) and does NOT add
+      # a second alerting path -- same issue, same reconcile step, just a
+      # fuller body.
+      #
+      # Secret/privacy safety (public repo -- see the header's note): only
+      # the failure title (spec file:line + the test's own name, both source
+      # code) and the `Locator:` selector (also source code) are extracted.
+      # The assertion's `Error:` message line is included too but capped at
+      # 200 characters and taken as a single line, because on a DIFFERENT
+      # assertion type (e.g. `toContainText`) that message can echo real DOM
+      # text from the account under test -- capping bounds the blast radius
+      # without deleting the signal. Read from $RUNNER_TEMP, never the repo
+      # checkout, and never uploaded as an artifact.
+      - name: Extract failing smoke detail for the issue (refs #856)
+        id: smoke_detail
+        if: steps.smoke.outputs.outcome == 'failure'
+        run: |
+          log="${RUNNER_TEMP}/smoke-run.log"
+          strip_ansi() { sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g'; }
+          title="$(strip_ansi < "$log" | grep -m1 -E '^[[:space:]]*[0-9]+\)[[:space:]]+\[' | sed -E 's/^[[:space:]]*[0-9]+\)[[:space:]]+//; s/[[:space:]]+$//' || true)"
+          locator="$(strip_ansi < "$log" | grep -m1 -E '^[[:space:]]*Locator:' | sed -E 's/^[[:space:]]*Locator:[[:space:]]*//' || true)"
+          message="$(strip_ansi < "$log" | grep -m1 -E '^[[:space:]]*Error:' | sed -E 's/^[[:space:]]*Error:[[:space:]]*//' | cut -c1-200 || true)"
+          failed_count="$(strip_ansi < "$log" | grep -oE '^[[:space:]]*[0-9]+ failed' | grep -oE '[0-9]+' | head -1 || true)"
+          {
+            echo "title<<SMOKE_DETAIL_EOF"
+            echo "${title:-(no failure title captured)}"
+            echo "SMOKE_DETAIL_EOF"
+            echo "locator<<SMOKE_DETAIL_EOF"
+            echo "${locator:-(none)}"
+            echo "SMOKE_DETAIL_EOF"
+            echo "message<<SMOKE_DETAIL_EOF"
+            echo "${message:-(no assertion message captured)}"
+            echo "SMOKE_DETAIL_EOF"
+            echo "failedCount=${failed_count:-unknown}"
+          } >> "$GITHUB_OUTPUT"
 
       # The smoke step above deliberately swallows a non-zero exit so the
       # reconcile step can still open/close the tracking issue. That makes a
@@ -302,6 +350,15 @@ jobs:
       - name: Reconcile prod-smoke GitHub issue
         if: steps.smoke.outputs.outcome == 'success' || steps.smoke.outputs.outcome == 'failure'
         uses: actions/github-script@v8
+        env:
+          # Plain-language failing-step detail from the "Extract failing
+          # smoke detail" step above (refs #856). Empty on a success run --
+          # that step is skipped then, which is fine, nothing below reads
+          # these unless outcome is "failure".
+          SMOKE_FAILURE_TITLE: ${{ steps.smoke_detail.outputs.title }}
+          SMOKE_FAILURE_LOCATOR: ${{ steps.smoke_detail.outputs.locator }}
+          SMOKE_FAILURE_MESSAGE: ${{ steps.smoke_detail.outputs.message }}
+          SMOKE_FAILED_COUNT: ${{ steps.smoke_detail.outputs.failedCount }}
         with:
           script: |
             const outcome = "${{ steps.smoke.outputs.outcome }}";
@@ -317,12 +374,32 @@ jobs:
 
             if (outcome === "failure") {
               const now = new Date().toISOString();
+              // Plain-language failing-step lines (refs #856) -- built even
+              // when the extract step captured nothing (falls back to "not
+              // captured" rather than a blank line), so the issue always
+              // names a failing step in words, not just "still failing".
+              const failedCount = (process.env.SMOKE_FAILED_COUNT || "unknown").trim();
+              const failureTitle = (process.env.SMOKE_FAILURE_TITLE || "").trim() || "(not captured)";
+              const failureLocator = (process.env.SMOKE_FAILURE_LOCATOR || "").trim();
+              const failureMessage = (process.env.SMOKE_FAILURE_MESSAGE || "").trim();
+              const failureLines = [
+                `**Failing test** (${failedCount === "unknown" ? "count unknown" : `${failedCount} failed`}): ${failureTitle}`,
+              ];
+              if (failureLocator && failureLocator !== "(none)") {
+                failureLines.push(`**Waiting on:** \`${failureLocator}\``);
+              }
+              if (failureMessage && failureMessage !== "(no assertion message captured)") {
+                failureLines.push(`**Assertion:** ${failureMessage}`);
+              }
+
               if (!existing) {
                 await github.rest.issues.create({
                   owner, repo,
                   title: "Weekly prod smoke: production smoke failed",
                   body: [
                     `The weekly production smoke (\`.github/workflows/weekly-prod-smoke.yml\`) failed at ${now}.`,
+                    "",
+                    ...failureLines,
                     "",
                     `Run: ${runUrl}`,
                     "",
@@ -336,7 +413,13 @@ jobs:
               } else {
                 await github.rest.issues.createComment({
                   owner, repo, issue_number: existing.number,
-                  body: `Weekly prod smoke: still failing as of ${now}.\n\nRun: ${runUrl}`,
+                  body: [
+                    `Weekly prod smoke: still failing as of ${now}.`,
+                    "",
+                    ...failureLines,
+                    "",
+                    `Run: ${runUrl}`,
+                  ].join("\n"),
                 });
                 core.info(`Weekly prod smoke: commented on existing issue #${existing.number}.`);
               }
