@@ -1616,9 +1616,7 @@ test("a second tab restores both the remembered moment and area consistently", a
 
   await expect(async () => {
     expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
-    expect(new URL(page.url()).searchParams.get("area")).toBe(
-      "area-personal",
-    );
+    expect(new URL(page.url()).searchParams.get("area")).toBe("area-personal");
   }).toPass({ timeout: 30_000 });
 
   const secondTab = await context.newPage();
