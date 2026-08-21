@@ -157,15 +157,40 @@ export async function signIn(page: Page, user: SeededUser): Promise<void> {
  * likely place the #841 clock race hits first
  *
  * `signIn()` calls this immediately after the `/login` form submits, which
- * makes the `capture_items` GET below the very first PostgREST request the
+ * makes the requests below the very first PostgREST traffic the
  * freshly-minted session's JWT is used for — closest in wall-clock terms to
- * a `supabase db reset` that just ran. If that GET 401s with the exact
+ * a `supabase db reset` that just ran. If a GET 401s with the exact
  * PGRST303 shape (see `isPgrst303` / the constants above `accountClient`),
  * it is retried by re-running the WHOLE navigation (bounded, with a settle
  * wait) rather than by masking it: nothing here decides the read succeeded
- * when it did not. Any other failure shape on this same endpoint — or a
- * timeout with no PGRST303 ever observed — rethrows the original
- * `waitForResponse` timeout unchanged, exactly as before this retry existed.
+ * when it did not. Any other failure shape — or a timeout with no PGRST303
+ * ever observed — rethrows the original `waitForResponse` timeout unchanged,
+ * exactly as before this retry existed.
+ *
+ * ## #883 — the watch covers every `/rest/v1/` GET, not only `capture_items`
+ *
+ * `capture_items` is requested from INSIDE `syncPersistedAreas`
+ * (`WorkflowContext.tsx`), strictly after `listAreas()` returns:
+ * ```
+ * const result = await listAreas(client);          // GET /rest/v1/areas
+ * ...
+ * await syncPersistedWorkflowRows(client, result.areas); // GET .../capture_items
+ * ```
+ * `listAreas` throws on any non-2xx (`if (error) throw new Error(...)`,
+ * `lib/data/workflow/areas.ts`), and `syncPersistedAreas`'s `catch` routes
+ * straight to `markPersistedLoadFailure` — `syncPersistedWorkflowRows`, and
+ * so the `capture_items` GET, is never reached. A PGRST303 on `areas` is
+ * the exact same self-resolving clock race as a PGRST303 on `capture_items`
+ * (same session, same JWT, same `nbf` skew), but a watch scoped to
+ * `capture_items` alone never observes it: two CI sightings (#883) showed
+ * the wait dying at the bare 60s timeout with no `[signed-in] PGRST303 …`
+ * line at all, because the request that actually 401'd was never watched.
+ * So `sawPgrst303` below is set by a PGRST303 on ANY `/rest/v1/` GET this
+ * function's window sees — still the identical narrow signature
+ * (`isPgrst303`: 401 AND `code === "PGRST303"`, nothing looser) — while the
+ * SUCCESS predicate (`rowsLoaded`) stays exactly as narrow as before,
+ * scoped to `capture_items` only: widening what can trigger a retry does
+ * not widen what counts as "the account arrived".
  */
 export async function gotoWithAccountSync(
   page: Page,
@@ -175,16 +200,26 @@ export async function gotoWithAccountSync(
     response.url().includes("/rest/v1/capture_items") &&
     response.request().method() === "GET";
 
+  // #883: PGRST303 is retried for ANY `/rest/v1/` GET this window sees, not
+  // only `capture_items` — see the doc comment above for why `capture_items`
+  // itself may never be requested at all when an earlier read (`areas`) hits
+  // the same clock race first.
+  const isTrackedRestGet = (response: Response) =>
+    response.url().includes("/rest/v1/") &&
+    response.request().method() === "GET";
+
   for (let attempt = 1; attempt <= PGRST303_MAX_ATTEMPTS; attempt++) {
     let sawPgrst303 = false;
+    let pgrst303Path = "";
     const onResponse = (response: Response) => {
-      if (!isCaptureItemsGet(response) || response.ok()) return;
+      if (!isTrackedRestGet(response) || response.ok()) return;
       void response
         .text()
         .catch(() => "")
         .then((body) => {
           if (isPgrst303(response.status(), body)) {
             sawPgrst303 = true;
+            pgrst303Path = response.url().split("?")[0]!;
           }
         });
     };
@@ -204,7 +239,7 @@ export async function gotoWithAccountSync(
         throw err;
       }
       console.log(
-        `[signed-in] PGRST303 (JWT not yet valid) on capture_items during gotoWithAccountSync(${path}), attempt ${attempt}/${PGRST303_MAX_ATTEMPTS} — settling ${PGRST303_SETTLE_WAIT_MS}ms and retrying the navigation.`,
+        `[signed-in] PGRST303 (JWT not yet valid) on ${pgrst303Path || "(unknown /rest/v1 path)"} during gotoWithAccountSync(${path}), attempt ${attempt}/${PGRST303_MAX_ATTEMPTS} — settling ${PGRST303_SETTLE_WAIT_MS}ms and retrying the navigation.`,
       );
       await new Promise((resolve) =>
         setTimeout(resolve, PGRST303_SETTLE_WAIT_MS),
