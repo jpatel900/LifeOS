@@ -107,9 +107,90 @@
  * that portion. Next's own popstate handler additionally reloads the page
  * outright if `event.state.__NA` is missing on the entry landed on, so
  * carrying this marker is load-bearing beyond just dodging the race.
+ *
+ * ## #897 — the bypass this file exists for has its OWN permanent cost
+ *
+ * Always taking Next's bypass branch (this file's whole reason for being)
+ * means Next's `HistoryUpdater` never re-syncs its own `canonicalUrl` to any
+ * write we make through here. That is fine for readers — `usePathname`/
+ * `useSearchParams` are never consumed for these params (see the blast-radius
+ * paragraph above) — but `HistoryUpdater`'s `useInsertionEffect`
+ * (`app-router.js:89-113`) does something readers never see: on EVERY
+ * `appRouterState` change, for ANY reason, anywhere in the app, it
+ * unconditionally does `window.history.replaceState(historyState, '',
+ * canonicalUrl)` — re-stamping whatever `canonicalUrl` Next is CURRENTLY
+ * holding onto the address bar. A bypassed write leaves that stale
+ * `canonicalUrl` sitting there, unbounded, until the next completely
+ * unrelated router-state change cashes it in and stomps our write back onto
+ * the URL. Confirmed directly against the installed `next@15.5.21` source:
+ * `app-router.js:311`/`:326` gate the bypass on `data.__NA || data._N`;
+ * `restore-reducer.js`'s `restoreReducer` (what a NON-bypassed write
+ * triggers via `ACTION_RESTORE`) reuses `state.cache`/`state.tree` rather
+ * than fetching or remounting anything — so letting Next see a write is
+ * cheap, not the route re-render `router.push`/`router.replace` would cause.
+ *
+ * Fix: an explicit, opt-in `resyncNextRouter` on `historyPushState`/
+ * `historyReplaceState`. Left off (the default), behavior is byte-for-byte
+ * unchanged — this is load-bearing for `useOverlayUrlState.closeOverlay`'s
+ * `stillOnOurEntry` branch, the ONE call site in this app that does a
+ * synchronous `write, then window.history.back()` in the same invocation
+ * (`useOverlayUrlState.ts:190-191`): a resync scheduled from that write is
+ * computed from the PRE-`back()` url/tree and, being deferred
+ * (`startTransition`), can commit AFTER `back()` already moved position —
+ * exactly the race this file's own header documents above. Turned on, the
+ * write is allowed to resync — safe at any call site verified (by grep) to
+ * never call `history.back()` synchronously in the same function: today
+ * that is `useSheetUrlState`'s `openSheet`/`closeSheet` only. Every other
+ * caller (`useMomentUrlState`, `useAreaUrlState`, `WorkflowContext`,
+ * `TodayMoments`'s own `historyReplaceState` calls) is left off for now —
+ * they share this same staleness defect in principle, but flipping them
+ * needs the same one-call-site-at-a-time safety check this comment just
+ * did, not a blind sweep.
+ *
+ * `startTransition`'s deferral is NOT undone by this fix: a resync is
+ * scheduled, not synchronous, so a sub-render-tick window where
+ * `canonicalUrl` is still stale survives. What this closes is the
+ * UNBOUNDED window — stale until some unrelated LATER navigation cashes it
+ * in — down to that much smaller one. Whether the residual window is ever
+ * user-observable is a live-browser question; see the PR for what remains
+ * unverified without one.
  */
 
 let nextEntryId = 1;
+
+/** Options accepted by `historyPushState`/`historyReplaceState`. */
+export interface HistoryWriteOptions {
+  /**
+   * Let Next.js's own patched `pushState`/`replaceState` see this write as
+   * EXTERNAL so its `HistoryUpdater` resyncs `canonicalUrl` to match, instead
+   * of leaving it pointed at the pre-write URL until some unrelated later
+   * navigation stomps our write back onto the address bar (#897). Defaults
+   * to `false` — see this file's header for exactly which call sites may
+   * safely pass `true`.
+   */
+  resyncNextRouter?: boolean;
+}
+
+/**
+ * Strips Next's own bypass markers (`__NA`, the legacy-router `_N`, and the
+ * internals tree) from a history-entry state object, WITHOUT touching any
+ * other field (namely our own `__lifeOSEntryId`). Next's patched
+ * `pushState`/`replaceState` re-stamps `__NA`/the tree onto the entry itself
+ * regardless (`copyNextJsInternalHistoryState`, `app-router.js:144-156`), so
+ * dropping them here only ever affects whether THIS call is treated as
+ * external (and therefore resyncs `canonicalUrl`) — never whether the
+ * resulting entry is recognized as Next's own on a later popstate.
+ */
+function stripNextRouterMarker(state: unknown): Record<string, unknown> | null {
+  if (!state || typeof state !== "object") return null;
+  const {
+    __NA: _na,
+    _N: _legacyNa,
+    __PRIVATE_NEXTJS_INTERNALS_TREE: _tree,
+    ...rest
+  } = state as Record<string, unknown>;
+  return rest;
+}
 
 function entryIdFromState(state: unknown): number | null {
   if (
@@ -142,12 +223,20 @@ function currentHistoryState(): unknown {
  * caller can later ask `currentHistoryEntryId() === thatId` to know,
  * unambiguously, whether it is still standing on the entry it just created.
  */
-export function historyPushState(url: string): number {
+export function historyPushState(
+  url: string,
+  options?: HistoryWriteOptions,
+): number {
   const id = nextEntryId++;
   const priorState = currentHistoryState();
+  const carryForward = options?.resyncNextRouter
+    ? stripNextRouterMarker(priorState)
+    : priorState && typeof priorState === "object"
+      ? priorState
+      : null;
   window.history.pushState(
     {
-      ...(priorState && typeof priorState === "object" ? priorState : null),
+      ...carryForward,
       __lifeOSEntryId: id,
     },
     "",
@@ -161,9 +250,20 @@ export function historyPushState(url: string): number {
  * entry already carried (its `__lifeOSEntryId`, and Next's own `__NA`/
  * internals-tree marker) — `replaceState` never creates a new position, so
  * the entry's identity does not change just because its URL did.
+ *
+ * Pass `{ resyncNextRouter: true }` only at a call site verified never to
+ * follow this with a synchronous `window.history.back()` in the same
+ * invocation — see this file's header (#897).
  */
-export function historyReplaceState(url: string): void {
-  window.history.replaceState(currentHistoryState(), "", url);
+export function historyReplaceState(
+  url: string,
+  options?: HistoryWriteOptions,
+): void {
+  const priorState = currentHistoryState();
+  const state = options?.resyncNextRouter
+    ? stripNextRouterMarker(priorState)
+    : priorState;
+  window.history.replaceState(state, "", url);
 }
 
 /**
