@@ -115,7 +115,10 @@ function formatEntry({ version, name }) {
  * Prints the report and returns whether the check passed. Kept separate
  * from computeDrift so the self-test can assert on data, not console output.
  */
-export function report({ missingFromProd, prodOnlyUnexplained, prodOnlyKnown }, totalLocal) {
+export function report(
+  { missingFromProd, prodOnlyUnexplained, prodOnlyKnown },
+  totalLocal,
+) {
   let ok = true;
 
   if (missingFromProd.length > 0) {
@@ -179,8 +182,17 @@ function runSelfTest() {
       name: "prod-only version on the allowlist is filtered out, not reported as unexplained",
       input: {
         local: [entry("20260101120000", "one")],
-        remote: [entry("20260101120000", "one"), entry("20260612231853", "remote_schema")],
-        allowlist: [{ version: "20260612231853", name: "remote_schema", reason: "documented in FAILURES.md" }],
+        remote: [
+          entry("20260101120000", "one"),
+          entry("20260612231853", "remote_schema"),
+        ],
+        allowlist: [
+          {
+            version: "20260612231853",
+            name: "remote_schema",
+            reason: "documented in FAILURES.md",
+          },
+        ],
       },
       expect: { missingFromProd: 0, prodOnlyUnexplained: 0, prodOnlyKnown: 1 },
     },
@@ -188,7 +200,10 @@ function runSelfTest() {
       name: "prod-only version NOT on the allowlist fails loudly — the planted-violation case",
       input: {
         local: [entry("20260101120000", "one")],
-        remote: [entry("20260101120000", "one"), entry("20260821999999", "mystery_change")],
+        remote: [
+          entry("20260101120000", "one"),
+          entry("20260821999999", "mystery_change"),
+        ],
         allowlist: [],
       },
       expect: { missingFromProd: 0, prodOnlyUnexplained: 1, prodOnlyKnown: 0 },
@@ -196,8 +211,14 @@ function runSelfTest() {
     {
       name: "both directions can fire in the same run",
       input: {
-        local: [entry("20260101120000", "one"), entry("20260103120000", "repo_only")],
-        remote: [entry("20260101120000", "one"), entry("20260821999999", "mystery_change")],
+        local: [
+          entry("20260101120000", "one"),
+          entry("20260103120000", "repo_only"),
+        ],
+        remote: [
+          entry("20260101120000", "one"),
+          entry("20260821999999", "mystery_change"),
+        ],
         allowlist: [],
       },
       expect: { missingFromProd: 1, prodOnlyUnexplained: 1, prodOnlyKnown: 0 },
@@ -230,31 +251,45 @@ function runSelfTest() {
     "20260102120000\ttwo",
   ]);
   assert.equal(parsedOk.length, 2, "well-formed ledger lines all parse");
-  assert.equal(malformedOk.length, 0, "well-formed ledger lines have no malformed entries");
+  assert.equal(
+    malformedOk.length,
+    0,
+    "well-formed ledger lines have no malformed entries",
+  );
 
   const { entries: parsedBad, malformed: malformedBad } = parseLedgerLines([
     "20260101120000\tone",
     "FATAL: connection to server failed",
   ]);
-  assert.equal(parsedBad.length, 1, "a bad line does not get counted as a valid version");
+  assert.equal(
+    parsedBad.length,
+    1,
+    "a bad line does not get counted as a valid version",
+  );
   assert.equal(
     malformedBad.length,
     1,
     "an unparseable ledger line is flagged as malformed, not silently skipped",
   );
 
-  const { entries: filesOk, malformed: filesMalformedOk } = readLocalMigrations(".", () => [
-    "20260101120000_one.sql",
-    "20260102120000_two.sql",
-  ]);
+  const { entries: filesOk, malformed: filesMalformedOk } = readLocalMigrations(
+    ".",
+    () => ["20260101120000_one.sql", "20260102120000_two.sql"],
+  );
   assert.equal(filesOk.length, 2, "well-formed migration filenames all parse");
-  assert.equal(filesMalformedOk.length, 0, "well-formed migration filenames have no malformed entries");
+  assert.equal(
+    filesMalformedOk.length,
+    0,
+    "well-formed migration filenames have no malformed entries",
+  );
 
-  const { entries: filesBad, malformed: filesMalformedBad } = readLocalMigrations(".", () => [
-    "20260101120000_one.sql",
-    "notes.sql",
-  ]);
-  assert.equal(filesBad.length, 1, "a file without a valid timestamp prefix does not get counted");
+  const { entries: filesBad, malformed: filesMalformedBad } =
+    readLocalMigrations(".", () => ["20260101120000_one.sql", "notes.sql"]);
+  assert.equal(
+    filesBad.length,
+    1,
+    "a file without a valid timestamp prefix does not get counted",
+  );
   assert.equal(
     filesMalformedBad.length,
     1,
@@ -274,7 +309,8 @@ function runSelfTest() {
       `allowlist entry ${JSON.stringify(allowlistEntry)} has a well-formed version`,
     );
     assert.ok(
-      typeof allowlistEntry.reason === "string" && allowlistEntry.reason.length > 20,
+      typeof allowlistEntry.reason === "string" &&
+        allowlistEntry.reason.length > 20,
       `allowlist entry for ${allowlistEntry.version} (${allowlistEntry.name}) must carry a real reason, not a placeholder`,
     );
   }
@@ -322,7 +358,7 @@ function main() {
   if (local.length === 0) {
     console.error(
       `::error::No local migrations found under ${migrationsDir}/*.sql. Either the glob failed ` +
-        "to expand or the directory is empty/missing. This must never be read as \"zero drift\" " +
+        'to expand or the directory is empty/missing. This must never be read as "zero drift" ' +
         "— refusing to compare.",
     );
     process.exit(1);
