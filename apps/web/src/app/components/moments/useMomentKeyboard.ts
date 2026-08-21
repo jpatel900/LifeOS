@@ -3,6 +3,7 @@ import {
   matchesMomentKeyBinding,
   momentKeyBindingById,
 } from "@/lib/keys/keymap";
+import { isTypingTarget } from "./typingTarget";
 
 /**
  * Moments pass P1 — packet: structural moments (Start/Flow/Close cockpit).
@@ -14,10 +15,13 @@ import {
  * disabled while typing so it never fights normal text entry).
  *
  * "Typing" means a real text-entry context only — INPUT/TEXTAREA/SELECT or
- * `isContentEditable` (see `isTypingTarget`). A focused BUTTON or A is NOT a
+ * `isContentEditable` (see `./typingTarget`'s `isTypingTarget`, shared with
+ * every other window-level keydown listener in this directory since the
+ * round-6 bug-echo sweep found the identical defect copy-pasted into
+ * AreaSelector.tsx/MastheadThemeToggle.tsx). A focused BUTTON or A is NOT a
  * typing context: every shortcut here still fires the instant focus lands on
  * one. The only special case a button/link earns is narrower —
- * `isNativeActivationTarget` stops Enter from double-firing the global
+ * `isNativeActivationTarget` below stops Enter from double-firing the global
  * primary action on top of the control's own native Enter-activates-click
  * behavior. (#687 round-6: the two were previously folded into one check,
  * which killed every shortcut but Escape after clicking ANY control.)
@@ -31,15 +35,6 @@ export interface MomentKeyboardHandlers {
   onEscape(): void;
   /** When false, the listener is inert (still attached/detached, no-op). */
   enabled?: boolean;
-}
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
-    return true;
-  }
-  return target.isContentEditable;
 }
 
 /**
