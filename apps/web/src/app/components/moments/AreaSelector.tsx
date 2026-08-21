@@ -9,6 +9,7 @@ import {
 } from "@/lib/keys/keymap";
 import { HIT_TARGET_MIN, HIT_TARGET_ROW } from "./hitTarget";
 import { kbdHintClass } from "./kbdChip";
+import { isTypingTarget } from "./typingTarget";
 
 /**
  * D-10 (#483, masthead audit finding #1 — "the single most off-language
@@ -89,21 +90,6 @@ const ALL_AREAS_OPTION: Option = { id: null, name: "All areas", color: null };
 // added to globals.css).
 const NEUTRAL_SWATCH_STYLE = { borderColor: "var(--muted-foreground)" };
 
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  if (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    tag === "BUTTON" ||
-    tag === "A"
-  ) {
-    return true;
-  }
-  return target.isContentEditable;
-}
-
 function optionKey(option: Option): string {
   return option.id ?? "all";
 }
@@ -149,7 +135,11 @@ export function AreaSelector({
   // D-10: real "A" shortcut — cycles the selection. Guarded exactly like
   // useMomentKeyboard's global listener (typing targets + held modifiers
   // pass through untouched) so it never fights a focused control elsewhere
-  // on the page.
+  // on the page. #687 round-6 bug-echo: this used to have its own
+  // isTypingTarget that (mis)classified a focused BUTTON/A as "typing",
+  // which silently killed this shortcut the instant focus landed on ANY
+  // control — including this component's own trigger. Now imports the one
+  // shared, fixed definition from `./typingTarget` instead.
   useEffect(() => {
     if (!shortcutEnabled) return undefined;
     function handleKeyDown(event: KeyboardEvent) {
