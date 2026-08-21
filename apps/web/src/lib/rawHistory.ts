@@ -154,7 +154,16 @@
  * strip's OWN dispatch land in the same synchronous tick and win instead of
  * being silently overwritten. The owning branch above (`stillOnOurEntry`)
  * must keep this off — it always follows with a synchronous `back()`, which
- * is exactly what turning this on would race. Every other caller
+ * is exactly what turning this on would race.
+ *
+ * `useOverlayUrlState.openOverlay`'s own push (`useOverlayUrlState.ts:~170`)
+ * was the predicted MIRROR of #897 on the open side, checked rather than
+ * assumed (Part of #687): it was in neither list above — not verified safe
+ * and flipped, not deliberately left off pending a check — just never
+ * examined, so it left `canonicalUrl` stale at the NO-OVERLAY url the same
+ * way `openSheet` did before #904. Now flipped on too, safe by the same
+ * grep-verified rule: `openOverlay` never calls `history.back()`
+ * synchronously in the same invocation. Every other caller
  * (`useMomentUrlState`, `useAreaUrlState`, `WorkflowContext`, `TodayMoments`'s
  * own `historyReplaceState` calls) is left off for now — they share this
  * same staleness defect in principle, but flipping them needs the same

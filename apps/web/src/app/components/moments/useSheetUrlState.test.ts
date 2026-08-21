@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { historyReplaceState } from "@/lib/rawHistory";
+import { installNextRouterHistorySimulator } from "./nextRouterHistorySimulator";
 import { urlWithSheet, useSheetUrlState } from "./useSheetUrlState";
 
 /**
@@ -124,7 +125,16 @@ describe("useSheetUrlState (C2 Target Card 2)", () => {
     expect(result.current.activeSheet).toBe("plan");
   });
 
-  it("after a Back, closing never consumes a second Back", () => {
+  // RE-ANCHORED (Part of #687, "Back does nothing once" fix — see the
+  // dedicated describe block below): this file's `goto()` helper is a bare
+  // `replaceState(null, ...)`, which WIPES the landed-on entry's `state` —
+  // including the `__lifeOSEntryId` a real Forward would have preserved. So
+  // this test does NOT exercise a real Back+Forward (that walk is pinned for
+  // real below, against a REAL history stack); it covers the narrower,
+  // still-real case where identity genuinely CANNOT be recovered (the entry
+  // we land on carries none of ours) — closing must still take the safe
+  // strip branch, not guess `back()` off it.
+  it("closing after landing on an entry with no ownership id of ours strips the param instead of guessing a Back", () => {
     const back = vi.spyOn(window.history, "back").mockImplementation(() => {});
     const { result } = renderHook(() => useSheetUrlState());
 
@@ -133,7 +143,9 @@ describe("useSheetUrlState (C2 Target Card 2)", () => {
       goto("/");
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
-    // Forward again, then close with the button.
+    // "Forward" via `goto()` lands on the right URL but, unlike a real
+    // Forward, an entry with NO state of ours (see above) — so this is not
+    // actually the entry `openSheet` pushed, ownership-wise.
     act(() => {
       goto("/?sheet=plan");
       window.dispatchEvent(new PopStateEvent("popstate"));
@@ -207,112 +219,15 @@ describe("useSheetUrlState (C2 Target Card 2)", () => {
  *
  * jsdom never mounts a real App Router, so this defect is invisible to the
  * other tests in this file (all of which use the bare `goto()` + `popstate`
- * helper above). The harness below is a faithful model of just the three
- * behaviors of Next's history patch this defect depends on — verified line
- * for line against the installed `next@15.5.21` source
- * (`node_modules/next/dist/client/components/app-router.js`,
- * `.../router-reducer/reducers/restore-reducer.js`):
- *
- *   1. `:309-333` — a `pushState`/`replaceState` call whose `state` already
- *      carries `__NA` or `_N` is Next's OWN write, forwarded unchanged:
- *      `canonicalUrl` does NOT change. A call WITHOUT either marker is
- *      external: Next stamps `__NA` onto the entry regardless
- *      (`copyNextJsInternalHistoryState`, `:144-156`) and schedules
- *      `canonicalUrl` to become the new url (`applyUrlFromHistoryPushReplace`
- *      -> `ACTION_RESTORE` -> `restoreReducer`, which reuses `state.cache`/
- *      `state.tree` rather than fetching or remounting anything).
- *   2. `HistoryUpdater`'s `useInsertionEffect` (`:89-113`) — on EVERY
- *      `appRouterState` change, for ANY reason, anywhere in the app,
- *      unconditionally re-stamps the CURRENT `canonicalUrl` onto the address
- *      bar via `replaceState`. Modeled as `fireHistoryUpdater()` below —
- *      standing in for "some unrelated later navigation happened".
- *   3. Native Back/Forward traversal (Next's own `onPopState` ->
- *      `dispatchTraverseAction`) sets `canonicalUrl` to whatever URL was
- *      traversed to. `traverse()` wraps this file's existing `goto()` +
- *      `popstate` pattern and additionally updates the modeled
- *      `canonicalUrl` to match — without this, `canonicalUrl` would still
- *      read the PRE-Forward url at close time and the reproduction below
- *      would be right for the wrong reason.
- *
- * NOT modeled: `startTransition`'s deferral (both (1)'s resync and (2)'s
- * re-stamp are applied here synchronously, not scheduled). A fix proven
- * against this harness closes the UNBOUNDED staleness window (stale until
- * some later, unrelated navigation cashes it in) down to one bounded by
- * whenever React flushes that transition — NOT one render tick; #897's own
- * CI evidence had a stale stamp land ~83ms after the strip, with no
- * guaranteed ordering against whatever else runs in between. Whether that
- * residual window is ever user-observable is a live-browser question the
- * PR states as unverified at this tier.
+ * helper above). `installNextRouterHistorySimulator` (extracted to
+ * `nextRouterHistorySimulator.ts` so the mirrored defect this predicted on
+ * `useOverlayUrlState` — Part of #687 — reuses the SAME model rather than a
+ * drifting second copy) is a faithful model of just the three behaviors of
+ * Next's history patch this defect depends on; see that file's own header
+ * for the line-for-line verification against the installed `next@15.5.21`
+ * source and what is deliberately NOT modeled (`startTransition`'s
+ * deferral).
  */
-function installNextRouterHistorySimulator() {
-  const nativePushState = window.history.pushState.bind(window.history);
-  const nativeReplaceState = window.history.replaceState.bind(window.history);
-  const initialUrl = window.location.pathname + window.location.search;
-  let canonicalUrl = initialUrl;
-
-  function hasNextMarker(state: unknown): boolean {
-    if (!state || typeof state !== "object") return false;
-    const s = state as Record<string, unknown>;
-    return Boolean(s.__NA) || Boolean(s._N);
-  }
-
-  function patch(
-    native: typeof window.history.pushState,
-  ): typeof window.history.pushState {
-    return function patched(
-      this: History,
-      data: unknown,
-      unused: string,
-      url?: string | URL | null,
-    ) {
-      if (hasNextMarker(data)) {
-        // Next's own write (or ours, deliberately marked to look like one):
-        // forwarded unchanged, canonicalUrl untouched.
-        return native.call(window.history, data, unused, url ?? undefined);
-      }
-      // External write: Next stamps its own marker onto the entry regardless
-      // (`copyNextJsInternalHistoryState`) and resyncs canonicalUrl to match.
-      const stamped =
-        data && typeof data === "object"
-          ? { ...(data as Record<string, unknown>), __NA: true }
-          : { __NA: true };
-      if (url != null) canonicalUrl = String(url);
-      return native.call(window.history, stamped, unused, url ?? undefined);
-    };
-  }
-
-  window.history.pushState = patch(nativePushState);
-  window.history.replaceState = patch(nativeReplaceState);
-  // Seed the root entry as already Next-owned — matching a mounted app whose
-  // first `HistoryUpdater` insertion effect already ran (rawHistory.ts's own
-  // header: "once Next has stamped anything").
-  nativeReplaceState({ __NA: true }, "", initialUrl);
-
-  return {
-    /** Simulates `HistoryUpdater` firing for a completely unrelated reason
-     * elsewhere in the app: re-stamps whatever canonicalUrl Next is
-     * currently holding onto the address bar. */
-    fireHistoryUpdater() {
-      nativeReplaceState({ __NA: true }, "", canonicalUrl);
-    },
-    /** Simulates the browser landing on a different history entry (Back or
-     * Forward) and Next's own popstate handler resyncing to it. Passes
-     * `{ __NA: true }` rather than `null` (unlike this file's plain
-     * `goto()`) because a real traversed-to entry already carries whatever
-     * Next stamped on it when it was created — it is never wiped. */
-    traverse(url: string) {
-      nativeReplaceState({ __NA: true }, "", url);
-      canonicalUrl = url;
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    },
-    getCanonicalUrl: () => canonicalUrl,
-    restore() {
-      window.history.pushState = nativePushState;
-      window.history.replaceState = nativeReplaceState;
-    },
-  };
-}
-
 describe("useSheetUrlState keeps Next's canonicalUrl in sync (#897)", () => {
   let sim: ReturnType<typeof installNextRouterHistorySimulator>;
 
@@ -382,5 +297,133 @@ describe("useSheetUrlState keeps Next's canonicalUrl in sync (#897)", () => {
     // of this file's fix.
     historyReplaceState("/?sheet=health");
     expect(sim.getCanonicalUrl()).toBe("/");
+  });
+});
+
+/**
+ * "Back does nothing once" (Part of #687, round-8 judge; observed
+ * independently by two fresh-eyes judges). Pre-fix, `pushedRef` was a single
+ * BOOLEAN, unconditionally cleared to `false` by `handlePopState` on EVERY
+ * popstate — including a Forward that lands back on the EXACT entry
+ * `openSheet` itself pushed. `closeSheet` read that cleared boolean and took
+ * the `replaceState` branch instead of `back()`, stripping the CURRENT entry
+ * (the one Forward just landed on) into a byte-for-byte duplicate of the
+ * entry behind it. One `Back` from there landed on the duplicate — the
+ * screen and URL were already "closed" before that Back, and were still
+ * "closed" after it, so nothing visibly changed; a SECOND `Back` was needed
+ * to reach a genuinely different entry. Reproduced against a real dev server
+ * first (`nav-truth.spec.ts`'s own history-walk pin for this exact defect;
+ * failed red on unfixed code with `expect(page.url()).not.toBe(urlBeforeSheet)`
+ * — the final Back landed back on the SAME entry, not a further one) before
+ * fixing here.
+ *
+ * Fix: track ownership by entry IDENTITY (`pushedEntryIdRef`, matching
+ * `useOverlayUrlState`'s own mechanism) instead of a boolean — a real Forward
+ * restores the landed-on entry's OWN `state`, id included, so `closeSheet`
+ * now correctly recognizes it is still standing on its own pushed entry and
+ * consumes a bare `back()`, never touching (or duplicating) the entry at
+ * all.
+ *
+ * Cannot be exercised with this file's own `goto()` helper: `goto()` is a
+ * bare `replaceState(null, ...)`, which WIPES the entry's `state` — including
+ * `__lifeOSEntryId` — so it cannot stand in for a real Forward. This block
+ * drives a REAL history stack instead (mirroring
+ * `useOverlayUrlState.test.ts`'s own composed-nesting pattern): `pushState`/
+ * `replaceState` apply for real; only `back()`/`forward()` (unimplemented in
+ * jsdom, per this file's header) are mocked to perform the traversal a real
+ * browser would, restoring whatever the stack ACTUALLY holds at that
+ * position rather than a hardcoded snapshot.
+ */
+describe("useSheetUrlState — the 'Back does nothing once' artifact (#687 round-8)", () => {
+  function installRealHistoryStack() {
+    const stack: Array<{ state: unknown; url: string }> = [
+      {
+        state: window.history.state,
+        url: `${window.location.pathname}${window.location.search}`,
+      },
+    ];
+    let position = 0;
+    const realPushState = window.history.pushState.bind(window.history);
+    const realReplaceState = window.history.replaceState.bind(window.history);
+    vi.spyOn(window.history, "pushState").mockImplementation(
+      (state, title, url) => {
+        realPushState(state, title, url ?? undefined);
+        stack.length = position + 1;
+        stack.push({
+          state: window.history.state,
+          url: `${window.location.pathname}${window.location.search}`,
+        });
+        position++;
+      },
+    );
+    vi.spyOn(window.history, "replaceState").mockImplementation(
+      (state, title, url) => {
+        realReplaceState(state, title, url ?? undefined);
+        stack[position] = {
+          state: window.history.state,
+          url: `${window.location.pathname}${window.location.search}`,
+        };
+      },
+    );
+    vi.spyOn(window.history, "back").mockImplementation(() => {
+      position--;
+      const entry = stack[position];
+      realReplaceState(entry.state, "", entry.url);
+    });
+    vi.spyOn(window.history, "forward").mockImplementation(() => {
+      position++;
+      const entry = stack[position];
+      realReplaceState(entry.state, "", entry.url);
+    });
+    return { stack };
+  }
+
+  beforeEach(() => {
+    goto("/");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("after Back+Forward, closing consumes its OWN Back rather than duplicating the current entry", () => {
+    const { stack } = installRealHistoryStack();
+    const back = vi.spyOn(window.history, "back");
+    const { result } = renderHook(() => useSheetUrlState());
+
+    act(() => result.current.openSheet("plan"));
+    expect(window.location.search).toBe("?sheet=plan");
+
+    // Back.
+    act(() => {
+      window.history.back();
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(result.current.activeSheet).toBeNull();
+
+    // Forward — a REAL forward, landing back on the exact entry `openSheet`
+    // pushed, `state` (and its `__lifeOSEntryId`) intact, unlike `goto()`.
+    act(() => {
+      window.history.forward();
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(result.current.activeSheet).toBe("plan");
+
+    back.mockClear();
+    act(() => result.current.closeSheet());
+    expect(result.current.activeSheet).toBeNull();
+    expect(window.location.search).toBe(""); // screen and URL agree right now
+
+    // The fix: `closeSheet` recognizes it is STILL standing on the entry it
+    // pushed (Forward preserved its id) and consumes its own Back, exactly
+    // like the un-Forwarded "just opened, immediate close" case already
+    // pinned above — not a strip.
+    expect(back).toHaveBeenCalledTimes(1);
+
+    // No duplicate: entry 1 (the one Forward landed on) was NEVER
+    // replaceState'd — `back()` alone moved position off it, leaving its
+    // content untouched in the stack, unlike the pre-fix artifact.
+    expect(stack[1].url).toBe("/?sheet=plan");
+    expect(stack[1].url).not.toBe(stack[0].url);
   });
 });

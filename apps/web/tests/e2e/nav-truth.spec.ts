@@ -1055,6 +1055,91 @@ test("history walk: palette -> capture opened from inside it -> Esc -> Esc -> a 
   expect(page.url()).not.toBe(urlBeforePalette);
 });
 
+/**
+ * Predicted mirror of the SAME defect class (Part of #687, round-8 judge;
+ * observed independently by two fresh-eyes judges; documented in
+ * `rawHistory.ts`'s own header): "Back does nothing once" on a SHEET.
+ * `useSheetUrlState`'s `pushedRef` is a single BOOLEAN, unconditionally
+ * cleared by `handlePopState` on EVERY popstate — including a Forward that
+ * lands back on the EXACT entry `openSheet` itself pushed. `closeSheet` then
+ * reads that cleared boolean and takes the `replaceState` branch instead of
+ * `back()`, stripping the CURRENT entry into a byte-for-byte duplicate of the
+ * entry behind it. One `Back` from there lands on that duplicate — nothing
+ * visibly changes; a second was needed to reach a genuinely different entry.
+ *
+ * Cannot be reproduced by the unit tier's own `goto()` helper (a bare
+ * `replaceState(null, ...)` that wipes `__lifeOSEntryId` from the entry's
+ * state on every simulated pop) standing in for a real Forward, which
+ * preserves the landed-on entry's state untouched — this walk against a real
+ * dev server is the tier that actually proves it.
+ */
+test("history walk: sheet open -> Back -> Forward -> close -> a single Back reaches a genuinely different, previous entry", async ({
+  page,
+}) => {
+  await page.goto("/?moment=start");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  await expect(page.getByTestId("start-moment")).toBeVisible();
+
+  // A real prior push, distinct from every entry the sheet open/close/
+  // Back/Forward walk below will create — the entry the final single Back
+  // must reach.
+  await page.keyboard.press("2");
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  // Switch back to Start so the pipeline rail (Start-moment only) is on
+  // screen to open a sheet from — a second real push, matching the
+  // history-walk pin test's own pattern above.
+  await page.keyboard.press("1");
+  await expect(page.getByTestId("start-moment")).toBeVisible();
+  const urlBeforeSheet = page.url();
+
+  // Sheet open.
+  await page.getByTestId("pipeline-overview-stage-triage").click();
+  await expect(page.getByTestId("moment-sheet-dialog")).toHaveAttribute(
+    "aria-label",
+    "Triage",
+  );
+  expect(new URL(page.url()).searchParams.get("sheet")).toBe("triage");
+
+  // Back.
+  await page.goBack();
+  await expect(page.getByTestId("moment-sheet-dialog")).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get("sheet")).toBeNull();
+
+  // Forward — lands back on the SAME entry `openSheet` pushed.
+  await page.goForward();
+  await expect(page.getByTestId("moment-sheet-dialog")).toHaveAttribute(
+    "aria-label",
+    "Triage",
+  );
+  expect(new URL(page.url()).searchParams.get("sheet")).toBe("triage");
+
+  // Close via the UI button — the moment this defect lives in. Correct
+  // behavior: `closeSheet` recognizes it still owns this entry (Forward
+  // landed it back on the exact one `openSheet` pushed) and consumes ITS OWN
+  // Back here, landing directly on the entry behind (Start, pre-sheet) —
+  // exactly as it already does for the un-Forwarded "just opened, immediate
+  // close" case pinned earlier in this file.
+  await page.getByTestId("moment-sheet-close").click();
+  await expect(page.getByTestId("moment-sheet-dialog")).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get("sheet")).toBeNull();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("start");
+  expect(page.url()).toBe(urlBeforeSheet);
+
+  // The actual pin: ONE single Back from HERE must land on a genuinely
+  // DIFFERENT, PREVIOUS entry (Flow, from the first switch) — not a silent
+  // no-op on a duplicate of the entry close() already left us standing on.
+  // Pre-fix, close() left the position sitting on a byte-for-byte duplicate
+  // of THIS entry instead of consuming its own Back, so this single Back
+  // would land back on "start" again (matching `urlBeforeSheet`) rather than
+  // reaching "flow" — visibly nothing would change.
+  await page.goBack();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+  expect(page.url()).not.toBe(urlBeforeSheet);
+});
+
 test("matrix pin: Settings reachable in 1 tap on mobile", async ({ page }) => {
   await page.setViewportSize(MOBILE_VIEWPORT);
   await page.goto("/");
