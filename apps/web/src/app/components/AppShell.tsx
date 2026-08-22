@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -22,8 +21,12 @@ import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
    bare `hover:text-foreground` text). The date is computed client-side only
    (mirrors the moments masthead's own now-dependent rendering) to avoid an
    SSR/CSR mismatch; admin pages don't need the minute-by-minute self-refresh
-   TodayMoments does, so a mount-time value is enough here. */
-function AdminShell({ children }: { children: ReactNode }) {
+   TodayMoments does, so a mount-time value is enough here.
+
+   Part of #687 (defect 2, fresh-eyes judge): EXPORTED, and no longer applied
+   via a `usePathname()` guess in `AppShell` below — see that component's own
+   comment for why. `app/settings/layout.tsx` is the only caller now. */
+export function AdminShell({ children }: { children: ReactNode }) {
   const [dateLabel, setDateLabel] = useState<string | null>(null);
   // C2-S13 (#687 round-7 judge, "area dropped crossing the settings seam"):
   // `selectedAreaId` is WorkflowContext's own state, not URL-derived here —
@@ -134,11 +137,42 @@ function AdminShell({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Part of #687 (defect 2, fresh-eyes judge): this used to decide whether to
+ * wrap `children` in `AdminShell` by guessing the current route from
+ * `usePathname()` (`pathname?.startsWith("/settings")`). That guess is what
+ * broke every 404 under `/settings/*` in a PRODUCTION build: Next serves ONE
+ * statically pre-rendered shell (`○ /_not-found`, built once) as the HTML
+ * for ANY unmatched URL app-wide, so it was generated with whatever pathname
+ * static generation used for that route (not starting with `/settings`,
+ * `isAdmin=false`, bare children baked into the HTML). Real hydration then
+ * recomputed `usePathname()` from the ACTUAL requested URL — for
+ * `/settings/nope` (and any other `/settings/*` 404), that genuinely starts
+ * with `/settings`, so the client tried to graft `AdminShell`'s header/nav
+ * onto a server tree that never had it: a structural mismatch, React
+ * hydration error #418. `/settings/areas` never diverged (a real page,
+ * consistently `isAdmin=true` on both sides); a root-level `/nonsense` never
+ * diverged either (consistently `isAdmin=false`) — only the combination of
+ * "falls through to the one shared static shell" AND "the real URL happens
+ * to start with /settings" produced the mismatch, and no client-side guess
+ * can fix that: the SAME static bytes serve infinitely many real URLs, so
+ * there is no pathname string this component could read that agrees with
+ * all of them.
+ *
+ * Fixed by removing the guess rather than correcting it: `AdminShell` is no
+ * longer reachable through this pathname branch at all.
+ * `app/settings/layout.tsx` now applies it unconditionally, server-side, to
+ * every REAL page Next actually routes under `/settings/*` — a structural
+ * fact of the route tree, true on both the server and every client
+ * hydration by construction, not a runtime guess. A `/settings/*` 404 never
+ * enters that segment's layout tree at all (an unmatched deep path falls
+ * straight to the app-wide `/_not-found` boundary under the root layout,
+ * bypassing every nested layout — the same reason a nested
+ * `app/settings/not-found.tsx` was tried and rejected: it never renders for
+ * a path that never matched any route), so it never gets AdminShell,
+ * consistently, matching what the static shell already always rendered.
+ */
 export function AppShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const isAdmin = pathname?.startsWith("/settings");
-  const isLogin = pathname?.startsWith("/login");
-
   return (
     <ThemeProvider
       attribute="class"
@@ -149,13 +183,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <WorkflowProvider>
         <ServiceWorkerRegister />
         <DemoModeBanner />
-        {isAdmin ? (
-          <AdminShell>{children}</AdminShell>
-        ) : isLogin ? (
-          children
-        ) : (
-          children
-        )}
+        {children}
       </WorkflowProvider>
     </ThemeProvider>
   );
