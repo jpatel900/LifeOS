@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { historyPushState, historyReplaceState } from "@/lib/rawHistory";
+import {
+  currentHistoryEntryId,
+  historyPushState,
+  historyReplaceState,
+} from "@/lib/rawHistory";
 import { isSheetValue, type SheetValue } from "./sheetValues";
 
 /**
@@ -41,31 +45,52 @@ import { isSheetValue, type SheetValue } from "./sheetValues";
  * remount the sheet's own state on every open and close.
  *
  * C2-S11 (#687 round-5 judge) audited this hook against the SAME defect
- * class just fixed in `useOverlayUrlState.ts`: `handlePopState` here ALSO
- * unconditionally clears its ownership tracking (`pushedRef.current =
- * false`) on every popstate, which is exactly what broke
- * `useOverlayUrlState` when a nested push-then-`back()` happened while it
- * still (legitimately) owned the entry underneath. That specific failure
- * needs a live path that PUSHES a new entry while a sheet is the CURRENT
- * entry, then `back()`s off that push — ruled out here, not assumed:
- * `MomentSheet` (every sheet's shared wrapper) renders as a `fixed inset-0
- * z-50` full-screen overlay with its own scrim, structurally covering the
- * masthead's capture pill and area switcher underneath; `TodayMoments.tsx`'s
- * `useMomentKeyboard` — the only source of `setMoment`/`openCapture`/
- * `openPalette` calls outside a sheet's own UI — is gated
- * `enabled: topbarShortcutsEnabled`, which requires `!activeSheet`; and none
- * of `TriageSheet.tsx`/`PlanSheet.tsx`/`ReviewSheet.tsx`/`HealthSheet.tsx`/
- * `AreasSheet.tsx` themselves ever call `openCapture`/`openPalette`/
- * `setMoment`/a raw `pushState` (grepped directly, zero hits). `pushedRef`
- * being a single BOOLEAN (not per-sheet, since `activeSheet` is one shared
- * union across every sheet type, so there is only ever one instance of this
- * hook) also means the SIBLING-INSTANCE half of the original bug — one
- * hook's `back()` corrupting a DIFFERENT hook instance's tracking via the
- * shared `popstate` event — cannot occur here at all; there is no sibling.
+ * class just fixed in `useOverlayUrlState.ts`: the SIBLING-INSTANCE half of
+ * that bug (one hook's `back()` corrupting a DIFFERENT hook instance's
+ * ownership tracking via the shared `popstate` event) cannot happen here —
+ * `activeSheet` is one shared union across every sheet type, so there is
+ * only ever one instance of this hook. The NESTED-PUSH half (something else
+ * pushing a new entry while a sheet is the CURRENT entry, then `back()`ing
+ * off that push) was also ruled out, not assumed: `MomentSheet` (every
+ * sheet's shared wrapper) renders as a `fixed inset-0 z-50` full-screen
+ * overlay with its own scrim, structurally covering the masthead's capture
+ * pill and area switcher underneath; `TodayMoments.tsx`'s `useMomentKeyboard`
+ * — the only source of `setMoment`/`openCapture`/`openPalette` calls outside
+ * a sheet's own UI — is gated `enabled: topbarShortcutsEnabled`, which
+ * requires `!activeSheet`; and none of `TriageSheet.tsx`/`PlanSheet.tsx`/
+ * `ReviewSheet.tsx`/`HealthSheet.tsx`/`AreasSheet.tsx` themselves ever call
+ * `openCapture`/`openPalette`/`setMoment`/a raw `pushState` (grepped
+ * directly, zero hits).
+ *
+ * That audit's boolean `pushedRef` (now `pushedEntryIdRef`, see below) missed
+ * a THIRD case neither half of the C2-S11 audit considered — no sibling, no
+ * nested push, just a plain Back then Forward on THIS hook's own entry
+ * (round-8 judge / two fresh-eyes judges, "Back does nothing once"; Part of
+ * #687): `handlePopState` unconditionally forgot ownership on every popstate,
+ * including a Forward that lands squarely back on the exact entry `openSheet`
+ * itself pushed. `closeSheet` then read the forgotten boolean and took the
+ * `replaceState` branch instead of `back()`, stripping the CURRENT entry (the
+ * one Forward just re-landed on) into a byte-for-byte duplicate of the entry
+ * behind it — one `Back` from there visibly changed nothing; a second was
+ * needed to reach a genuinely different entry. Fixed the same way
+ * `useOverlayUrlState` already tracks ownership: a monotonic id stamped by
+ * `historyPushState` at push time, compared against `currentHistoryEntryId()`
+ * at close time — an identity question a Forward answers correctly by
+ * construction (a real Forward restores the landed-on entry's own `state`
+ * untouched, id and all), unlike the boolean, which had no way to
+ * distinguish "reached this entry by pushing it just now" from "reached this
+ * entry by navigating back to it later." The owning branch stays a BARE
+ * `window.history.back()` — no `historyReplaceState` call precedes it, unlike
+ * `useOverlayUrlState.closeOverlay`'s owning branch — so this fix does not
+ * touch, and cannot race, the write-then-`back()` precondition #894/#904
+ * exist to protect.
+ *
  * `AreasSheet`'s own pick-and-close composition (C2-S8) already avoids
  * `closeSheet()`'s `back()` entirely via `adoptSheetFromUrl(null)`, for a
  * different reason (documented on that function) but with the same effect
- * of never exercising this path.
+ * of never exercising this path — `adoptSheetFromUrl` clears
+ * `pushedEntryIdRef` the same way it always did, so this fix does not change
+ * that contract either.
  */
 
 export type { SheetValue };
@@ -106,7 +131,7 @@ export interface SheetUrlState {
    * the sheet closed in REACT STATE only, with zero history side effects —
    * unlike `closeSheet()`, which always touches history (`back()` when this
    * hook pushed the open entry, `replaceState` otherwise). Passing `null`
-   * here also clears `pushedRef` the same way any adopt does, so a
+   * here also clears `pushedEntryIdRef` the same way any adopt does, so a
    * SUBSEQUENT `closeSheet()` call (e.g. `AreasSheet`'s own `onSelectArea`
    * then `onClose()` sequence) finds nothing of its own left to pop and
    * takes its already-safe `replaceState` branch instead of `back()`.
@@ -117,15 +142,20 @@ export interface SheetUrlState {
 export function useSheetUrlState(): SheetUrlState {
   const [activeSheet, setActiveSheet] = useState<SheetValue | null>(null);
 
-  // True only while the currently-open sheet is one WE pushed — the single
-  // fact that decides whether closing may consume a Back.
-  const pushedRef = useRef(false);
+  // The entry id `historyPushState` returned for OUR OWN push, or null when
+  // we have never pushed (or have explicitly disclaimed, via
+  // `adoptSheetFromUrl`). Deliberately NOT cleared on every popstate — see
+  // the file header ("Back does nothing once"): ownership of a history entry
+  // is a property of its IDENTITY, re-derived fresh via
+  // `currentHistoryEntryId()` every time, not a boolean belief a Forward can
+  // silently invalidate just by landing back on the very entry we pushed.
+  const pushedEntryIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     function handlePopState() {
-      // Back/Forward: the URL wins. Whatever entry we land on, we did not
-      // push it in this transition, so closing from here must not pop.
-      pushedRef.current = false;
+      // Back/Forward: the URL wins for WHICH sheet is open. Ownership of the
+      // entry we land on is answered fresh by comparing ids at close time
+      // (see `closeSheet` below), not reset here.
       setActiveSheet(
         parseSheetParam(
           new URLSearchParams(window.location.search).get("sheet"),
@@ -152,17 +182,29 @@ export function useSheetUrlState(): SheetUrlState {
     // #897: resync Next's own `canonicalUrl` to this write rather than
     // leaving it stale — safe here because `openSheet` never follows this
     // write with a synchronous `history.back()` (see rawHistory.ts header).
-    historyPushState(urlWithSheet(window.location, sheet), {
-      resyncNextRouter: true,
-    });
-    pushedRef.current = true;
+    pushedEntryIdRef.current = historyPushState(
+      urlWithSheet(window.location, sheet),
+      { resyncNextRouter: true },
+    );
   }, []);
 
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
     if (typeof window === "undefined") return;
-    if (pushedRef.current) {
-      pushedRef.current = false;
+    const stillOnOurEntry =
+      pushedEntryIdRef.current !== null &&
+      currentHistoryEntryId() === pushedEntryIdRef.current;
+    if (stillOnOurEntry) {
+      // Bare `back()` — no write precedes it. This is the entire fix for
+      // "Back does nothing once" (file header): recognizing we are STILL
+      // standing on our own pushed entry, however we got here (a direct
+      // push, or a Forward re-landing on it), and consuming exactly the one
+      // Back this hook owes, rather than stripping the current entry into a
+      // duplicate of the one behind it. No `historyReplaceState` call
+      // precedes this `back()`, so this cannot race the write-then-`back()`
+      // hazard #894/#904 exist to prevent — unlike
+      // `useOverlayUrlState.closeOverlay`'s owning branch, which strips
+      // first for a different, documented reason (see that file).
       window.history.back();
       return;
     }
@@ -177,7 +219,7 @@ export function useSheetUrlState(): SheetUrlState {
   }, []);
 
   const adoptSheetFromUrl = useCallback((sheet: SheetValue | null) => {
-    pushedRef.current = false;
+    pushedEntryIdRef.current = null;
     setActiveSheet(sheet);
   }, []);
 

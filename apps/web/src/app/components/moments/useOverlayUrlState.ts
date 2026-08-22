@@ -161,8 +161,20 @@ export function useOverlayUrlState(
     ) {
       return;
     }
+    // Predicted mirror of #897 (Part of #687), verified rather than
+    // assumed: this push used to take Next's `__NA` bypass with no options,
+    // exactly like `useSheetUrlState.openSheet` did before PR #904 — leaving
+    // Next's `canonicalUrl` stale at the NO-OVERLAY url until some later,
+    // unrelated router-state change stamped it back onto the address bar,
+    // stripping this param while the overlay was still on screen (the exact
+    // inverse of #897's own close-side symptom). Safe for the same reason
+    // #904 gave `openSheet` this option: `openOverlay` never follows this
+    // write with a synchronous `window.history.back()` in the same
+    // invocation (see rawHistory.ts's file header for the race that
+    // precondition avoids).
     pushedEntryIdRef.current = historyPushState(
       urlWithOverlay(window.location, param, true),
+      { resyncNextRouter: true },
     );
   }, [param]);
 
