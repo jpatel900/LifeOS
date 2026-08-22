@@ -65,9 +65,14 @@ function MomentsHomeShell({
 // `searchParams`, which forces this route dynamic regardless — reading
 // `cookies()` here adds no NEW caching cost. Reading it in the root layout
 // instead (so `WorkflowProvider`'s `selectedAreaId` could resolve the area
-// chip truthfully too) would force EVERY route dynamic, including the 8
-// demoted redirect shims, `/login`, and `/settings/areas` — routes that
-// render no area-scoped content at all.
+// chip truthfully too) would force EVERY route dynamic. The demoted redirect
+// shims (`/areas`, `/calendar`, `/capture`, `/execute`, `/health`, `/plan`,
+// `/review`, `/today`, `/triage`) are already `ƒ` dynamic today (each calls
+// `redirect()`, which itself opts out of static generation) — a root-layout
+// read costs them nothing NEW. The routes that WOULD flip from `○` to `ƒ`
+// are `/login`, `/settings`, `/settings/areas`, and `/_not-found` — see
+// `lib/momentsPreferencesCookie.ts`'s header for the full trade-off and the
+// `pnpm build` route-table evidence.
 //
 // #687 round-9 judge (defect 1, area half — CLOSED here): the round-8 lane
 // deferred area's OWN first-paint truth as an OWNER-GATE, reasoning that
