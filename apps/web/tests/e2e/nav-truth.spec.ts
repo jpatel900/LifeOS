@@ -440,6 +440,84 @@ test("/settings/areas content is centered, not stretched edge-to-edge (#687)", a
   expect(box!.x).toBeGreaterThan(40);
 });
 
+/**
+ * Part of #687 — defect 2 (fresh-eyes judge, newest comment on the issue):
+ * every 404 under `/settings/*` threw React hydration error #418 in a
+ * PRODUCTION build. Root cause: `AppShell.tsx` used to decide whether to
+ * wrap `children` in `AdminShell` by guessing the current route from
+ * `usePathname()`. Next serves ONE statically pre-rendered shell
+ * (`○ /_not-found`, built once) as the HTML for ANY unmatched URL app-wide —
+ * generated with `isAdmin=false` baked in (its own pathname never started
+ * with `/settings`) — while real hydration recomputed `usePathname()` from
+ * the ACTUAL requested URL, which for `/settings/nope` genuinely does start
+ * with `/settings`, flipping `isAdmin` to `true` on the client only: a
+ * structural server/client mismatch, reported as #418. `/settings/areas`
+ * (a real page, not the shared shell) and a root-level `/nonsense` (which
+ * computes `isAdmin=false` on both sides) never diverged.
+ *
+ * Fixed by moving `AdminShell` into `app/settings/layout.tsx`, applied
+ * unconditionally to every real `/settings/*` page — a structural fact of
+ * the route tree rather than a pathname guess. A genuinely unmatched deep
+ * path never enters that layout at all (Next falls straight to the
+ * app-wide `/_not-found` boundary), so it never gets AdminShell, on
+ * EITHER side, for ANY unmatched `/settings/*` path.
+ *
+ * This walk cannot see #418 itself — this repo's e2e harness always spawns
+ * `next dev`, which re-renders every request fresh (no shared static shell,
+ * so pre-fix code never actually diverged here — confirmed: dev mode showed
+ * no console error even on the unfixed build, only a real `next build && next
+ * start` did). What this tier CAN see, red-first against the unfixed build,
+ * is the STRUCTURAL fact the fix establishes: `AdminShell` (the "Areas
+ * admin" nav link) never renders for a `/settings/*` 404, matching the one
+ * shared shell every unmatched path already gets — while a REAL settings
+ * page keeps it. The production-build console proof (#418 present pre-fix,
+ * absent post-fix) is recorded as PR evidence, not re-derived here.
+ */
+test.describe("settings 404s never wear AdminShell chrome (#687 defect 2)", () => {
+  for (const path of [
+    "/settings/nope",
+    "/settings/areas/nope",
+    "/settings/x/y/z",
+  ]) {
+    test(`${path} renders the plain 404 card, no "Areas admin" nav`, async ({
+      page,
+    }) => {
+      await page.goto(path);
+      await expect(
+        page.getByRole("heading", { name: "Page not found" }),
+      ).toBeVisible();
+      await expect(page.getByRole("link", { name: "Areas admin" })).toHaveCount(
+        0,
+      );
+      await expect(
+        page.getByRole("link", { name: "Go to Today" }),
+      ).toBeVisible();
+    });
+  }
+
+  test("/settings/areas (a real page, not a 404) still wears AdminShell chrome — the positive control", async ({
+    page,
+  }) => {
+    await page.goto("/settings/areas");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Areas" }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Areas admin" })).toBeVisible();
+  });
+
+  test("/nonsense (a root-level 404, never under /settings) is unaffected — the other control", async ({
+    page,
+  }) => {
+    await page.goto("/nonsense");
+    await expect(
+      page.getByRole("heading", { name: "Page not found" }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Areas admin" })).toHaveCount(
+      0,
+    );
+  });
+});
+
 // Final UX Loop C2-S0 (#742): signed-out visits to /settings/areas now
 // redirect to the sign-in door (`useAreasLoadState.ts`'s status:"signed-out"
 // drives a `router.replace("/login?next=…")` in page.tsx). This spec's dev
@@ -1851,6 +1929,84 @@ test("settings return path: switch area -> Settings -> Home keeps the URL and sc
   } finally {
     await freshContext.close();
   }
+});
+
+/**
+ * Part of #687 — a fresh-eyes judge (issue #687, newest comment) scored Card
+ * 2 at 7.0/9 and reported this as the WORST defect: "pick Flow -> tap
+ * Settings -> press Back -> you land on Start", claimed deterministic on
+ * both `Page.goBack()` and in-page `history.back()`, with the judge's own
+ * mechanism proof being that polling `location.search` after Back gives
+ * `moment=start` at every checkpoint from 50ms to 2500ms AND that reloading
+ * the landed-on entry ALSO gives `moment=start` (i.e. the restored history
+ * entry itself is stale, not a late client overwrite).
+ *
+ * DISPROVED, not fixed: this walk (and its mobile sibling below) was run
+ * red-first against unmodified `origin/main` at 560dd422 — dev server, a
+ * `next build && next start` production server, in-page `history.back()`,
+ * Playwright's `goBack()` via this repo's own e2e harness, and again against
+ * 53b6361a (the commit immediately before #916, the PR the contract named as
+ * the area-half repair mechanism) — every single run passed; `moment`
+ * survived the round trip and the reload-on-landed-entry check every time.
+ * `rawHistory.ts`'s own header names a REAL, latent architectural risk (its
+ * `resyncNextRouter` bypass leaves Next's `canonicalUrl` stale for every
+ * moment/area write, "in principle" reproducible by a later unrelated router
+ * change stomping the address bar) — but an instrumented `pushState`/
+ * `replaceState` probe run alongside this exact walk recorded no stomp event
+ * on the outgoing `/` entry for this specific click-Flow -> click-Settings
+ * -> Back sequence. No code change accompanies this test: it exists to keep
+ * this behavior pinned now that it has been checked, since nothing protected
+ * it before.
+ */
+test("moment switch -> Settings -> Back keeps the moment (#687, disproved premise)", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  await page.getByTestId("moment-switcher-flow").click();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  await page.getByTestId("moments-settings-link").click();
+  await expect(page).toHaveURL(/\/settings\/areas$/, { timeout: 15_000 });
+
+  await page.goBack();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  // Judge's own reload-on-landed-entry check.
+  await page.reload();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+});
+
+// Mobile sibling of the walk above — same disproved premise, reached via the
+// mobile-only path (`moments-settings-link` is `hidden sm:contents`).
+test("mobile: moment switch -> Settings -> Back keeps the moment (#687, disproved premise)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?moment=start");
+  await expect(page.getByTestId("start-moment")).toBeVisible();
+  await page.getByTestId("moment-switcher-bottom-nav-flow").click();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  // moments-settings-link is `hidden sm:contents` (desktop-only) — mobile
+  // reaches Settings via BottomNavigator's "More" trigger -> command palette
+  // -> "Open settings", same reach path the matrix pin above uses.
+  await page.getByTestId("bottom-navigator-more").click();
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  await page.getByTestId("command-palette-option-open-settings").click();
+  await expect(page).toHaveURL(/\/settings\/areas$/, { timeout: 15_000 });
+
+  await page.goBack();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  await page.reload();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
 });
 
 /**

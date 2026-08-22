@@ -8,6 +8,7 @@ import ExecutePage from "../app/execute/page";
 import HealthPage from "../app/health/page";
 import ReviewPage from "../app/review/page";
 import AreasSettingsPage from "../app/settings/areas/page";
+import SettingsLayout from "../app/settings/layout";
 import AreasOverviewPage from "../app/areas/page";
 import TriagePage from "../app/triage/page";
 import { AppShell } from "../app/components/AppShell";
@@ -224,7 +225,12 @@ describe("handoff cockpit route provider wiring", () => {
   });
 
   it("keeps settings outside the cockpit but inside the provider", async () => {
-    renderThroughAppShell(<AreasSettingsPage />, "/settings/areas");
+    renderThroughAppShell(
+      <SettingsLayout>
+        <AreasSettingsPage />
+      </SettingsLayout>,
+      "/settings/areas",
+    );
 
     expect(screen.queryByTestId("lifeos-cockpit")).toBeNull();
     expect(
@@ -260,7 +266,12 @@ describe("handoff cockpit route provider wiring", () => {
   // exact "self-heals only on refresh" tell #920's own comment describes,
   // just via the other link. Fixed the same way: `urlWithArea`.
   it("the settings shell's brand link ALSO carries the active area, not just the 'Home' pill (#687 round-11 defect 4)", async () => {
-    renderThroughAppShell(<AreasSettingsPage />, "/settings/areas");
+    renderThroughAppShell(
+      <SettingsLayout>
+        <AreasSettingsPage />
+      </SettingsLayout>,
+      "/settings/areas",
+    );
 
     await screen.findByRole("heading", { level: 1, name: "Areas" });
 
@@ -279,7 +290,9 @@ describe("handoff cockpit route provider wiring", () => {
    */
   it("gives settings the same shell contract as home: one main, one top-level header, a working skip link (#687)", async () => {
     const { container } = renderThroughAppShell(
-      <AreasSettingsPage />,
+      <SettingsLayout>
+        <AreasSettingsPage />
+      </SettingsLayout>,
       "/settings/areas",
     );
 
