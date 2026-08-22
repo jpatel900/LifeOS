@@ -421,7 +421,15 @@ async function signInSmokeAccountForToken({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          // supabase-js sends BOTH of these on every auth request (verified
+          // against its GoTrue client) -- some project gateways require the
+          // Authorization header in addition to apikey and 401 without it.
+          // Match what packages/cli/src/auth.ts's login() and
+          // login/page.tsx's handleSubmit actually send through
+          // supabase-js, rather than betting on the shorter apikey-only
+          // form silently working.
           apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
         },
         body: JSON.stringify({ email, password }),
       },

@@ -260,25 +260,67 @@ test("runAuthenticatedProbe: sign-in success => probe runs with the minted token
   assert.equal(state, "healthy");
 });
 
-test("runAuthenticatedProbe: never logs the access token, on success or on a rejected probe", async () => {
+test("runAuthenticatedProbe: warns without ever including the token, even when the failed sign-in result carries one", async () => {
   const logged = [];
   const fakeToken = "SUPER-SECRET-ACCESS-TOKEN-DO-NOT-LOG";
 
-  await runAuthenticatedProbe({
+  // signInImpl below is adversarial on purpose: ok:false (so classifySignIn
+  // still correctly calls this "misconfigured" -- a token alone never
+  // overrides an explicit failure) but the result object happens to carry
+  // an accessToken-shaped field anyway. This exercises the ACTUAL warn()
+  // call site with a token in scope -- a fake token present on a
+  // signInImpl that always succeeds would never reach warn() at all
+  // (runAuthenticatedProbe only warns on the misconfigured branch), which
+  // would make this test pass vacuously without proving anything.
+  const state = await runAuthenticatedProbe({
     smokeEmail: "smoke@example.com",
-    smokePassword: "correct-password",
+    smokePassword: "wrong-password",
     supabaseUrl: "https://project.supabase.co",
     supabaseAnonKey: "anon-key",
     baseUrl: "https://app.example.com",
-    signInImpl: async () => ({ ok: true, accessToken: fakeToken }),
-    probeImpl: async () => ({ ok: false, httpStatus: 401 }),
+    signInImpl: async () => ({
+      ok: false,
+      httpStatus: 400,
+      accessToken: fakeToken,
+    }),
     warn: (message) => logged.push(message),
-    log: (message) => logged.push(message),
   });
 
+  assert.equal(state, "misconfigured");
+  assert.ok(
+    logged.length > 0,
+    "expected the sign-in-failure warning to actually fire (a test that captures nothing proves nothing)",
+  );
   assert.ok(
     !logged.some((line) => line.includes(fakeToken)),
-    "the minted access token must never appear in any logged line",
+    "the token must never appear in a logged line, even when present on the sign-in result",
+  );
+});
+
+test("runAuthenticatedProbe test harness control: the leak detector actually catches a planted leak", async () => {
+  // Proves the `.some(line => line.includes(token))` technique used above
+  // is not vacuously true. Wraps `warn` to deliberately APPEND a token to
+  // whatever runAuthenticatedProbe's real sign-in-failure branch already
+  // logs -- simulating what a future regression that logged the token
+  // would look like -- and confirms the assertion above would actually
+  // catch it, through the real call site, not a hand-built array.
+  const logged = [];
+  const fakeToken = "PLANTED-LEAK-TOKEN";
+
+  const state = await runAuthenticatedProbe({
+    smokeEmail: "smoke@example.com",
+    smokePassword: "wrong-password",
+    supabaseUrl: "https://project.supabase.co",
+    supabaseAnonKey: "anon-key",
+    baseUrl: "https://app.example.com",
+    signInImpl: async () => ({ ok: false, httpStatus: 400 }),
+    warn: (message) => logged.push(`${message} token=${fakeToken}`),
+  });
+
+  assert.equal(state, "misconfigured");
+  assert.ok(
+    logged.some((line) => line.includes(fakeToken)),
+    "control failed: the leak detector itself doesn't catch a planted leak",
   );
 });
 
