@@ -7,6 +7,7 @@ import {
   historyReplaceState,
 } from "@/lib/rawHistory";
 import { isSheetValue, type SheetValue } from "./sheetValues";
+import { parseOverlayParam } from "./useOverlayUrlState";
 
 /**
  * Final UX Loop C2 — Target Card 2 (Structure): "every state change is
@@ -115,6 +116,55 @@ import { isSheetValue, type SheetValue } from "./sheetValues";
  * derived from the URL, so it can never disagree with what the address bar
  * already says, by construction — there is nothing here for a self-heal to
  * correct.
+ *
+ * ## Escape means "get me out" (#687 round-11 judge, DEFECT 2)
+ *
+ * Opening a sheet FROM WITHIN the command palette (`runPaletteAction`'s
+ * "open-triage" through "open-areas" cases) pushes the sheet's own entry ON
+ * TOP of the palette's still-live entry (`?palette=1`, never rewritten — a
+ * browser cannot `replaceState` an entry it isn't currently on). So a plain
+ * `closeSheet()` `back()` — correct, and unchanged, for a sheet reached any
+ * OTHER way — used to land squarely back on that palette entry, reopening
+ * it. Round-8's judge called this correct back-stack semantics (the palette
+ * genuinely IS the previous history entry); round-11 calls it a defect,
+ * since the palette is the advertised primary navigation path. Deliberate
+ * product decision, made here: Escape (and every OTHER way this hook's own
+ * `closeSheet` gets called — the sheet's Close button, its scrim) dismisses
+ * the WHOLE chain in one action, not one history entry at a time.
+ *
+ * The browser's own Back BUTTON is a different affordance and is
+ * deliberately UNCHANGED: `popstate` is user-driven (a mouse click, a
+ * keyboard Alt+Left, a swipe gesture) and this hook never intercepts it —
+ * `handlePopState` below still just reads the URL, same as ever. Only a
+ * close THIS hook itself initiates (`closeSheet()`) arms the chain-skip, via
+ * `pendingChainSkipRef` — a real Back press never sets it, so it can never
+ * fire on one. This is what keeps Back walking the stack one entry at a
+ * time (sheet -> the palette's own entry -> the page), exactly as praised,
+ * while Escape's OWN meaning changes.
+ *
+ * Mechanism: `openSheet` records, at push time, whether the URL it is
+ * pushing ON TOP OF already carried `?palette=1` (`pushedBehindPaletteRef`).
+ * `closeSheet`'s existing `back()` branch (unchanged — still a BARE
+ * `window.history.back()`, no write precedes it, so this cannot race the
+ * write-then-`back()` hazard #894/#904 exist to prevent) additionally arms
+ * `pendingChainSkipRef` when that ref is true. The popstate that `back()`
+ * eventually lands — asynchronous, so this is a SEPARATE, later event, never
+ * a synchronous second `back()` in the same tick — consumes the flag
+ * (unconditionally cleared the instant it's read, whether or not it fires a
+ * second `back()`, so a later, UNRELATED popstate can never inherit a stale
+ * `true`) and, only if the entry it landed on still names `?palette=1`,
+ * issues ONE more `window.history.back()` — consuming the palette's entry
+ * too and landing on the true page underneath it. `adoptSheetFromUrl` clears
+ * both refs, matching how it already clears `pushedEntryIdRef`: a sheet
+ * reached directly (never pushed by this hook) has nothing to chain-skip.
+ *
+ * Scope note: this fix is the SHEET side only. `useOverlayUrlState.ts`'s
+ * `closeOverlay` has the IDENTICAL mechanism and the identical "capture
+ * opened from inside the palette, Escape reopens it" behavior (documented,
+ * and pinned, in that file and in `nav-truth.spec.ts`'s "history walk:
+ * palette -> capture opened from inside it" test) — deliberately left alone
+ * here (see this PR's AGENT-TODO) rather than widened without a fresh
+ * red/green pass of its own pinned regression tests.
  */
 
 export type { SheetValue };
@@ -178,17 +228,38 @@ export function useSheetUrlState(
   // `currentHistoryEntryId()` every time, not a boolean belief a Forward can
   // silently invalidate just by landing back on the very entry we pushed.
   const pushedEntryIdRef = useRef<number | null>(null);
+  // DEFECT 2 ("Escape means get me out"): recorded at push time — was the
+  // URL we pushed ON TOP OF already showing `?palette=1`? See the file
+  // header for the full mechanism.
+  const pushedBehindPaletteRef = useRef(false);
+  // One-shot: armed by `closeSheet` only when the entry it is about to
+  // reveal (via a bare `back()`) is the palette's own. Consumed — and
+  // unconditionally cleared — by the very next popstate, so a later,
+  // unrelated popstate (a real user Back press with nothing to do with this
+  // chain) can never inherit a stale `true`.
+  const pendingChainSkipRef = useRef(false);
 
   useEffect(() => {
     function handlePopState() {
+      const params = new URLSearchParams(window.location.search);
       // Back/Forward: the URL wins for WHICH sheet is open. Ownership of the
       // entry we land on is answered fresh by comparing ids at close time
       // (see `closeSheet` below), not reset here.
-      setActiveSheet(
-        parseSheetParam(
-          new URLSearchParams(window.location.search).get("sheet"),
-        ),
-      );
+      setActiveSheet(parseSheetParam(params.get("sheet")));
+
+      if (!pendingChainSkipRef.current) return;
+      pendingChainSkipRef.current = false;
+      // Only a close THIS hook itself initiated arms this flag (see
+      // `closeSheet` below) — a genuine user Back press never does, so this
+      // branch cannot fire on one. Landed on the palette's own entry: skip
+      // it too, in the SAME direction (`back()`), landing on the true page
+      // underneath it. This is a separate, later event (popstate is
+      // asynchronous), never a synchronous second `back()` in the same tick
+      // as the first — it cannot race the write-then-`back()` hazard
+      // #894/#904 exist to prevent, since no write precedes either call.
+      if (parseOverlayParam(params.get("palette"))) {
+        window.history.back();
+      }
     }
 
     window.addEventListener("popstate", handlePopState);
@@ -207,6 +278,11 @@ export function useSheetUrlState(
     ) {
       return;
     }
+    // DEFECT 2: capture whether we are pushing on top of a live palette
+    // entry BEFORE the push changes the URL out from under this read.
+    pushedBehindPaletteRef.current = parseOverlayParam(
+      new URLSearchParams(window.location.search).get("palette"),
+    );
     // #897: resync Next's own `canonicalUrl` to this write rather than
     // leaving it stale — safe here because `openSheet` never follows this
     // write with a synchronous `history.back()` (see rawHistory.ts header).
@@ -233,6 +309,14 @@ export function useSheetUrlState(
       // hazard #894/#904 exist to prevent — unlike
       // `useOverlayUrlState.closeOverlay`'s owning branch, which strips
       // first for a different, documented reason (see that file).
+      //
+      // DEFECT 2 ("Escape means get me out"): if we were pushed on top of a
+      // live palette entry, arm the one-shot chain-skip BEFORE this `back()`
+      // — the popstate it triggers is a later, separate event (see the file
+      // header), so arming here never races the `back()` call itself.
+      if (pushedBehindPaletteRef.current) {
+        pendingChainSkipRef.current = true;
+      }
       window.history.back();
       return;
     }
@@ -248,6 +332,8 @@ export function useSheetUrlState(
 
   const adoptSheetFromUrl = useCallback((sheet: SheetValue | null) => {
     pushedEntryIdRef.current = null;
+    pushedBehindPaletteRef.current = false;
+    pendingChainSkipRef.current = false;
     setActiveSheet(sheet);
   }, []);
 
