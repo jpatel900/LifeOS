@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -194,21 +194,64 @@ describe("doc registry", () => {
     ).toBeLessThanOrEqual(ENTRY_FILE_LINE_BUDGET);
   });
 
+  /**
+   * The probe lives in its own repo-root subdirectory, never directly in the
+   * repo root. Two sibling guards (`docLinkIntegrity`, `publicEvidenceHygiene`)
+   * list the repo root with `readdirSync` and then read every root-level `*.md`
+   * they find. Vitest runs test files in parallel workers, so a root-level
+   * probe can be listed by one of those scans and deleted by the `finally`
+   * below before that scan reads it -- an ENOENT failure surfacing in an
+   * unrelated test file (observed once in a full `pnpm test` run, 2026-08-22;
+   * reproduced deterministically by flipping a root probe on and off while
+   * those two guards run). Both scans only take `entry.isFile()` at the root,
+   * so a subdirectory is invisible to them. Do not move this probe back to the
+   * repo root.
+   *
+   * Two properties keep the assertion meaningful, and the git-status check
+   * below pins both: the probe must sit INSIDE the working tree (`git ls-files`
+   * could never list a path outside it, so `not.toContain` would pass
+   * vacuously), and it must be untracked but NOT gitignored (`git ls-files`
+   * omits ignored files for a different reason than the one under test).
+   */
   it("ignores untracked local scratch markdown files", () => {
-    const probeRelativePath = "__docregistry-untracked-probe__.md";
+    const probeDirectoryRelativePath = ".doc-registry-probe";
+    const probeRelativePath = `${probeDirectoryRelativePath}/untracked-probe.md`;
     const probeAbsolutePath = resolve(repoRoot, probeRelativePath);
 
     try {
+      mkdirSync(resolve(repoRoot, probeDirectoryRelativePath), {
+        recursive: true,
+      });
       writeFileSync(
         probeAbsolutePath,
         "# untracked probe\n\nThis file is never committed.\n",
       );
 
+      const probeStatus = execFileSync(
+        "git",
+        ["status", "--porcelain", "-uall", "--", probeRelativePath],
+        { cwd: repoRoot, encoding: "utf8" },
+      ).trim();
+
+      expect(
+        probeStatus,
+        [
+          "The probe must be untracked and not gitignored for this test to mean",
+          `anything, but git reported "${probeStatus}" instead of`,
+          `"?? ${probeRelativePath}". If ${probeDirectoryRelativePath} was added to`,
+          ".gitignore, this test would only prove that git ls-files skips ignored",
+          "files -- not that it skips untracked ones.",
+        ].join(" "),
+      ).toBe(`?? ${probeRelativePath}`);
+
       const markdownFiles = listTrackedMarkdownFiles();
 
       expect(markdownFiles).not.toContain(probeRelativePath);
     } finally {
-      unlinkSync(probeAbsolutePath);
+      rmSync(resolve(repoRoot, probeDirectoryRelativePath), {
+        recursive: true,
+        force: true,
+      });
     }
   });
 });
