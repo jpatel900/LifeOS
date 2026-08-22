@@ -248,6 +248,27 @@ describe("handoff cockpit route provider wiring", () => {
     );
   });
 
+  // #687 round-11 fresh-eyes judge (defect 4, "returning from Settings via
+  // its back link drops area"): PR #920 (the fix pinned in the test above)
+  // only re-anchored the explicit "Home" pill — the brand/title link at the
+  // TOP of this same `AdminShell` header (`AppShell.tsx`, "LifeOS · Settings")
+  // was a second, un-fixed return-to-home path with a bare `href="/"`.
+  // Live-reproduced (real browser, dev server): switch to Side Project ->
+  // Settings -> click "LifeOS · Settings" landed on `/?moment=close` with NO
+  // `area=` at all, while the screen still showed Side Project (WorkflowContext's
+  // in-memory `selectedAreaId` survives the client-side nav untouched) — the
+  // exact "self-heals only on refresh" tell #920's own comment describes,
+  // just via the other link. Fixed the same way: `urlWithArea`.
+  it("the settings shell's brand link ALSO carries the active area, not just the 'Home' pill (#687 round-11 defect 4)", async () => {
+    renderThroughAppShell(<AreasSettingsPage />, "/settings/areas");
+
+    await screen.findByRole("heading", { level: 1, name: "Areas" });
+
+    expect(
+      screen.getByRole("link", { name: "LifeOS · Settings" }),
+    ).toHaveAttribute("href", "/?area=area-main-job");
+  });
+
   /**
    * #687 round-8 finding 3 (fresh-eyes judge, score 7.3/9): "/settings/areas
    * wears a measurably different shell" — zero `<main>` landmarks (home has
