@@ -68,11 +68,7 @@ function listLiveDocFiles(): string[] {
   // Anti-vacuum: docs/ + root markdown totals 60+ files today; a renamed
   // docs directory would otherwise make every assertion built on this list
   // (path existence, FR-title collisions) pass on zero docs scanned.
-  assertWalkFoundFiles(
-    files,
-    "docLinkIntegrity: docs/**/*.md + root *.md",
-    20,
-  );
+  assertWalkFoundFiles(files, "docLinkIntegrity: docs/**/*.md + root *.md", 20);
   return files;
 }
 
