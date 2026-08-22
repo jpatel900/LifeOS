@@ -90,6 +90,28 @@ function collectContext(baseRef) {
   };
 }
 
+/**
+ * Anti-vacuum guard (same shape as check-turbo-test-inputs.mjs's own
+ * `requiredSegments.size >= 2` assertion): a renamed MIGRATIONS_DIR, an
+ * unresolvable/wrong `baseRef`, or a shallow checkout without full history
+ * would all make `baseFiles` come back silently empty -- and an empty
+ * baseFiles set makes findCollisions() trivially report "no collisions" even
+ * though the check never actually looked at anything on the base branch.
+ * This repo's supabase/migrations/ already has real files on every real base
+ * ref, so zero is never a legitimate result here -- fail loudly instead of
+ * passing quietly.
+ */
+export function assertBaseFilesNonEmpty(baseFiles, baseRef) {
+  assert.ok(
+    baseFiles.length > 0,
+    `check-migration-collision: found 0 files under ${MIGRATIONS_DIR} on ` +
+      `${baseRef} -- vacuous-pass guard tripped. Check that MIGRATIONS_DIR ` +
+      `is still correct, that ${baseRef} resolves, and that the checkout ` +
+      `step used fetch-depth: 0 (this job needs full history to diff ` +
+      `against ${baseRef}).`,
+  );
+}
+
 function report(collisions) {
   if (collisions.length === 0) {
     console.log("No migration timestamp collisions with the base branch.");
@@ -192,7 +214,22 @@ function runSelfTest() {
     );
   }
 
-  console.log(`Self-test passed (${cases.length} cases).`);
+  // assertBaseFilesNonEmpty: the vacuous-pass guard itself.
+  assert.throws(
+    () => assertBaseFilesNonEmpty([], "origin/main"),
+    /vacuous-pass guard tripped/,
+    "empty baseFiles must fail loudly instead of letting findCollisions report a silent, meaningless pass",
+  );
+  assert.doesNotThrow(
+    () =>
+      assertBaseFilesNonEmpty(
+        ["supabase/migrations/20260101120000_one.sql"],
+        "origin/main",
+      ),
+    "non-empty baseFiles must not trip the guard",
+  );
+
+  console.log(`Self-test passed (${cases.length + 2} cases).`);
 }
 
 function main() {
@@ -212,7 +249,9 @@ function main() {
     process.exit(2);
   }
 
-  report(findCollisions(collectContext(baseRef)));
+  const context = collectContext(baseRef);
+  assertBaseFilesNonEmpty(context.baseFiles, baseRef);
+  report(findCollisions(context));
 }
 
 main();

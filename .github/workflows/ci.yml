@@ -210,10 +210,29 @@ jobs:
       # BLOCKING: bans z.string().datetime() without { offset: true } (the exact gap
       # that silently killed the calendar integration for 2 months, 2026-07-25 incident).
       # This check is now blocking following fix #858's merge.
+      #
+      # Vacuous-pass guard (issue #858, same shape as the WorkflowState step's
+      # guard above): a misconfigured path (a rename, a typo, a .semgrepignore
+      # that grows to swallow the target) would make this step report "0
+      # findings" and exit 0 with zero files actually scanned -- green while
+      # blind, the exact failure mode this rule was created to close. `--json`
+      # records how many files semgrep actually looked at (`.paths.scanned`);
+      # fail loudly if that count is zero, independent of the rule's own exit
+      # code.
       - name: Semgrep - datetime offset rule (blocking)
-        run: >
-          semgrep scan --config .semgrep/zod-datetime-requires-offset.yaml
-          --metrics=off --error apps packages
+        run: |
+          set +e
+          semgrep scan --config .semgrep/zod-datetime-requires-offset.yaml \
+            --metrics=off --error --json --output=sg-datetime.json apps packages
+          rc=$?
+          set -e
+          scanned=$(python3 -c 'import json; print(len(json.load(open("sg-datetime.json"))["paths"]["scanned"]))')
+          echo "Semgrep scanned $scanned file(s) for the datetime-offset rule."
+          if [ "$scanned" -eq 0 ]; then
+            echo "FAIL: vacuous-pass guard tripped -- the datetime-offset rule scanned 0 files. Check the paths/include/exclude config in .semgrep/zod-datetime-requires-offset.yaml and the 'apps packages' targets in .github/workflows/ci.yml (issue #858)."
+            exit 1
+          fi
+          exit "$rc"
 
   e2e:
     name: Playwright E2E
