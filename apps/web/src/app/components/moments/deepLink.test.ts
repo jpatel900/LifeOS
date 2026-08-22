@@ -71,6 +71,76 @@ describe("deepLinkTargetFromParams", () => {
     expect(deepLinkTargetFromParams({ capture: "0" })).toBeNull();
   });
 
+  // #687 round-11 fresh-eyes judge (defect 5): `/?capture=` (an EMPTY value)
+  // opened the capture overlay while `capture=0`/`capture=false`/`capture=
+  // banana` correctly did not — `isTruthyFlag`'s own `|| v === ""` treated a
+  // present-but-empty value as affirmative. An empty value is exactly as
+  // non-affirmative as any other non-"1"/"true" string; the URL never wrote a
+  // reason for it to mean "yes". Matrix covers every boolean-ish param
+  // (`capture`, `palette`) across every case the judge's own 41-case abuse
+  // sweep and this repo's existing precedence tests already rely on, so a
+  // fix here cannot silently reintroduce a different asymmetry between the
+  // two flags.
+  describe("boolean-ish param matrix — capture/palette (#687 round-11 defect B)", () => {
+    const affirmative = ["1", "true"];
+    const nonAffirmative = ["", "0", "false", "banana"];
+
+    it.each(affirmative)("capture=%s opens the capture overlay", (value) => {
+      expect(deepLinkTargetFromParams({ capture: value })).toEqual({
+        overlay: "capture",
+      });
+    });
+
+    it.each(nonAffirmative)(
+      "capture=%s does NOT open the capture overlay",
+      (value) => {
+        expect(deepLinkTargetFromParams({ capture: value })).toBeNull();
+      },
+    );
+
+    it("capture with no value at all (absent key) does not open the overlay", () => {
+      expect(deepLinkTargetFromParams({ capture: undefined })).toBeNull();
+    });
+
+    it.each(affirmative)("palette=%s opens the command palette", (value) => {
+      expect(deepLinkTargetFromParams({ palette: value })).toEqual({
+        overlay: "palette",
+      });
+    });
+
+    it.each(nonAffirmative)(
+      "palette=%s does NOT open the command palette",
+      (value) => {
+        expect(deepLinkTargetFromParams({ palette: value })).toBeNull();
+      },
+    );
+
+    it("palette with no value at all (absent key) does not open the palette", () => {
+      expect(deepLinkTargetFromParams({ palette: undefined })).toBeNull();
+    });
+
+    it("a duplicate-key empty value (?capture=0&capture=) still resolves from the FIRST value, not the empty one", () => {
+      // `first()` (deepLink.ts) always takes index 0 of a repeated param, so
+      // an empty value later in the list must not leak through some other
+      // path — this pins that duplicate-key handling and the truthiness fix
+      // don't interact.
+      expect(deepLinkTargetFromParams({ capture: ["0", ""] })).toBeNull();
+      expect(deepLinkTargetFromParams({ capture: ["", "1"] })).toBeNull();
+    });
+
+    // #687 round-9 judge (defect 1): `?area=` is a THREE-valued param
+    // (absent/all/candidate-id), never a boolean-ish flag — an empty value
+    // is a real (if unusual) candidate id here, not a "no" the way it is for
+    // capture/palette. This fix must not touch that contract.
+    it("area keeps its own three-valued contract — an empty value is NOT normalized away", () => {
+      expect(deepLinkTargetFromParams({ area: "" })).toEqual({ area: "" });
+      expect(deepLinkTargetFromParams({ area: "all" })).toEqual({
+        area: null,
+      });
+      expect(deepLinkTargetFromParams({})).toBeNull();
+    });
+  });
+
   // C2-S6 (#687) FIX: composition, not first-match. `/?moment=flow&sheet=plan`
   // must open Flow WITH the plan sheet open, matching what TodayMoments'
   // deepLink effect already does with each field independently.
