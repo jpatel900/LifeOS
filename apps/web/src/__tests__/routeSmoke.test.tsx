@@ -90,6 +90,52 @@ describe("handoff cockpit route provider wiring", () => {
     ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
   });
 
+  /**
+   * #687 round-9 judge (defect 2): "#stage-content sits inside the
+   * masthead's ancestor chain (main > div > div#stage-content > div >
+   * header), so activating 'Skip to stage content' lands the user back at
+   * the nav — the next Tab stop is the moment switcher." A "the skip link
+   * exists" test (above) passes whether or not this is true — it never
+   * inspects what the target actually contains. This is the structural
+   * assertion instead: the masthead `<header>` must not be a DESCENDANT of
+   * `#stage-content`, matching the same shape `/settings/areas` already had
+   * (its own pin, below) and `LifeOSCockpit.tsx`'s `<header>` then
+   * `<section id="stage-content">` sibling structure.
+   */
+  it("keeps the home masthead OUTSIDE #stage-content, so a skip-link Tab cannot land back on the nav (#687)", async () => {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    const { container } = renderThroughAppShell(
+      await HomePage({ searchParams: Promise.resolve({}) }),
+      "/",
+    );
+
+    await screen.findByTestId("today-moments");
+
+    const stageContent = container.querySelector("#stage-content");
+    expect(stageContent).not.toBeNull();
+
+    const header = container.querySelector("header");
+    expect(header).not.toBeNull();
+
+    // The defect, pinned directly: the skip target does not contain the
+    // masthead.
+    expect(stageContent?.contains(header as Node)).toBe(false);
+
+    // And the masthead precedes the skip target in document order (a
+    // preceding sibling, not merely "somewhere else") — DOCUMENT_POSITION_
+    // FOLLOWING means `stageContent` comes AFTER `header`.
+    const position = header!.compareDocumentPosition(stageContent as Node);
+    expect(Boolean(position & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+
+    // The specific control the judge found Tab landing on (the moment
+    // switcher slot) is not inside the skip target either.
+    const momentSwitcherSlot = container.querySelector(
+      '[data-testid="masthead-momentswitcher-slot"]',
+    );
+    expect(momentSwitcherSlot).not.toBeNull();
+    expect(stageContent?.contains(momentSwitcherSlot as Node)).toBe(false);
+  });
+
   // Each page component is an async Server Component (Next 15 `searchParams`
   // is a Promise) — `createPage` calls it directly (not as JSX) and returns
   // the pending element so the runner below can await it.

@@ -42,19 +42,31 @@
  *   never disagree. This cookie tier slots into that same, already-trusted
  *   shape — see `TodayMoments.tsx`'s `resolvedInitialMoment` initializer.
  *
- * Root-layout-wide cookie reads were considered and rejected for `area`'s
- * own first-paint truthfulness (the area chip): `WorkflowProvider` mounts in
- * the root layout, shared by every route, so making its initial
- * `selectedAreaId` cookie-aware would require reading `cookies()` in
- * `app/layout.tsx` — which forces the ENTIRE route tree dynamic. Verified
- * via `pnpm build`: 11 currently-static routes (`/login`, `/settings`,
- * `/settings/areas`, and the 8 demoted redirect shims) would flip from `○`
- * to `ƒ` for a benefit — a chip label not flashing on ONE route — that does
- * not justify it, especially since none of those 11 routes render
- * area-scoped content at all. So: `moment`'s first paint is now fully
- * truthful (defect 1, closed); `area`'s own DISPLAY still adopts the
- * remembered value in a post-hydration effect, same as before this PR — see
- * the OWNER-GATE in this PR's body.
+ * Root-layout-wide cookie reads were considered and rejected for making
+ * `WorkflowProvider`'s OWN `selectedAreaId` state cookie-aware at its source:
+ * that state is mounted once in the root layout, shared by every route, so
+ * seeding its initializer from `cookies()` would require reading it in
+ * `app/layout.tsx` — which forces the ENTIRE route tree dynamic. Verified via
+ * `pnpm build`: routes with no area-scoped content at all (`/login`,
+ * `/settings`, `/settings/areas`, `/_not-found`) would flip from `○` to `ƒ`.
+ * That rejection stands — `WorkflowContext.tsx`'s own `selectedAreaId`
+ * `useState` initializer is untouched by the round-9 fix below.
+ *
+ * #687 round-9 judge (defect 1, area half): the ORIGINAL version of this
+ * comment stopped there and left area's own DISPLAY adopting the remembered
+ * value in a post-hydration effect — an OWNER-GATE, on the (now-corrected)
+ * reasoning that fixing it required the same root-layout read just rejected
+ * above. It does not: `app/page.tsx` already resolves BOTH per-request tiers
+ * (`?area=` via `deepLinkTargetFromParams`, the cookie via this module's own
+ * `parseMomentsPrefsCookie`) without touching `app/layout.tsx` at all, and
+ * `TodayMoments.tsx`'s own `resolvedInitialAreaId` — a LOCAL `useState`
+ * initializer, exactly like `resolvedInitialMoment` — resolves the effective
+ * area from those two props (falling back to `WorkflowContext`'s current
+ * `selectedAreaId` only when neither is present) instead of trusting
+ * `selectedAreaId` directly until a `hasAreaSynced` flag flips post-mount.
+ * `WorkflowProvider`'s OWN state stays wrong at SSR time — the fix works
+ * because `TodayMoments` (page.tsx's own subtree) never reads that state
+ * directly for the first paint, not because the shared ancestor got fixed.
  *
  * ## Defect 3 — persistence scope agreement
  *

@@ -137,18 +137,18 @@ describe("deepLinkTargetFromParams", () => {
       });
     });
 
-    // C2-S8 (#687 finding 1): `?area=` is deliberately NOT part of this
-    // parser's shape — no demoted route ever redirects with an `area`
-    // target (unlike moment/sheet/capture/palette, there is no
-    // `/main-job` -> `/?area=main-job` shim), so there is nothing for this
-    // SERVER-side parser to own for it (the zero-target rule: don't build a
-    // field with no caller). `selectedAreaId`'s own URL precedence is
-    // resolved separately, in `lib/WorkflowContext.tsx` (see its C2-S8
-    // comments) — this test pins that an `area` param is silently ignored
-    // HERE rather than accidentally tripping the "unknown value" branch or
-    // disturbing the composition of the fields this parser does own.
-    it("ignores ?area= (not this parser's param) without disturbing moment/sheet/overlay composition", () => {
-      expect(deepLinkTargetFromParams({ area: "area-personal" })).toBeNull();
+    // C2-S8 (#687 finding 1) recorded `?area=` as deliberately NOT part of
+    // this parser's shape, on the reasoning that no demoted route ever
+    // redirects with an `area` target — the "zero-target rule: don't build a
+    // field with no caller." Re-anchored, not deleted: the round-9 judge's
+    // defect 1 gave this field a real caller (`app/page.tsx`, threading the
+    // resolved value into `TodayMoments`' SSR-safe area tier), so `area` now
+    // composes exactly like every other field here rather than being
+    // silently dropped.
+    it("parses ?area= alongside moment/sheet/overlay, composing rather than dropping it", () => {
+      expect(deepLinkTargetFromParams({ area: "area-personal" })).toEqual({
+        area: "area-personal",
+      });
       expect(
         deepLinkTargetFromParams({
           moment: "flow",
@@ -156,7 +156,24 @@ describe("deepLinkTargetFromParams", () => {
           capture: "1",
           area: "area-personal",
         }),
-      ).toEqual({ moment: "flow", sheet: "plan", overlay: "capture" });
+      ).toEqual({
+        moment: "flow",
+        sheet: "plan",
+        overlay: "capture",
+        area: "area-personal",
+      });
+    });
+
+    it("maps ?area=all to the explicit All-areas sentinel (null, not absent)", () => {
+      expect(deepLinkTargetFromParams({ area: "all" })).toEqual({
+        area: null,
+      });
+    });
+
+    it("takes the first ?area= value when the key repeats, like every other field", () => {
+      expect(
+        deepLinkTargetFromParams({ area: ["area-personal", "area-volunteer"] }),
+      ).toEqual({ area: "area-personal" });
     });
   });
 });
