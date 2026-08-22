@@ -202,10 +202,28 @@ jobs:
       # repo-wide (issue #859). Paths are pinned to "apps packages" -- never
       # bare repo root -- because semgrep's default ignore silently skips
       # dirs named test/ or tests/.
+      #
+      # Vacuous-pass guard (issue #859): a misconfigured path (a rename, a
+      # typo, a .semgrepignore that grows to swallow the target) would make
+      # this step report "0 findings" and exit 0 with zero files actually
+      # scanned -- green while blind, the exact failure mode this rule was
+      # created to close. `--json` records how many files semgrep actually
+      # looked at (`.paths.scanned`); fail loudly if that count is zero,
+      # independent of the rule's own exit code.
       - name: Enforce WorkflowState test-annotation ban
-        run: >
-          semgrep scan --config .semgrep/no-workflowstate-annotation-in-tests.yaml
-          --metrics=off --error apps packages
+        run: |
+          set +e
+          semgrep scan --config .semgrep/no-workflowstate-annotation-in-tests.yaml \
+            --metrics=off --error --json --output=sg-workflowstate.json apps packages
+          rc=$?
+          set -e
+          scanned=$(python3 -c 'import json; print(len(json.load(open("sg-workflowstate.json"))["paths"]["scanned"]))')
+          echo "Semgrep scanned $scanned file(s) for the WorkflowState rule."
+          if [ "$scanned" -eq 0 ]; then
+            echo "FAIL: vacuous-pass guard tripped -- the WorkflowState rule scanned 0 files. Check the paths/include/exclude config in .semgrep/no-workflowstate-annotation-in-tests.yaml and the 'apps packages' targets in .github/workflows/ci.yml (issue #859)."
+            exit 1
+          fi
+          exit "$rc"
 
       # BLOCKING: bans z.string().datetime() without { offset: true } (the exact gap
       # that silently killed the calendar integration for 2 months, 2026-07-25 incident).
