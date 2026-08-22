@@ -1854,6 +1854,84 @@ test("settings return path: switch area -> Settings -> Home keeps the URL and sc
 });
 
 /**
+ * Part of #687 — a fresh-eyes judge (issue #687, newest comment) scored Card
+ * 2 at 7.0/9 and reported this as the WORST defect: "pick Flow -> tap
+ * Settings -> press Back -> you land on Start", claimed deterministic on
+ * both `Page.goBack()` and in-page `history.back()`, with the judge's own
+ * mechanism proof being that polling `location.search` after Back gives
+ * `moment=start` at every checkpoint from 50ms to 2500ms AND that reloading
+ * the landed-on entry ALSO gives `moment=start` (i.e. the restored history
+ * entry itself is stale, not a late client overwrite).
+ *
+ * DISPROVED, not fixed: this walk (and its mobile sibling below) was run
+ * red-first against unmodified `origin/main` at 560dd422 — dev server, a
+ * `next build && next start` production server, in-page `history.back()`,
+ * Playwright's `goBack()` via this repo's own e2e harness, and again against
+ * 53b6361a (the commit immediately before #916, the PR the contract named as
+ * the area-half repair mechanism) — every single run passed; `moment`
+ * survived the round trip and the reload-on-landed-entry check every time.
+ * `rawHistory.ts`'s own header names a REAL, latent architectural risk (its
+ * `resyncNextRouter` bypass leaves Next's `canonicalUrl` stale for every
+ * moment/area write, "in principle" reproducible by a later unrelated router
+ * change stomping the address bar) — but an instrumented `pushState`/
+ * `replaceState` probe run alongside this exact walk recorded no stomp event
+ * on the outgoing `/` entry for this specific click-Flow -> click-Settings
+ * -> Back sequence. No code change accompanies this test: it exists to keep
+ * this behavior pinned now that it has been checked, since nothing protected
+ * it before.
+ */
+test("moment switch -> Settings -> Back keeps the moment (#687, disproved premise)", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  await page.getByTestId("moment-switcher-flow").click();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  await page.getByTestId("moments-settings-link").click();
+  await expect(page).toHaveURL(/\/settings\/areas$/, { timeout: 15_000 });
+
+  await page.goBack();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  // Judge's own reload-on-landed-entry check.
+  await page.reload();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+});
+
+// Mobile sibling of the walk above — same disproved premise, reached via the
+// mobile-only path (`moments-settings-link` is `hidden sm:contents`).
+test("mobile: moment switch -> Settings -> Back keeps the moment (#687, disproved premise)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?moment=start");
+  await expect(page.getByTestId("start-moment")).toBeVisible();
+  await page.getByTestId("moment-switcher-bottom-nav-flow").click();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  // moments-settings-link is `hidden sm:contents` (desktop-only) — mobile
+  // reaches Settings via BottomNavigator's "More" trigger -> command palette
+  // -> "Open settings", same reach path the matrix pin above uses.
+  await page.getByTestId("bottom-navigator-more").click();
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  await page.getByTestId("command-palette-option-open-settings").click();
+  await expect(page).toHaveURL(/\/settings\/areas$/, { timeout: 15_000 });
+
+  await page.goBack();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  await page.reload();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+});
+
+/**
  * C2-S13 (#687 round-7 judge, defect 3 — "a sheet renders with no sheet
  * param"): a Back/Forward walk crossing `/settings/areas` used to land on a
  * URL with no `sheet=` at all while a sheet was still visible on screen.
