@@ -68,7 +68,22 @@ function AdminShell({ children }: { children: ReactNode }) {
       <header className="border-b border-border bg-card/95 px-4 py-3">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-baseline gap-3">
-            <Link href="/" className="text-sm font-semibold tracking-tight">
+            {/* #687 round-11 fresh-eyes judge (defect 4, "returning from
+                Settings via its back link drops area"): this brand/title
+                link is a SECOND return-to-home path in this same header,
+                separate from the "Home" pill two lines below — round-7's
+                fix (see that Link's own comment) only re-anchored the pill,
+                so this one kept a bare `href="/"`. Live-reproduced: switch
+                area -> Settings -> click "LifeOS · Settings" landed on
+                `/?moment=close` with NO `area=`, while the screen still
+                showed the switched-to area — the exact "self-heals only on
+                refresh" tell the pill's fix already describes, just via the
+                other link. Same fix, same reasoning: `urlWithArea` with the
+                live `selectedAreaId`, not a URL that lies about the screen. */}
+            <Link
+              href={urlWithArea({ pathname: "/", search: "" }, selectedAreaId)}
+              className="text-sm font-semibold tracking-tight"
+            >
               LifeOS · Settings
             </Link>
             {dateLabel ? (

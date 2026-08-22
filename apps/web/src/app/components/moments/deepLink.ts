@@ -48,9 +48,19 @@ function first(value: RawParam): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+// #687 round-11 fresh-eyes judge (defect 5): `?capture=` (a PRESENT but
+// EMPTY value) used to open the capture overlay via the `|| v === ""` branch
+// below, while `capture=0`/`capture=false`/`capture=banana` all correctly
+// stayed closed — an empty value is exactly as non-affirmative as any other
+// string that isn't "1"/"true"; the URL never wrote a reason for absence-of-
+// text to mean "yes". Removed the empty-string branch entirely: only an
+// explicit "1" or "true" opens capture/palette now, matching every other
+// non-affirmative value already handled correctly. `deepLink.test.ts`'s
+// "boolean-ish param matrix" pins the full capture/palette x
+// affirmative/non-affirmative grid so this can't drift back.
 function isTruthyFlag(value: RawParam): boolean {
   const v = first(value);
-  return v === "1" || v === "true" || v === "";
+  return v === "1" || v === "true";
 }
 
 /**

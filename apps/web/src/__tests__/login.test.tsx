@@ -147,6 +147,20 @@ describe("LoginPage", () => {
     expect(mocks.push).not.toHaveBeenCalledWith(next);
   });
 
+  // #687 round-11 fresh-eyes judge (defect 7): `/login` was a dead end — no
+  // links, no skip link, no header — so browser Back or hand-editing the URL
+  // was the only way out. Matches `not-found.tsx`'s own escape hatch (a
+  // single "Go to Today" link home), at the structural minimum the judge
+  // asked for: a way back, not a redesign.
+  it("offers a way back into the app, matching the 404 page's 'Go to Today' escape hatch (#687 round-11 defect 7)", () => {
+    render(<LoginPage />);
+
+    expect(screen.getByRole("link", { name: "Go to Today" })).toHaveAttribute(
+      "href",
+      "/",
+    );
+  });
+
   it("shows the provider error when sign-in fails", async () => {
     mocks.signInWithPassword.mockResolvedValue({
       error: { message: "Invalid login credentials" },
