@@ -42,7 +42,14 @@ export default function NotFound() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button asChild>
+          {/* CI catch (`hit-target-overlap-pin.spec.ts`, previously an
+              UNPINNED surface — #687 finding): `Button`'s default `size` is
+              `h-10`/40px (`components/ui/button.tsx`), so this only
+              interactive control on the page landed under the 44px hit-target
+              floor. Same fix as `/login`'s identical "Go to Today" escape
+              hatch (commit 506328c1): `size="lg"` (`h-11`/44px) is the one
+              `Button` size that clears the floor outright. */}
+          <Button asChild size="lg">
             <Link href="/">Go to Today</Link>
           </Button>
         </CardContent>
