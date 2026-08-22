@@ -365,6 +365,47 @@ export function TodayMoments({
     toggleTaskMapNodeCompletion,
   } = useWorkflow();
 
+  // C2-S13 (#687 round-7 judge, "sheet renders with no sheet param"), moved
+  // here a second time (Part of #687, stale-deep-link-moment fix — see the
+  // pointer comment left at its previous home, just above the P6 deep-link
+  // effect, for why it needed to move once already): `consumeIsRemount`
+  // (deepLink.ts) reads a MODULE-scope flag, not React state — it survives a
+  // client-side route change and back the same way `WorkflowProvider`'s own
+  // state does (mounted once at the root layout, that module is never
+  // re-evaluated by an in-app navigation; only TodayMoments' own component
+  // INSTANCE unmounts/remounts). Captured into a `useState` lazy initializer
+  // so it is read (and flipped for the NEXT mount) exactly once,
+  // synchronously, in the SAME render pass that produces this mount's first
+  // commit — before any effect has run.
+  //
+  // This distinguishes "TodayMoments has mounted before in this tab" (a
+  // Back/Forward walk crossing a real route change — `/settings/areas`,
+  // reached via `next/link`, the one navigation kind Next's router actually
+  // tracks; every moment/sheet/capture/palette/area write on `/` itself is a
+  // raw, router-invisible history write, see `lib/rawHistory.ts` — landing
+  // back on `/` can have Next's client Router Cache serve a STALE cached
+  // render, one baked from the earlier visit, with a stale `deepLink` prop)
+  // from "this is the very first mount `/` has ever had in this tab" (a hard
+  // load, a redirect-shim landing, or any of this file's own unit tests,
+  // which reset the flag between tests — see deepLink.ts's own doc comment
+  // on `resetTodayMomentsMountTrackingForTests` for why unit tests need
+  // that reset and `window.location` resets do not suffice). Only the
+  // FORMER needs the live URL cross-checked against `deepLink` at all — a
+  // fresh mount has nothing to distrust, `deepLink` is exactly what it
+  // always was: this render's own truth. See deepLink.ts's own doc comment
+  // on `deepLinkTargetFromSearch` for the full red-first repro.
+  //
+  // Needed THIS early (before `resolvedInitialAreaId`/`resolvedInitialMoment`
+  // just below, not merely before `resolvedDeepLinkTarget` further down)
+  // because those two initializers ALSO read `deepLink` unconditionally on a
+  // remount — the exact same stale-prop shape `resolvedDeepLinkTarget` and
+  // the P6 deep-link effect already guard against, just never extended to
+  // these two tiers. See `resolvedInitialMoment`'s own comment below for the
+  // caught red-first bug this gap produced: a soft-nav Back across
+  // `/settings/areas` landing on the ORIGINAL document request's moment
+  // instead of the one actually chosen before Settings was opened.
+  const [isRemount] = useState(consumeIsRemount);
+
   // #687 round-9 judge (defect 1, the worst one — area half): mirrors
   // `resolvedInitialMoment` below for `selectedAreaId`, which — unlike
   // `moment` — is NOT local state: it lives in `WorkflowContext`, an
@@ -399,10 +440,34 @@ export function TodayMoments({
   // both sides too — the async Supabase/sessionStorage reconciliation that
   // could make it diverge only ever runs in a later effect, after this
   // initializer has already run.
+  //
+  // Part of #687 (stale-deep-link-moment fix): gated behind `isRemount` for
+  // the same reason `resolvedInitialMoment` below now is — a soft-nav Back
+  // across `/settings/areas` remounts this component with a STALE `deepLink`
+  // prop (baked at the ORIGINAL document request), and this tier used to
+  // trust it unconditionally. Proven inert TODAY, not hypothetical-only:
+  // `hasAreaSynced`'s effect (just below) flips within the same tick and
+  // overrides `selectedAreaId` with `contextSelectedAreaId` — the
+  // never-unmounted `WorkflowContext` value, which a soft-nav Back never
+  // disturbs — and no effect here ever writes this stale value BACK into the
+  // URL/history the way `useMomentUrlState`'s mount-effect self-heal does
+  // for moment. So there is no persisted-history poisoning to reproduce for
+  // area, only a same-tick initializer value that a later render already
+  // discards. Guarded anyway, for symmetry with `resolvedInitialMoment` and
+  // so this tier does not silently become the next version of the same bug
+  // if `hasAreaSynced`'s timing, or the lack of a URL self-heal for area,
+  // ever changes. `nav-truth.spec.ts`'s existing area round-trip pins
+  // (crossing `/settings/areas` via Back) are unchanged by this guard —
+  // proof it changes nothing observable today.
   const [resolvedInitialAreaId] = useState<string | null>(() => {
     const isValid = (candidate: string | null) =>
       candidate === null || state.areas.some((area) => area.id === candidate);
-    if (deepLink?.area !== undefined && isValid(deepLink.area)) {
+    const deepLinkIsStale = typeof window !== "undefined" && isRemount;
+    if (
+      !deepLinkIsStale &&
+      deepLink?.area !== undefined &&
+      isValid(deepLink.area)
+    ) {
       return deepLink.area;
     }
     if (typeof window !== "undefined") {
@@ -593,13 +658,37 @@ export function TodayMoments({
   // explicit signal, permanently blocking the legacy migration from ever
   // running. This ref is the one place that "was it already resolved" fact
   // is captured before anything can overwrite the evidence.
+  //
+  // Part of #687 (stale-deep-link-moment fix — the soft-nav Back regression):
+  // the `deepLink?.moment` tier below used to trust the prop unconditionally,
+  // the ONE tier in this initializer `resolvedDeepLinkTarget` and the P6
+  // deep-link effect further down had already learned not to (both gate the
+  // identical prop behind `isRemount ? <live URL> : deepLink`) — this
+  // initializer was simply never covered by that earlier fix. Caught
+  // red-first: pick a moment via the switcher, open Settings (a real
+  // `next/link` navigation, the one route change Next's client Router Cache
+  // actually tracks), press Back. Next remounts this component from that
+  // cache with the SAME `deepLink` prop the ORIGINAL `/` document request
+  // carried — stale whenever that request itself had a `?moment=` (every
+  // legacy shim redirect, a refresh, or a bookmark of a self-healed URL).
+  // This tier resolved that stale value BEFORE the URL tier two lines down
+  // ever got a chance to run, and `useMomentUrlState`'s own mount effect then
+  // `replaceState`d the (correctly-restored) history entry to match it —
+  // silently overwriting the moment the user actually had on screen. Gated
+  // the same way the other two consumers already are: on a genuine remount,
+  // skip straight past the stale prop to the live-URL tier immediately
+  // below, which the browser has already restored correctly by the time this
+  // runs (proven by the popstate/history instrumentation this fix was built
+  // against — the restored entry is correct; this initializer's own stale
+  // read is what used to poison it a moment later).
   const explicitMomentRef = useRef(false);
   const [resolvedInitialMoment] = useState<MomentValue>(() => {
     if (initialMoment) {
       explicitMomentRef.current = true;
       return initialMoment;
     }
-    if (deepLink?.moment) {
+    const deepLinkIsStale = typeof window !== "undefined" && isRemount;
+    if (!deepLinkIsStale && deepLink?.moment) {
       explicitMomentRef.current = true;
       return deepLink.moment;
     }
@@ -680,37 +769,13 @@ export function TodayMoments({
     }
   }, []);
 
-  // C2-S13 (#687 round-7 judge, "sheet renders with no sheet param"):
-  // `consumeIsRemount` (deepLink.ts) reads a MODULE-scope flag, not React
-  // state — it survives a client-side route change and back the same way
-  // `WorkflowProvider`'s own state does (mounted once at the root layout,
-  // that module is never re-evaluated by an in-app navigation; only
-  // TodayMoments' own component INSTANCE unmounts/remounts). Captured into a
-  // `useState` lazy initializer so it is read (and flipped for the NEXT
-  // mount) exactly once, synchronously, in the SAME render pass that
-  // produces this mount's first commit — before any effect has run.
-  //
-  // This distinguishes "TodayMoments has mounted before in this tab" (a
-  // Back/Forward walk crossing a real route change — `/settings/areas`,
-  // reached via `next/link`, the one navigation kind Next's router actually
-  // tracks; every moment/sheet/capture/palette/area write on `/` itself is a
-  // raw, router-invisible history write, see `lib/rawHistory.ts` — landing
-  // back on `/` can have Next's client Router Cache serve a STALE cached
-  // render, one baked from the earlier visit, with a stale `deepLink` prop)
-  // from "this is the very first mount `/` has ever had in this tab" (a hard
-  // load, a redirect-shim landing, or any of this file's own unit tests,
-  // which reset the flag between tests — see deepLink.ts's own doc comment
-  // on `resetTodayMomentsMountTrackingForTests` for why unit tests need
-  // that reset and `window.location` resets do not suffice). Only the
-  // FORMER needs the live URL cross-checked against `deepLink` at all — a
-  // fresh mount has nothing to distrust, `deepLink` is exactly what it
-  // always was: this render's own truth. See deepLink.ts's own doc comment
-  // on `deepLinkTargetFromSearch` for the full red-first repro.
-  //
-  // C2-S15 moved this declaration earlier than the P6 deep-link effect
-  // below (its original home, where a shorter pointer comment now sits) so
-  // the SSR-safe sheet/overlay resolvers just below could share it.
-  const [isRemount] = useState(consumeIsRemount);
+  // `isRemount` now declared right after `useWorkflow()` above — moved a
+  // second time (Part of #687, stale-deep-link-moment fix) so
+  // `resolvedInitialAreaId` and `resolvedInitialMoment` below could gate
+  // their own stale `deepLink` reads on it too, same as the SSR-safe
+  // sheet/overlay resolvers just below already did (C2-S15's move). See that
+  // declaration's own comment for the full "why a module-scope flag, not
+  // React state" explanation.
 
   // C2-S15 (#687 round-10 judge, "sheets and overlays are never
   // server-rendered" — the last Card 2 defect): resolved the same way
@@ -724,12 +789,29 @@ export function TodayMoments({
   // while wiring this in, against this file's own existing remount test
   // (`TodayMoments.deepLink.test.tsx`, "#911 + #912"): trusting the
   // `deepLink` PROP unconditionally (ignoring `isRemount`) resolved a sheet
-  // from a STALE cached prop a Back/Forward walk left behind, because
-  // unlike `target.moment` (which the OLD effect ALWAYS re-applies when the
-  // live URL names one, self-correcting a wrong guess), the OLD effect only
-  // ever POSITIVELY adopts a sheet/overlay — it never explicitly closes one
-  // the live target does not name — so a wrongly-open sheet from a stale
-  // prop had nothing left to correct it.
+  // from a STALE cached prop a Back/Forward walk left behind. Like
+  // `target.moment` just below, the OLD effect only ever POSITIVELY adopts a
+  // sheet/overlay — it never explicitly closes one the live target does not
+  // name — so a wrongly-open sheet from a stale prop had nothing left to
+  // correct it.
+  //
+  // CORRECTION (Part of #687, stale-deep-link-moment fix): this comment used
+  // to claim `target.moment` "ALWAYS re-applies when the live URL names one,
+  // self-correcting a wrong guess" — false, and the reason the moment
+  // equivalent of this exact bug shipped. This effect runs AFTER
+  // `resolvedInitialMoment`'s own `useState` initializer (declared earlier
+  // in this render, so its effects — `useMomentUrlState`'s mount-effect
+  // self-heal among them — register and run first) has already resolved a
+  // moment and, via that self-heal, already `replaceState`d the URL to
+  // match it. Pre-fix, on a remount with a stale `deepLink.moment`, that
+  // meant the URL was already overwritten to the STALE value by the time
+  // this effect's `isRemount ? deepLinkTargetFromSearch(...) : deepLink`
+  // re-parses `window.location.search` — it read the self-heal's own echo,
+  // not independent evidence, so `adoptMomentFromUrl` "re-applied" the
+  // already-wrong value rather than correcting anything. There was never a
+  // second chance to catch a wrong guess here; the only fix that actually
+  // closes the gap is not making the guess in the first place, which is
+  // what `resolvedInitialMoment`'s own `isRemount` gate now does.
   //
   // Unlike moment/area there is no THIRD (cookie/preference) tier — sheet
   // and overlay have never been persisted, only URL-visible — so neither

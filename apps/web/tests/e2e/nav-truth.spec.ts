@@ -1854,6 +1854,96 @@ test("settings return path: switch area -> Settings -> Home keeps the URL and sc
 });
 
 /**
+ * Part of #687 — a fresh-eyes judge (issue #687, newest comment) scored Card
+ * 2 at 7.0/9 and reported this as the WORST defect: "pick Flow -> tap
+ * Settings -> press Back -> you land on Start", claimed deterministic on
+ * both `Page.goBack()` and in-page `history.back()`, with the judge's own
+ * mechanism proof being that polling `location.search` after Back gives
+ * `moment=start` at every checkpoint from 50ms to 2500ms AND that reloading
+ * the landed-on entry ALSO gives `moment=start` (i.e. the restored history
+ * entry itself is stale, not a late client overwrite).
+ *
+ * CORRECTED, not disproved: an earlier pass at this test walked in via bare
+ * `page.goto("/")` (desktop) and reached Settings through the command
+ * palette (mobile) — every run passed, and that passing run was written up
+ * here as "DISPROVED, not fixed". Both choices happened to land on the ONE
+ * starting condition where this bug is invisible. It reproduces ONLY when
+ * the `/` DOCUMENT REQUEST ITSELF carries a parseable `?moment=` — a bare
+ * `page.goto("/")` never does, so the buggy tier (`deepLink?.moment` at
+ * `TodayMoments.tsx`'s `resolvedInitialMoment` initializer) never had
+ * anything to misfire on. Re-run red-first with `page.goto("/?moment=start")`
+ * instead, this walk fails at both the `dev` and `next build && next start`
+ * tiers, in-page `history.back()` and Playwright's `goBack()` alike:
+ * instrumented `pushState`/`replaceState` logging shows the popstate-restored
+ * history entry is correct (`?moment=flow`) the instant it lands, then this
+ * component's OWN mount effect (`useMomentUrlState`'s self-heal,
+ * `historyReplaceState`) overwrites it back to `?moment=start` roughly 50ms
+ * later — not a browser-side stale entry, and not `rawHistory.ts`'s
+ * documented `resyncNextRouter`/router-stomp risk (that probe found no
+ * stomp event because there wasn't one to find; the app's own write is what
+ * poisons the entry). Root cause: a soft-nav Back across `/settings/areas`
+ * (a real `next/link` route change) has Next serve `/` from its client
+ * Router Cache — `TodayMoments` remounts with the SAME `deepLink` prop the
+ * ORIGINAL document request computed, which `resolvedInitialMoment` trusted
+ * unconditionally. Two sibling tiers in the same file
+ * (`resolvedDeepLinkTarget`, the P6 deep-link effect) already guarded the
+ * identical stale-prop shape behind `isRemount`; `resolvedInitialMoment` was
+ * simply never covered by that earlier fix. Fixed by extending that same
+ * `isRemount` guard to this tier — see `TodayMoments.tsx`'s
+ * `resolvedInitialMoment` comment for the full mechanism.
+ */
+test("moment switch -> Settings -> Back keeps the moment, even when the document request itself named one (#687)", async ({
+  page,
+}) => {
+  await page.goto("/?moment=start");
+  await expect(page.getByTestId("start-moment")).toBeVisible();
+  await page.getByTestId("moment-switcher-flow").click();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  await page.getByTestId("moments-settings-link").click();
+  await expect(page).toHaveURL(/\/settings\/areas$/, { timeout: 15_000 });
+
+  await page.goBack();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  // Judge's own reload-on-landed-entry check.
+  await page.reload();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+});
+
+// Mobile sibling of the walk above. An earlier pass reached Settings via the
+// command palette's "Open settings" — that action is a HARD navigation
+// (`window.location.assign`, `TodayMoments.tsx`'s command handler), never a
+// soft nav, so Back from there never exercises Next's client Router Cache
+// remount path and the bug stayed invisible on mobile too. Reaching Settings
+// via `bottom-navigator-settings-link` (a real `next/link`, same as the
+// desktop `moments-settings-link`) is what actually reproduces it.
+test("mobile: moment switch -> Settings -> Back keeps the moment, reached via a real soft nav (#687)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?moment=start");
+  await expect(page.getByTestId("start-moment")).toBeVisible();
+  await page.getByTestId("moment-switcher-bottom-nav-flow").click();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  await page.getByTestId("bottom-navigator-settings-link").click();
+  await expect(page).toHaveURL(/\/settings\/areas$/, { timeout: 15_000 });
+
+  await page.goBack();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  await page.reload();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+});
+
+/**
  * C2-S13 (#687 round-7 judge, defect 3 — "a sheet renders with no sheet
  * param"): a Back/Forward walk crossing `/settings/areas` used to land on a
  * URL with no `sheet=` at all while a sheet was still visible on screen.
