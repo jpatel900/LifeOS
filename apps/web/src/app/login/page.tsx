@@ -59,16 +59,19 @@ function LoginForm() {
   const nextPath = safeNextPath(searchParams?.get("next") ?? null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  // #687 (part 1 of the fresh-eyes judge's docked point): this used to start
-  // "idle" unconditionally — a normal, fillable form with no hint that
-  // submitting it can only ever fail — and only told the truth once someone
-  // actually pressed "Sign in". `AuthAffordance.tsx` now links here from the
-  // masthead even when Supabase isn't configured (see that file's own
-  // comment), and a link that lands on a screen silently pretending sign-in
-  // might work would be worse than no link at all. `createSupabaseBrowserClient`
-  // is the same memoized singleton `handleSubmit` below already calls (and
-  // the same seam `login.test.tsx` already mocks), so checking it once here,
-  // synchronously, costs nothing extra and needs no new test double.
+  // #687: this used to start "idle" unconditionally — a normal, fillable
+  // form with no hint that submitting it can only ever fail when Supabase
+  // isn't configured — and only told the truth once someone actually
+  // pressed "Sign in". This page is reachable independently of any link
+  // pointing here (typing the URL directly, or `settings/areas/page.tsx`'s
+  // own `router.replace` when signed out on a CONFIGURED deploy — see that
+  // file's own effect), so the arrival-time lie exists regardless of how
+  // anyone gets here: showing a working-looking form that can only ever
+  // fail is wrong on its own terms, independent of who links to it.
+  // `createSupabaseBrowserClient` is the same memoized singleton
+  // `handleSubmit` below already calls (and the same seam `login.test.tsx`
+  // already mocks), so checking it once here, synchronously, costs nothing
+  // extra and needs no new test double.
   const [state, setState] = useState<LoginState>(() =>
     createSupabaseBrowserClient()
       ? { status: "idle" }
@@ -254,39 +257,48 @@ export default function LoginPage() {
           focusable element on the page — a skip link placed after what it
           skips would skip nothing.
 
-          `top-0 left-0` ADDED beyond the copied string, proven necessary by
-          actually running hit-target-overlap-pin.spec.ts (not by reasoning
-          about it): this page's `<main>` vertically CENTERS its single
-          child (`items-center`, unlike Today's/Settings' top-aligned
-          shells), so an `sr-only` link's un-positioned "static position"
-          (where it would sit if it weren't taken out of flow) lands in the
-          empty space above the centered card — nothing else is painted
-          there, so `elementFromPoint` resolves to `<body>`, an ANCESTOR of
-          the link, which the pin's hit-testability filter treats as
-          "reachable" and counts as a genuine sub-44px control (measured:
-          32x16, at (-1, 39) on a 1440x1000 viewport). On Today/Settings the
-          identical invisible box instead lands directly under that shell's
-          own masthead `<header>` — a SIBLING, which the same filter
-          excludes — by accident of their top-aligned layout, not by
-          design. `top-0 left-0` makes the same exclusion deliberate here:
-          it pins the invisible box inside `DemoModeBanner`'s sticky
-          `top-0`, full-width footprint (rendered one level up, in
-          `AppShell.tsx`, immediately before this element), so
-          `elementFromPoint` resolves to the banner instead — a sibling,
-          not an ancestor. Depends on the banner: verified true for the
-          current demo/unconfigured deploy this pin measures
-          (tests/e2e/helpers/pinnedSurfaces.ts's own header: "the E2E dev
-          server has no Supabase env"); if this app ever ships configured
-          (banner returns null), this exact 32x16 box would need a fresh
-          anchor — flagged as an AGENT-TODO in this PR rather than silently
-          left for whoever hits it. `focus:` variants below are unaffected
-          (higher-specificity `:focus`-suffixed classes already win over
-          plain `top-0`/`left-0`, same mechanism the copied string already
-          relied on for `focus:absolute` beating base `sr-only`'s own
-          `position: absolute`). */}
+          `min-h-[44px] min-w-[44px]` ADDED beyond the copied string, proven
+          necessary by actually running hit-target-overlap-pin.spec.ts (not
+          by reasoning about it): this page's `<main>` vertically CENTERS
+          its single child (`items-center`, unlike Today's/Settings'
+          top-aligned shells), so an `sr-only` link's un-positioned "static
+          position" (where it would sit if it weren't taken out of flow)
+          lands in the empty space above the centered card — nothing else
+          is painted there, so `elementFromPoint` resolves to `<body>`, an
+          ANCESTOR of the link, which the pin's hit-testability filter
+          treats as "reachable". Reachable-but-32x16 is what the pin then
+          flags as a genuine sub-44px control (measured: 32x16, at (-1, 39)
+          on a 1440x1000 viewport) — on Today (directly verified the same
+          way: `elementFromPoint` at the identical invisible box's center
+          resolves to `TodayMoments.tsx`'s own masthead `<header>`, a
+          SIBLING, which the SAME filter excludes) the identical invisible
+          box instead lands under that top-aligned shell's masthead, by
+          accident of that layout rather than by design. Rather than chase
+          that same accident here (an earlier version of
+          this fix pinned the box under `DemoModeBanner` with `top-0
+          left-0` — deliberate, but silently depended on the banner always
+          rendering, i.e. on this deploy staying unconfigured forever, and
+          was never checked against the FOCUSED state at all), this instead
+          does what the contract's own floor already asks for any new
+          interactive element: sized to the 44px minimum outright.
+          `min-width`/`min-height` win over the `sr-only` utility's own
+          explicit `width:1px;height:1px` by ordinary CSS box-model rules
+          (used size is `max(specified, min)`, independent of stylesheet
+          order), and `clip-path: inset(50%)` (`sr-only`'s actual clip
+          mechanism in this Tailwind version — confirmed via computed
+          style, not assumed) clips 50% from every side regardless of the
+          box's own size, so a 44x44 box is exactly as visually invisible
+          as the 32x16 one was — no appearance change, unfocused. The
+          FOCUSED state (`focus:not-sr-only` etc.) is unconditional
+          `min-h-[44px] min-w-[44px]` too, so the visible, keyboard-revealed
+          pill is now itself hit-target-compliant — verified by tabbing to
+          it directly (Playwright `keyboard.press("Tab")`) and reading its
+          focused rect: NOT clipped, positioned near the top-left per its
+          own `focus:left-4 focus:top-4`, comfortably above `z-50`
+          alongside `DemoModeBanner`, not hidden underneath it. */}
       <a
         href="#stage-content"
-        className="sr-only top-0 left-0 rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+        className="sr-only min-h-[44px] min-w-[44px] rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
       >
         Skip to stage content
       </a>

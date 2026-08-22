@@ -375,30 +375,4 @@ describe("handoff cockpit route provider wiring", () => {
       ),
     ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
   });
-
-  /**
-   * #687 round-11 fresh-eyes judge (defect: "nothing links to /login" —
-   * zero hrefs across six surfaces, and the demo-mode banner offers no
-   * sign-in affordance). The chosen surface is the Today masthead's
-   * existing auth door (`AuthAffordance.tsx`) — already the one component
-   * whose whole job is presenting a way to `/login`, not a new door bolted
-   * onto the banner (see that file's own updated comment for why the
-   * banner itself is the wrong place: it renders only when Supabase is
-   * NOT configured, so any link fixed inside it would always be exactly
-   * the "sign-in is impossible" case). `isSupabaseConfigured()` is real
-   * (unmocked) here, and this suite sets no NEXT_PUBLIC_SUPABASE_* env, so
-   * it resolves to demo/unconfigured — the same state the judge measured.
-   */
-  it("gives a signed-out demo visitor a way to /login from the Today masthead (#687)", async () => {
-    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
-    renderThroughAppShell(
-      await HomePage({ searchParams: Promise.resolve({}) }),
-      "/",
-    );
-
-    await screen.findByTestId("today-moments");
-
-    const link = await screen.findByTestId("masthead-signin-link");
-    expect(link).toHaveAttribute("href", "/login");
-  });
 });

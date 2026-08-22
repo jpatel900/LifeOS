@@ -17,28 +17,9 @@ import { HIT_TARGET_MIN } from "./hitTarget";
  * current session and signing out.
  *
  * Three honest states:
- * - accounts not set up here (Supabase not configured): a plain "Sign in"
- *   pill -> /login, no `?next=` (the visit is informational, not an
- *   interrupted flow to return from). #687 REVISED this from #688's
- *   original "render nothing": that reasoning was "a Sign in door would
- *   dead-end on a page that can't sign anyone in", which was true only
- *   because `/login` itself silently showed a normal, fillable form with no
- *   indication sign-in couldn't work — the actual dead end was the
- *   destination lying on arrival, not the door existing. `/login` now tells
- *   this truth the moment it loads (its own lazy `state` initializer), so
- *   linking here stops being a dead end and starts being the "so they
- *   follow you on every device" pitch's own front door — a demo visitor can
- *   now discover accounts exist as a *concept*, in the one place the whole
- *   app already tells them there is no account to save to
- *   (`DemoModeBanner.tsx`). That banner itself was considered as the host
- *   for this link and rejected: it renders ONLY when unconfigured, so any
- *   affordance fixed inside it would always be exactly the "sign-in is
- *   impossible" case the fresh-eyes judge's own contract warns against —
- *   this masthead door, by contrast, already renders the identical pill in
- *   the genuinely-possible "configured + signed-out" state below, so
- *   extending its unconfigured branch is the smaller, more consistent
- *   change (harmony rule: extend the existing door, don't build a second
- *   one).
+ * - accounts not set up here (Supabase not configured): render nothing. A
+ *   "Sign in" door would dead-end on a page that can't sign anyone in, so we
+ *   don't show one — this device is simply local-only.
  * - configured + no session: a plain "Sign in" pill -> /login?next=<here>, so
  *   the person returns to the page they were on after signing in.
  * - configured + signed in: a quiet who + "Sign out", matching the masthead's
@@ -121,23 +102,8 @@ export function AuthAffordance() {
     setPresence({ status: "signed-out" });
   }
 
-  if (presence.status === "loading") {
+  if (presence.status === "loading" || presence.status === "unconfigured") {
     return null;
-  }
-
-  if (presence.status === "unconfigured") {
-    // No `?next=` — see the module doc comment above for why this differs
-    // from the "configured + signed-out" pill just below.
-    return (
-      <Link
-        href="/login"
-        className={cn(HIT_TARGET_MIN, PILL_CLASS)}
-        data-testid="masthead-signin-link"
-      >
-        <LogIn className="size-4" aria-hidden="true" />
-        Sign in
-      </Link>
-    );
   }
 
   if (presence.status === "signed-out") {
