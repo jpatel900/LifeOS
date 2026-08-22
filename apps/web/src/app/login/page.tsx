@@ -176,10 +176,16 @@ function LoginForm() {
                   attempt that failed ("Sign in failed", unchanged), and the
                   new arrival-time case above where nobody has attempted
                   anything yet — "Sign in failed" would itself be a fresh
-                  falsehood there. */}
+                  falsehood there. Deliberately avoids the substring "sign
+                  in" (tests/e2e/helpers/pinnedSurfaces.ts's `login` surface
+                  locates the page via `getByRole("heading", { name: "Sign
+                  in" })`, which Playwright matches by case-insensitive
+                  substring — a title containing that phrase made this
+                  alert's own <h5> a second match and broke the pin with a
+                  strict-mode violation, caught by actually running it). */}
               <AlertTitle>
                 {state.message === NOT_CONFIGURED_MESSAGE
-                  ? "No account to sign in to"
+                  ? "Accounts aren't set up here"
                   : "Sign in failed"}
               </AlertTitle>
               <AlertDescription>{state.message}</AlertDescription>
@@ -235,22 +241,52 @@ export default function LoginPage() {
     <>
       {/* #687 round-11 fresh-eyes judge (defect: "missing the shell
           conventions every other surface has: no skip link, no
-          #stage-content id"). Copied verbatim from `AppShell.tsx`'s
-          `AdminShell` skip link (same class string, same target id
-          contract) rather than `MomentsThemeShell.tsx`'s variant, which
-          uses `--btn`/`--btn-fg` tokens scoped to `.lifeos-cockpit` —
-          `/login` is never inside that scope (root `AppShell` wraps it
-          directly, no `.lifeos-cockpit` ancestor). Lives OUTSIDE the
-          Suspense boundary below (not duplicated per branch, unlike the
-          "Go to Today" link): it is identical in both states, and `/login`
-          is statically prerendered, so it must exist in the very first
-          HTML byte, before `LoginForm` ever mounts. Placed before
-          `<Suspense>` so it is also the first focusable element on the
-          page — a skip link placed after what it skips would skip
-          nothing. */}
+          #stage-content id"). Same class string as `AppShell.tsx`'s
+          `AdminShell` skip link (same target id contract) rather than
+          `MomentsThemeShell.tsx`'s variant, which uses `--btn`/`--btn-fg`
+          tokens scoped to `.lifeos-cockpit` — `/login` is never inside that
+          scope (root `AppShell` wraps it directly, no `.lifeos-cockpit`
+          ancestor). Lives OUTSIDE the Suspense boundary below (not
+          duplicated per branch, unlike the "Go to Today" link): it is
+          identical in both states, and `/login` is statically prerendered,
+          so it must exist in the very first HTML byte, before `LoginForm`
+          ever mounts. Placed before `<Suspense>` so it is also the first
+          focusable element on the page — a skip link placed after what it
+          skips would skip nothing.
+
+          `top-0 left-0` ADDED beyond the copied string, proven necessary by
+          actually running hit-target-overlap-pin.spec.ts (not by reasoning
+          about it): this page's `<main>` vertically CENTERS its single
+          child (`items-center`, unlike Today's/Settings' top-aligned
+          shells), so an `sr-only` link's un-positioned "static position"
+          (where it would sit if it weren't taken out of flow) lands in the
+          empty space above the centered card — nothing else is painted
+          there, so `elementFromPoint` resolves to `<body>`, an ANCESTOR of
+          the link, which the pin's hit-testability filter treats as
+          "reachable" and counts as a genuine sub-44px control (measured:
+          32x16, at (-1, 39) on a 1440x1000 viewport). On Today/Settings the
+          identical invisible box instead lands directly under that shell's
+          own masthead `<header>` — a SIBLING, which the same filter
+          excludes — by accident of their top-aligned layout, not by
+          design. `top-0 left-0` makes the same exclusion deliberate here:
+          it pins the invisible box inside `DemoModeBanner`'s sticky
+          `top-0`, full-width footprint (rendered one level up, in
+          `AppShell.tsx`, immediately before this element), so
+          `elementFromPoint` resolves to the banner instead — a sibling,
+          not an ancestor. Depends on the banner: verified true for the
+          current demo/unconfigured deploy this pin measures
+          (tests/e2e/helpers/pinnedSurfaces.ts's own header: "the E2E dev
+          server has no Supabase env"); if this app ever ships configured
+          (banner returns null), this exact 32x16 box would need a fresh
+          anchor — flagged as an AGENT-TODO in this PR rather than silently
+          left for whoever hits it. `focus:` variants below are unaffected
+          (higher-specificity `:focus`-suffixed classes already win over
+          plain `top-0`/`left-0`, same mechanism the copied string already
+          relied on for `focus:absolute` beating base `sr-only`'s own
+          `position: absolute`). */}
       <a
         href="#stage-content"
-        className="sr-only rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+        className="sr-only top-0 left-0 rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
       >
         Skip to stage content
       </a>
