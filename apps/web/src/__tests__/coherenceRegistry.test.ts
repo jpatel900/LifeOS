@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { readDirCached } from "./helpers/repoWalk";
+import { assertWalkFoundFiles, readDirCached } from "./helpers/repoWalk";
 
 // #761 — walkPolicySourceFiles/walkUxTokenScanFiles below re-walk their
 // roots per call; readDirCached dedupes the repeated directory reads, and
@@ -92,8 +92,21 @@ function walkPolicySourceFiles(relativePath: string): string[] {
 
 function readProductionPolicySourceText(): Map<string, string> {
   const sourceTextByPath = new Map<string, string>();
+  const sourcePaths = POLICY_SOURCE_ROOTS.flatMap(walkPolicySourceFiles);
+  // Anti-vacuum: packages/schemas/src + apps/web/src/lib carry 100+ matching
+  // files today. Without this, a renamed root would silently empty
+  // sourceTextByPath, and every currently-registered non-reserved policy id
+  // would then read as "unreferenced" -- which happens to still fail loudly
+  // today (12 of 15 registered policies are non-reserved), but only by
+  // coincidence of the registry's current contents, not by an explicit
+  // guarantee. This makes the floor explicit instead of incidental.
+  assertWalkFoundFiles(
+    sourcePaths,
+    "coherenceRegistry: policy source files (packages/schemas/src + apps/web/src/lib)",
+    50,
+  );
 
-  for (const sourcePath of POLICY_SOURCE_ROOTS.flatMap(walkPolicySourceFiles)) {
+  for (const sourcePath of sourcePaths) {
     sourceTextByPath.set(
       sourcePath,
       readFileSync(resolve(repoRoot, sourcePath), "utf8"),
@@ -382,10 +395,17 @@ function walkUxTokenScanFiles(relativePath: string): string[] {
 }
 
 function uxTokenScanFiles(): string[] {
-  return [
-    ...walkUxTokenScanFiles(UX_COMPONENT_SCAN_ROOT),
-    ...UX_ROUTE_PAGE_SCAN_FILES,
-  ].sort();
+  const componentFiles = walkUxTokenScanFiles(UX_COMPONENT_SCAN_ROOT);
+  // Anti-vacuum: the fixed UX_ROUTE_PAGE_SCAN_FILES list (7 files) always
+  // keeps this function's result non-empty on its own, so a renamed
+  // components directory would otherwise silently drop ~100 files from
+  // scope while both G-UX-3 tests kept passing on the 7 route pages alone.
+  assertWalkFoundFiles(
+    componentFiles,
+    "coherenceRegistry G-UX-3: apps/web/src/app/components scan",
+    30,
+  );
+  return [...componentFiles, ...UX_ROUTE_PAGE_SCAN_FILES].sort();
 }
 
 // Comment-stripping is the only robust disambiguation: content alone cannot

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { readDirCached } from "./helpers/repoWalk";
+import { assertWalkFoundFiles, readDirCached } from "./helpers/repoWalk";
 
 // #761 — this file walks apps/web/src/__tests__, apps/web/src, and apps/web
 // (overlapping, some more than once) across its guards; readDirCached
@@ -37,11 +37,20 @@ const WORKFLOW_STATE_ANNOTATION_ALLOWLIST = [
 ];
 
 function workflowStateAnnotationTestFiles() {
-  return walkRepoFiles("apps/web/src/__tests__").filter(
+  const files = walkRepoFiles("apps/web/src/__tests__").filter(
     (file) =>
       /apps\/web\/src\/__tests__\/.*\.(?:test|spec)\.(?:ts|tsx)$/.test(file) ||
       /apps\/web\/src\/__tests__\/helpers\/[^/]+\.ts$/.test(file),
   );
+  // Anti-vacuum: 67 files match this filter today; a renamed __tests__ tree
+  // or a broken filter would otherwise make the WorkflowState-annotation ban
+  // below pass on zero files scanned.
+  assertWalkFoundFiles(
+    files,
+    "sourceOfTruth: apps/web/src/__tests__ test/spec + helper files",
+    20,
+  );
+  return files;
 }
 
 function walkRepoFiles(relativePath: string): string[] {
@@ -75,6 +84,12 @@ describe("source-of-truth boundaries", () => {
       (file) =>
         /\.(?:test|spec)\.(?:ts|tsx)$/.test(file) ||
         file.endsWith("helpers/workflowReachability.ts"),
+    );
+    // Anti-vacuum: same shape as workflowStateAnnotationTestFiles() below.
+    assertWalkFoundFiles(
+      testFiles,
+      "sourceOfTruth: apps/web/src/__tests__ test/spec files",
+      20,
     );
     const offenders = testFiles.filter((file) => {
       if (file === "apps/web/src/__tests__/helpers/workflowReachability.ts") {
@@ -426,6 +441,13 @@ describe("source-of-truth boundaries", () => {
   it("blocks direct vendor observability SDK imports outside the shared wrapper", () => {
     const sourceFiles = walkRepoFiles("apps/web/src").filter((path) =>
       /\.(ts|tsx)$/.test(path),
+    );
+    // Anti-vacuum: apps/web/src carries 500+ .ts/.tsx files today; a broken
+    // walk would otherwise make this for-loop check nothing at all.
+    assertWalkFoundFiles(
+      sourceFiles,
+      "sourceOfTruth: apps/web/src ts/tsx files (vendor SDK import ban)",
+      200,
     );
     const vendorImportPattern =
       /from ["'](?:@sentry\/|posthog-js|posthog-node|langfuse)/;
