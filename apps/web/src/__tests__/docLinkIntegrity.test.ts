@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { readDirCached } from "./helpers/repoWalk";
+import { assertWalkFoundFiles, readDirCached } from "./helpers/repoWalk";
 
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -64,7 +64,16 @@ function listLiveDocFiles(): string[] {
   const rootFiles = readdirSync(repoRoot, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
     .map((entry) => entry.name);
-  return [...rootFiles, ...docsFiles].sort();
+  const files = [...rootFiles, ...docsFiles].sort();
+  // Anti-vacuum: docs/ + root markdown totals 60+ files today; a renamed
+  // docs directory would otherwise make every assertion built on this list
+  // (path existence, FR-title collisions) pass on zero docs scanned.
+  assertWalkFoundFiles(
+    files,
+    "docLinkIntegrity: docs/**/*.md + root *.md",
+    20,
+  );
+  return files;
 }
 
 /**
@@ -136,7 +145,12 @@ describe("doc link integrity", () => {
     const offenders: string[] = [];
 
     for (const dir of requireStatusIn) {
-      for (const file of walkMarkdownFiles(resolve(repoRoot, dir), dir)) {
+      const files = walkMarkdownFiles(resolve(repoRoot, dir), dir);
+      // Anti-vacuum: each of these directories carries live docs today; a
+      // renamed directory would otherwise make the STATUS-header check pass
+      // on zero files scanned for that directory.
+      assertWalkFoundFiles(files, `docLinkIntegrity STATUS check: ${dir}`, 1);
+      for (const file of files) {
         const head = readFileSync(resolve(repoRoot, file), "utf8")
           .split(/\r?\n/)
           .slice(0, 10)
@@ -192,12 +206,34 @@ describe("doc link integrity", () => {
   it("model names appear only in docs/agent/MODEL_LANES.md on live governance surfaces", () => {
     // Live governance surfaces: entry files + program + agent docs. Historical
     // plans, audits, and vision docs may quote model names as provenance.
+    const programDocs = walkMarkdownFiles(
+      resolve(repoRoot, "docs/program"),
+      "docs/program",
+    );
+    const agentDocs = walkMarkdownFiles(
+      resolve(repoRoot, "docs/agent"),
+      "docs/agent",
+    );
+    // Anti-vacuum: the 3 fixed root files always get scanned regardless, so
+    // without this a renamed docs/program or docs/agent directory would
+    // silently drop out of scope while the test kept passing on the 3 roots
+    // alone.
+    assertWalkFoundFiles(
+      programDocs,
+      "docLinkIntegrity model-name scope: docs/program",
+      1,
+    );
+    assertWalkFoundFiles(
+      agentDocs,
+      "docLinkIntegrity model-name scope: docs/agent",
+      1,
+    );
     const scopes = [
       "AGENTS.md",
       "CLAUDE.md",
       "README.md",
-      ...walkMarkdownFiles(resolve(repoRoot, "docs/program"), "docs/program"),
-      ...walkMarkdownFiles(resolve(repoRoot, "docs/agent"), "docs/agent"),
+      ...programDocs,
+      ...agentDocs,
     ].filter((path) => path !== "docs/agent/MODEL_LANES.md");
     const MODEL_TOKENS =
       /\b(opus|sonnet|haiku|fable|gpt-\d|o[13]-\w+|gemini)\b/i;

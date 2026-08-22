@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { USER_DATA_EXPORT_TABLES } from "@/lib/data/export";
-import { readDirCached } from "./helpers/repoWalk";
+import { assertWalkFoundFiles, readDirCached } from "./helpers/repoWalk";
 
 // Static guards for docs/ENGINEERING_INVARIANTS.md. Each block names the
 // invariant it enforces; weakening a guard to pass it violates the invariant.
@@ -106,6 +106,14 @@ describe("INV-3 vendor seams", () => {
         !/\.(test|spec)\.(ts|tsx)$/.test(f) &&
         !f.includes("__tests__"),
     );
+    // Anti-vacuum: ~300 production source files match this filter today; a
+    // broken walk would otherwise make the per-hostname check below pass on
+    // zero files scanned.
+    assertWalkFoundFiles(
+      sourceFiles,
+      "engineeringInvariants INV-3: apps/web/src production ts/tsx files",
+      100,
+    );
 
     for (const { hostname, allowedDir } of VENDOR_BOUNDARIES) {
       const violations = sourceFiles.filter(
@@ -133,6 +141,13 @@ describe("INV-4 module budgets", () => {
   it("keeps route pages within their line budgets", () => {
     const pages = walkRepoFiles("apps/web/src/app").filter((f) =>
       f.endsWith("/page.tsx"),
+    );
+    // Anti-vacuum: 13 route pages exist today; a broken walk would otherwise
+    // make the budget check below pass on zero pages scanned.
+    assertWalkFoundFiles(
+      pages,
+      "engineeringInvariants INV-4: apps/web/src/app page.tsx files",
+      5,
     );
     const overages = pages.flatMap((page) => {
       const budget = GRANDFATHERED_PAGE_BUDGETS[page] ?? DEFAULT_PAGE_BUDGET;
