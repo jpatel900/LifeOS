@@ -197,14 +197,14 @@ test("classifySignIn: sign-in rejected (bad credentials / rotated password) => m
   // SMOKE_EMAIL/SMOKE_PASSWORD, Supabase misconfigured) -- never evidence
   // the AI PROVIDER is down. Must classify the same way a probe-side 401/403
   // does (#874's original fix), never "failing".
-  assert.equal(
-    classifySignIn({ ok: false, httpStatus: 400 }),
-    "misconfigured",
-  );
+  assert.equal(classifySignIn({ ok: false, httpStatus: 400 }), "misconfigured");
 });
 
 test("classifySignIn: ok but no access token in the response => misconfigured", () => {
-  assert.equal(classifySignIn({ ok: true, accessToken: null }), "misconfigured");
+  assert.equal(
+    classifySignIn({ ok: true, accessToken: null }),
+    "misconfigured",
+  );
   assert.equal(classifySignIn({ ok: true, accessToken: "" }), "misconfigured");
   assert.equal(classifySignIn({ ok: true }), "misconfigured");
 });
@@ -231,7 +231,11 @@ test("runAuthenticatedProbe: sign-in failure => misconfigured, probe is never ca
   });
 
   assert.equal(state, "misconfigured");
-  assert.equal(probeCalled, false, "the synthetic probe must not run without a token");
+  assert.equal(
+    probeCalled,
+    false,
+    "the synthetic probe must not run without a token",
+  );
   assert.ok(
     warnings.some((message) => /sign.?in/i.test(message)),
     "a misconfigured sign-in should warn, distinctly from the probe-rejected case",
