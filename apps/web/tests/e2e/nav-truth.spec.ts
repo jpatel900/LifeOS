@@ -440,6 +440,84 @@ test("/settings/areas content is centered, not stretched edge-to-edge (#687)", a
   expect(box!.x).toBeGreaterThan(40);
 });
 
+/**
+ * Part of #687 — defect 2 (fresh-eyes judge, newest comment on the issue):
+ * every 404 under `/settings/*` threw React hydration error #418 in a
+ * PRODUCTION build. Root cause: `AppShell.tsx` used to decide whether to
+ * wrap `children` in `AdminShell` by guessing the current route from
+ * `usePathname()`. Next serves ONE statically pre-rendered shell
+ * (`○ /_not-found`, built once) as the HTML for ANY unmatched URL app-wide —
+ * generated with `isAdmin=false` baked in (its own pathname never started
+ * with `/settings`) — while real hydration recomputed `usePathname()` from
+ * the ACTUAL requested URL, which for `/settings/nope` genuinely does start
+ * with `/settings`, flipping `isAdmin` to `true` on the client only: a
+ * structural server/client mismatch, reported as #418. `/settings/areas`
+ * (a real page, not the shared shell) and a root-level `/nonsense` (which
+ * computes `isAdmin=false` on both sides) never diverged.
+ *
+ * Fixed by moving `AdminShell` into `app/settings/layout.tsx`, applied
+ * unconditionally to every real `/settings/*` page — a structural fact of
+ * the route tree rather than a pathname guess. A genuinely unmatched deep
+ * path never enters that layout at all (Next falls straight to the
+ * app-wide `/_not-found` boundary), so it never gets AdminShell, on
+ * EITHER side, for ANY unmatched `/settings/*` path.
+ *
+ * This walk cannot see #418 itself — this repo's e2e harness always spawns
+ * `next dev`, which re-renders every request fresh (no shared static shell,
+ * so pre-fix code never actually diverged here — confirmed: dev mode showed
+ * no console error even on the unfixed build, only a real `next build && next
+ * start` did). What this tier CAN see, red-first against the unfixed build,
+ * is the STRUCTURAL fact the fix establishes: `AdminShell` (the "Areas
+ * admin" nav link) never renders for a `/settings/*` 404, matching the one
+ * shared shell every unmatched path already gets — while a REAL settings
+ * page keeps it. The production-build console proof (#418 present pre-fix,
+ * absent post-fix) is recorded as PR evidence, not re-derived here.
+ */
+test.describe("settings 404s never wear AdminShell chrome (#687 defect 2)", () => {
+  for (const path of [
+    "/settings/nope",
+    "/settings/areas/nope",
+    "/settings/x/y/z",
+  ]) {
+    test(`${path} renders the plain 404 card, no "Areas admin" nav`, async ({
+      page,
+    }) => {
+      await page.goto(path);
+      await expect(
+        page.getByRole("heading", { name: "Page not found" }),
+      ).toBeVisible();
+      await expect(page.getByRole("link", { name: "Areas admin" })).toHaveCount(
+        0,
+      );
+      await expect(
+        page.getByRole("link", { name: "Go to Today" }),
+      ).toBeVisible();
+    });
+  }
+
+  test("/settings/areas (a real page, not a 404) still wears AdminShell chrome — the positive control", async ({
+    page,
+  }) => {
+    await page.goto("/settings/areas");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Areas" }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Areas admin" })).toBeVisible();
+  });
+
+  test("/nonsense (a root-level 404, never under /settings) is unaffected — the other control", async ({
+    page,
+  }) => {
+    await page.goto("/nonsense");
+    await expect(
+      page.getByRole("heading", { name: "Page not found" }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Areas admin" })).toHaveCount(
+      0,
+    );
+  });
+});
+
 // Final UX Loop C2-S0 (#742): signed-out visits to /settings/areas now
 // redirect to the sign-in door (`useAreasLoadState.ts`'s status:"signed-out"
 // drives a `router.replace("/login?next=…")` in page.tsx). This spec's dev
