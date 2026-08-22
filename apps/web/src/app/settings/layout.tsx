@@ -20,10 +20,6 @@ import { AdminShell } from "../components/AppShell";
  * layout — and therefore `AdminShell` — is never in play for that case,
  * consistently on the server and any client hydration.
  */
-export default function SettingsLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function SettingsLayout({ children }: { children: ReactNode }) {
   return <AdminShell>{children}</AdminShell>;
 }
