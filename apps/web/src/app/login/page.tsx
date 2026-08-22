@@ -145,8 +145,17 @@ function LoginForm() {
               `not-found.tsx` already offers, at the bottom of the SAME card
               rather than a new header, since this page deliberately has no
               shell of its own. `ghost` variant keeps it visually secondary
-              to the primary "Sign in" action above. */}
-          <Button asChild variant="ghost" className="w-full">
+              to the primary "Sign in" action above.
+              CI catch (`hit-target-overlap-pin.spec.ts`, `login` is pinned at
+              EXACTLY 3 pre-existing sub-44px controls — email/password/Sign
+              in, all shadcn's 40px default): `Button`'s default `size` is
+              also `h-10`/40px (`components/ui/button.tsx`), so this control
+              would have been a 4th, raising the pinned surface's count —
+              which the ratchet only allows to SHRINK, never grow. `size="lg"`
+              (`h-11`/44px) is the one `Button` size that clears the pin's
+              `>=44px` floor outright, so this link adds zero new debt to an
+              already-imperfect surface instead of quietly making it worse. */}
+          <Button asChild variant="ghost" size="lg" className="w-full">
             <Link href="/">Go to Today</Link>
           </Button>
         </CardContent>
@@ -167,7 +176,12 @@ function LoginForm() {
 // hatch added to `LoginForm` above would otherwise exist only after
 // hydration, leaving the exact dead-end window the judge measured — the
 // same single link is repeated here so the way back exists on the very
-// first byte, not only once the form swaps in.
+// first byte, not only once the form swaps in. `size="lg"` matches
+// `LoginForm`'s own copy above (both must clear the hit-target pin's
+// >=44px floor identically), even though this exact fallback markup is
+// never what CI's real-browser pin measures (it hydrates past this before
+// the pin's page.goto() resolves) — kept consistent so a future direct
+// measurement of the fallback finds the same, already-correct size.
 export default function LoginPage() {
   return (
     <Suspense
@@ -178,7 +192,7 @@ export default function LoginPage() {
               <CardTitle className="login-title">Sign in</CardTitle>
             </CardHeader>
             <CardContent>
-              <Button asChild variant="ghost" className="w-full">
+              <Button asChild variant="ghost" size="lg" className="w-full">
                 <Link href="/">Go to Today</Link>
               </Button>
             </CardContent>
