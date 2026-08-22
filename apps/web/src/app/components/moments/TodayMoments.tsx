@@ -61,7 +61,7 @@ import { HealthSheet } from "./HealthSheet";
 import { AreasSheet } from "./AreasSheet";
 import { useSheetUrlState } from "./useSheetUrlState";
 import { useOverlayUrlState, parseOverlayParam } from "./useOverlayUrlState";
-import { isSheetValue } from "./sheetValues";
+import { isSheetValue, type SheetValue } from "./sheetValues";
 import {
   parseMomentParam,
   urlWithMoment,
@@ -674,6 +674,119 @@ export function TodayMoments({
     }
   }, []);
 
+  // C2-S13 (#687 round-7 judge, "sheet renders with no sheet param"):
+  // `consumeIsRemount` (deepLink.ts) reads a MODULE-scope flag, not React
+  // state — it survives a client-side route change and back the same way
+  // `WorkflowProvider`'s own state does (mounted once at the root layout,
+  // that module is never re-evaluated by an in-app navigation; only
+  // TodayMoments' own component INSTANCE unmounts/remounts). Captured into a
+  // `useState` lazy initializer so it is read (and flipped for the NEXT
+  // mount) exactly once, synchronously, in the SAME render pass that
+  // produces this mount's first commit — before any effect has run.
+  //
+  // This distinguishes "TodayMoments has mounted before in this tab" (a
+  // Back/Forward walk crossing a real route change — `/settings/areas`,
+  // reached via `next/link`, the one navigation kind Next's router actually
+  // tracks; every moment/sheet/capture/palette/area write on `/` itself is a
+  // raw, router-invisible history write, see `lib/rawHistory.ts` — landing
+  // back on `/` can have Next's client Router Cache serve a STALE cached
+  // render, one baked from the earlier visit, with a stale `deepLink` prop)
+  // from "this is the very first mount `/` has ever had in this tab" (a hard
+  // load, a redirect-shim landing, or any of this file's own unit tests,
+  // which reset the flag between tests — see deepLink.ts's own doc comment
+  // on `resetTodayMomentsMountTrackingForTests` for why unit tests need
+  // that reset and `window.location` resets do not suffice). Only the
+  // FORMER needs the live URL cross-checked against `deepLink` at all — a
+  // fresh mount has nothing to distrust, `deepLink` is exactly what it
+  // always was: this render's own truth. See deepLink.ts's own doc comment
+  // on `deepLinkTargetFromSearch` for the full red-first repro.
+  //
+  // C2-S15 moved this declaration earlier than the P6 deep-link effect
+  // below (its original home, where a shorter pointer comment now sits) so
+  // the SSR-safe sheet/overlay resolvers just below could share it.
+  const [isRemount] = useState(consumeIsRemount);
+
+  // C2-S15 (#687 round-10 judge, "sheets and overlays are never
+  // server-rendered" — the last Card 2 defect): resolved the same way
+  // `resolvedInitialMoment`/`resolvedInitialAreaId` above already are, and
+  // from the SAME `target` the OLD P6 deep-link effect below computes —
+  // `deepLink` (page.tsx's `searchParams` tier, identical on the server and
+  // the client's first render) on a genuine first mount, or a live
+  // `window.location` re-parse on a remount, exactly mirroring that
+  // effect's own `isRemount ? deepLinkTargetFromSearch(...) : deepLink`
+  // ternary. Getting this wrong is not hypothetical — caught red-first
+  // while wiring this in, against this file's own existing remount test
+  // (`TodayMoments.deepLink.test.tsx`, "#911 + #912"): trusting the
+  // `deepLink` PROP unconditionally (ignoring `isRemount`) resolved a sheet
+  // from a STALE cached prop a Back/Forward walk left behind, because
+  // unlike `target.moment` (which the OLD effect ALWAYS re-applies when the
+  // live URL names one, self-correcting a wrong guess), the OLD effect only
+  // ever POSITIVELY adopts a sheet/overlay — it never explicitly closes one
+  // the live target does not name — so a wrongly-open sheet from a stale
+  // prop had nothing left to correct it.
+  //
+  // Unlike moment/area there is no THIRD (cookie/preference) tier — sheet
+  // and overlay have never been persisted, only URL-visible — so neither
+  // hook below needs a URL self-heal effect the way `useMomentUrlState`
+  // does: the value seeded here is already exactly what the URL says, by
+  // construction.
+  //
+  // Deliberately NOT gated on `ritualActive`/`ritual.pending`/
+  // `onboardingActive`/`onboarding.pending` here, unlike the OLD P6
+  // deep-link effect below (left unchanged — it still runs, and still
+  // redundantly re-adopts the same value here on a first mount, same as it
+  // always has for `moment`). `useOnboardingRitual`'s own `candidate` memo
+  // hard-codes `false` whenever `window` is undefined, so
+  // `onboarding.pending` is unconditionally `false` on the server but can be
+  // genuinely `true` on the client's first render (a zero-state account) —
+  // gating resolution on it HERE would make this initializer answer
+  // differently on the server than on the client, reintroducing the exact
+  // SSR/CSR split this slice exists to remove, just for a rarer trigger.
+  // Resolving unconditionally, like moment/area, keeps this tier
+  // deterministic on both sides. What actually keeps a sheet/overlay from
+  // floating on top of a ritual once one takes the screen is the render
+  // below: every `open` is ANDed with `showingMastheadAndMoments`, which is
+  // false on both the server and the client's first render whenever a
+  // ritual/onboarding is ALREADY latched (an effect-flipped fact, so never
+  // one-sided), and flips false on a later client-only render the same way
+  // it always has — `TodayMoments.deepLink.test.tsx`'s "defers the deep
+  // link until the re-entry ritual completes, then applies it" pins exactly
+  // this and still passes unchanged.
+  const [resolvedDeepLinkTarget] = useState<DeepLinkTarget>(() => {
+    // `isRemount` is read from `consumeIsRemount`'s MODULE-scope flag (see
+    // its own comment above), which is a valid "has this tab mounted
+    // TodayMoments before" signal only in a BROWSER, where one tab loads the
+    // module exactly once. The SERVER loads this same module once per
+    // process, not once per REQUEST — every request after the very first
+    // one this process ever served would otherwise see `isRemount === true`
+    // (a stale true from an EARLIER, unrelated request/user), take the
+    // "re-parse window.location" branch below, find no `window` at all, and
+    // resolve to `null` regardless of what `deepLink` (this request's own,
+    // correct, `searchParams`-derived answer) says — silently discarding a
+    // valid deep link on every SSR pass after the first in a warm process.
+    // Caught red-first via a direct curl of a SECOND `/?sheet=triage`
+    // request against the same dev server: the FIRST request rendered the
+    // sheet, every one after it rendered nothing. `typeof window ===
+    // "undefined"` is checked FIRST so the server always takes the
+    // `deepLink` branch — a "remount" is a client-only concept; there is no
+    // such thing during SSR, only a fresh request with its own correct prop.
+    if (typeof window !== "undefined" && isRemount) {
+      return deepLinkTargetFromSearch(
+        new URLSearchParams(window.location.search),
+      );
+    }
+    return deepLink ?? null;
+  });
+  const [resolvedInitialCaptureOpen] = useState<boolean>(
+    () => resolvedDeepLinkTarget?.overlay === "capture",
+  );
+  const [resolvedInitialPaletteOpen] = useState<boolean>(
+    () => resolvedDeepLinkTarget?.overlay === "palette",
+  );
+  const [resolvedInitialSheet] = useState<SheetValue | null>(
+    () => resolvedDeepLinkTarget?.sheet ?? null,
+  );
+
   // C2-S7 (#687 finding 2): capture and palette are now URL-visible via the
   // same push/pop/adopt contract every sheet already has — see
   // useOverlayUrlState's own header for why closing needs to survive being
@@ -684,7 +797,7 @@ export function TodayMoments({
     openOverlay: openCapture,
     closeOverlay: closeCapture,
     adoptOverlayFromUrl: adoptCaptureFromUrl,
-  } = useOverlayUrlState("capture");
+  } = useOverlayUrlState("capture", resolvedInitialCaptureOpen);
   const [captureDraft, setCaptureDraft] = useState<string>(() =>
     readStoredCaptureDraft(),
   );
@@ -693,12 +806,12 @@ export function TodayMoments({
     openOverlay: openPalette,
     closeOverlay: closePalette,
     adoptOverlayFromUrl: adoptPaletteFromUrl,
-  } = useOverlayUrlState("palette");
+  } = useOverlayUrlState("palette", resolvedInitialPaletteOpen);
   // C2 Target Card 2: the sheet is URL-visible and Back/Forward-correct.
   // `openSheet` pushes `?sheet=<value>`, `closeSheet` undoes exactly that,
   // and popstate re-reads the URL as the authority — see useSheetUrlState.
   const { activeSheet, openSheet, closeSheet, adoptSheetFromUrl } =
-    useSheetUrlState();
+    useSheetUrlState(resolvedInitialSheet);
   // C2-S8 hotfix (#687 finding 1, caught by the signed-in e2e tier —
   // areas-port-truth.spec.ts:211): AreasSheet's own click handler
   // (AreasSheet.tsx) calls `onSelectArea(areaId)` THEN `onClose()`
@@ -832,32 +945,11 @@ export function TodayMoments({
   // would pop on top of the ritual before its own effect has a chance to
   // run.
   // C2-S13 (#687 round-7 judge, "sheet renders with no sheet param"):
-  // `consumeIsRemount` (deepLink.ts) reads a MODULE-scope flag, not React
-  // state — it survives a client-side route change and back the same way
-  // `WorkflowProvider`'s own state does (mounted once at the root layout,
-  // that module is never re-evaluated by an in-app navigation; only
-  // TodayMoments' own component INSTANCE unmounts/remounts). Captured into a
-  // `useState` lazy initializer so it is read (and flipped for the NEXT
-  // mount) exactly once, synchronously, in the SAME render pass that
-  // produces this mount's first commit — before any effect has run.
-  //
-  // This distinguishes "TodayMoments has mounted before in this tab" (a
-  // Back/Forward walk crossing a real route change — `/settings/areas`,
-  // reached via `next/link`, the one navigation kind Next's router actually
-  // tracks; every moment/sheet/capture/palette/area write on `/` itself is a
-  // raw, router-invisible history write, see `lib/rawHistory.ts` — landing
-  // back on `/` can have Next's client Router Cache serve a STALE cached
-  // render, one baked from the earlier visit, with a stale `deepLink` prop)
-  // from "this is the very first mount `/` has ever had in this tab" (a hard
-  // load, a redirect-shim landing, or any of this file's own unit tests,
-  // which reset the flag between tests — see deepLink.ts's own doc comment
-  // on `resetTodayMomentsMountTrackingForTests` for why unit tests need
-  // that reset and `window.location` resets do not suffice). Only the
-  // FORMER needs the live URL cross-checked against `deepLink` at all — a
-  // fresh mount has nothing to distrust, `deepLink` is exactly what it
-  // always was: this render's own truth. See deepLink.ts's own doc comment
-  // on `deepLinkTargetFromSearch` for the full red-first repro.
-  const [isRemount] = useState(consumeIsRemount);
+  // `isRemount` (see its own long comment above, by `resolvedDeepLinkTarget`
+  // — C2-S15 moved the declaration earlier so the SSR-safe resolvers there
+  // could share it) distinguishes "TodayMoments has mounted before in this
+  // tab" from a genuine first mount; only the former needs the live URL
+  // cross-checked against `deepLink` at all.
   const deepLinkAppliedRef = useRef(false);
   useEffect(() => {
     if (deepLinkAppliedRef.current) return;
@@ -2035,8 +2127,21 @@ export function TodayMoments({
           onOpenPalette={() => openPalette()}
         />
 
+        {/* C2-S15 (#687 round-10 judge): every `open` below is ANDed with
+          `showingMastheadAndMoments` — resolving `captureOpen`/`paletteOpen`/
+          `activeSheet` now happens synchronously (see the resolvedInitial*
+          initializers above), unconditionally of ritual/onboarding state,
+          which is what makes them SSR-truthful. This AND is what still
+          keeps a deep-linked sheet/overlay from rendering on top of the
+          re-entry/onboarding ritual once one takes the screen — the same
+          invariant the OLD post-mount deep-link effect used to enforce by
+          deferring resolution itself, now enforced at render time instead
+          (`showingMastheadAndMoments` is false on both the server and the
+          client's first render whenever a ritual is already latched, so
+          this never causes a hydration mismatch). See the
+          resolvedInitialCaptureOpen comment above for the full reasoning. */}
         <CaptureOverlay
-          open={captureOpen}
+          open={captureOpen && showingMastheadAndMoments}
           initialText={captureDraft}
           onDraftChange={(text) => {
             setCaptureDraft(text);
@@ -2095,20 +2200,20 @@ export function TodayMoments({
         />
 
         <CommandPalette
-          open={paletteOpen}
+          open={paletteOpen && showingMastheadAndMoments}
           actions={paletteActions}
           onRun={runPaletteAction}
           onClose={() => closePalette()}
         />
 
         <TriageSheet
-          open={activeSheet === "triage"}
+          open={activeSheet === "triage" && showingMastheadAndMoments}
           selectedAreaId={selectedAreaId}
           onClose={() => closeSheet()}
         />
 
         <PlanSheet
-          open={activeSheet === "plan"}
+          open={activeSheet === "plan" && showingMastheadAndMoments}
           onClose={() => closeSheet()}
           selectedAreaId={selectedAreaId}
           blocks={startVM.blocks}
@@ -2121,7 +2226,7 @@ export function TodayMoments({
           close path in this shell (its own comment says so) and `closeVM`
           holds C1's verdict, so the sheet renders both and owns neither. */}
         <ReviewSheet
-          open={activeSheet === "review"}
+          open={activeSheet === "review" && showingMastheadAndMoments}
           onClose={() => closeSheet()}
           selectedAreaId={selectedAreaId}
           now={now}
@@ -2134,7 +2239,7 @@ export function TodayMoments({
           renders — see HealthSheet's doc comment. Mounting it here (the shape
           every sheet uses) is what makes that gate necessary and deliberate. */}
         <HealthSheet
-          open={activeSheet === "health"}
+          open={activeSheet === "health" && showingMastheadAndMoments}
           onClose={() => closeSheet()}
           selectedAreaId={selectedAreaId}
           now={now}
@@ -2144,7 +2249,7 @@ export function TodayMoments({
           condition). AreasSheet is hook-free while closed for the reason S4
           measured -- see its doc comment. */}
         <AreasSheet
-          open={activeSheet === "areas"}
+          open={activeSheet === "areas" && showingMastheadAndMoments}
           onClose={() => closeSheet()}
           selectedAreaId={selectedAreaId}
           onSelectArea={handleAreasSheetSelectArea}

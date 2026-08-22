@@ -91,6 +91,30 @@ import { isSheetValue, type SheetValue } from "./sheetValues";
  * of never exercising this path — `adoptSheetFromUrl` clears
  * `pushedEntryIdRef` the same way it always did, so this fix does not change
  * that contract either.
+ *
+ * C2-S15 (#687 round-10 judge, "sheets and overlays are never
+ * server-rendered" — the last Card 2 defect): `activeSheet` used to be a
+ * bare `useState<SheetValue | null>(null)`, always closed on the very first
+ * render regardless of what the URL named — `TodayMoments.tsx`'s own P6
+ * deep-link effect only `adoptSheetFromUrl`'d the real value in a
+ * post-mount `useEffect`, so a deep-linked sheet (`/?sheet=triage`) painted
+ * a bare home page first and the sheet popped in a beat later, on EVERY
+ * load, not just a rare one — `role="dialog"` count in the raw HTML was 0
+ * for `/?sheet=triage`, identical to bare `/`. Same disease
+ * `resolvedInitialMoment`/`resolvedInitialAreaId` (`TodayMoments.tsx`) were
+ * already fixed for, one tier simpler: sheet has no cookie/preference tier
+ * to consult (it has never been persisted, only URL-visible), so
+ * `TodayMoments.tsx` resolves `resolvedInitialSheet` from `deepLink.sheet` —
+ * the same `searchParams`-derived value `app/page.tsx` computes on the
+ * server and Next hydrates this component with — and seeds THIS hook with
+ * it, so `activeSheet` answers identically on the server and the client's
+ * first render. The optional parameter defaults to `null` so every existing
+ * `useSheetUrlState()` call site (this file's own unit tests) is
+ * unaffected. No URL self-heal effect was added alongside it (unlike
+ * `useMomentUrlState`'s mount effect): `resolvedInitialSheet` is ITSELF
+ * derived from the URL, so it can never disagree with what the address bar
+ * already says, by construction — there is nothing here for a self-heal to
+ * correct.
  */
 
 export type { SheetValue };
@@ -139,8 +163,12 @@ export interface SheetUrlState {
   adoptSheetFromUrl(sheet: SheetValue | null): void;
 }
 
-export function useSheetUrlState(): SheetUrlState {
-  const [activeSheet, setActiveSheet] = useState<SheetValue | null>(null);
+export function useSheetUrlState(
+  resolvedInitialSheet: SheetValue | null = null,
+): SheetUrlState {
+  const [activeSheet, setActiveSheet] = useState<SheetValue | null>(
+    resolvedInitialSheet,
+  );
 
   // The entry id `historyPushState` returned for OUR OWN push, or null when
   // we have never pushed (or have explicitly disclaimed, via

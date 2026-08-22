@@ -407,3 +407,43 @@ describe.each(["capture", "palette"] as const)(
     });
   },
 );
+
+/**
+ * C2-S15 (#687 round-10 judge, "sheets and overlays are never
+ * server-rendered"): `resolvedInitialOpen` is the sibling of
+ * `useSheetUrlState`'s own `resolvedInitialSheet` parameter — seeding the
+ * hook's `useState` directly so `open` is correct on the very first render
+ * rather than a beat later via `adoptOverlayFromUrl`. Defaults to `false`,
+ * so every `useOverlayUrlState(param)` call above (one argument) is
+ * unaffected.
+ */
+describe.each(["capture", "palette"] as const)(
+  "useOverlayUrlState(%s, resolvedInitialOpen) — C2-S15 seed parameter",
+  (param) => {
+    beforeEach(() => {
+      goto("/");
+    });
+
+    it("defaults to closed when no resolved value is passed (existing call sites unaffected)", () => {
+      const { result } = renderHook(() => useOverlayUrlState(param));
+      expect(result.current.open).toBe(false);
+    });
+
+    it("opens with the resolved value already true on the very first render", () => {
+      const { result } = renderHook(() => useOverlayUrlState(param, true));
+      expect(result.current.open).toBe(true);
+    });
+
+    it("closeOverlay on a seeded (never-pushed) overlay strips the param via replaceState, never back()", () => {
+      goto(`/?${param}=1`);
+      const back = vi.spyOn(window.history, "back");
+      const { result } = renderHook(() => useOverlayUrlState(param, true));
+
+      act(() => result.current.closeOverlay());
+
+      expect(result.current.open).toBe(false);
+      expect(back).not.toHaveBeenCalled();
+      expect(window.location.search).toBe("");
+    });
+  },
+);
