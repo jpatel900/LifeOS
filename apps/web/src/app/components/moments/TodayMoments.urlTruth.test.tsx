@@ -215,7 +215,15 @@ describe("TodayMoments — URL and deep-link parameter truth (#687 finding 1)", 
     expect(screen.getByTestId("plan-sheet")).toBeInTheDocument();
   });
 
-  it("does not touch a VALID ?sheet= value — that stays owned by the deep-link effect", async () => {
+  // C2-S15 (#687 round-10 judge): the title used to read "that stays owned
+  // by the deep-link effect" — accurate before this slice, since the P6
+  // deep-link effect was the only thing that ever opened a sheet from a URL
+  // param. `resolvedInitialSheet` (TodayMoments.tsx) now resolves this
+  // synchronously instead, so the sheet is open on the very first render;
+  // the deep-link effect's own `adoptSheetFromUrl(target.sheet)` call still
+  // fires on mount too, redundantly (same as it always has for `moment`),
+  // but is no longer what makes this assertion true.
+  it("does not touch a VALID ?sheet= value", async () => {
     window.history.replaceState(null, "", "/?sheet=triage");
 
     renderToday({ initialMoment: "start", deepLink: { sheet: "triage" } });

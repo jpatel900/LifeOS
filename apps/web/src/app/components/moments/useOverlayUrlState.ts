@@ -89,6 +89,24 @@ import {
  * having pushed anything. "Do I currently own the entry I'm standing on" is
  * answered by comparing ids fresh, every time, rather than by trusting a
  * cached yes/no that can go stale.
+ *
+ * C2-S15 (#687 round-10 judge, "sheets and overlays are never
+ * server-rendered" — the last Card 2 defect, sibling fix to
+ * `useSheetUrlState.ts`'s own header comment): `open` used to be a bare
+ * `useState(false)`, always closed on the very first render regardless of
+ * what the URL named (`?capture=1`/`?palette=1`) — `TodayMoments.tsx`'s P6
+ * deep-link effect only `adoptOverlayFromUrl`'d the real value in a
+ * post-mount effect, so raw HTML for `/?capture=1` had zero `role="dialog"`
+ * elements, identical to bare `/`. `TodayMoments.tsx` now resolves
+ * `resolvedInitialCaptureOpen`/`resolvedInitialPaletteOpen` from
+ * `deepLink.overlay` (the same `searchParams`-derived value `app/page.tsx`
+ * computes on the server) and seeds THIS hook with it, so `open` answers
+ * identically on the server and the client's first render. The optional
+ * second parameter defaults to `false` so every existing
+ * `useOverlayUrlState(param)` call site (this file's own unit tests) is
+ * unaffected. Like `useSheetUrlState`, no URL self-heal effect was needed:
+ * the resolved value is itself derived from the URL, so it can never
+ * disagree with the address bar by construction.
  */
 
 export function parseOverlayParam(value: string | null): boolean {
@@ -126,8 +144,9 @@ export interface OverlayUrlState {
 
 export function useOverlayUrlState(
   param: "capture" | "palette",
+  resolvedInitialOpen = false,
 ): OverlayUrlState {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(resolvedInitialOpen);
 
   // The entry id `historyPushState` returned for OUR OWN push, or null when
   // we have never pushed (or have explicitly disclaimed, via

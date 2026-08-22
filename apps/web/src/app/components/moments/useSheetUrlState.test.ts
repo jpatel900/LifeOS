@@ -485,3 +485,58 @@ describe("useSheetUrlState — the 'Back does nothing once' artifact (#687 round
     expect(window.location.search).toBe("");
   });
 });
+
+/**
+ * C2-S15 (#687 round-10 judge, "sheets and overlays are never
+ * server-rendered"): `resolvedInitialSheet` is the SAME shape
+ * `useMomentUrlState`'s `resolvedInitialMoment` parameter already proved —
+ * seeding the hook's `useState` directly, so `activeSheet` is correct on the
+ * very first render rather than a beat later via `adoptSheetFromUrl`. The
+ * optional parameter defaults to `null`, so every `useSheetUrlState()` call
+ * above (with no argument) is unaffected — this is additive coverage, not a
+ * replacement for it.
+ */
+describe("useSheetUrlState(resolvedInitialSheet) — C2-S15 seed parameter", () => {
+  beforeEach(() => {
+    goto("/");
+  });
+
+  it("defaults to closed when no resolved sheet is passed (existing call sites unaffected)", () => {
+    const { result } = renderHook(() => useSheetUrlState());
+    expect(result.current.activeSheet).toBeNull();
+  });
+
+  it("opens with the resolved sheet already active on the very first render", () => {
+    const { result } = renderHook(() => useSheetUrlState("triage"));
+    expect(result.current.activeSheet).toBe("triage");
+  });
+
+  it("closeSheet on a seeded (never-pushed) sheet strips the param via replaceState, never back()", () => {
+    goto("/?sheet=triage");
+    const back = vi.spyOn(window.history, "back");
+    const { result } = renderHook(() => useSheetUrlState("triage"));
+
+    act(() => result.current.closeSheet());
+
+    expect(result.current.activeSheet).toBeNull();
+    expect(back).not.toHaveBeenCalled();
+    expect(window.location.search).toBe("");
+  });
+
+  it("a seed value does not reappear after being closed and re-rendered (same instance)", () => {
+    const { result, rerender } = renderHook(
+      ({ seed }: { seed: "triage" | null }) => useSheetUrlState(seed),
+      { initialProps: { seed: "triage" as "triage" | null } },
+    );
+    expect(result.current.activeSheet).toBe("triage");
+
+    act(() => result.current.closeSheet());
+    expect(result.current.activeSheet).toBeNull();
+
+    // A re-render with the SAME seed prop must not reopen it — `useState`'s
+    // initializer only runs on the hook's first call, matching
+    // `useMomentUrlState`'s own already-proven contract.
+    rerender({ seed: "triage" });
+    expect(result.current.activeSheet).toBeNull();
+  });
+});
