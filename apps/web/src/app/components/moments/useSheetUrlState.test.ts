@@ -426,4 +426,62 @@ describe("useSheetUrlState — the 'Back does nothing once' artifact (#687 round
     expect(stack[1].url).toBe("/?sheet=plan");
     expect(stack[1].url).not.toBe(stack[0].url);
   });
+
+  /**
+   * #897's own investigation named its two CI sightings at
+   * `review-port-truth.spec.ts:289` and `health-port-truth.spec.ts:330`,
+   * always on the walk "open -> reload -> Back -> Forward -> close". Those
+   * two specs are `@signed-in` (require a real Supabase stack this lane has
+   * no credentials for — `requireSupabaseEnv()` throws before the browser
+   * even opens), so they could not be run directly to confirm this fix
+   * leaves that walk unaffected. This pins the same walk's LOGIC instead: a
+   * reload unmounts the hook and mounts a fresh instance, which the mount-
+   * time deep-link effect (`TodayMoments.tsx`'s `adoptSheetFromUrl(target.sheet)`)
+   * hands the URL-named sheet via `adoptSheetFromUrl` — the SAME call that
+   * clears `pushedEntryIdRef` to `null` on every adopt. A subsequent Forward
+   * lands back on the entry the PRE-reload `openSheet` originally pushed
+   * (its own id still intact in `history.state`, a real reload does not
+   * touch entries other than the current one) — but the fresh instance
+   * never recorded that id itself, so `stillOnOurEntry` is false regardless
+   * of what id the entry carries, and `closeSheet` takes the same strip
+   * branch it always took here, pre- and post-fix. The entry-identity fix
+   * only changes behavior for a Forward reached WITHOUT an intervening
+   * remount — precisely the case #897's CI sightings did not exercise.
+   */
+  it("PIN (#897 CI sightings): open -> reload (fresh hook instance) -> Back -> Forward -> close still strips via replaceState, unaffected by the entry-identity fix", () => {
+    installRealHistoryStack();
+    const first = renderHook(() => useSheetUrlState());
+    act(() => first.result.current.openSheet("review"));
+    expect(window.location.search).toBe("?sheet=review");
+
+    // Reload: unmount the old instance, mount a fresh one that adopts the
+    // sheet the URL already names — exactly `TodayMoments.tsx`'s own mount-
+    // time deep-link effect.
+    first.unmount();
+    const back = vi.spyOn(window.history, "back");
+    const reloaded = renderHook(() => useSheetUrlState());
+    act(() => reloaded.result.current.adoptSheetFromUrl("review"));
+    expect(reloaded.result.current.activeSheet).toBe("review");
+
+    // Back.
+    act(() => {
+      window.history.back();
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(reloaded.result.current.activeSheet).toBeNull();
+
+    // Forward — lands back on the PRE-reload entry, id and all, but this
+    // FRESH instance never pushed it itself.
+    act(() => {
+      window.history.forward();
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(reloaded.result.current.activeSheet).toBe("review");
+
+    back.mockClear();
+    act(() => reloaded.result.current.closeSheet());
+
+    expect(back).not.toHaveBeenCalled();
+    expect(window.location.search).toBe("");
+  });
 });
