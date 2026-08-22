@@ -13,12 +13,14 @@ import {
   CONSECUTIVE_FAILURE_THRESHOLD,
   buildIssueBody,
   buildRecoveryComment,
+  classifySignIn,
   classifySyntheticProbe,
   decideProbeAction,
   decideTransition,
   evaluateTraceSignal,
   findExistingCanaryIssue,
   resolveFinalState,
+  runAuthenticatedProbe,
 } from "./provider-canary.mjs";
 
 const NOW = new Date("2026-07-05T12:00:00.000Z");
@@ -89,6 +91,33 @@ test("decideProbeAction: does NOT fire on healthy (cost cap, NFR-001)", () => {
   assert.equal(decideProbeAction({ state: "healthy" }), false);
 });
 
+test("decideProbeAction: does NOT fire on healthy with zero recent failures", () => {
+  assert.equal(
+    decideProbeAction({ state: "healthy", recentFailedCount: 0 }),
+    false,
+  );
+});
+
+test("decideProbeAction: fires on a sub-threshold recent failure (masking-loop guard)", () => {
+  // Now that the probe authenticates, a failing tick writes a real
+  // ai_call_traces row (recordTraceRow in parseCaptureService.ts fires
+  // whenever parser==="ai", including the failure path, BEFORE any
+  // mock-degrade). fetchRecentTraceRows has no user_id filter, so the
+  // canary's own probe becomes part of the very signal the next tick reads.
+  // Without this guard: tick N (no_signal) probes, confirms failing (1
+  // failed row written). Tick N+1 sees that ONE row -- consecutiveFailed=1,
+  // below CONSECUTIVE_FAILURE_THRESHOLD(3) -- so evaluateTraceSignal reports
+  // "healthy" and the old decideProbeAction (state-only) would skip probing,
+  // so a still-ongoing outage would be reported "healthy" and the incident
+  // issue closed 30 minutes into a live outage. Firing whenever
+  // recentFailedCount > 0 (regardless of state) re-confirms every tick
+  // while any recent failure is on record, closing that gap.
+  assert.equal(
+    decideProbeAction({ state: "healthy", recentFailedCount: 1 }),
+    true,
+  );
+});
+
 test("classifySyntheticProbe: null result (probe could not run) => no_signal", () => {
   assert.equal(classifySyntheticProbe(null), "no_signal");
 });
@@ -157,6 +186,114 @@ test("classifySyntheticProbe: 200 + mock parser but NOT degraded (e.g. key just 
     }),
     "healthy",
   );
+});
+
+test("classifySignIn: null result (sign-in could not be attempted) => misconfigured", () => {
+  assert.equal(classifySignIn(null), "misconfigured");
+});
+
+test("classifySignIn: sign-in rejected (bad credentials / rotated password) => misconfigured, NOT failing", () => {
+  // A sign-in failure is the canary's OWN setup problem (bad/rotated
+  // SMOKE_EMAIL/SMOKE_PASSWORD, Supabase misconfigured) -- never evidence
+  // the AI PROVIDER is down. Must classify the same way a probe-side 401/403
+  // does (#874's original fix), never "failing".
+  assert.equal(
+    classifySignIn({ ok: false, httpStatus: 400 }),
+    "misconfigured",
+  );
+});
+
+test("classifySignIn: ok but no access token in the response => misconfigured", () => {
+  assert.equal(classifySignIn({ ok: true, accessToken: null }), "misconfigured");
+  assert.equal(classifySignIn({ ok: true, accessToken: "" }), "misconfigured");
+  assert.equal(classifySignIn({ ok: true }), "misconfigured");
+});
+
+test("classifySignIn: successful sign-in with a token => proceed (null)", () => {
+  assert.equal(classifySignIn({ ok: true, accessToken: "a-real-token" }), null);
+});
+
+test("runAuthenticatedProbe: sign-in failure => misconfigured, probe is never called (not reported as a provider outage)", async () => {
+  let probeCalled = false;
+  const warnings = [];
+  const state = await runAuthenticatedProbe({
+    smokeEmail: "smoke@example.com",
+    smokePassword: "wrong-password",
+    supabaseUrl: "https://project.supabase.co",
+    supabaseAnonKey: "anon-key",
+    baseUrl: "https://app.example.com",
+    signInImpl: async () => ({ ok: false, httpStatus: 400 }),
+    probeImpl: async () => {
+      probeCalled = true;
+      return { ok: true, httpStatus: 200, parser: "ai" };
+    },
+    warn: (message) => warnings.push(message),
+  });
+
+  assert.equal(state, "misconfigured");
+  assert.equal(probeCalled, false, "the synthetic probe must not run without a token");
+  assert.ok(
+    warnings.some((message) => /sign.?in/i.test(message)),
+    "a misconfigured sign-in should warn, distinctly from the probe-rejected case",
+  );
+});
+
+test("runAuthenticatedProbe: sign-in success => probe runs with the minted token and its classification wins", async () => {
+  const state = await runAuthenticatedProbe({
+    smokeEmail: "smoke@example.com",
+    smokePassword: "correct-password",
+    supabaseUrl: "https://project.supabase.co",
+    supabaseAnonKey: "anon-key",
+    baseUrl: "https://app.example.com",
+    signInImpl: async () => ({ ok: true, accessToken: "minted-token-123" }),
+    probeImpl: async ({ accessToken }) => {
+      assert.equal(accessToken, "minted-token-123");
+      return { ok: true, httpStatus: 200, parser: "ai" };
+    },
+    warn: () => {},
+  });
+
+  assert.equal(state, "healthy");
+});
+
+test("runAuthenticatedProbe: never logs the access token, on success or on a rejected probe", async () => {
+  const logged = [];
+  const fakeToken = "SUPER-SECRET-ACCESS-TOKEN-DO-NOT-LOG";
+
+  await runAuthenticatedProbe({
+    smokeEmail: "smoke@example.com",
+    smokePassword: "correct-password",
+    supabaseUrl: "https://project.supabase.co",
+    supabaseAnonKey: "anon-key",
+    baseUrl: "https://app.example.com",
+    signInImpl: async () => ({ ok: true, accessToken: fakeToken }),
+    probeImpl: async () => ({ ok: false, httpStatus: 401 }),
+    warn: (message) => logged.push(message),
+    log: (message) => logged.push(message),
+  });
+
+  assert.ok(
+    !logged.some((line) => line.includes(fakeToken)),
+    "the minted access token must never appear in any logged line",
+  );
+});
+
+test("runAuthenticatedProbe: sign-in failure warning names only the HTTP status, never the response body (email/password must not leak into public Actions logs)", async () => {
+  const warnings = [];
+  await runAuthenticatedProbe({
+    smokeEmail: "smoke@example.com",
+    smokePassword: "wrong-password",
+    supabaseUrl: "https://project.supabase.co",
+    supabaseAnonKey: "anon-key",
+    baseUrl: "https://app.example.com",
+    signInImpl: async () => ({ ok: false, httpStatus: 400 }),
+    warn: (message) => warnings.push(message),
+  });
+
+  const joined = warnings.join("\n");
+  assert.match(joined, /400/);
+  assert.doesNotMatch(joined, /smoke@example\.com/);
+  assert.doesNotMatch(joined, /wrong-password/);
 });
 
 test("resolveFinalState: probe result overrides trace signal", () => {

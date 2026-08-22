@@ -10,8 +10,9 @@
 # is no recent real signal, or to confirm a suspected failure. It never
 # runs a paid parse on every tick.
 #
-# Requires two repository secrets to do real work; otherwise it skips with a
-# warning, matching migration-drift.yml's shape:
+# Requires four repository secrets/variables to do real work; otherwise it
+# skips (or reports "misconfigured") with a warning, matching
+# migration-drift.yml's shape:
 #   SUPABASE_PROD_DB_URL   Postgres connection string for the prod project
 #                          (same secret migration-drift.yml already uses).
 #                          Prefer a read-only role; this workflow only reads
@@ -19,14 +20,25 @@
 #   SMOKE_BASE_URL         Base URL of the deployed app (same variable name
 #                          used by scripts/run-prod-smoke.mjs), used only to
 #                          target the synthetic POST at /api/parse-capture.
+#   SMOKE_EMAIL /          Same secrets weekly-prod-smoke.yml already uses to
+#   SMOKE_PASSWORD         sign in as the dedicated smoke account. Used here
+#                          to mint the bearer token the probe authenticates
+#                          with -- no new secret (issue #874's follow-up).
+#   NEXT_PUBLIC_SUPABASE_URL /  Same repository VARIABLES (not secrets --
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY  public by design, they ship in the
+#                          deployed app's browser bundle) weekly-prod-smoke.yml
+#                          already reads via `vars.*`. Needed to mint the
+#                          sign-in token (Supabase's password-grant endpoint).
 #
-# The synthetic probe currently sends no auth, so /api/parse-capture's auth
-# gate (#684) rejects it with a 401. That is reported as its own
-# "misconfigured" state (never as "failing" -- see #684 in FAILURES.md/the
-# canary's own commit history) and does not open an incident issue.
-# Authenticating the probe needs no new secret: the existing SMOKE_EMAIL /
-# SMOKE_PASSWORD (weekly prod smoke sign-in) can mint a token. Issue #874
-# tracks that follow-up.
+# As of #684, the probe needs a real bearer token or /api/parse-capture's
+# auth gate rejects it with a 401. As of this change the probe signs in as
+# the smoke account first (scripts/agent/provider-canary.mjs's
+# runAuthenticatedProbe) and authenticates the synthetic POST with the
+# minted token, so it actually reaches the AI provider path again. A 401/403
+# still reported as its own "misconfigured" state (never "failing" -- see
+# #684 in FAILURES.md/the canary's own commit history) if sign-in itself
+# fails or the minted token is somehow still rejected, and does not open an
+# incident issue.
 #
 # Per .github/AGENT_AUTOMATION_POLICY.md this file is T2: changes require
 # human review.
@@ -68,6 +80,16 @@ jobs:
         env:
           SUPABASE_PROD_DB_URL: ${{ secrets.SUPABASE_PROD_DB_URL }}
           SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
+          # #874 follow-up: mint a bearer token for the synthetic probe by
+          # signing in as the same dedicated smoke account
+          # weekly-prod-smoke.yml already uses. No new secrets -- all four
+          # already exist in this repo (SMOKE_EMAIL/SMOKE_PASSWORD as
+          # secrets; the NEXT_PUBLIC_* pair as variables, same as
+          # weekly-prod-smoke.yml's "Run production smoke" step).
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           set -o pipefail
           # GitHub Actions runs this under `bash -e`: a plain non-zero exit
