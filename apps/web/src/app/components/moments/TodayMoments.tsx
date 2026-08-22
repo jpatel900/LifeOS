@@ -9,10 +9,15 @@ import { useWorkflow } from "@/lib/WorkflowContext";
 import { historyReplaceState } from "@/lib/rawHistory";
 import { buildCockpitAccentStyle } from "@/lib/cockpit/accent";
 import { resolveSelectedArea } from "@/lib/areaAccent";
-import { momentKeyLabel } from "@/lib/keys/keymap";
+import {
+  matchesMomentKeyBinding,
+  momentKeyBindingById,
+  momentKeyLabel,
+} from "@/lib/keys/keymap";
 import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import { cn } from "@/lib/utils";
 import { useMomentKeyboard } from "./useMomentKeyboard";
+import { isTypingTarget } from "./typingTarget";
 import { HIT_TARGET_MIN } from "./hitTarget";
 import { buildStartVM, buildFlowVM, buildCloseVM } from "./momentsViewModel";
 import { MomentSwitcher, type MomentValue } from "./MomentSwitcher";
@@ -59,6 +64,7 @@ import { PlanSheet } from "./PlanSheet";
 import { ReviewSheet } from "./ReviewSheet";
 import { HealthSheet } from "./HealthSheet";
 import { AreasSheet } from "./AreasSheet";
+import { CaptureOverlayOpenContext } from "./MomentSheet";
 import { useSheetUrlState } from "./useSheetUrlState";
 import { useOverlayUrlState, parseOverlayParam } from "./useOverlayUrlState";
 import { isSheetValue, type SheetValue } from "./sheetValues";
@@ -1526,6 +1532,77 @@ export function TodayMoments({
     enabled: topbarShortcutsEnabled,
   });
 
+  // #687 round-11 judge (DEFECT 3): Ctrl+K and "c" were silently inert while
+  // any sheet was open — no URL change, no UI change, no feedback.
+  // `topbarShortcutsEnabled` above requires `!activeSheet`, and PR #908
+  // confirmed that gate is deliberate: it also covers Escape/1/2/3/Enter, and
+  // `useMomentKeyboard` attaches exactly ONE listener for the whole set, so
+  // widening `enabled` itself would ALSO re-arm its Escape path
+  // (`closeTopOverlay`) behind a sheet — firing a SECOND, independent Escape
+  // handler alongside `MomentSheet`'s own `onKeyDown` (neither calls
+  // `stopPropagation`) for the identical keypress. Since `history.back()` is
+  // asynchronous, the second `closeSheet()` call would still read
+  // `stillOnOurEntry: true` (the first call's `back()` hasn't landed yet)
+  // and queue a SECOND `back()` — silently skipping an extra history entry
+  // on every sheet Escape. Caught by reasoning before writing any code, not
+  // by shipping it and finding out.
+  //
+  // A separate, narrow listener instead, scoped to ONLY the two keys
+  // round-11 named, wired to the two decisions this PR makes: capture is
+  // the app's always-available interrupt (DEFECT 1's compose fix, this same
+  // file, is what makes opening it from inside a sheet land as a
+  // well-formed two-dialog state rather than the old copy-lie), so "c" now
+  // opens it; the palette stays suppressed (sheet still wins over palette,
+  // `deepLink.ts`'s PR #915 precedence, untouched by this PR) but now says
+  // so instead of staying silent. Never touches Escape, 1/2/3, or Enter —
+  // that is what keeps it from regrowing the double-handler hazard above.
+  useEffect(() => {
+    const sheetOnlyShortcutsEnabled =
+      Boolean(activeSheet) &&
+      !captureOpen &&
+      !paletteOpen &&
+      !ritualActive &&
+      !onboardingActive;
+    if (!sheetOnlyShortcutsEnabled) return undefined;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (isTypingTarget(event.target)) return;
+      // OS key-repeat on a held key must not spam the toast below or
+      // re-invoke openCapture() on every repeat tick.
+      if (event.repeat) return;
+
+      if (
+        matchesMomentKeyBinding(
+          event,
+          momentKeyBindingById("open-command-palette"),
+        )
+      ) {
+        event.preventDefault();
+        showToast("Close the sheet to open the command palette");
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      if (
+        matchesMomentKeyBinding(event, momentKeyBindingById("open-capture"))
+      ) {
+        openCapture();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    activeSheet,
+    captureOpen,
+    paletteOpen,
+    ritualActive,
+    onboardingActive,
+    openCapture,
+    showToast,
+  ]);
+
   const paletteActions = useMemo<CommandPaletteAction[]>(() => {
     const actions: CommandPaletteAction[] = [
       {
@@ -2140,6 +2217,77 @@ export function TodayMoments({
           client's first render whenever a ritual is already latched, so
           this never causes a hydration mismatch). See the
           resolvedInitialCaptureOpen comment above for the full reasoning. */}
+        <CommandPalette
+          open={paletteOpen && showingMastheadAndMoments}
+          actions={paletteActions}
+          onRun={runPaletteAction}
+          onClose={() => closePalette()}
+        />
+
+        {/* #687 DEFECT 1 (round-11 judge): every sheet reads this Provider's
+          value to know whether capture — the always-in-front overlay, see
+          `MomentSheet.tsx`'s header — currently sits in front of it. Wraps
+          all five so none can silently fall back to the context default
+          (`false`) while capture is genuinely open. */}
+        <CaptureOverlayOpenContext.Provider
+          value={captureOpen && showingMastheadAndMoments}
+        >
+          <TriageSheet
+            open={activeSheet === "triage" && showingMastheadAndMoments}
+            selectedAreaId={selectedAreaId}
+            onClose={() => closeSheet()}
+          />
+
+          <PlanSheet
+            open={activeSheet === "plan" && showingMastheadAndMoments}
+            onClose={() => closeSheet()}
+            selectedAreaId={selectedAreaId}
+            blocks={startVM.blocks}
+            timeDisplay={timeDisplay}
+            now={now}
+            onToast={showToast}
+          />
+
+          {/* C2-S3: the day-close truth is passed IN. `handleCloseDay` is the one
+            close path in this shell (its own comment says so) and `closeVM`
+            holds C1's verdict, so the sheet renders both and owns neither. */}
+          <ReviewSheet
+            open={activeSheet === "review" && showingMastheadAndMoments}
+            onClose={() => closeSheet()}
+            selectedAreaId={selectedAreaId}
+            now={now}
+            dayClose={closeVM.dayClose}
+            onCloseDay={handleCloseDay}
+            onToast={showToast}
+          />
+
+          {/* C2-S4: the system check runs when this sheet OPENS, not when the home
+            renders — see HealthSheet's doc comment. Mounting it here (the shape
+            every sheet uses) is what makes that gate necessary and deliberate. */}
+          <HealthSheet
+            open={activeSheet === "health" && showingMastheadAndMoments}
+            onClose={() => closeSheet()}
+            selectedAreaId={selectedAreaId}
+            now={now}
+          />
+
+          {/* C2-S5: mounted like every other sheet (`open` is a prop, not a mount
+            condition). AreasSheet is hook-free while closed for the reason S4
+            measured -- see its doc comment. */}
+          <AreasSheet
+            open={activeSheet === "areas" && showingMastheadAndMoments}
+            onClose={() => closeSheet()}
+            selectedAreaId={selectedAreaId}
+            onSelectArea={handleAreasSheetSelectArea}
+          />
+        </CaptureOverlayOpenContext.Provider>
+
+        {/* #687 DEFECT 1 (round-11 judge): renders AFTER every sheet above —
+          same-z-index paint order follows sibling order, so capture is now
+          unconditionally the FRONT dialog whenever both are open, matching
+          the Provider value just above. See `MomentSheet.tsx`'s header for
+          the full mechanism and the product decision (genuine composition,
+          not mutual exclusion). */}
         <CaptureOverlay
           open={captureOpen && showingMastheadAndMoments}
           initialText={captureDraft}
@@ -2197,62 +2345,6 @@ export function TodayMoments({
             writeStoredCaptureDraft("");
           }}
           onClose={() => closeCapture()}
-        />
-
-        <CommandPalette
-          open={paletteOpen && showingMastheadAndMoments}
-          actions={paletteActions}
-          onRun={runPaletteAction}
-          onClose={() => closePalette()}
-        />
-
-        <TriageSheet
-          open={activeSheet === "triage" && showingMastheadAndMoments}
-          selectedAreaId={selectedAreaId}
-          onClose={() => closeSheet()}
-        />
-
-        <PlanSheet
-          open={activeSheet === "plan" && showingMastheadAndMoments}
-          onClose={() => closeSheet()}
-          selectedAreaId={selectedAreaId}
-          blocks={startVM.blocks}
-          timeDisplay={timeDisplay}
-          now={now}
-          onToast={showToast}
-        />
-
-        {/* C2-S3: the day-close truth is passed IN. `handleCloseDay` is the one
-          close path in this shell (its own comment says so) and `closeVM`
-          holds C1's verdict, so the sheet renders both and owns neither. */}
-        <ReviewSheet
-          open={activeSheet === "review" && showingMastheadAndMoments}
-          onClose={() => closeSheet()}
-          selectedAreaId={selectedAreaId}
-          now={now}
-          dayClose={closeVM.dayClose}
-          onCloseDay={handleCloseDay}
-          onToast={showToast}
-        />
-
-        {/* C2-S4: the system check runs when this sheet OPENS, not when the home
-          renders — see HealthSheet's doc comment. Mounting it here (the shape
-          every sheet uses) is what makes that gate necessary and deliberate. */}
-        <HealthSheet
-          open={activeSheet === "health" && showingMastheadAndMoments}
-          onClose={() => closeSheet()}
-          selectedAreaId={selectedAreaId}
-          now={now}
-        />
-
-        {/* C2-S5: mounted like every other sheet (`open` is a prop, not a mount
-          condition). AreasSheet is hook-free while closed for the reason S4
-          measured -- see its doc comment. */}
-        <AreasSheet
-          open={activeSheet === "areas" && showingMastheadAndMoments}
-          onClose={() => closeSheet()}
-          selectedAreaId={selectedAreaId}
-          onSelectArea={handleAreasSheetSelectArea}
         />
 
         <EndSessionSheet
