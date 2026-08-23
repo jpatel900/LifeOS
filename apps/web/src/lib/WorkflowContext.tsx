@@ -307,6 +307,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // read the AI draft/suggestion id synchronously (for override diffing)
   // without a stale closure over the useState value.
   const taskMapDraftRef = useRef<TaskMapDraftState>({ phase: "idle" });
+  // jsdom-teardown race fix — the "Sync on mount" effect below fires several
+  // un-awaited refreshes (`refreshUnsyncedCount`, `refreshJournalledDurableState`,
+  // `refreshPendingLocalChanges`, `syncPersistedWorkflowRows`'s own drains).
+  // None of that async work was ever cancelled on unmount, so a provider torn
+  // down before a slow read (IndexedDB, the account) settled left its
+  // continuation to call a state setter afterward — in a real browser React
+  // just drops that update, but in CI it reached into React's scheduler while
+  // vitest had already deleted `window` between test files, throwing
+  // `ReferenceError: window is not defined` (main red at 79996dba, PR #894's
+  // CI). Checked before every one of those setters below.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const markLocalOnly = useCallback((message: string) => {
     setSyncStatus((current) => ({
@@ -519,6 +536,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // The provider that started this read may already be unmounted by the
+    // time it resolves (see the jsdom-teardown race note by `mountedRef`
+    // above) — do no work rather than call a state setter into nothing.
+    if (!mountedRef.current) return;
+
     setSyncStatus((current) => {
       const pendingLocalChanges = queued > 0;
       if (current.pendingLocalChanges === pendingLocalChanges) return current;
@@ -587,6 +609,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           listPlanningItems(client),
           listExecutionReviewItems(client),
         ]);
+
+      // See `mountedRef`'s note above the ref/refs block — a provider
+      // unmounted during this read must not dispatch, touch state below, or
+      // start the four further un-awaited reads (`listWinRecords` and
+      // siblings) that follow later in this function.
+      if (!mountedRef.current) return;
 
       if (
         capturesResult.provider !== "supabase" ||
@@ -1463,15 +1491,21 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
       try {
         const result = await listAreas(client);
-        if (cancelled || result.provider !== "supabase") {
+        // jsdom-teardown race fix — same shape as `mountedRef` elsewhere in
+        // this file (see its note near the ref declarations): this effect's
+        // own `cancelled` flag already existed for exactly this purpose, but
+        // used to fire `markLocalOnly` even when cancelled was true. Bail
+        // first, before touching state at all.
+        if (cancelled) return;
+        if (result.provider !== "supabase") {
           markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
           return;
         }
         applyPersistedAreas(result.areas);
         await syncPersistedWorkflowRows(client, result.areas);
-        markAccountSynced();
+        if (!cancelled) markAccountSynced();
       } catch (error) {
-        markPersistedLoadFailure(error);
+        if (!cancelled) markPersistedLoadFailure(error);
       }
     }
 
@@ -1638,7 +1672,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // FR-027 (F-G1a): refresh the unsynced-count signal from the device queue.
   const refreshUnsyncedCount = useCallback(async () => {
     try {
-      setUnsyncedCaptureCount(await pendingCaptureCount());
+      const count = await pendingCaptureCount();
+      // See `mountedRef`'s note above the ref/refs block — a provider
+      // unmounted while this read was in flight must not touch state.
+      if (!mountedRef.current) return;
+      setUnsyncedCaptureCount(count);
     } catch {
       // best-effort signal; a queue read failure must not break capture
     }
@@ -1662,6 +1700,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const refreshJournalledDurableState = useCallback(async () => {
     try {
       const pending = await listPendingWrites();
+      // See `mountedRef`'s note above the ref/refs block — a provider
+      // unmounted while this read was in flight must not touch state. One
+      // check covers every setter below: none of them awaits between here
+      // and the end of this try block.
+      if (!mountedRef.current) return;
       setJournalledClosedDays(
         pending
           .filter((write) => write.entity === "review")

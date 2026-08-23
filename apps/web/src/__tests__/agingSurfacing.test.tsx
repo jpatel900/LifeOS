@@ -50,22 +50,22 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-function renderHealthPage() {
+// HealthPage/ReviewPage are async Server Components (Next 15 `searchParams`
+// is a Promise) — resolve each before handing the element to `render`.
+async function renderHealthPage() {
   mockPathname.mockReturnValue("/health");
-  return render(
-    <AppShell>
-      <HealthPage />
-    </AppShell>,
-  );
+  const healthPageElement = await HealthPage({
+    searchParams: Promise.resolve({}),
+  });
+  return render(<AppShell>{healthPageElement}</AppShell>);
 }
 
-function renderReviewPage() {
+async function renderReviewPage() {
   mockPathname.mockReturnValue("/review");
-  return render(
-    <AppShell>
-      <ReviewPage />
-    </AppShell>,
-  );
+  const reviewPageElement = await ReviewPage({
+    searchParams: Promise.resolve({}),
+  });
+  return render(<AppShell>{reviewPageElement}</AppShell>);
 }
 
 const persistedArea = {
@@ -171,7 +171,7 @@ afterEach(() => {
 
 describe("waiting-on aging + commitment surfacing (S4 / #256)", () => {
   it("shows no aging signals when there is no waiting-on or commitment data", async () => {
-    renderHealthPage();
+    await renderHealthPage();
 
     await waitFor(() => expect(mockListAreas).toHaveBeenCalled());
 
@@ -198,7 +198,7 @@ describe("waiting-on aging + commitment surfacing (S4 / #256)", () => {
       reviewEntries: [],
     });
 
-    renderHealthPage();
+    await renderHealthPage();
 
     await waitFor(() =>
       expect(mockListExecutionReviewItems).toHaveBeenCalled(),
@@ -226,7 +226,7 @@ describe("waiting-on aging + commitment surfacing (S4 / #256)", () => {
       reviewEntries: [],
     });
 
-    renderReviewPage();
+    await renderReviewPage();
 
     await waitFor(() =>
       expect(mockListExecutionReviewItems).toHaveBeenCalled(),
@@ -252,7 +252,7 @@ describe("waiting-on aging + commitment surfacing (S4 / #256)", () => {
       reviewEntries: [],
     });
 
-    renderReviewPage();
+    await renderReviewPage();
 
     await waitFor(() =>
       expect(mockListExecutionReviewItems).toHaveBeenCalled(),
@@ -282,7 +282,7 @@ describe("waiting-on aging + commitment surfacing (S4 / #256)", () => {
       reviewEntries: [],
     });
 
-    renderReviewPage();
+    await renderReviewPage();
 
     await waitFor(() =>
       expect(mockListExecutionReviewItems).toHaveBeenCalled(),

@@ -13,12 +13,14 @@ import {
   CONSECUTIVE_FAILURE_THRESHOLD,
   buildIssueBody,
   buildRecoveryComment,
+  classifySignIn,
   classifySyntheticProbe,
   decideProbeAction,
   decideTransition,
   evaluateTraceSignal,
   findExistingCanaryIssue,
   resolveFinalState,
+  runAuthenticatedProbe,
 } from "./provider-canary.mjs";
 
 const NOW = new Date("2026-07-05T12:00:00.000Z");
@@ -89,8 +91,54 @@ test("decideProbeAction: does NOT fire on healthy (cost cap, NFR-001)", () => {
   assert.equal(decideProbeAction({ state: "healthy" }), false);
 });
 
+test("decideProbeAction: does NOT fire on healthy with zero recent failures", () => {
+  assert.equal(
+    decideProbeAction({ state: "healthy", recentFailedCount: 0 }),
+    false,
+  );
+});
+
+test("decideProbeAction: fires on a sub-threshold recent failure (masking-loop guard)", () => {
+  // Now that the probe authenticates, a failing tick writes a real
+  // ai_call_traces row (recordTraceRow in parseCaptureService.ts fires
+  // whenever parser==="ai", including the failure path, BEFORE any
+  // mock-degrade). fetchRecentTraceRows has no user_id filter, so the
+  // canary's own probe becomes part of the very signal the next tick reads.
+  // Without this guard: tick N (no_signal) probes, confirms failing (1
+  // failed row written). Tick N+1 sees that ONE row -- consecutiveFailed=1,
+  // below CONSECUTIVE_FAILURE_THRESHOLD(3) -- so evaluateTraceSignal reports
+  // "healthy" and the old decideProbeAction (state-only) would skip probing,
+  // so a still-ongoing outage would be reported "healthy" and the incident
+  // issue closed 30 minutes into a live outage. Firing whenever
+  // recentFailedCount > 0 (regardless of state) re-confirms every tick
+  // while any recent failure is on record, closing that gap.
+  assert.equal(
+    decideProbeAction({ state: "healthy", recentFailedCount: 1 }),
+    true,
+  );
+});
+
 test("classifySyntheticProbe: null result (probe could not run) => no_signal", () => {
   assert.equal(classifySyntheticProbe(null), "no_signal");
+});
+
+test("classifySyntheticProbe: HTTP 401 => misconfigured, NOT failing (#684 regression)", () => {
+  // 2026-07-18 incident: PR #684 added an auth gate to /api/parse-capture;
+  // the unauthenticated synthetic probe 401'd on every tick and this used
+  // to classify that as "failing", reporting a false provider outage for
+  // three weeks straight. A 401 proves the canary itself is misconfigured,
+  // not that the provider is down.
+  assert.equal(
+    classifySyntheticProbe({ ok: false, httpStatus: 401 }),
+    "misconfigured",
+  );
+});
+
+test("classifySyntheticProbe: HTTP 403 => misconfigured, NOT failing", () => {
+  assert.equal(
+    classifySyntheticProbe({ ok: false, httpStatus: 403 }),
+    "misconfigured",
+  );
 });
 
 test("classifySyntheticProbe: HTTP 429 => failing", () => {
@@ -140,6 +188,160 @@ test("classifySyntheticProbe: 200 + mock parser but NOT degraded (e.g. key just 
   );
 });
 
+test("classifySignIn: null result (sign-in could not be attempted) => misconfigured", () => {
+  assert.equal(classifySignIn(null), "misconfigured");
+});
+
+test("classifySignIn: sign-in rejected (bad credentials / rotated password) => misconfigured, NOT failing", () => {
+  // A sign-in failure is the canary's OWN setup problem (bad/rotated
+  // SMOKE_EMAIL/SMOKE_PASSWORD, Supabase misconfigured) -- never evidence
+  // the AI PROVIDER is down. Must classify the same way a probe-side 401/403
+  // does (#874's original fix), never "failing".
+  assert.equal(classifySignIn({ ok: false, httpStatus: 400 }), "misconfigured");
+});
+
+test("classifySignIn: ok but no access token in the response => misconfigured", () => {
+  assert.equal(
+    classifySignIn({ ok: true, accessToken: null }),
+    "misconfigured",
+  );
+  assert.equal(classifySignIn({ ok: true, accessToken: "" }), "misconfigured");
+  assert.equal(classifySignIn({ ok: true }), "misconfigured");
+});
+
+test("classifySignIn: successful sign-in with a token => proceed (null)", () => {
+  assert.equal(classifySignIn({ ok: true, accessToken: "a-real-token" }), null);
+});
+
+test("runAuthenticatedProbe: sign-in failure => misconfigured, probe is never called (not reported as a provider outage)", async () => {
+  let probeCalled = false;
+  const warnings = [];
+  const state = await runAuthenticatedProbe({
+    smokeEmail: "smoke@example.com",
+    smokePassword: "wrong-password",
+    supabaseUrl: "https://project.supabase.co",
+    supabaseAnonKey: "anon-key",
+    baseUrl: "https://app.example.com",
+    signInImpl: async () => ({ ok: false, httpStatus: 400 }),
+    probeImpl: async () => {
+      probeCalled = true;
+      return { ok: true, httpStatus: 200, parser: "ai" };
+    },
+    warn: (message) => warnings.push(message),
+  });
+
+  assert.equal(state, "misconfigured");
+  assert.equal(
+    probeCalled,
+    false,
+    "the synthetic probe must not run without a token",
+  );
+  assert.ok(
+    warnings.some((message) => /sign.?in/i.test(message)),
+    "a misconfigured sign-in should warn, distinctly from the probe-rejected case",
+  );
+});
+
+test("runAuthenticatedProbe: sign-in success => probe runs with the minted token and its classification wins", async () => {
+  const state = await runAuthenticatedProbe({
+    smokeEmail: "smoke@example.com",
+    smokePassword: "correct-password",
+    supabaseUrl: "https://project.supabase.co",
+    supabaseAnonKey: "anon-key",
+    baseUrl: "https://app.example.com",
+    signInImpl: async () => ({ ok: true, accessToken: "minted-token-123" }),
+    probeImpl: async ({ accessToken }) => {
+      assert.equal(accessToken, "minted-token-123");
+      return { ok: true, httpStatus: 200, parser: "ai" };
+    },
+    warn: () => {},
+  });
+
+  assert.equal(state, "healthy");
+});
+
+test("runAuthenticatedProbe: warns without ever including the token, even when the failed sign-in result carries one", async () => {
+  const logged = [];
+  const fakeToken = "SUPER-SECRET-ACCESS-TOKEN-DO-NOT-LOG";
+
+  // signInImpl below is adversarial on purpose: ok:false (so classifySignIn
+  // still correctly calls this "misconfigured" -- a token alone never
+  // overrides an explicit failure) but the result object happens to carry
+  // an accessToken-shaped field anyway. This exercises the ACTUAL warn()
+  // call site with a token in scope -- a fake token present on a
+  // signInImpl that always succeeds would never reach warn() at all
+  // (runAuthenticatedProbe only warns on the misconfigured branch), which
+  // would make this test pass vacuously without proving anything.
+  const state = await runAuthenticatedProbe({
+    smokeEmail: "smoke@example.com",
+    smokePassword: "wrong-password",
+    supabaseUrl: "https://project.supabase.co",
+    supabaseAnonKey: "anon-key",
+    baseUrl: "https://app.example.com",
+    signInImpl: async () => ({
+      ok: false,
+      httpStatus: 400,
+      accessToken: fakeToken,
+    }),
+    warn: (message) => logged.push(message),
+  });
+
+  assert.equal(state, "misconfigured");
+  assert.ok(
+    logged.length > 0,
+    "expected the sign-in-failure warning to actually fire (a test that captures nothing proves nothing)",
+  );
+  assert.ok(
+    !logged.some((line) => line.includes(fakeToken)),
+    "the token must never appear in a logged line, even when present on the sign-in result",
+  );
+});
+
+test("runAuthenticatedProbe test harness control: the leak detector actually catches a planted leak", async () => {
+  // Proves the `.some(line => line.includes(token))` technique used above
+  // is not vacuously true. Wraps `warn` to deliberately APPEND a token to
+  // whatever runAuthenticatedProbe's real sign-in-failure branch already
+  // logs -- simulating what a future regression that logged the token
+  // would look like -- and confirms the assertion above would actually
+  // catch it, through the real call site, not a hand-built array.
+  const logged = [];
+  const fakeToken = "PLANTED-LEAK-TOKEN";
+
+  const state = await runAuthenticatedProbe({
+    smokeEmail: "smoke@example.com",
+    smokePassword: "wrong-password",
+    supabaseUrl: "https://project.supabase.co",
+    supabaseAnonKey: "anon-key",
+    baseUrl: "https://app.example.com",
+    signInImpl: async () => ({ ok: false, httpStatus: 400 }),
+    warn: (message) => logged.push(`${message} token=${fakeToken}`),
+  });
+
+  assert.equal(state, "misconfigured");
+  assert.ok(
+    logged.some((line) => line.includes(fakeToken)),
+    "control failed: the leak detector itself doesn't catch a planted leak",
+  );
+});
+
+test("runAuthenticatedProbe: sign-in failure warning names only the HTTP status, never the response body (email/password must not leak into public Actions logs)", async () => {
+  const warnings = [];
+  await runAuthenticatedProbe({
+    smokeEmail: "smoke@example.com",
+    smokePassword: "wrong-password",
+    supabaseUrl: "https://project.supabase.co",
+    supabaseAnonKey: "anon-key",
+    baseUrl: "https://app.example.com",
+    signInImpl: async () => ({ ok: false, httpStatus: 400 }),
+    warn: (message) => warnings.push(message),
+  });
+
+  const joined = warnings.join("\n");
+  assert.match(joined, /400/);
+  assert.doesNotMatch(joined, /smoke@example\.com/);
+  assert.doesNotMatch(joined, /wrong-password/);
+});
+
 test("resolveFinalState: probe result overrides trace signal", () => {
   assert.equal(resolveFinalState("healthy", "failing"), "failing");
   assert.equal(resolveFinalState("failing", "healthy"), "healthy");
@@ -149,6 +351,18 @@ test("resolveFinalState: no probe run falls back to trace signal, never false-al
   assert.equal(resolveFinalState("no_signal", null), "healthy");
   assert.equal(resolveFinalState("failing", null), "failing");
   assert.equal(resolveFinalState("healthy", null), "healthy");
+});
+
+test("resolveFinalState: misconfigured probe (auth-blocked) surfaces distinctly, not as failing", () => {
+  assert.equal(resolveFinalState("healthy", "misconfigured"), "misconfigured");
+  assert.equal(
+    resolveFinalState("no_signal", "misconfigured"),
+    "misconfigured",
+  );
+});
+
+test("resolveFinalState: a trace-confirmed failure is never hidden behind an auth-blocked probe", () => {
+  assert.equal(resolveFinalState("failing", "misconfigured"), "failing");
 });
 
 test("decideTransition: healthy -> failing opens an issue", () => {

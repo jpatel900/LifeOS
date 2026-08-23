@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { readDirCached } from "./helpers/repoWalk";
+import { assertWalkFoundFiles, readDirCached } from "./helpers/repoWalk";
 
 // #761 — productionSourceFiles() below re-walks apps/web/src per call;
 // readDirCached dedupes the repeated directory reads, and this timeout is
@@ -72,12 +72,21 @@ function readRepoFile(path: string) {
 // filtering so fixtures/specs that legitimately exercise the choke point are
 // not treated as construction sites.
 function productionSourceFiles() {
-  return walkRepoFiles("apps/web/src").filter(
+  const files = walkRepoFiles("apps/web/src").filter(
     (f) =>
       /\.(ts|tsx)$/.test(f) &&
       !/\.(test|spec)\.(ts|tsx)$/.test(f) &&
       !f.includes("__tests__"),
   );
+  // Anti-vacuum: ~300 production source files match this filter today; a
+  // broken walk would otherwise make the choke-point check below pass on
+  // zero files scanned.
+  assertWalkFoundFiles(
+    files,
+    "contextAssemblyChokePoint: apps/web/src production ts/tsx files",
+    100,
+  );
+  return files;
 }
 
 describe("NS-INV-1 context-assembly choke point", () => {

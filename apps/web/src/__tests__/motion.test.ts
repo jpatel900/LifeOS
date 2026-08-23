@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { readDirCached } from "./helpers/repoWalk";
+import { assertWalkFoundFiles, readDirCached } from "./helpers/repoWalk";
 
 // #761 — belt-and-braces timeout alongside the readDirCached walk helper
 // used by the other repo-walking guards in this suite.
@@ -85,9 +85,18 @@ function reducedMotionBlock(source: string): string {
 }
 
 function componentSourceFiles(): string[] {
-  return walkFiles("apps/web/src/app/components")
+  const files = walkFiles("apps/web/src/app/components")
     .filter((file) => file.endsWith(".tsx"))
     .filter((file) => !/\.(?:test|spec)\.tsx$/.test(file));
+  // Anti-vacuum: ~67 component files match this filter today; a renamed
+  // components directory would otherwise make the token-only check below
+  // pass on zero files scanned.
+  assertWalkFoundFiles(
+    files,
+    "motion: apps/web/src/app/components .tsx non-test files",
+    20,
+  );
+  return files;
 }
 
 describe("motion budget guard", () => {

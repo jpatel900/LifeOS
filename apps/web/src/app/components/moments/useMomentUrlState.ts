@@ -33,9 +33,11 @@ import type { MomentValue } from "./MomentSwitcher";
  *   `useSheetUrlState.adoptSheetFromUrl`.
  * - **Mount** takes `resolvedInitialMoment` as already fully resolved by the
  *   caller — `initialMoment` prop (test-only override) -> the URL's own
- *   `?moment=` param -> stored preference -> clock heuristic, in that order
- *   (`TodayMoments.tsx` computes it; this hook does not re-derive it, so
- *   there is exactly one place that order lives). It then `replaceState`s
+ *   `?moment=` param -> the `cookieMoment` prop (the remembered moment,
+ *   resolved server-side from the `lifeos_moments_prefs` cookie — C2-S14,
+ *   #687 round-8) -> clock heuristic, in that order (`TodayMoments.tsx`
+ *   computes it; this hook does not re-derive it, so there is exactly one
+ *   place that order lives). It then `replaceState`s
  *   the resolved value into the URL — a no-op whenever the URL already
  *   agreed, which is always true on the redirect-shim path (`/execute` ->
  *   `/?moment=flow`) and self-healing whenever it does not (a stale

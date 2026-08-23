@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { installNextRouterHistorySimulator } from "./nextRouterHistorySimulator";
 import {
   parseOverlayParam,
   urlWithOverlay,
@@ -319,3 +320,130 @@ describe("useOverlayUrlState — composed nesting (capture opened from palette, 
     vi.restoreAllMocks();
   });
 });
+
+/**
+ * Predicted mirror of #897 (Part of #687): the investigation that produced
+ * PR #904 predicted `useSheetUrlState.openSheet`'s push was bypassed
+ * identically to `closeSheet`'s and would leave Next's `canonicalUrl` stale
+ * at the NO-SHEET url on a plain open. #904 verified and fixed THAT call
+ * site (`openSheet` now passes `resyncNextRouter: true`). Checking every
+ * other write that still takes the bypass (grep for `historyPushState`/
+ * `historyReplaceState` call sites and which pass `resyncNextRouter`) found
+ * this hook's own `openOverlay` push (line ~164) was never examined for the
+ * same defect: it is in NEITHER of rawHistory.ts's own lists — not "verified
+ * safe and flipped" (that lists only `useSheetUrlState`'s two call sites and
+ * this file's `closeOverlay` non-owning strip), nor "left off for now,
+ * pending a one-call-site-at-a-time check" (that list names
+ * `useMomentUrlState`, `useAreaUrlState`, `WorkflowContext`, and
+ * `TodayMoments`'s own calls, but not this one). #911's own diff (C2-S13)
+ * only ever touched `closeOverlay`'s strip branch, confirming the push was
+ * simply never looked at, not deliberately deferred.
+ *
+ * Reachable: `useOverlayUrlState("capture")` and `useOverlayUrlState("palette")`
+ * are both mounted unconditionally in `TodayMoments.tsx`, backing the C key/
+ * capture pill and Cmd/Ctrl+K/command palette respectively — every path a
+ * user actually takes to open either overlay goes through this exact push.
+ *
+ * Safe to fix the same way #904 fixed `openSheet`: `openOverlay` never
+ * follows its push with a synchronous `window.history.back()` in the same
+ * invocation (grepped — it only sets React state and returns), which is
+ * rawHistory.ts's own precondition for passing `resyncNextRouter: true`.
+ */
+describe.each(["capture", "palette"] as const)(
+  "useOverlayUrlState(%s) keeps Next's canonicalUrl in sync (mirror of #897)",
+  (param) => {
+    let sim: ReturnType<typeof installNextRouterHistorySimulator>;
+
+    beforeEach(() => {
+      window.history.replaceState(null, "", "/");
+      sim = installNextRouterHistorySimulator();
+    });
+
+    afterEach(() => {
+      sim.restore();
+    });
+
+    it("mirror, predicted by the investigation: opening the overlay keeps its param present after a later, unrelated router-state change", () => {
+      const { result } = renderHook(() => useOverlayUrlState(param));
+
+      act(() => result.current.openOverlay());
+      expect(window.location.search).toBe(`?${param}=1`);
+
+      // A LATER, totally unrelated Next.js router-state change elsewhere in
+      // the app (any navigation at all) re-runs HistoryUpdater.
+      act(() => sim.fireHistoryUpdater());
+
+      // Pre-fix, `openOverlay`'s bypassed push never let Next learn the
+      // param was added, so its stale canonicalUrl (still the NO-OVERLAY
+      // url) gets stamped back onto the address bar here — stripping the
+      // param while the overlay is still rendered on screen. That is the
+      // exact inverse of #897's own close-side symptom.
+      expect(window.location.search).toBe(`?${param}=1`);
+      expect(result.current.open).toBe(true);
+    });
+
+    it("protects the owning close-then-back() branch other tests in this file rely on", () => {
+      // `closeOverlay`'s `stillOnOurEntry` branch calls `historyReplaceState`
+      // immediately before a synchronous `window.history.back()` — it must
+      // NEVER resync (rawHistory.ts's file header documents the race this
+      // avoids: a resync scheduled from a write immediately followed by a
+      // synchronous back() can commit AFTER back() already moved position).
+      // Fixing the push above must not touch that branch's own behavior, so
+      // this asserts the INVARIANT (canonicalUrl unchanged by this call)
+      // rather than a hardcoded value that depends on whether the push
+      // above resyncs.
+      const back = vi
+        .spyOn(window.history, "back")
+        .mockImplementation(() => {});
+      const { result } = renderHook(() => useOverlayUrlState(param));
+
+      act(() => result.current.openOverlay());
+      const canonicalBeforeClose = sim.getCanonicalUrl();
+
+      act(() => result.current.closeOverlay());
+
+      expect(sim.getCanonicalUrl()).toBe(canonicalBeforeClose);
+      back.mockRestore();
+    });
+  },
+);
+
+/**
+ * C2-S15 (#687 round-10 judge, "sheets and overlays are never
+ * server-rendered"): `resolvedInitialOpen` is the sibling of
+ * `useSheetUrlState`'s own `resolvedInitialSheet` parameter — seeding the
+ * hook's `useState` directly so `open` is correct on the very first render
+ * rather than a beat later via `adoptOverlayFromUrl`. Defaults to `false`,
+ * so every `useOverlayUrlState(param)` call above (one argument) is
+ * unaffected.
+ */
+describe.each(["capture", "palette"] as const)(
+  "useOverlayUrlState(%s, resolvedInitialOpen) — C2-S15 seed parameter",
+  (param) => {
+    beforeEach(() => {
+      goto("/");
+    });
+
+    it("defaults to closed when no resolved value is passed (existing call sites unaffected)", () => {
+      const { result } = renderHook(() => useOverlayUrlState(param));
+      expect(result.current.open).toBe(false);
+    });
+
+    it("opens with the resolved value already true on the very first render", () => {
+      const { result } = renderHook(() => useOverlayUrlState(param, true));
+      expect(result.current.open).toBe(true);
+    });
+
+    it("closeOverlay on a seeded (never-pushed) overlay strips the param via replaceState, never back()", () => {
+      goto(`/?${param}=1`);
+      const back = vi.spyOn(window.history, "back");
+      const { result } = renderHook(() => useOverlayUrlState(param, true));
+
+      act(() => result.current.closeOverlay());
+
+      expect(result.current.open).toBe(false);
+      expect(back).not.toHaveBeenCalled();
+      expect(window.location.search).toBe("");
+    });
+  },
+);

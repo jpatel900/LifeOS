@@ -159,6 +159,22 @@ export const PINNED_SURFACES: PinnedSurface[] = [
     },
   },
   {
+    // #687 fix (Part of #687): the App Router's own not-found.tsx boundary —
+    // reachable by requesting any unrouted path, and previously absent from
+    // this list entirely, which is exactly how its own "Go to Today" escape
+    // hatch shipped at the shadcn Button default (h-10/40px) unmeasured. The
+    // fix (size="lg", same idiom as /login's identical escape hatch, commit
+    // 506328c1) is already in place, so this entry is pinned at its
+    // POST-FIX, honestly-measured 0/0 rather than baking the violation in.
+    id: "not-found",
+    async goto(page) {
+      await page.goto("/this-path-does-not-exist-687");
+      await expect(
+        page.getByRole("heading", { name: "Page not found" }),
+      ).toBeVisible();
+    },
+  },
+  {
     id: "start-moment",
     async goto(page) {
       await page.goto("/?moment=start");

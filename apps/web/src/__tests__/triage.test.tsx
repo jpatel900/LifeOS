@@ -94,11 +94,12 @@ describe("Triage cockpit", () => {
   const JOURNEY_TEST_TIMEOUT_MS = 30_000;
 
   it("shows the empty verdict-first triage state", async () => {
-    render(
-      <AppShell>
-        <TriagePage />
-      </AppShell>,
-    );
+    // TriagePage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const triagePageElement = await TriagePage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<AppShell>{triagePageElement}</AppShell>);
 
     expect(await screen.findByText("Inbox clear")).toBeDefined();
     expect(screen.getByRole("button", { name: "Plan the day" })).toBeDefined();
@@ -108,11 +109,12 @@ describe("Triage cockpit", () => {
     "lets a captured item move to Someday",
     async () => {
       mockPathname.mockReturnValue("/capture");
-      render(
-        <AppShell>
-          <CapturePage />
-        </AppShell>,
-      );
+      // CapturePage is an async Server Component (Next 15 `searchParams` is
+      // a Promise) — resolve it before handing the element to `render`.
+      const capturePageElement = await CapturePage({
+        searchParams: Promise.resolve({}),
+      });
+      render(<AppShell>{capturePageElement}</AppShell>);
 
       await captureThenSortIntoTriage("Review old someday notes");
 
@@ -133,11 +135,12 @@ describe("Triage cockpit", () => {
     "shows the anti-procrastination breakdown on a parsed task draft",
     async () => {
       mockPathname.mockReturnValue("/capture");
-      render(
-        <AppShell>
-          <CapturePage />
-        </AppShell>,
-      );
+      // CapturePage is an async Server Component (Next 15 `searchParams` is
+      // a Promise) — resolve it before handing the element to `render`.
+      const capturePageElement = await CapturePage({
+        searchParams: Promise.resolve({}),
+      });
+      render(<AppShell>{capturePageElement}</AppShell>);
 
       await captureThenSortIntoTriage("Prepare the sponsor update deck");
 
@@ -172,11 +175,12 @@ describe("Triage cockpit", () => {
     "renders split drafts without a breakdown section",
     async () => {
       mockPathname.mockReturnValue("/capture");
-      render(
-        <AppShell>
-          <CapturePage />
-        </AppShell>,
-      );
+      // CapturePage is an async Server Component (Next 15 `searchParams` is
+      // a Promise) — resolve it before handing the element to `render`.
+      const capturePageElement = await CapturePage({
+        searchParams: Promise.resolve({}),
+      });
+      render(<AppShell>{capturePageElement}</AppShell>);
 
       await captureThenSortIntoTriage("Tidy the garage shelves");
 
@@ -197,6 +201,28 @@ describe("Triage cockpit", () => {
         target: { value: "Donate the spare shelf" },
       });
       fireEvent.click(screen.getByRole("button", { name: "Split draft" }));
+
+      // #789 diagnostic hardening: `splitDraft` (lib/workflow/triage.ts) is a
+      // synchronous reducer dispatch — a successful split retires the
+      // original draft before this line runs, so its title must already be
+      // gone. #789's three CI sightings all showed this exact test alone
+      // burning the full 10s below while its three siblings in the same run
+      // finished in ~230ms/1.7s/1.6s (issue #789, run 30463518203) — proof
+      // it was a silent no-op, not a slow render (a contended worker would
+      // have slowed the siblings too). Reproduced verbatim in this file by
+      // temporarily forcing `onSplit` to fire with a draftId that matches no
+      // pending draft: the same ~11.5s timeout below, the same untouched
+      // siblings, and `splitDraft`'s find-by-id-and-pending guard returning
+      // state unchanged. The natural trigger for that mismatch was not
+      // found — extensive reproduction attempts (CPU saturation up to ~30x
+      // slowdown, single/multi-core, isolated runs, shuffled in-file test
+      // order) never hit it — but if it recurs, this assertion fails
+      // immediately and names the mechanism instead of the confusing
+      // "Sort tools into bins" not-found 10s later.
+      expect(
+        screen.queryByText("Tidy the garage shelves"),
+        "the split must retire the original draft synchronously — if this is still on screen, the click was a silent no-op (stale draftId or a disabled button at click time)",
+      ).toBeNull();
 
       expect(
         await screen.findByText("Sort tools into bins", undefined, {

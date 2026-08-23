@@ -45,6 +45,89 @@ describe("CommandPalette", () => {
     ).not.toBeInTheDocument();
   });
 
+  // C2-S12A (#687 round-6 judge, palette gaps): typing "today" or "home"
+  // used to return "No commands match" for the Start moment. The palette
+  // had no alias mechanism at all — this is that mechanism, kept simple
+  // (substring match against a plain keyword list, same as the label match
+  // right above; not a search engine).
+  it("matches a keyword alias even when the query doesn't appear in the label", () => {
+    const actionsWithKeywords: CommandPaletteAction[] = [
+      ...ACTIONS,
+      { id: "settings", label: "Open settings", keywords: ["preferences"] },
+    ];
+    render(
+      <CommandPalette
+        open
+        actions={actionsWithKeywords}
+        onRun={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("command-palette-input"), {
+      target: { value: "preferences" },
+    });
+
+    expect(
+      screen.getByTestId("command-palette-option-settings"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/No commands match/)).not.toBeInTheDocument();
+  });
+
+  // C2-S12A (#687 round-6 judge): an action that navigates to an entirely
+  // different page via a real browser navigation must opt out of the
+  // palette's own onClose — onClose (useOverlayUrlState.closeOverlay) can
+  // call history.back() synchronously in the same tick, which races and
+  // reverts a real navigation scheduled just before it (caught red-first
+  // against the real dev server, not reproducible in jsdom — see
+  // TodayMoments.tsx's "open-settings" case and nav-truth.spec.ts).
+  // `closesPalette: false` is the escape hatch; every other action (no flag,
+  // or explicitly true) keeps closing exactly as before.
+  it("skips onClose for an action marked closesPalette: false, on both click and Enter", () => {
+    const onRun = vi.fn();
+    const onClose = vi.fn();
+    const actionsWithNavigate: CommandPaletteAction[] = [
+      ...ACTIONS,
+      { id: "leave", label: "Open settings", closesPalette: false },
+    ];
+    render(
+      <CommandPalette
+        open
+        actions={actionsWithNavigate}
+        onRun={onRun}
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("command-palette-option-leave"));
+    expect(onRun).toHaveBeenCalledWith("leave");
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Same for the Enter-key path: filter down to just this one option, then
+    // run it via Enter instead of a click.
+    fireEvent.change(screen.getByTestId("command-palette-input"), {
+      target: { value: "settings" },
+    });
+    fireEvent.keyDown(screen.getByTestId("command-palette-input"), {
+      key: "Enter",
+    });
+    expect(onRun).toHaveBeenCalledWith("leave");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("still closes for a normal action with no closesPalette flag", () => {
+    const onRun = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <CommandPalette open actions={ACTIONS} onRun={onRun} onClose={onClose} />,
+    );
+
+    fireEvent.click(screen.getByTestId("command-palette-option-capture"));
+
+    expect(onRun).toHaveBeenCalledWith("capture");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   // SP-8: the zero-matches empty state names the filling action (try a
   // different word or clear the search) and echoes the query, instead of
   // being a dead end, and avoids the banned dead-end phrasing.

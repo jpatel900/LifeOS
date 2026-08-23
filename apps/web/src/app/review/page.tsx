@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import { CockpitRoute } from "../components/CockpitRoute";
 import { isMomentsHomeEnabled } from "@/lib/flags";
+import {
+  legacyRedirectTarget,
+  type LegacyIncomingSearchParams,
+} from "../legacyRedirectTarget";
 
 // #687 C2-S6: redirect to the moments home with the Review sheet open — NOT
 // `?moment=close` (the Close moment is deliberately day-scoped and lacks
@@ -11,9 +15,18 @@ import { isMomentsHomeEnabled } from "@/lib/flags";
 // `review-sheet-decision-*` testids: carry forward / put off / drop). The
 // cockpit review stage stays reachable only under the #590 rollback
 // (NEXT_PUBLIC_MOMENTS_HOME=false).
-export default function ReviewPage() {
+//
+// #687 round-8 finding 2 (legacyRedirectTarget.ts): carries the incoming
+// query string through, composed with this shim's own `sheet=review` — see
+// that file's header comment for the full collision rule.
+export default async function ReviewPage({
+  searchParams,
+}: {
+  searchParams?: Promise<LegacyIncomingSearchParams>;
+}) {
   if (isMomentsHomeEnabled()) {
-    redirect("/?sheet=review");
+    const params = searchParams ? await searchParams : undefined;
+    redirect(legacyRedirectTarget(params, { sheet: "review" }));
   }
   return <CockpitRoute stage="review" />;
 }

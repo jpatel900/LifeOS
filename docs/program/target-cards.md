@@ -17,8 +17,8 @@ Baseline: audit v2 (`docs/design/ux-audit-2026-07-26-fable.md`, PR #757). Overal
 
 ## 2. Information architecture — 5.0 → **9** — campaign C2, in flight
 
-- [ ] One shell. Legacy cockpit routes ported per the owner decision (all four); no screen renders the old design (pin: route-level guard test).
-- [ ] Every in-app state change is URL-visible; Back/Forward always steps moments, never jumps to another shell (pin: e2e history walk).
+- [ ] One shell. Legacy cockpit routes ported per the owner decision (the four ratified surfaces — calendar, review, health, areas — plus the stage shims that joined them; nine redirect paths exist today and all must port); no screen renders the old design (pin: route-level guard test).
+- [ ] Every in-app state change is URL-visible; Back/Forward always steps moments, never jumps to another shell (pin: e2e history walk). Device-local display preferences — theme and the countdown/clock toggle — are deliberately exempt: they persist across reload, so a refresh never lands elsewhere, and putting them in the URL would force the sender's display choices onto anyone who opens a shared link.
 - [ ] Any screen reachable in ≤2 interactions from home; refresh/direct-URL/back always agree (pin: e2e matrix).
 
 ## 3. Capture — 7.0 → **9**

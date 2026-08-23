@@ -117,7 +117,15 @@ describe("MastheadThemeToggle", () => {
     expect(hint).toHaveClass("sm:group-hover:opacity-100");
   });
 
-  it("does not toggle on 'D' while a button elsewhere has focus (typing-target guard)", async () => {
+  // #687 round-6 bug-echo (bug-echo of PR #906's useMomentKeyboard fix):
+  // MastheadThemeToggle had the identical defective isTypingTarget, which
+  // (mis)classified a focused BUTTON/A as "typing" and silently killed this
+  // shortcut the instant focus landed on ANY control. A button is not a
+  // text-entry context — the shortcut must keep firing. Red-first: this
+  // fails against the pre-fix isTypingTarget (which returned true for
+  // tag === "BUTTON"), confirmed by temporarily reverting
+  // MastheadThemeToggle.tsx to its own local copy of that defect.
+  it("keeps toggling on 'D' while a button elsewhere has focus (not a typing context)", async () => {
     useThemeMock.mockReturnValue({ theme: "dark", setTheme: setThemeMock });
 
     render(
@@ -134,6 +142,47 @@ describe("MastheadThemeToggle", () => {
     const other = screen.getByTestId("other-button");
     other.focus();
     fireEvent.keyDown(other, { key: "d" });
+
+    expect(setThemeMock).toHaveBeenCalledWith("light");
+  });
+
+  // Same defect, worse case: clicking the toggle itself moves focus onto
+  // its own button, so the pre-fix isTypingTarget blocked "D" from ever
+  // firing again without first clicking elsewhere to move focus off it.
+  // Uses `.focus()`, not `fireEvent.click`, deliberately: a click's own
+  // `onClick` calls `setTheme` directly regardless of the keydown listener,
+  // which would make this pass for the wrong reason and hide a regression
+  // — focusing without clicking isolates the keydown listener alone.
+  it("keeps toggling on 'D' while its own button holds focus", async () => {
+    useThemeMock.mockReturnValue({ theme: "dark", setTheme: setThemeMock });
+
+    render(<MastheadThemeToggle />);
+    const button = await screen.findByTestId("masthead-theme-toggle");
+    await waitFor(() => expect(button).not.toBeDisabled());
+
+    button.focus();
+    fireEvent.keyDown(button, { key: "d" });
+
+    expect(setThemeMock).toHaveBeenCalledWith("light");
+  });
+
+  // The real typing-target case must still be suppressed — only BUTTON/A
+  // were ever the bug; INPUT stays blocked.
+  it("does not toggle on 'D' while typing in a real text input", async () => {
+    useThemeMock.mockReturnValue({ theme: "dark", setTheme: setThemeMock });
+
+    render(
+      <div>
+        <MastheadThemeToggle />
+        <input data-testid="other-input" />
+      </div>,
+    );
+    const button = await screen.findByTestId("masthead-theme-toggle");
+    await waitFor(() => expect(button).not.toBeDisabled());
+
+    const input = screen.getByTestId("other-input");
+    input.focus();
+    fireEvent.keyDown(input, { key: "d" });
 
     expect(setThemeMock).not.toHaveBeenCalled();
   });

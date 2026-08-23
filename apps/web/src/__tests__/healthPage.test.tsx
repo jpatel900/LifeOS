@@ -65,17 +65,18 @@ function userFacingText() {
   return cockpit.textContent ?? "";
 }
 
-function renderHealth() {
-  return render(
-    <AppShell>
-      <HealthPage />
-    </AppShell>,
-  );
+// HealthPage is an async Server Component (Next 15 `searchParams` is a
+// Promise) — resolve it before handing the element to `render`.
+async function renderHealth() {
+  const healthPageElement = await HealthPage({
+    searchParams: Promise.resolve({}),
+  });
+  return render(<AppShell>{healthPageElement}</AppShell>);
 }
 
 describe("Health cockpit", () => {
   it("leads with the plain glance answer and layers the rest (#692)", async () => {
-    renderHealth();
+    await renderHealth();
 
     // GLANCE — the headline answers "is everything working" and the line
     // under it answers "does anything need me", both in plain words.
@@ -167,7 +168,7 @@ describe("Health cockpit", () => {
       ],
     });
 
-    renderHealth();
+    await renderHealth();
     await screen.findByTestId("health-developer-details");
 
     const visible = userFacingText();
@@ -217,7 +218,7 @@ describe("Health cockpit", () => {
       ],
     });
 
-    renderHealth();
+    await renderHealth();
 
     expect(
       (await screen.findAllByText("Moving work between steps")).length,
@@ -277,7 +278,7 @@ describe("Health cockpit", () => {
       ],
     });
 
-    renderHealth();
+    await renderHealth();
 
     expect(
       (

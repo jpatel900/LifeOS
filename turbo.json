@@ -13,7 +13,32 @@
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      // Several apps/web vitest suites read outside apps/web/** (docs/**,
+      // supabase/**, root config/markdown, .github/.agents/.cursor) to guard
+      // repo-wide invariants — e.g. publicEvidenceHygiene.test.ts and
+      // docRegistry.test.ts. Turbo's default `inputs` (when omitted) only
+      // hash files inside the task's own package directory, so a docs-only
+      // edit never changed this task's cache key: CI could replay a stale
+      // cached PASS while the guard's premise had actually changed (found
+      // 2026-08-21 — see docs/FAILURES.md). $TURBO_DEFAULT$ keeps the normal
+      // per-package file set; the $TURBO_ROOT$ globs below add every
+      // repo-root path a test in apps/web/src/__tests__ (or
+      // apps/web/src/lib/observability/sentry.test.ts) actually reads or
+      // existsSync-checks. Keep this list in sync with the tests — the
+      // turboTestInputsCoverage self-test (scripts/agent/check-turbo-test-inputs.mjs)
+      // fails CI if a test starts reading a repo-root path this list omits.
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/docs/**",
+        "$TURBO_ROOT$/supabase/**",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/.github/**",
+        "$TURBO_ROOT$/.agents/**",
+        "$TURBO_ROOT$/.cursor/**",
+        "$TURBO_ROOT$/.env.example",
+        "$TURBO_ROOT$/**/*.md"
+      ]
     },
     "type-check": {
       "dependsOn": ["^build"]

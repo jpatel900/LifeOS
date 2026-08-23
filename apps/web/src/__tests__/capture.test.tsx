@@ -60,11 +60,12 @@ describe("Capture cockpit", () => {
   // (sorting is a separate action there), and staying put means the next
   // thought can go straight in.
   it("saves a thought through the single primary action and says where it went", async () => {
-    render(
-      <AppShell>
-        <CapturePage />
-      </AppShell>,
-    );
+    // CapturePage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const capturePageElement = await CapturePage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<AppShell>{capturePageElement}</AppShell>);
 
     fireEvent.change(
       await screen.findByPlaceholderText("Drop the thought here."),
@@ -86,11 +87,12 @@ describe("Capture cockpit", () => {
   });
 
   it("blocks empty saves and keeps one primary capture action", async () => {
-    render(
-      <AppShell>
-        <CapturePage />
-      </AppShell>,
-    );
+    // CapturePage is an async Server Component (Next 15 `searchParams` is a
+    // Promise) — resolve it before handing the element to `render`.
+    const capturePageElement = await CapturePage({
+      searchParams: Promise.resolve({}),
+    });
+    render(<AppShell>{capturePageElement}</AppShell>);
 
     expect(
       await screen.findByText(
