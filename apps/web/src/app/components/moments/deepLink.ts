@@ -126,18 +126,20 @@ export function deepLinkTargetFromParams(
     // deliberately EXEMPT — `?sheet=X&capture=1` keeps composing, see the
     // "capture takes precedence over palette" test below and the pinned
     // "genuinely renders both" case in `TodayMoments.urlTruth.test.tsx`.
-    // Be precise about what that exemption buys, because this comment used
-    // to overclaim it: both halves MOUNT, but they do not coexist usefully.
-    // `CaptureOverlay` and `MomentSheet` are both `z-50` and the overlay
-    // renders FIRST in `TodayMoments`' tree, so the sheet paints in front
-    // of it. Probed against the dev server on `/?sheet=triage&capture=1`:
-    // `elementFromPoint` at the capture dialog's centre returns
-    // `moment-sheet-scrim`, both dialogs carry `aria-modal="true"`, focus
-    // lands on `<body>`, and Escape closes neither. So this exemption keeps
-    // a pair that renders one usable screen and one buried one — left
-    // standing rather than widened into a behaviour change under what is a
-    // comment-accuracy fix; `MomentSheet.tsx`'s header carries the same
-    // measurement. Only palette-vs-sheet is scrubbed here.)
+    // That exemption is now backed by real composition, which it was NOT
+    // when this comment was written. Between #915 and #924 the pair mounted
+    // both halves but only rendered one: `CaptureOverlay` and `MomentSheet`
+    // were both `z-50` with the overlay rendering FIRST in `TodayMoments`'
+    // tree, so the sheet painted in front and buried capture. #924 inverted
+    // that — `<CaptureOverlay>` renders AFTER every sheet, capture is
+    // unconditionally the front dialog, and an obscured sheet goes `inert`
+    // and drops its `aria-modal`. Re-probed against the dev server on
+    // `/?sheet=triage&capture=1`: `elementFromPoint` at capture's centre
+    // returns `capture-overlay-return-hook`, the sheet's outer shell carries
+    // `inert`, and capture is the only `aria-modal="true"` dialog on the
+    // page. `MomentSheet.tsx`'s header owns that story — do not restate the
+    // stacking rule here, this comment has already gone stale once by doing
+    // exactly that. Only palette-vs-sheet is scrubbed.)
     target.overlay = "palette";
   }
 
