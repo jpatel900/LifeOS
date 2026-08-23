@@ -2022,6 +2022,92 @@ test("mobile: moment switch -> Settings -> Back keeps the moment, reached via a 
 });
 
 /**
+ * Part of #687 — the palette's OWN route to Settings, the one the mobile
+ * walk directly above deliberately stopped taking. Both settings LINKS
+ * (`moments-settings-link`, `bottom-navigator-settings-link`) are real
+ * `next/link` soft navs; the command palette's "Open settings" is
+ * `window.location.assign` (`TodayMoments.tsx`'s `runPaletteAction`), a HARD
+ * cross-document navigation — which is exactly why the walk above swapped
+ * off it (see its own comment: Back from a hard nav never exercises Next's
+ * client Router Cache remount, so the moment bug stayed invisible). That
+ * correction left this route with no pin at all, and it is not a duplicate
+ * of the soft-nav one: it exercises a different navigation kind and a
+ * different close contract.
+ *
+ * "Open settings" is declared `closesPalette: false` (`TodayMoments.tsx`),
+ * and `CommandPalette.tsx` gates its `onClose()` on `action.closesPalette
+ * !== false` — so `useOverlayUrlState.closeOverlay` never runs on this path
+ * at all. The palette is still genuinely open when the navigation starts,
+ * so the entry left behind carries `?palette=1` TRUTHFULLY, and Back
+ * restores exactly that screen (`deepLinkTargetFromParams` maps `palette=1`
+ * with no `sheet` to `overlay: "palette"`, seeding
+ * `resolvedInitialPaletteOpen`).
+ *
+ * Investigated red-first as a suspected URL-truth residue — "does the close
+ * path fail to strip `palette=1` when the palette is closed by navigating
+ * away?" — and DISPROVED against the real dev server, the opposite way round
+ * from C2-S13's own "CORRECTED, not disproved" note above: polled at
+ * 0/100/250/500/1000/2000ms after Back, the param and the dialog agree at
+ * every checkpoint, with no self-heal and no late router stomp. This pin
+ * exists so that agreement cannot quietly rot into a real lie later.
+ *
+ * Asserting the DIALOG, not just the moment, is the load-bearing part and
+ * the reason the residue was mis-read as real in the first place:
+ * `flow-moment` stays `toBeVisible()` with a full-screen `role="dialog"`
+ * painted over it, because Playwright checks CSS visibility and box size,
+ * not occlusion. A moment-level assertion alone cannot tell "palette open"
+ * from "palette closed" — it passes in both worlds.
+ */
+test("mobile: the palette's own hard-nav route to Settings — Back restores the palette, and ?palette=1 is telling the truth", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?moment=start");
+  await expect(page.getByTestId("start-moment")).toBeVisible();
+  await page.getByTestId("moment-switcher-bottom-nav-flow").click();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+
+  await page.getByTestId("bottom-navigator-more").click();
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  await page.getByTestId("command-palette-option-open-settings").click();
+  await expect(page).toHaveURL(/\/settings\/areas$/, { timeout: 15_000 });
+
+  await page.goBack();
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+
+  // The URL claims a palette. It must therefore BE on screen — and be the
+  // only dialog there, not stacked behind or in front of another one.
+  expect(new URL(page.url()).searchParams.get("palette")).toBe("1");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  // Settle. `rawHistory.ts` documents a deferred Next `HistoryUpdater`
+  // re-stamp that has landed ~83ms after a write in this app's own CI
+  // evidence, so a stomp (or a self-heal) shows up HERE, never in the reads
+  // above — checking once immediately after Back would pass in a world
+  // where the URL goes on to disagree a beat later.
+  await page.waitForTimeout(1000);
+  expect(new URL(page.url()).searchParams.get("palette")).toBe("1");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+
+  // Not a husk restored for show: it still filters, and closing it strips
+  // the very param it was advertising, leaving the moment underneath.
+  await page.getByTestId("command-palette-input").fill("review");
+  await expect(
+    page.getByTestId("command-palette-option-open-review"),
+  ).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+  await expect(async () => {
+    expect(new URL(page.url()).searchParams.get("palette")).toBeNull();
+  }).toPass({ timeout: 10_000 });
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+});
+
+/**
  * C2-S13 (#687 round-7 judge, defect 3 — "a sheet renders with no sheet
  * param"): a Back/Forward walk crossing `/settings/areas` used to land on a
  * URL with no `sheet=` at all while a sheet was still visible on screen.
