@@ -52,16 +52,36 @@ import { parseOverlayParam } from "./useOverlayUrlState";
  * `activeSheet` is one shared union across every sheet type, so there is
  * only ever one instance of this hook. The NESTED-PUSH half (something else
  * pushing a new entry while a sheet is the CURRENT entry, then `back()`ing
- * off that push) was also ruled out, not assumed: `MomentSheet` (every
- * sheet's shared wrapper) renders as a `fixed inset-0 z-50` full-screen
- * overlay with its own scrim, structurally covering the masthead's capture
- * pill and area switcher underneath; `TodayMoments.tsx`'s `useMomentKeyboard`
- * — the only source of `setMoment`/`openCapture`/`openPalette` calls outside
- * a sheet's own UI — is gated `enabled: topbarShortcutsEnabled`, which
- * requires `!activeSheet`; and none of `TriageSheet.tsx`/`PlanSheet.tsx`/
- * `ReviewSheet.tsx`/`HealthSheet.tsx`/`AreasSheet.tsx` themselves ever call
+ * off that push) was ruled out AT THE TIME on three grounds: `MomentSheet`
+ * (every sheet's shared wrapper) renders as a `fixed inset-0 z-50`
+ * full-screen overlay with its own scrim, structurally covering the
+ * masthead's capture pill and area switcher underneath; `TodayMoments.tsx`'s
+ * `useMomentKeyboard` was the only source of
+ * `setMoment`/`openCapture`/`openPalette` calls outside a sheet's own UI and
+ * is gated `enabled: topbarShortcutsEnabled`, which requires `!activeSheet`;
+ * and none of `TriageSheet.tsx`/`PlanSheet.tsx`/`ReviewSheet.tsx`/
+ * `HealthSheet.tsx`/`AreasSheet.tsx` themselves ever call
  * `openCapture`/`openPalette`/`setMoment`/a raw `pushState` (grepped
  * directly, zero hits).
+ *
+ * The SECOND of those three no longer holds, and a nested push is now a
+ * real, shipped state rather than a ruled-out one. #924 (round-11 judge,
+ * DEFECT 3) added a SEPARATE, sheet-scoped key listener in
+ * `TodayMoments.tsx` — deliberately NOT a widening of
+ * `topbarShortcutsEnabled`, see that listener's own comment for why — so
+ * "c" opens capture from INSIDE an open sheet. Measured against a live dev
+ * server from `/?sheet=triage`: pressing "c" pushes `&capture=1` on top of
+ * the sheet's own entry (`history.length` 5 -> 6), and closing capture and
+ * then the sheet strips each param in turn, landing on the bare page with
+ * no entry skipped.
+ *
+ * That round trip is safe because of the round-8 fix documented below, NOT
+ * because of the C2-S11 argument above: ownership is a monotonic
+ * `pushedEntryIdRef` naming the SPECIFIC entry this hook pushed, so an
+ * unrelated entry pushed on top of it can never be mistaken for ours. Do
+ * not re-derive "nothing can nest" from the paragraph above — that premise
+ * is history, kept here only to explain why the ref is shaped the way it
+ * is.
  *
  * That audit's boolean `pushedRef` (now `pushedEntryIdRef`, see below) missed
  * a THIRD case neither half of the C2-S11 audit considered — no sibling, no
