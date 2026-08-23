@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
-import type { WorkflowState } from "@/lib/workflow";
 import { TriageView } from "./TriageView";
 import {
   buildWorkflowCockpitViewModel,
@@ -69,7 +68,10 @@ describe("TriageView 44px hit targets (#615)", () => {
 // triage split-drafts flake. Deterministic guard for a failure that otherwise
 // only shows up as an intermittent CI red.
 describe("TriageView keeps typed input across a background draft refresh (#789)", () => {
-  function renderView(state: WorkflowState) {
+  // Typed from the seed helper rather than hand-annotated: the
+  // source-of-truth guard (#331 / #859) requires test state to be reachable
+  // only through workflowSeed() + the transition helpers.
+  function renderView(state: ReturnType<typeof workflowSeed>) {
     return (
       <WorkflowProvider>
         <TriageView
