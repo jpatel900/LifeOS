@@ -105,4 +105,24 @@ export const MIGRATION_DRIFT_ALLOWLIST = [
       "RiseUp Cockpit project migration (separate repo/app) applied directly by RiseUp's " +
       "own pipeline to this shared Supabase project. Not a LifeOS migration.",
   },
+  {
+    version: "20260823035026",
+    name: "riseup_feedback_anon_spam_guard",
+    reason:
+      "RiseUp Cockpit project migration (separate repo jpatel900/riseup-cockpit) applied " +
+      "directly by RiseUp's own pipeline to this shared Supabase project on 2026-08-23. " +
+      'Confirmed against that repo: it backs commit b5bb27b "Spam guards on public idea ' +
+      'submissions" (2026-08-22 23:53 local = 03:53Z, minutes after this ledger row). ' +
+      "Not a LifeOS migration.",
+  },
+  {
+    version: "20260823035733",
+    name: "riseup_feedback_pending_approval_gate",
+    reason:
+      "RiseUp Cockpit project migration (separate repo jpatel900/riseup-cockpit) applied " +
+      "directly by RiseUp's own pipeline to this shared Supabase project on 2026-08-23. " +
+      'Confirmed against that repo: it backs commit 551ac12 "Approval gate: public ' +
+      'submissions land as Pending, approved to the board" (2026-08-23 00:02 local = ' +
+      "04:02Z, minutes after this ledger row). Not a LifeOS migration.",
+  },
 ];
