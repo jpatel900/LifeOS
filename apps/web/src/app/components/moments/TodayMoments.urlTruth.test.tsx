@@ -342,11 +342,12 @@ describe("TodayMoments — URL and deep-link parameter truth (#687 finding 1)", 
 
   // Sheet + capture is the pair the scrub deliberately leaves alone (S6's
   // own composition contract) — pinning that finding 2's fix cannot regress
-  // into over-scrubbing it. Read the assertion narrowly: BOTH halves mount,
-  // which is all jsdom can see. It is NOT a claim that both are usable.
-  // Live, the sheet paints in front of the capture dialog (equal `z-50`,
-  // overlay renders first in the tree), so capture is buried until the
-  // sheet closes — measured in `MomentSheet.tsx`'s header comment.
+  // into over-scrubbing it. Read the assertion narrowly: it checks that both
+  // halves MOUNT, which is all jsdom can see. Which of them the user can
+  // actually reach is a paint-order and focus question this test does not
+  // touch — #924 settled it (capture renders after every sheet and is the
+  // front dialog; an obscured sheet goes `inert`), and `MomentSheet.tsx`'s
+  // header is the single place that records it.
   it("does not touch a real sheet+overlay combo that genuinely renders both", async () => {
     window.history.replaceState(
       null,
