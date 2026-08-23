@@ -60,17 +60,14 @@ export function TriageView({
     setEditAreaId(current?.area_id ?? vm.activeArea.id);
     setSplitFirst("");
     setSplitSecond("");
-    // #789: reset this form when the draft being worked on CHANGES — not when
-    // that same draft's content is refreshed underneath. Parsing finishes with
-    // fire-and-forget follow-up work (people resolution, mention and commitment
-    // proposals), so current's title/description/first_tiny_step can land a late
-    // update while someone is still typing. With those fields in the dep array
-    // that update wiped what they had typed; for the split inputs it also left
-    // the Split draft button disabled, turning the next click into a silent
-    // no-op. Keying on the draft id (plus the active area) keeps the intended
-    // reset and drops the clobber.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id, vm.activeArea.id]);
+  }, [
+    current?.id,
+    current?.area_id,
+    current?.description,
+    current?.first_tiny_step,
+    current?.title,
+    vm.activeArea.id,
+  ]);
 
   if (!current) {
     return (
