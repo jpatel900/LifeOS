@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInitialWorkflowState, type WorkflowState } from "@/lib/workflow";
+import { workflowSeed } from "@/__tests__/helpers/workflowReachability";
 import type {
   Phase2MockArea,
   Phase2MockCalendarBlock,
@@ -121,9 +121,11 @@ function makeSession(
   };
 }
 
-function stateWith(partial: Partial<WorkflowState>): WorkflowState {
+function stateWith(
+  partial: Partial<ReturnType<typeof workflowSeed>>,
+): ReturnType<typeof workflowSeed> {
   return {
-    ...createInitialWorkflowState(),
+    ...workflowSeed(),
     areas: [makeArea({ id: "area-1" })],
     ...partial,
   };

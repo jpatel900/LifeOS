@@ -1,8 +1,9 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createInitialWorkflowState, type WorkflowState } from "@/lib/workflow";
+import { createInitialWorkflowState } from "@/lib/workflow";
 import type { Phase2MockCalendarBlock, Phase2MockTask } from "@/lib/types";
 import { useReEntryRitual } from "./useReEntryRitual";
+import { workflowSeed } from "@/__tests__/helpers/workflowReachability";
 
 /**
  * FR-028 packet F-G2c: hook-level coverage over a hand-built WorkflowState
@@ -60,7 +61,9 @@ function makeBlock(
   } as Phase2MockCalendarBlock;
 }
 
-function stateWith(partial: Partial<WorkflowState>): WorkflowState {
+function stateWith(
+  partial: Partial<ReturnType<typeof workflowSeed>>,
+): ReturnType<typeof workflowSeed> {
   return { ...createInitialWorkflowState(), ...partial };
 }
 

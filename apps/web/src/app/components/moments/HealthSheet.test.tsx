@@ -2,7 +2,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
-import type { WorkflowState } from "@/lib/workflow";
 import type { HealthDashboardCheck } from "@/lib/data/health";
 import {
   GOLDEN_AREA_ID,
@@ -69,15 +68,18 @@ const ALL_HEALTHY: HealthDashboardCheck[] = [
   check({ id: "health-observability-sentry", subsystem: "sentry" }),
 ];
 
-function seedState(): WorkflowState {
+function seedState() {
   let state = workflowSeed();
   state = captureWorkflow(state, "Something open");
   return acceptLatestDraft(state);
 }
 
-function renderSheet(options: { open?: boolean; state?: WorkflowState } = {}): {
-  onClose: ReturnType<typeof vi.fn>;
-} {
+function renderSheet(
+  options: {
+    open?: boolean;
+    state?: ReturnType<typeof workflowSeed>;
+  } = {},
+): { onClose: ReturnType<typeof vi.fn> } {
   const onClose = vi.fn();
   window.sessionStorage.setItem(
     STORAGE_KEY,

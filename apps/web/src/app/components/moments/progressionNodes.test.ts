@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInitialWorkflowState, type WorkflowState } from "@/lib/workflow";
+import { createInitialWorkflowState } from "@/lib/workflow";
 import type {
   Phase2MockArea,
   Phase2MockCalendarBlock,
@@ -7,6 +7,7 @@ import type {
   Phase2MockTask,
 } from "@/lib/types";
 import { buildProgressionNodes } from "./progressionNodes";
+import { workflowSeed } from "@/__tests__/helpers/workflowReachability";
 
 /** Pinned clock convention shared with momentsViewModel.test.ts. */
 const NOW = new Date("2026-07-05T12:00:00.000Z");
@@ -86,7 +87,9 @@ function makeSession(
   };
 }
 
-function stateWith(partial: Partial<WorkflowState>): WorkflowState {
+function stateWith(
+  partial: Partial<ReturnType<typeof workflowSeed>>,
+): ReturnType<typeof workflowSeed> {
   return {
     ...createInitialWorkflowState(),
     areas: [makeArea({ id: "area-1" })],

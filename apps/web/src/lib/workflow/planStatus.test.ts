@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildPipelineCounts } from "@/app/components/moments/pipelineCounts";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
-import type { WorkflowState } from "@/lib/workflow";
 import {
   acceptLatestDraft,
   captureWorkflow,
@@ -55,7 +54,7 @@ afterAll(() => {
  * rail, the task never left `active`. The only state where the three
  * derivations could disagree — and it is a state the product really produced.
  */
-function statusDriftState(): WorkflowState {
+function statusDriftState(): ReturnType<typeof workflowSeed> {
   let state = workflowSeed();
   state = captureWorkflow(state, "One thing, counted once.");
   state = acceptLatestDraft(state);
@@ -76,7 +75,7 @@ function statusDriftState(): WorkflowState {
   };
 }
 
-function unplacedState(): WorkflowState {
+function unplacedState(): ReturnType<typeof workflowSeed> {
   let state = workflowSeed();
   state = captureWorkflow(state, "One thing, genuinely unplaced.");
   return acceptLatestDraft(state);
@@ -88,7 +87,7 @@ function unplacedState(): WorkflowState {
  */
 const TO_PLACE_SURFACES: ReadonlyArray<{
   name: string;
-  count: (state: WorkflowState) => number;
+  count: (state: ReturnType<typeof workflowSeed>) => number;
 }> = [
   {
     name: "shared selector (the Plan sheet's To place list)",

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
-import type { WorkflowState } from "@/lib/workflow";
 import {
   acceptLatestDraft,
   backlogLatestDraft,
@@ -29,7 +28,7 @@ import {
  * The inventory's measured seed: 2 active + 1 backlog + 1 scheduled task in one
  * area. Four distinct open items; three of them need a decision.
  */
-function inventorySeedState(): WorkflowState {
+function inventorySeedState(): ReturnType<typeof workflowSeed> {
   let state = workflowSeed();
   state = captureWorkflow(state, "First open thing.");
   state = acceptLatestDraft(state);
@@ -42,7 +41,7 @@ function inventorySeedState(): WorkflowState {
   return planLatestActiveTask(state, 9);
 }
 
-function oneMissedBlockState(): WorkflowState {
+function oneMissedBlockState(): ReturnType<typeof workflowSeed> {
   let state = workflowSeed();
   state = captureWorkflow(state, "The thing the day went past.");
   state = acceptLatestDraft(state);
@@ -70,7 +69,7 @@ function oneMissedBlockState(): WorkflowState {
  */
 const NEEDS_DECISION_SURFACES: ReadonlyArray<{
   name: string;
-  count: (state: WorkflowState) => number;
+  count: (state: ReturnType<typeof workflowSeed>) => number;
 }> = [
   {
     name: "shared selector (the Review sheet's and /review's list)",
