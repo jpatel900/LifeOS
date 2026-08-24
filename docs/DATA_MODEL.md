@@ -536,22 +536,25 @@ Standard owner RLS (section 8), same pattern as sibling additive columns on exis
 
 ### 4.18 Durable writes (#737-A) — replay idempotency keys
 
-**SHIPPED for wins and reviews (slice 2, migration `20260726120000_add_win_review_client_write_id.sql`).** Additive per NS-INV-2; no new table.
+**SHIPPED — the family is complete (issue #737 closed completed 2026-08-24).** Wins and reviews (slice 2, `20260726120000_add_win_review_client_write_id.sql`), plans and triage/project drafts (slice S3, `20260727130000_add_plan_and_draft_client_write_ids.sql`, which also added the replayable `place_time_block` transition function), and rollups (slice S5, `20260727140000_add_rollup_client_write_id.sql`). The capture queue's own idempotency was repaired by #759 (`20260726130000_fix_capture_client_capture_id_index.sql`). Additive per NS-INV-2; no new table.
 
-A confirmed win and a saved review are now written to the device-local pending-writes journal (`apps/web/src/lib/durability/pendingWriteJournal.ts`, IndexedDB) before any network call, and replayed to the account on app start and on reconnect. Replay can legitimately run more than once for the same logical write, so each journalled write carries a client-generated id that the server dedupes on — the same mechanism `capture_items.client_capture_id` (4.15) already uses for the offline capture queue.
+A confirmed win, a saved review, a placed plan, an accepted draft, and an approved rollup are written to the device-local pending-writes journal (`apps/web/src/lib/durability/pendingWriteJournal.ts`, IndexedDB) before any network call, and replayed to the account on app start and on reconnect. Replay can legitimately run more than once for the same logical write, so each journalled write carries a client-generated id that the server dedupes on — the same mechanism `capture_items.client_capture_id` (4.15) already uses for the offline capture queue.
 
-| Table          | Column          | Type                           | Notes                                                                                                   |
-| -------------- | --------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| win_records    | client_write_id | text nullable, unique per user | #737-A; set by the journal replay path so a repeated replay dedupes instead of creating a duplicate win |
-| review_entries | client_write_id | text nullable, unique per user | #737-A; same key for the review save path                                                               |
+| Table                | Column          | Type                           | Notes                                                                                                   |
+| -------------------- | --------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| win_records          | client_write_id | text nullable, unique per user | #737-A; set by the journal replay path so a repeated replay dedupes instead of creating a duplicate win |
+| review_entries       | client_write_id | text nullable, unique per user | #737-A; same key for the review save path                                                               |
+| tasks                | client_write_id | text nullable, unique per user | #737-A slice S3; stamps the proposal/block a journalled placement produced                              |
+| time_block_proposals | client_write_id | text nullable, unique per user | #737-A slice S3; the replay short-circuit reads this before any write                                   |
+| rollup_summaries     | client_write_id | text nullable, unique per user | #737-A slice S5; period-key conflicts stay terminal (see below)                                         |
 
 Both are PLAIN (non-partial) composite unique indexes, and that is load-bearing: `ON CONFLICT (user_id, client_write_id)` can only infer a partial index when the INSERT itself carries a WHERE clause proving the index predicate, which PostgREST/supabase-js `onConflict` cannot send — a partial index fails every upsert with Postgres 42P10. Pre-existing rows are unaffected regardless, because a Postgres unique index treats NULLs as DISTINCT by default, so any number of rows may carry a NULL `client_write_id`. (`NULLS NOT DISTINCT` must not be used here.) Writes go through `upsert(..., { onConflict: "user_id,client_write_id", ignoreDuplicates: true })`.
 
-Note for `capture_items.client_capture_id` (4.15): that index IS partial and is paired with the same `onConflict` shape, so it is expected to carry the same 42P10 defect. Tracked as a follow-up on #737 — it is not touched here.
+Note for `capture_items.client_capture_id` (4.15): the partial-index 42P10 defect this section once tracked was fixed by #759 (`20260726130000_fix_capture_client_capture_id_index.sql`) — that index is now a plain unique index like the rest of the family.
 
 No new grants and no policy change: table-level `grant select, insert, update, delete` already covers columns added later, and the owner RLS policies (section 8) are column-agnostic. The column is deliberately absent from `winRecordColumns` / `reviewEntryColumns` — unlike the capture queue, which reconciles against server rows, the journal clears its own entry once the write is confirmed, so nothing reads the key back.
 
-Rollups (`rollup_summaries`) are NOT covered by this slice and keep no idempotency key yet — they are the next durable-writes slice.
+Rollups (`rollup_summaries`) are covered as of slice S5 (`20260727140000`): the journal entry dedupes on `client_write_id`, while the original per-period uniqueness (`rollup_summaries_period_key`) deliberately stays the upsert's non-arbiter — a period already rolled up elsewhere still raises its constraint and the client treats that as terminal success (`isRollupPeriodConflict` in `apps/web/src/lib/durability/durableWrites.ts`), preserving "re-approving a period conflicts, the app decides".
 
 ## 5. Meta-Learning Tables
 
