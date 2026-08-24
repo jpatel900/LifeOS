@@ -1,12 +1,12 @@
 # UX_FLOWS.md
 
 Status: Authority UX contract for current workflow behavior
-Purpose: Define route semantics, navigation roles, workflow-state expectations, and user-facing behavior rules
+Purpose: Define the moments shell, surface semantics (home, overlays, sheets), workflow-state expectations, and user-facing behavior rules
 Read when: Changing or reviewing workflow UX behavior
 Do not use for: Active implementation queue, shipped change log, or historical proof by itself
 Superseded by: n/a
 
-Evolution note: V1 is the shipped UX baseline. Stage labels below express dependency and risk order under ADR 0005; they do not block owner-ratified, data-independent foundations. Personalization, proactive interruption, autonomy, and external-write behavior still require their relevant evidence and approval gates.
+Evolution note: V1 is the shipped UX baseline. Navigation follows the moments architecture (ADR 0003): one Today home, three moments, work in overlay sheets. Stage labels below express dependency and risk order under ADR 0005; they do not block owner-ratified, data-independent foundations. Personalization, proactive interruption, autonomy, and external-write behavior still require their relevant evidence and approval gates.
 
 # UX Flows — Area-Scoped Personal Workflow Cockpit
 
@@ -28,51 +28,89 @@ Principles:
 10. The system must help the user recover after disruption.
 11. Planning outputs should prevent planning theatre: show the next action, timebox, confidence, known unknowns, review trigger, and what not to do yet instead of decorative roadmaps.
 
+Principle 5 separates concerns, not routes: capture, triage, planning,
+execution, and review each get their own surface, but those surfaces are
+overlays on one home rather than separate destinations (ADR 0003).
+
 ## 2. Primary Navigation
 
-**Primary workflow screens (six, per NFR-005):**
+**One shell, three moments (ADR 0003).** The Today home (`/`) is the only
+cockpit surface. The day is organized into three moments — Start, Flow,
+Close — switched by tabs, keys `1`/`2`/`3`, and the URL
+(`/?moment=start|flow|close`). An explicit `?moment=` always wins over the
+stored preference and clock heuristic used when the URL is silent.
 
-- Capture
-- Triage
-- Calendar / Planning
-- Execute
-- Review
-- Health
+**Work happens in overlay sheets on the home,** not on separate routes:
+capture, Triage, Plan, Review, Health, All areas. Sheets compose with
+moments (for example `?sheet=plan&moment=start`), and deep links render the
+right surface at first paint.
 
-**Read-only entry / routing surface:** Today / Home on `/` routes into the six primary workflow screens but is not a seventh mutable workflow.
+**URL truth.** Every in-app state change is visible in the URL. Back and
+Forward step moments and sheets only. Refresh, direct-URL entry, and
+fresh-context reproduction all agree. The pinned proof lives in
+`apps/web/tests/e2e/nav-truth.spec.ts` (C2 Target Card 2), which also pins
+that any surface is reachable in at most two interactions from home.
 
-**Stage 1 target (slice S1-S8):** the flows below gain new steps once Stage 1 lands: a person-link approval step in Triage, aging/win-harvest/rollup-approval steps in Review, and a brief panel on Home. These are recorded ahead of implementation per NS-INV-2/ADR 0002 D5; each note is marked with its owning slice and stays consistent with the existing six-screen limit (NFR-005) and the read-only Home routing rule above — no new primary nav item is introduced. The referenced "mobile surface budget doctrine" is not yet defined in this doc or `AGENTS.md`; until a doctrine document exists, the Home brief panel note below is scoped conservatively against the existing screen-budget and anti-pattern rules (NFR-005; section 14 "full-screen analytics before basic use works").
+**Retired stage routes.** The legacy stage routes (`/capture`, `/triage`,
+`/plan`, `/execute`, `/review`, `/health`, `/calendar`, `/areas`, `/today`)
+survive only as redirect shims behind the #590 rollback flag
+(`NEXT_PUBLIC_MOMENTS_HOME=false`). They are not user paths.
 
-**Secondary / admin:** Settings (areas, policies, integrations) — supports the app but is not one of the six primary workflow screens.
+### Stage 1 slice status
 
-Suggested route map:
+Slices S7 (win records) and S8 (weekly + monthly rollups) have shipped and
+appear below as current behavior in their flows. Slice S3 (parse
+`person_mentions`) shipped; its approval UI (S1) and the operator profile /
+Home brief panel (S2, FR-019) remain targets. Table authority for all slice
+statuses is `docs/DATA_MODEL.md`.
 
-```text
-/
-/capture
-/triage
-/calendar
-/execute
-/review
-/health
-/settings/areas
-```
+### Surface map
+
+| Surface          | How it is reached                                        | URL                               |
+| ---------------- | -------------------------------------------------------- | --------------------------------- |
+| Today home       | Tabs, keys `1`/`2`/`3`, or bottom navigator (mobile)     | `/?moment=start\|flow\|close`     |
+| Area selection   | Area switcher on the home                                | `?area=<slug>` (`all` = everyone) |
+| Capture overlay  | Key `c` or the Capture button, from any moment           | `?capture=1`                      |
+| Triage sheet     | Pipeline rail stage node in Start                        | `?sheet=triage`                   |
+| Plan sheet       | Pipeline rail stage node in Start                        | `?sheet=plan`                     |
+| Review sheet     | Pipeline rail stage node in Start                        | `?sheet=review`                   |
+| Health sheet     | Side rail (Start, desktop) or More → command palette     | `?sheet=health`                   |
+| All areas sheet  | Side rail (Start, desktop) or More → command palette     | `?sheet=areas`                    |
+| Command palette  | More trigger (mobile bottom navigator)                   | Transient `?palette=1`, scrubbed  |
+| Settings — Areas | Settings link (desktop masthead or mobile bottom nav)    | `/settings/areas`                 |
+| Sign-in door     | Automatic redirect when signed out (Supabase configured) | `/login`                          |
+
+Notes: `/settings/areas` is the one settings destination (areas, policies,
+integrations) and requires sign-in — signed-out users land on `/login` with
+a calm note. In demo mode (no Supabase env) there are no accounts: the
+DemoModeBanner says so honestly and `/login` explains accounts are not set
+up. `?moment=` and `?sheet=` compose; the capture overlay composes with
+sheets.
 
 ### Future Operating-View Containment
 
-Future project/task operating views should usually live inside existing Planning, Review, or Health surfaces, or as secondary detail routes that support those workflows.
+Future project/task operating views should usually live inside existing
+Planning, Review, or Health surfaces, or as secondary detail surfaces that
+support those workflows.
 
 Use these defaults unless a reviewed product decision says otherwise:
 
-- project cockpit -> project detail route, not a new primary nav item
-- by-project, by-area, stuck/waiting, people follow-up, archive, and priority/urgency views -> tabs, filters, disclosures, or detail routes inside the relevant workflow surface
-- top-level navigation expansion beyond the six primary workflow screens -> explicit product approval plus requirements update first
+- project cockpit -> detail surface inside the relevant moment or sheet, not a new primary nav item
+- by-project, by-area, stuck/waiting, people follow-up, archive, and priority/urgency views -> tabs, filters, disclosures, or detail surfaces inside the relevant workflow surface
+- top-level navigation expansion beyond the three moments and their sheets -> explicit product approval plus requirements update first
 
 The goal is to add operating clarity without turning LifeOS into a cluttered multi-dashboard app.
 
 ### Stage 1 target: Home brief panel (FR-019)
 
-Home gains a read-only brief panel (blocks, focus items, aging items, one stale project, recovery nudge) issuing zero mutations. It stays within the read-only entry/routing surface defined above — Home remains a routing surface into the six primary workflow screens, not a seventh mutable workflow, and the panel does not become a full-screen dashboard ahead of basic use (section 14 anti-patterns). Placement must respect whatever "mobile surface budget doctrine" the product intends to define; that doctrine does not yet exist in this doc or `AGENTS.md` (flagged in the PR as a dangling referent, not resolved here).
+The Today home gains a read-only brief panel (blocks, focus items, aging
+items, one stale project, recovery nudge) issuing zero mutations. It stays
+within the read-only spirit of the home: the panel informs the moments, it
+does not become a full-screen dashboard ahead of basic use (section 14
+anti-patterns). Placement must respect whatever "mobile surface budget
+doctrine" the product intends to define; that doctrine does not yet exist
+in this doc or `AGENTS.md` (flagged in the PR as a dangling referent, not
+resolved here).
 
 ## 3. Flow 1 — First-Time Setup
 
@@ -82,7 +120,7 @@ Create enough structure to use the system without over-onboarding.
 
 ### Steps
 
-1. User signs in.
+1. User signs in (with Supabase configured; see the demo-mode note under Surface map).
 2. App creates default areas:
    - Main Job
    - Personal
@@ -95,7 +133,8 @@ Create enough structure to use the system without over-onboarding.
    - default session length
    - strictness of calendar approval
 5. User optionally connects Google Calendar.
-6. App lands on Today / Home and the user can move into Capture or Areas immediately.
+6. App lands on the Today home (`/`); Capture is one keystroke away (`c` or
+   the Capture button) and Areas live under Settings (`/settings/areas`).
 
 ### Acceptance Criteria
 
@@ -112,12 +151,12 @@ Convert a simple thought into a task.
 
 ### Steps
 
-1. User opens Capture.
+1. User opens Capture (key `c` from anywhere, or the Capture button).
 2. User types: "Follow up with Alex about event sponsorship."
 3. User optionally selects "Volunteer Work."
 4. User clicks "Save and organize."
 5. System saves the raw capture first, then creates local draft suggestions.
-6. User reviews the current item in Triage and accepts the task draft.
+6. User reviews the current item in the Triage sheet and accepts the task draft.
 7. Task appears as accepted work that can be planned.
 
 ### UI Requirements
@@ -196,7 +235,7 @@ Resolve uncertain AI outputs before they pollute the system.
 
 ### Steps
 
-1. User opens Triage.
+1. User opens the Triage sheet (pipeline rail in Start, or `/?sheet=triage`).
 2. One current item is primary and the rest wait in an explicit next-up queue.
 3. User chooses:
    - accept
@@ -210,14 +249,14 @@ Resolve uncertain AI outputs before they pollute the system.
 
 ### Acceptance Criteria
 
-- Triage screen does not become a permanent backlog.
+- Triage does not become a permanent backlog.
 - User can bulk reject low-value drafts.
 - Corrections are logged per area.
 - Accepted items become real objects.
 
 ### Stage 1 target: person-link approval step (slice S1)
 
-When a capture's parse result includes a person mention (FR-017), Triage gains a person-link approval step alongside the existing accept/edit/reject/split/merge/reassign/defer choices: accept an existing matched person, create a new person record, or reject to a plain task (raw capture preserved). No person record is created or linked without this explicit approval (NS-INV-4).
+When a capture's parse result includes a person mention (FR-017), Triage gains a person-link approval step alongside the existing accept/edit/reject/split/merge/reassign/defer choices: accept an existing matched person, create a new person record, or reject to a plain task (raw capture preserved). No person record is created or linked without this explicit approval (NS-INV-4). The parse half already ships: parse results carry `person_mentions` (slice S3, `docs/DATA_MODEL.md`); the people table and this approval step do not exist yet.
 
 ## 7. Flow 5 — Task to Local Time-Block Proposal
 
@@ -265,6 +304,8 @@ Write approved block to Google Calendar safely.
 5. App stores Google event ID.
 6. App creates audit log.
 
+Every write lands in `external_write_events`; free/busy informs proposals but never authorizes a write. Cancelling app-owned events ships; updating or rescheduling an existing Google event is not built.
+
 ### Acceptance Criteria
 
 - No calendar write occurs without final user action.
@@ -280,8 +321,8 @@ Help the user start and finish a work session.
 
 ### Steps
 
-1. User opens current scheduled block.
-2. Execute screen shows:
+1. User opens the current scheduled block — the Flow moment shows exactly one current block.
+2. The Flow moment shows:
    - current task
    - area
    - first tiny step
@@ -303,7 +344,7 @@ Help the user start and finish a work session.
 ### Acceptance Criteria
 
 - Screen shows only one primary task.
-- Quick capture does not navigate away.
+- Quick capture does not navigate away (it opens the overlay over the current moment).
 - Marking stuck can generate a smaller next step.
 - End-session data updates logs.
 - Persisted execution does not pretend a live timer is authoritative when it is not.
@@ -341,7 +382,7 @@ Recover from disruption without collapsing the plan.
 
 ### Daily-driver floor: re-entry ritual (FR-028)
 
-This flow's "a missed block is not a failure" doctrine extends, batched, to a multi-day absence rather than forking into a separate recovery flow. On first open after an absence of >= N days (seed N = 3, settings-configurable), the app runs a deterministic, rule-based return ritual in place of the normal today view instead of surfacing missed blocks one at a time: scheduled blocks whose time fully passed during the absence are auto-deferred to backlog by a deterministic rule (no AI) and every deferral is enumerated in a single "while you were out" summary (counts + the deferral list + the one stalest thing) — a reversible, non-AI, enumerated status transition, not a silent write. The ritual then surfaces exactly one recovery proposal as an L1 proposal (accept/edit/dismiss, never auto-started); on accept it re-enters through the normal activation path with the same WIP and launch-sequence gating as any other commitment. Zero red on screen during the ritual — no overdue badges, no failure language, no penalty framing — and the absence, deferrals, and recovery resolution are recorded (`re_entry.v1`) for the learning loop.
+This flow's "a missed block is not a failure" doctrine extends, batched, to a multi-day absence rather than forking into a separate recovery flow. On first open after an absence of >= N days (seed N = 3, settings-configurable), the app runs a deterministic, rule-based return ritual in place of the normal moments home instead of surfacing missed blocks one at a time: scheduled blocks whose time fully passed during the absence are auto-deferred to backlog by a deterministic rule (no AI) and every deferral is enumerated in a single "while you were out" summary (counts + the deferral list + the one stalest thing) — a reversible, non-AI, enumerated status transition, not a silent write. The ritual then surfaces exactly one recovery proposal as an L1 proposal (accept/edit/dismiss, never auto-started); on accept it re-enters through the normal activation path with the same WIP and launch-sequence gating as any other commitment. Zero red on screen during the ritual — no overdue badges, no failure language, no penalty framing — and the absence, deferrals, and recovery resolution are recorded (`re_entry.v1`) for the learning loop.
 
 ## 11. Flow 9 — Daily Review
 
@@ -351,8 +392,8 @@ Close today and reduce tomorrow's chaos.
 
 ### Steps
 
-1. User opens Daily Review.
-2. App shows:
+1. User opens the Review sheet (pipeline rail in Start, or `/?sheet=review`).
+2. The sheet shows:
    - completed
    - missed
    - still open
@@ -366,15 +407,19 @@ Close today and reduce tomorrow's chaos.
    - convert capture to task
 4. User rates day optionally.
 
+The Close moment is the day-scoped companion: a short, verdict-bearing day
+close with an optional check-in. The Review sheet holds standing open work;
+Close holds today.
+
 ### Acceptance Criteria
 
 - Can complete in under 5 minutes.
 - App suggests but does not force cleanup.
 - Review generates no external writes without approval.
 
-### Stage 1 target: aging section (slice S4)
+### Aging section (slice S4 — shipped)
 
-Daily Review gains an aging section showing waiting-on and commitment items past the aging threshold (FR-017; default 3 days, per-area override via `global_defaults`). Aging is a display/surfacing concern only — rule-based, not AI-invented — and does not add a new mutation path.
+The Review sheet carries an aging section showing waiting-on and commitment items past the aging threshold (FR-017; default 3 days, per-area override via `global_defaults`); the Health sheet surfaces the same aging signals. Aging is a display/surfacing concern only — rule-based, not AI-invented — and adds no new mutation path.
 
 ## 12. Flow 10 — Weekly Review
 
@@ -399,20 +444,25 @@ Update the system from reality.
    - cleanup actions
 5. User approves/rejects suggestions.
 
-### Acceptance Criteria
+Two pieces of this flow ship today, both in the Close moment: win
+confirmation and rollup approval (below). They persist durably — wins,
+reviews, plans, drafts, and rollups are journalled to the device before any
+network call and replayed to the account, and the copy around them says
+truthfully whether something is "saved on this device" or "saved to your
+account".
 
-- User sees declared vs observed behavior.
-- Core policy changes require approval.
-- User can apply suggestions by area only.
-- Review does not create too many suggestions.
+### Win harvest (slice S7 — shipped)
 
-### Stage 1 target: win-harvest step (slice S7)
+The Close moment offers win candidates drawn from completions; only
+user-confirmed wins persist as `win_records` (FR-020). Declining a
+candidate discards it; nothing is written silently.
 
-Weekly Review gains a win-harvest step: the app offers win candidates drawn from completions, and only user-confirmed wins persist as `win_records` (FR-020). Declining a candidate discards it; nothing is written silently.
+### Rollup approval (slice S8 — shipped)
 
-### Stage 1 target: rollup approval step (slice S8)
-
-Weekly Review gains a rollup approval step: an AI-drafted weekly rollup per area (strict schema) is shown for review, and persists as a `rollup_summaries` row only on explicit user approval (FR-020, NS-INV-4). Monthly rollups compose approved weeks and are surfaced the same way at the monthly cadence.
+An AI-drafted weekly rollup per area (strict schema) is shown in the Close
+moment and persists as a `rollup_summaries` row only on explicit user
+approval (FR-020, NS-INV-4). Monthly rollups compose approved weeks and are
+surfaced the same way at the monthly cadence.
 
 ## 13. Flow 11 — Health Dashboard
 
@@ -422,8 +472,8 @@ Show whether the system itself is working.
 
 ### Steps
 
-1. User opens Health.
-2. App displays:
+1. User opens the Health sheet (side rail in Start, or More → command palette; `/?sheet=health` deep-links).
+2. The sheet displays:
    - system status
    - area statuses
    - subsystem statuses
@@ -459,6 +509,7 @@ Avoid:
 
 ## 15. Core UI Components
 
+- Moment tabs (Start / Flow / Close)
 - Area selector
 - Confidence badge
 - Draft card
@@ -468,7 +519,7 @@ Avoid:
 - Time-block proposal card
 - Conflict badge
 - Execution focus-state card
-- Quick capture sidebar
+- Capture overlay
 - Review checklist
 - Health incident card
 - Policy suggestion card
@@ -483,6 +534,8 @@ Good:
 - "This task may be too vague to schedule."
 - "First useful move: clarify the owner."
 - "Your estimate is lower than similar past tasks."
+- "Saved on this device — will send to your account when you're online."
+- "Saved to your account."
 
 Avoid:
 
@@ -490,6 +543,7 @@ Avoid:
 - "You are behind."
 - "You should have done this."
 - "Productivity score: bad."
+- Claiming account persistence when data is only on the device (and vice versa).
 
 ## Reference Links
 
