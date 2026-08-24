@@ -77,6 +77,9 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   // workstreams — owner directive 2026-07-13. Both lanes check it before
   // starting a slice; it lists per-slice file manifests to prevent collisions.
   "docs/agent/LANES.md",
+  // Parked-capability catalog (ADR 0009): rows are append-only, added in the
+  // same PR that attics the code they describe.
+  "docs/ATTIC.md",
   // Epic #555 item-4 design note (one planning model — placement wins),
   // ratified by the owner decision 2026-07-14.
   "docs/implementation-planning/plan-one-planning-model.md",
