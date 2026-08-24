@@ -43,7 +43,7 @@ Every LifeOS repo-local skill should include:
 
 <!-- vendored-skills:begin (managed by sync-skills-to-lifeos.ps1; do not edit inside markers) -->
 
-## Vendored skills (synced 2026-08-22)
+## Vendored skills (synced 2026-08-23)
 
 Everything below is auto-vendored from the maintainer's curated hub so cloud agents get the
 same skills as local tools. Do not hand-edit vendored skills here - fix them at their source
@@ -57,6 +57,7 @@ Third-party skills remain under their upstream repos' licenses.
 - **superpowers**: verification-before-completion
 
 <!-- vendored-skills:end -->
+
 
 
 
