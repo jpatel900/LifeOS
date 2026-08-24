@@ -1,6 +1,6 @@
 # ADR 0009 — Capture live, adapt periodically: the learning layer moves out of the app
 
-- **Status:** Proposed (owner ratifies by merging this PR)
+- **Status:** Accepted (owner ratified 2026-08-24 by merging PR #945)
 - **Date:** 2026-08-23
 - **Deciders:** jpatel900 (owner), orchestrator session 2026-08-23
 - **Amends:** ADR 0005 (staged evolution — the "system learns in place" assumption); extends ADR 0002 (trust ladder) and the zero-target rule (harmony rule, owner 2026-08-10)

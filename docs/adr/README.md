@@ -13,4 +13,4 @@ Decision records amending `docs/ARCHITECTURE.md` and product doctrine. Append-on
 | [0007](0007-github-automation-control-plane.md)    | GitHub automation is engineering control-plane only, label/path/validation gated      | Accepted; renumbered from duplicate 0002 on 2026-08-04   |
 | [0008](0008-trust-rungs-for-sota-models.md)        | Widen agent trust rungs for current-generation models (per-class, INV-10-gated)       | Accepted (owner ratified 2026-08-04; move-2 window 30m)  |
 
-- [0009 — Capture live, adapt periodically: the learning layer moves out of the app](0009-capture-live-adapt-periodically.md) — proposed 2026-08-23
+- [0009 — Capture live, adapt periodically: the learning layer moves out of the app](0009-capture-live-adapt-periodically.md) — accepted 2026-08-24
