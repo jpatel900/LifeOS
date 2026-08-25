@@ -291,6 +291,19 @@ test.describe("C2-S2 — the ported Plan surface, signed in", () => {
 
     // THE DRAFT — it reaches the ACCOUNT as its own row, beside triage's.
     await page.getByTestId("plan-sheet-draft-block").click();
+    // #853 determinism split: assert the DEVICE truth before the account
+    // truth. The drafted card must render (under its device-local id until
+    // the sync swaps it) BEFORE the account is asked for a second row. If
+    // this assertion fails, the draft never became device state at all —
+    // an interaction or reducer problem, and the account poll below would
+    // be diagnosing the wrong layer. If it passes and the account poll
+    // still times out at one row, the loss is in the persistence path
+    // (`persistCreatedLocalProposal`'s silent device-only branch).
+    // (the list container's own `li` cards are counted, not the
+    // `plan-sheet-proposal-accept-*` buttons inside them).
+    await expect(
+      page.getByTestId("plan-sheet-proposals").locator("li"),
+    ).toHaveCount(2, { timeout: 15_000 });
     await expect
       .poll(async () => proposalStatuses(account), { timeout: 30_000 })
       .toEqual(["proposed", "proposed"]);
