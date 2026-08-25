@@ -2,7 +2,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
-import type { WorkflowState } from "@/lib/workflow";
 import type { Phase2MockExecutionSession } from "@/lib/types";
 import {
   acceptLatestDraft,
@@ -53,7 +52,7 @@ function session(
  * task in one area. Three of the four need a decision; the scheduled one has an
  * hour and does not.
  */
-function seedState(): WorkflowState {
+function seedState() {
   let state = workflowSeed();
   state = captureWorkflow(state, "First open thing");
   state = acceptLatestDraft(state);
@@ -85,7 +84,7 @@ const closeDay = vi.fn();
 function renderSheet(
   options: {
     open?: boolean;
-    state?: WorkflowState;
+    state?: ReturnType<typeof workflowSeed>;
     dayClose?: Parameters<typeof ReviewSheet>[0]["dayClose"];
   } = {},
 ) {
@@ -211,7 +210,7 @@ describe("ReviewSheet — the ported Review surface", () => {
           calendar_block_id: null,
         }),
       ],
-    } as WorkflowState;
+    };
     renderSheet({ state });
 
     expect(
@@ -235,7 +234,7 @@ describe("ReviewSheet — the ported Review surface", () => {
         session({ id: "session-1", task_id: null }),
         session({ id: "794b7d18-6b4f-4a7e-9c1a-2f0f5f7a1c33", task_id: null }),
       ],
-    } as WorkflowState;
+    };
     renderSheet({ state });
 
     const rows = screen

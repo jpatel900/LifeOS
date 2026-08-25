@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Phase2CaptureItem, Phase2TaskDraft } from "@lifeos/schemas";
 import type { Phase2MockArea, Phase2MockTask } from "@/lib/types";
-import { createInitialWorkflowState, type WorkflowState } from "@/lib/workflow";
+import { workflowSeed } from "@/__tests__/helpers/workflowReachability";
 import { buildPipelineCounts } from "@/app/components/moments/pipelineCounts";
 import { buildStartVM } from "@/app/components/moments/momentsViewModel/start";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
@@ -121,9 +121,11 @@ function makeDraft(
   };
 }
 
-function stateWith(partial: Partial<WorkflowState>): WorkflowState {
+function stateWith(
+  partial: Partial<ReturnType<typeof workflowSeed>>,
+): ReturnType<typeof workflowSeed> {
   return {
-    ...createInitialWorkflowState(),
+    ...workflowSeed(),
     areas: [makeArea({ id: "area-1" })],
     captureItems: [],
     taskDrafts: [],
@@ -168,7 +170,7 @@ const GENUINELY_UNSORTED_STATE = stateWith({
  */
 const UNSORTED_SURFACES: ReadonlyArray<{
   name: string;
-  count: (state: WorkflowState) => number;
+  count: (state: ReturnType<typeof workflowSeed>) => number;
 }> = [
   {
     name: "UnsortedCaptures rows (moments TriageSheet + cockpit TriageView)",

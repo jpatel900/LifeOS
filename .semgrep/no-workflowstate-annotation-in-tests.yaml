@@ -37,28 +37,11 @@ rules:
       include:
         - "*.test.ts"
         - "*.test.tsx"
-      exclude:
-        # GRANDFATHERED (issue #859) — this list may only shrink. These are the
-        # 13 test files that violated this rule when it was adopted repo-wide
-        # (2026-08-10), found via:
-        #   semgrep scan --config .semgrep/no-workflowstate-annotation-in-tests.yaml
-        #     --metrics=off apps packages
-        # Fix a file's hand-typed WorkflowState annotations (build the value
-        # through workflowSeed() + transition helpers instead), then remove it
-        # from this list in the same PR. Do not add new files here.
-        - "**/apps/web/src/app/components/moments/HealthSheet.test.tsx"
-        - "**/apps/web/src/app/components/moments/ReviewSheet.test.tsx"
-        - "**/apps/web/src/app/components/moments/areasOverview.test.ts"
-        - "**/apps/web/src/app/components/moments/momentsViewModel.test.ts"
-        - "**/apps/web/src/app/components/moments/pipelineCounts.test.ts"
-        - "**/apps/web/src/app/components/moments/progressionNodes.test.ts"
-        - "**/apps/web/src/app/components/moments/useOnboardingRitual.test.ts"
-        - "**/apps/web/src/app/components/moments/useReEntryRitual.test.ts"
-        - "**/apps/web/src/lib/reEntry/reEntry.test.ts"
-        - "**/apps/web/src/lib/workflow/captureStatus.test.ts"
-        - "**/apps/web/src/lib/workflow/execution.sessionTruth.test.ts"
-        - "**/apps/web/src/lib/workflow/planStatus.test.ts"
-        - "**/apps/web/src/lib/workflow/reviewStatus.test.ts"
+      # The grandfather list lived here and shrank to EMPTY (issue #859
+      # burn-down, 2026-08-24): all 13 files adopted at rule-adoption time
+      # (2026-08-10) now build state through workflowSeed() + transition
+      # helpers. Do not re-add entries — a new file needing an exemption is a
+      # design smell to fix, not to grandfather.
     metadata:
       category: correctness
       references:

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInitialWorkflowState, type WorkflowState } from "@/lib/workflow";
+import { workflowSeed } from "@/__tests__/helpers/workflowReachability";
 import {
   DEFAULT_RE_ENTRY_THRESHOLD_DAYS,
   detectAbsence,
@@ -78,8 +78,10 @@ function makeBlock(
   } as Phase2MockCalendarBlock;
 }
 
-function stateWith(partial: Partial<WorkflowState>): WorkflowState {
-  return { ...createInitialWorkflowState(), ...partial };
+function stateWith(
+  partial: Partial<ReturnType<typeof workflowSeed>>,
+): ReturnType<typeof workflowSeed> {
+  return { ...workflowSeed(), ...partial };
 }
 
 describe("detectAbsence", () => {
@@ -126,7 +128,7 @@ describe("detectAbsence", () => {
 
 describe("latestActivityTimestamp", () => {
   it("returns null for a pristine state", () => {
-    expect(latestActivityTimestamp(createInitialWorkflowState())).toBeNull();
+    expect(latestActivityTimestamp(workflowSeed())).toBeNull();
   });
 
   it("picks the newest timestamp across entity kinds", () => {
@@ -157,7 +159,7 @@ describe("buildWhileYouWereOutSummary", () => {
   it("returns an empty, zero-red summary for a pristine state", () => {
     const absence = detectAbsence({ lastActivityAt: null, now: NOW });
     const summary = buildWhileYouWereOutSummary({
-      state: createInitialWorkflowState(),
+      state: workflowSeed(),
       absence,
       now: NOW,
     });

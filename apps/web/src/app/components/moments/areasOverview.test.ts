@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInitialWorkflowState, type WorkflowState } from "@/lib/workflow";
+import { workflowSeed } from "@/__tests__/helpers/workflowReachability";
 import type { Phase2MockArea, Phase2MockTask } from "@/lib/types";
 import type { Phase2CaptureItem, Phase2TaskDraft } from "@lifeos/schemas";
 import {
@@ -84,9 +84,11 @@ function makeDraft(
   };
 }
 
-function stateWith(partial: Partial<WorkflowState>): WorkflowState {
+function stateWith(
+  partial: Partial<ReturnType<typeof workflowSeed>>,
+): ReturnType<typeof workflowSeed> {
   return {
-    ...createInitialWorkflowState(),
+    ...workflowSeed(),
     areas: [makeArea({ id: "area-1" }), makeArea({ id: "area-2" })],
     ...partial,
   };
@@ -293,7 +295,7 @@ describe("buildAreasOverview", () => {
    * how the legacy chips came to disagree with the lists beneath them.
    */
   describe("the per-area count is the columns, so the two cannot disagree", () => {
-    const cases: Record<string, WorkflowState> = {
+    const cases: Record<string, ReturnType<typeof workflowSeed>> = {
       empty: stateWith({}),
       "captures only": stateWith({
         captureItems: [

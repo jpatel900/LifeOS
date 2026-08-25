@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { workflowSeed } from "@/__tests__/helpers/workflowReachability";
 import {
   findLiveSession,
   markCurrentSession,
@@ -44,8 +45,11 @@ function task(id: string, status: string) {
   } as unknown as WorkflowState["tasks"][number];
 }
 
-function emptyState(overrides: Partial<WorkflowState> = {}): WorkflowState {
+function emptyState(
+  overrides: Partial<ReturnType<typeof workflowSeed>> = {},
+): ReturnType<typeof workflowSeed> {
   return {
+    ...workflowSeed(),
     areas: [
       {
         id: AREA_ID,
@@ -55,21 +59,8 @@ function emptyState(overrides: Partial<WorkflowState> = {}): WorkflowState {
         created_at: "2026-01-01T00:00:00.000Z",
       },
     ],
-    captureItems: [],
-    taskDrafts: [],
-    projectDrafts: [],
-    ambiguityAssessments: [],
-    timeBlockProposalDrafts: [],
-    projects: [],
-    tasks: [],
-    timeBlockProposals: [],
-    calendarBlocks: [],
-    executionSessions: [],
-    healthChecks: [],
-    reviewLog: [],
-    wipRefusal: null,
     ...overrides,
-  } as unknown as WorkflowState;
+  };
 }
 
 function session(

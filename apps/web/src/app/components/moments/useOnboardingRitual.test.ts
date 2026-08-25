@@ -1,13 +1,14 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createInitialWorkflowState, type WorkflowState } from "@/lib/workflow";
+import { createInitialWorkflowState } from "@/lib/workflow";
 import {
   ONBOARDING_COMPLETED_KEY,
   requestOnboardingRerun,
 } from "@/lib/onboarding/onboarding";
 import { useOnboardingRitual } from "./useOnboardingRitual";
+import { workflowSeed } from "@/__tests__/helpers/workflowReachability";
 
-function zeroState(): WorkflowState {
+function zeroState(): ReturnType<typeof workflowSeed> {
   return { ...createInitialWorkflowState(), areas: [], captureItems: [] };
 }
 
@@ -44,7 +45,7 @@ describe("useOnboardingRitual (#581)", () => {
         inferred_area_confidence: null,
         created_at: new Date().toISOString(),
       },
-    ] as WorkflowState["captureItems"];
+    ] as ReturnType<typeof workflowSeed>["captureItems"];
     const { result } = renderHook(() => useOnboardingRitual({ state }));
     expect(result.current.active).toBe(false);
   });

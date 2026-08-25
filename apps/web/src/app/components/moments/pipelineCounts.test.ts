@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInitialWorkflowState, type WorkflowState } from "@/lib/workflow";
+import { createInitialWorkflowState } from "@/lib/workflow";
 import type {
   Phase2MockArea,
   Phase2MockCalendarBlock,
@@ -11,6 +11,7 @@ import {
   buildPipelineCounts,
   PIPELINE_OVERVIEW_STAGES,
 } from "./pipelineCounts";
+import { workflowSeed } from "@/__tests__/helpers/workflowReachability";
 
 const NOW = new Date("2026-07-05T12:00:00.000Z");
 const TODAY = "2026-07-05T09:00:00.000Z";
@@ -124,7 +125,9 @@ function makeSession(
   };
 }
 
-function stateWith(partial: Partial<WorkflowState>): WorkflowState {
+function stateWith(
+  partial: Partial<ReturnType<typeof workflowSeed>>,
+): ReturnType<typeof workflowSeed> {
   return {
     ...createInitialWorkflowState(),
     areas: [makeArea({ id: "area-1" })],
@@ -265,7 +268,7 @@ describe("buildPipelineCounts", () => {
    * assertion here can pass by coincidence.
    */
   describe("#691 — 'All areas' counts every area, not the first one", () => {
-    function twoAreaState(): WorkflowState {
+    function twoAreaState(): ReturnType<typeof workflowSeed> {
       return stateWith({
         areas: [makeArea({ id: "area-1" }), makeArea({ id: "area-2" })],
         // Distinct `capture_item_id`s from the drafts below, so these two stay
