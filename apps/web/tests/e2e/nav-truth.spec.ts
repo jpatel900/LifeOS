@@ -859,7 +859,15 @@ test("Back closes the capture overlay (opened via the desktop pill) and restores
     page.getByRole("dialog", { name: "Capture a thought" }),
   ).toHaveCount(0);
   await expect(page.getByTestId("today-moments")).toBeVisible();
-  expect(page.url()).toBe(beforeUrl);
+  // #957 preventive hardening, same class as #955's captured shapes: after
+  // Back, the URL-truth self-heal may rewrite the bar to the restored state
+  // (adding `?area=`). Assert agreement — capture gone, restored area named —
+  // instead of byte-equality with the pre-interaction entry.
+  await expect(async () => {
+    const url = new URL(page.url());
+    expect(url.searchParams.get("capture")).toBeNull();
+    expect(url.searchParams.get("area")).toBe("area-main-job");
+  }).toPass({ timeout: 30_000 });
 });
 
 test("Back closes the command palette (opened via Cmd+K) and restores the prior screen", async ({
@@ -876,7 +884,16 @@ test("Back closes the command palette (opened via Cmd+K) and restores the prior 
   await page.goBack();
   await expect(page.getByTestId("command-palette")).toHaveCount(0);
   await expect(page.getByTestId("today-moments")).toBeVisible();
-  expect(page.url()).toBe(beforeUrl);
+  // #957 preventive hardening — same agreement contract as the capture test
+  // above (`beforeUrl` kept for the moment-param comparison).
+  await expect(async () => {
+    const url = new URL(page.url());
+    expect(url.searchParams.get("palette")).toBeNull();
+    expect(url.searchParams.get("area")).toBe("area-main-job");
+    expect(url.searchParams.get("moment")).toBe(
+      new URL(beforeUrl).searchParams.get("moment"),
+    );
+  }).toPass({ timeout: 30_000 });
 });
 
 /**
