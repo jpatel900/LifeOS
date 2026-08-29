@@ -170,5 +170,13 @@ test.describe("onboarding ritual stays out of the way (#581)", () => {
     // reject any other path.
     await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/);
     await expect(page.getByTestId("onboarding-ritual")).toBeVisible();
+
+    // #687 (trigger-truth split verdict) defect 2 — the "once" this test's
+    // title claims was never actually asserted. Abandon the ritual here (no
+    // step completed) and reload — the rerun request is consumed the moment
+    // the ritual activated above, so it must NOT re-admit a second time.
+    await page.reload();
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await expect(page.getByTestId("onboarding-ritual")).toHaveCount(0);
   });
 });
