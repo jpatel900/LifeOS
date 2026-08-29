@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LoginPage from "../app/login/page";
+import {
+  ONBOARDING_COMPLETED_KEY,
+  ONBOARDING_RERUN_KEY,
+} from "@/lib/onboarding/onboarding";
 
 const mocks = vi.hoisted(() => {
   const push = vi.fn();
@@ -46,6 +50,7 @@ describe("LoginPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.search = "";
+    window.localStorage.clear();
     mocks.createSupabaseBrowserClient.mockReturnValue({
       auth: {
         signInWithPassword: mocks.signInWithPassword,
@@ -156,8 +161,16 @@ describe("LoginPage", () => {
     });
   });
 
-  // #688: the sign-in door returns you to the page you came from.
-  it("returns to the originating page when ?next= is a same-app path", async () => {
+  // #688: the sign-in door returns you to the page you came from — but only
+  // once this device has an established, completed account on it (Part of
+  // #687). An established device is one where `hasCompletedOnboarding()` is
+  // true: the onboarding ritual already ran here at least once, so honoring
+  // ?next= can no longer bypass it.
+  it("returns to the originating page when ?next= is a same-app path, on an established device", async () => {
+    window.localStorage.setItem(
+      ONBOARDING_COMPLETED_KEY,
+      JSON.stringify({ completedAt: new Date().toISOString() }),
+    );
     mocks.search = "next=%2Fhealth";
     render(<LoginPage />);
     fillCredentials("user_a@example.test", "password123");
@@ -168,13 +181,59 @@ describe("LoginPage", () => {
     });
   });
 
+  // Part of #687: a brand-new account (or any device with no completed
+  // onboarding record — e.g. a fresh browser, or one where the device-local
+  // record was never written) reached Settings via its own signed-out
+  // redirect (`/login?next=%2Fsettings%2Fareas`, see
+  // settings/areas/page.tsx), landed back in Settings after sign-in, and
+  // TodayMoments.tsx — the ONLY place the onboarding ritual mounts — never
+  // rendered. `?next=` must not override Today for a device that has not
+  // completed onboarding, regardless of which page produced it.
+  it("ignores ?next= and routes to Today when this device has not completed onboarding (Part of #687)", async () => {
+    mocks.search = "next=%2Fsettings%2Fareas";
+    render(<LoginPage />);
+    fillCredentials("user_a@example.test", "password123");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => {
+      expect(mocks.push).toHaveBeenCalledWith("/");
+    });
+    expect(mocks.push).not.toHaveBeenCalledWith("/settings/areas");
+  });
+
+  // Part of #687: the device signal is gated on the SAME two inputs
+  // `shouldShowOnboarding` reads, not a per-route allowlist — a completed
+  // device that has explicitly requested a rerun (Settings' "run setup
+  // again") must also see Today, not its ?next= destination, since the
+  // canonical predicate would show the ritual again regardless of
+  // completion.
+  it("ignores ?next= and routes to Today when a rerun of onboarding was requested (Part of #687)", async () => {
+    window.localStorage.setItem(
+      ONBOARDING_COMPLETED_KEY,
+      JSON.stringify({ completedAt: new Date().toISOString() }),
+    );
+    window.localStorage.setItem(ONBOARDING_RERUN_KEY, "true");
+    mocks.search = "next=%2Fsettings%2Fareas";
+    render(<LoginPage />);
+    fillCredentials("user_a@example.test", "password123");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => {
+      expect(mocks.push).toHaveBeenCalledWith("/");
+    });
+  });
+
   // Open-redirect guard: a crafted ?next= must never bounce a freshly
-  // signed-in session off-site.
+  // signed-in session off-site, even on an established device.
   it.each([
     ["//evil.example.com", "protocol-relative URL"],
     ["https://evil.example.com", "absolute URL"],
     ["javascript:alert(1)", "script URL"],
   ])("ignores an off-site ?next= (%s)", async (next) => {
+    window.localStorage.setItem(
+      ONBOARDING_COMPLETED_KEY,
+      JSON.stringify({ completedAt: new Date().toISOString() }),
+    );
     mocks.search = `next=${encodeURIComponent(next)}`;
     render(<LoginPage />);
     fillCredentials("user_a@example.test", "password123");
