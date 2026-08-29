@@ -23,6 +23,23 @@ import {
  * and syncs persisted areas asynchronously AFTER first render, so a
  * genuinely-zero-state account only becomes visible as such one or two
  * commits in.
+ *
+ * #687 (trigger-truth split verdict) defect 1 — this hook has no access to
+ * WorkflowContext's `areasReadbackSettled` (a context-only flag, not part of
+ * `WorkflowState`), so it cannot gate the predicate itself. The caller is
+ * responsible for that: `enabled` doubles as the readback-settlement gate —
+ * TodayMoments.tsx passes `enabled: areasReadbackSettled` so `candidate`
+ * (and therefore the latch below) never judges an interim/unsettled areas
+ * array. Any other caller (tests included) that omits `enabled` gets the
+ * pre-gate default (`true`) — evaluate off whatever `state.areas` holds on
+ * that render, exactly as before.
+ *
+ * #687 defect 2 — the Settings "run setup again" rerun request is consumed
+ * the moment the ritual LATCHES active, not when it later completes. An
+ * abandoned rerun (reload mid-ritual, before any step finishes) must not
+ * re-admit the ritual forever: `shouldShowOnboarding` checks the rerun flag
+ * first, so clearing it late (only in `complete()`) left it "true" across
+ * every reload between the rerun click and an eventual completion.
  */
 
 export type OnboardingRitualStatus = "idle" | "active" | "done";
@@ -68,12 +85,17 @@ export function useOnboardingRitual(
   useEffect(() => {
     if (latchedRef.current || !candidate) return;
     latchedRef.current = true;
+    // #687 defect 2: consume the rerun request HERE, on activation — not in
+    // complete() — so an abandoned rerun (reload before any step finishes)
+    // cannot re-admit the ritual on every subsequent visit. A no-op when
+    // this activation was the ordinary zero-state trigger (nothing to
+    // clear).
+    clearOnboardingRerunRequest();
     setStatus("active");
   }, [candidate]);
 
   const complete = useCallback(() => {
     markOnboardingCompleted();
-    clearOnboardingRerunRequest();
     setStatus("done");
   }, []);
 
