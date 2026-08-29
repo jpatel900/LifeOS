@@ -2,7 +2,13 @@
 // write, so a run with no IndexedDB exercises the device-blocked branch and
 // never reaches `createTask` at all.
 import "fake-indexeddb/auto";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import {
   afterAll,
   afterEach,
@@ -493,6 +499,16 @@ describe("WorkflowProvider persisted area sync", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Sort" })).toBeEnabled();
     });
+    // #949: `sortCaptureIntoDrafts` looks the capture up in the provider's
+    // `stateRef` mirror, which only catches up to this commit in a passive
+    // effect that runs AFTER the DOM already shows Sort enabled (the same
+    // provider-lag race #752 instrumented on the TriageSheet side). Under
+    // full-suite load a bare click can land inside that window; the sort then
+    // silently no-ops (capture not found) and the draft never appears. Flush
+    // the pending effects first so the click always reads the synced mirror —
+    // probe-verified: every reproduced failure logged the not-found branch
+    // firing 3-5ms before the mirror sync ran.
+    await act(async () => {});
     fireEvent.click(screen.getByRole("button", { name: "Sort" }));
 
     await waitFor(() => {
