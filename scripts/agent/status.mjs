@@ -855,6 +855,42 @@ function docLastChangedAge(relPath) {
   }
 }
 
+// Full commit history, subjects and bodies concatenated (%B), as one blob.
+// Feeds the campaigns.json <-> git-history slice cross-check in
+// status.test.mjs: a slice merge commit is the ONE signal that exists
+// independently of both docs/program files, so it is the only thing that can
+// catch a slice row going missing from campaigns.json while final-ux-loop.md
+// drifts the same way in lockstep (2026-08-29 -- see FAILURES.md /
+// campaigns.json's own $comment). Callers MUST treat an empty or suspiciously
+// short result as "cannot check", never as "found nothing wrong" -- a shallow
+// checkout (fetch-depth: 1) returns almost no history and would otherwise
+// make this guard pass by examining nothing.
+function gitLogAllMessages() {
+  try {
+    return execFileSync("git", ["log", "--format=%B"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch {
+    return "";
+  }
+}
+
+function gitCommitCount() {
+  try {
+    return parseInt(
+      execFileSync("git", ["rev-list", "--count", "HEAD"], {
+        cwd: REPO_ROOT,
+        encoding: "utf8",
+      }).trim(),
+      10,
+    );
+  } catch {
+    return 0;
+  }
+}
+
 function gatherProgram() {
   const posix = (p) => p.split(path.sep).join("/");
   let program;
@@ -1263,4 +1299,6 @@ export {
   extractCheckboxGateItems,
   buildGateQueues,
   formatGateItem,
+  gitLogAllMessages,
+  gitCommitCount,
 };
