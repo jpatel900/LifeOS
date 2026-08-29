@@ -95,4 +95,32 @@ describe("useOnboardingRitual (#581)", () => {
     expect(result.current.active).toBe(false);
     expect(result.current.pending).toBe(false);
   });
+
+  // #687 (trigger-truth split verdict) defect 2 — RERUN NOT ONCE.
+  // Pre-fix, `complete()` was the only place that cleared the rerun request,
+  // so a rerun that never reaches completion (reload mid-ritual) left
+  // ONBOARDING_RERUN_KEY="true" forever: every fresh mount thereafter would
+  // re-admit the ritual, not just the one the Settings affordance promised.
+  it("does not re-admit an ABANDONED rerun on a later mount (fixes the 'once' claim)", () => {
+    requestOnboardingRerun();
+
+    // First mount: the rerun request activates the ritual, exactly like the
+    // e2e spec's click-through. Nothing here calls complete() — this is the
+    // abandon: a reload before any step finishes.
+    const first = renderHook(() =>
+      useOnboardingRitual({ state: createInitialWorkflowState() }),
+    );
+    expect(first.result.current.active).toBe(true);
+    first.unmount();
+
+    // Second mount (the reload): the account still has its existing areas
+    // (never zero-state), and the rerun was never completed. Only a
+    // lingering rerun flag could re-admit it — the fix consumes that flag
+    // the moment the ritual first activates, so this must now be idle.
+    const second = renderHook(() =>
+      useOnboardingRitual({ state: createInitialWorkflowState() }),
+    );
+    expect(second.result.current.active).toBe(false);
+    expect(second.result.current.pending).toBe(false);
+  });
 });
