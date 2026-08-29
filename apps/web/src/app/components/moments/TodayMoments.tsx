@@ -504,17 +504,7 @@ export function TodayMoments({
   // a zero-state (or Settings-rerun) session. The re-entry ritual is
   // disabled while onboarding is eligible/active — a brand-new account has
   // nothing to be welcomed back to.
-  //
-  // #687 (trigger-truth split verdict) defect 1: gated on
-  // `areasReadbackSettled` (same signal `useCloseMomentRollups` already
-  // gates its own area-keyed offer on) so the ritual's predicate never
-  // judges the interim/unsettled `state.areas` this context can show before
-  // the account-areas load resolves — an existing account's real areas must
-  // never be mistaken for a zero-state.
-  const onboarding = useOnboardingRitual({
-    state,
-    enabled: areasReadbackSettled,
-  });
+  const onboarding = useOnboardingRitual({ state });
   const onboardingActive = onboarding.active;
 
   const ritual = useReEntryRitual({
