@@ -83,6 +83,41 @@ jobs:
       - name: check-migration-drift self-test
         run: node scripts/agent/check-migration-drift.mjs --self-test
 
+  program-state-self-test:
+    name: Program state self-test (campaigns.json truth)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          # full history required: scripts/agent/status.test.mjs cross-checks
+          # docs/program/campaigns.json's slice rows against every "Final UX
+          # Loop <campaign>-<slice>" mention in git commit history (2026-08-29
+          # -- the check that actually catches a slice row going missing,
+          # which comparing campaigns.json to final-ux-loop.md cannot). The
+          # test itself refuses to pass on a checkout too shallow to see that
+          # history (git rev-list --count HEAD < 200), so a future revert of
+          # this fetch-depth would fail loudly here rather than silently
+          # disabling that check.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          # dependency-free by design, same as automerge-policy-self-tests above
+          package-manager-cache: false
+
+      # scripts/agent/status.test.mjs was not wired into any CI job from
+      # #848 (2026-08-06, when docs/program/campaigns.json and this self-test
+      # were introduced) through 2026-08-29: it only ran when a human typed
+      # `node scripts/agent/status.test.mjs` by hand. campaigns.json's own
+      # $comment claimed the self-test "fails the build" on drift the whole
+      # time it was orphaned. This step is what makes that claim true.
+      - name: status.test.mjs (campaigns.json / final-ux-loop.md / git-history truth)
+        run: node scripts/agent/status.test.mjs
+
   migration-timestamp-collision:
     name: Migration timestamp collision precheck
     if: github.event_name == 'pull_request'
