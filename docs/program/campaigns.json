@@ -1,6 +1,6 @@
 {
-  "$comment": "MACHINE-READABLE SOURCE OF TRUTH for Final UX Loop campaign state. Owner-decided 2026-08-06 (PR #848, gate b). The generated work map (scripts/agent/status.mjs --html) reads THIS FILE and nothing else for campaign and slice state, so the map can never disagree with the program. docs/program/final-ux-loop.md keeps the prose -- the rationale, the rules of engagement, the running program log -- and section 4 stays the human-readable campaign list. A self-test (scripts/agent/status.test.mjs) fails the build if this file and final-ux-loop.md section 4 disagree on campaign ids, names, or states, so drift becomes a red build instead of a lying map. Update this file in the same PR that changes a campaign's state.",
-  "updated": "2026-08-06",
+  "$comment": "MACHINE-READABLE SOURCE OF TRUTH for Final UX Loop campaign state. Owner-decided 2026-08-06 (PR #848, gate b). The generated work map (scripts/agent/status.mjs --html) reads THIS FILE and nothing else for campaign and slice state, so the map can never disagree with the program. docs/program/final-ux-loop.md keeps the prose -- the rationale, the rules of engagement, the running program log -- and section 4 stays the human-readable campaign list. A self-test (scripts/agent/status.test.mjs, wired into CI as of 2026-08-29 -- see the 'program-state-self-test' job in .github/workflows/ci.yml) fails the build if: this file and final-ux-loop.md section 4 disagree on campaign ids, names, or states; a state is used that isn't declared; a campaign's slices are not sequential (a slice can't be merged/done while an earlier one in the list still isn't); or a merge commit's own message claims a campaign-Sslice pair that this file's slice list doesn't list (git history vs. this file, not just doc vs. doc). That last check is what actually catches a slice row going missing, which id/name/state agreement with the prose doc cannot -- both docs can under-list the same slices in lockstep and still 'agree'. Update this file in the same PR that changes a campaign's state.",
+  "updated": "2026-08-29",
   "prose_doc": "docs/program/final-ux-loop.md",
   "campaign_states": ["closed", "in-flight", "queued"],
   "slice_states": ["done", "merged", "in-flight", "queued"],
@@ -29,13 +29,72 @@
           "ref": 840
         },
         { "id": "S3", "name": "Port Review", "state": "merged", "ref": 809 },
-        { "id": "S4", "name": "Port Health", "state": "in-flight" },
-        { "id": "S5", "name": "Port All-areas", "state": "queued" },
-        { "id": "S6", "name": "Shell close-out", "state": "queued" },
+        { "id": "S4", "name": "Port Health", "state": "merged", "ref": 846 },
+        {
+          "id": "S5",
+          "name": "Port All-areas",
+          "state": "merged",
+          "ref": 851
+        },
+        {
+          "id": "S6",
+          "name": "Shell close-out",
+          "state": "merged",
+          "ref": 880
+        },
+        {
+          "id": "S7",
+          "name": "Re-score residuals: branded 404, overlay URL truth, login prefill",
+          "state": "merged",
+          "ref": 889
+        },
+        {
+          "id": "S8",
+          "name": "Area switches tell the URL the truth; Flow/Close stop rebuilding on load",
+          "state": "merged",
+          "ref": 890
+        },
+        {
+          "id": "S9",
+          "name": "Settings quick links carry their area; URL bar drops dead params",
+          "state": "merged",
+          "ref": 891
+        },
+        {
+          "id": "S10",
+          "name": "The front door stops crashing on return visits; /plan joins its siblings",
+          "state": "merged",
+          "ref": 892
+        },
+        {
+          "id": "S11",
+          "name": "Review joins the palette; Back never needs pressing twice",
+          "state": "merged",
+          "ref": 894
+        },
+        {
+          "id": "S12A",
+          "name": "Shortcuts survive a click; the palette has a door on desktop",
+          "state": "merged",
+          "ref": 906
+        },
+        {
+          "id": "S12B",
+          "name": "The tab stops advertising the old shell; /settings and stray URL keys behave",
+          "state": "merged",
+          "ref": 898
+        },
+        {
+          "id": "S13",
+          "name": "The palette gets out of the way; the area survives the settings round trip",
+          "state": "merged",
+          "ref": 911
+        },
         {
           "id": "RE-SCORE",
           "name": "Fresh-eyes judge, full card 2",
-          "state": "queued"
+          "state": "in-flight",
+          "note": "Rounds already run inside S7 (round-3 residuals) through S13 -- see each PR's body for its round number and score. Not yet at target; see docs/program/target-cards.md."
         }
       ]
     },

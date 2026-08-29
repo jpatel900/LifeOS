@@ -22,6 +22,8 @@ import {
   escapeHtml,
   extractCheckboxGateItems,
   formatGateItem,
+  gitCommitCount,
+  gitLogAllMessages,
   parseArgs,
   renderStatusHtml,
 } from "./status.mjs";
@@ -29,6 +31,7 @@ import {
   buildHealthCells,
   classifyOwnerItem,
   collectDataProblems,
+  extractCampaignSliceRefs,
   parseCampaigns,
   parseLatestProgramNote,
   parseSlices,
@@ -1216,6 +1219,122 @@ test("campaigns.json uses only the states it declares", () => {
         `${campaign.id}/${slice.id} has undeclared state "${slice.state}"`,
       );
     }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Slice-level drift guards (2026-08-29). The two tests above only ever
+// compared campaign-level id/name/state between campaigns.json and
+// final-ux-loop.md section 4 -- neither file's SLICE rows were checked
+// against anything. That let campaigns.json's C2 slice list go stale for
+// three weeks: S4-S6 sat at "in-flight"/"queued" after merging, and S7-S13
+// were merged (PRs #889-#911) while campaigns.json never grew rows for them
+// at all -- a missing row, not just a wrong one, and the ONLY guard gap this
+// PR closes that a doc-vs-doc comparison structurally cannot: final-ux-loop.md
+// stopped logging slice merges at S6 too, so comparing the two docs to each
+// other would have found nothing.
+// ---------------------------------------------------------------------------
+
+test("extractCampaignSliceRefs: pulls every Final UX Loop campaign-slice mention from raw git log text", () => {
+  const fixture = [
+    "Final UX Loop C2-S4 — Health surface ported to moments language (#846)",
+    "",
+    "fix: settings quick links carry their area (#891)",
+    "",
+    "Final UX Loop C2-S9 (#687 round-3 fresh-eyes judge, score 8.0).",
+    "some body text mentioning Final UX Loop C2-S9 again should not duplicate",
+    "",
+    "Final UX Loop C2-S12A — shortcuts survive a click (#906)",
+    "",
+    "docs: unrelated commit touching Final UX Loop docs but no campaign-slice id",
+  ].join("\n");
+
+  const refs = extractCampaignSliceRefs(fixture);
+  assert.deepEqual(refs, [
+    { campaignId: "C2", sliceId: "S4" },
+    { campaignId: "C2", sliceId: "S9" },
+    { campaignId: "C2", sliceId: "S12A" },
+  ]);
+});
+
+test("extractCampaignSliceRefs: empty or non-string input yields no refs, never a throw", () => {
+  assert.deepEqual(extractCampaignSliceRefs(""), []);
+  assert.deepEqual(extractCampaignSliceRefs(undefined), []);
+  assert.deepEqual(extractCampaignSliceRefs(null), []);
+});
+
+test("campaigns.json: a campaign's slices are sequential -- a later slice can't be merged/done while an earlier one still isn't", () => {
+  // Sequential lanes are the documented design (campaign-c2-structure.md:
+  // "Slices (sequential lanes; re-score closes the campaign)"), so this reads
+  // it back as an invariant instead of trusting prose. Planted-violation
+  // proof (see PR description): setting S9 back to "queued" while S11-S13
+  // stay "merged" makes this fail; reverting makes it pass again.
+  const TERMINAL = new Set(["done", "merged"]);
+  const json = readCampaignsJson();
+  for (const campaign of json.campaigns) {
+    const slices = campaign.slices ?? [];
+    let sawNonTerminal = false;
+    for (const slice of slices) {
+      const isTerminal = TERMINAL.has(slice.state);
+      if (!isTerminal) {
+        sawNonTerminal = true;
+        continue;
+      }
+      assert.ok(
+        !sawNonTerminal,
+        `${campaign.id}/${slice.id} is "${slice.state}" but an earlier slice in the list is not done/merged yet -- ` +
+          `slices are sequential lanes, so a later one can't finish first. Fix the earlier slice's state or reorder.`,
+      );
+    }
+  }
+});
+
+test("campaigns.json: every campaign-slice a merge commit claims is a row in this file (git-history cross-check)", () => {
+  // The one check in this file that does not compare campaigns.json against
+  // ANOTHER DOCUMENT -- it compares against git history, which is what
+  // actually happened. Every real slice-merge commit for this program states
+  // "Final UX Loop <campaign>-<slice>" in its subject or body (verified
+  // 2026-08-29 against #803-#911); if history claims a slice and this file's
+  // slice list has no row for it, campaigns.json is lying by omission, which
+  // is exactly the class of drift #848's original self-test could not see.
+  const commitCount = gitCommitCount();
+  // Vacuity floor: a shallow checkout (actions/checkout default, fetch-depth
+  // 1) would make gitLogAllMessages() return almost nothing, and this test
+  // would then pass by finding zero claims to check -- green while blind,
+  // the same failure mode semgrep's `paths.scanned` guard and depcruise's
+  // module-count floor exist to catch elsewhere in this repo's CI. Fail
+  // loudly instead of silently approving an unchecked file. This repo has
+  // 700+ commits on main as of 2026-08-29; 200 is a floor with headroom, not
+  // a tight pin.
+  assert.ok(
+    commitCount >= 200,
+    `git history only has ${commitCount} commit(s) visible -- this checkout is too shallow for the git-history ` +
+      `cross-check to mean anything (needs fetch-depth: 0 in the CI job that runs this file). Refusing to pass a ` +
+      `check that would otherwise be scanning nothing.`,
+  );
+
+  const claimed = extractCampaignSliceRefs(gitLogAllMessages());
+  assert.ok(
+    claimed.length > 0,
+    "git history was readable (commit count check passed) but zero Final UX Loop campaign-slice mentions were " +
+      "found -- the commit-message convention this check relies on may have changed; update the regex, don't ignore this.",
+  );
+
+  const json = readCampaignsJson();
+  const knownIdsByCampaign = new Map(
+    json.campaigns.map((c) => [
+      c.id,
+      new Set((c.slices ?? []).map((s) => s.id)),
+    ]),
+  );
+  for (const { campaignId, sliceId } of claimed) {
+    const known = knownIdsByCampaign.get(campaignId);
+    if (!known) continue; // a merge commit for a campaign this file doesn't list at all is a different (bigger) problem, caught by the campaign-agreement test above
+    assert.ok(
+      known.has(sliceId),
+      `a git commit claims "Final UX Loop ${campaignId}-${sliceId}" was done, but campaigns.json's ${campaignId} ` +
+        `slice list has no "${sliceId}" row -- the file doesn't know this slice exists.`,
+    );
   }
 });
 

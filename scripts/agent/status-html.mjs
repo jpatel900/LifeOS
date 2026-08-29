@@ -111,6 +111,29 @@ function parseSlices(markdown) {
   return slices;
 }
 
+// Pure: scans raw git commit message text (subjects + bodies concatenated --
+// see status.mjs's gitLogAllMessages) for "Final UX Loop <campaign>-<slice>"
+// mentions and returns every distinct pair found, in first-seen order. This
+// is the convention every real slice-merge commit for this program follows
+// (checked against actual history 2026-08-29); a commit that used it is
+// independent evidence a slice exists, regardless of what either doc says.
+// Deliberately does NOT derive a state from the commit -- only existence.
+function extractCampaignSliceRefs(gitLogText) {
+  if (typeof gitLogText !== "string" || gitLogText.length === 0) return [];
+  const seen = new Set();
+  const refs = [];
+  const pattern = /Final UX Loop (C\d+)-(S\d+[A-Z]?|RE-SCORE)\b/g;
+  let match;
+  while ((match = pattern.exec(gitLogText)) !== null) {
+    const [, campaignId, sliceId] = match;
+    const key = `${campaignId}-${sliceId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push({ campaignId, sliceId });
+  }
+  return refs;
+}
+
 // Pure: the newest dated bullet under "## 6. Program state" -- the doc's own
 // live-state channel, and where campaign-c2-structure.md points for slice
 // truth. Returns null when absent.
@@ -1626,6 +1649,7 @@ export {
   formatGeneratedAt,
   parseCampaigns,
   parseSlices,
+  extractCampaignSliceRefs,
   parseLatestProgramNote,
   leadSentence,
   classifyOwnerItem,
