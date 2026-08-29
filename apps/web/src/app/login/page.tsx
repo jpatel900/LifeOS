@@ -14,6 +14,10 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { createSupabaseBrowserClient } from "../../lib/supabase/browser";
+import {
+  hasCompletedOnboarding,
+  isOnboardingRerunRequested,
+} from "@/lib/onboarding/onboarding";
 
 type LoginState =
   | { status: "idle" }
@@ -109,7 +113,41 @@ function LoginForm() {
     // entirely, so a brand-new account never saw the ritual.
     // #688: if the person arrived from a specific page (?next=), return them
     // there instead — `safeNextPath` already guaranteed it's a same-app path.
-    router.push(nextPath);
+    //
+    // #687 (Part of #687): those two rules collided. `useOnboardingRitual`
+    // mounts ONLY inside TodayMoments (the ritual literally cannot render
+    // anywhere else), and its own predicate — areaCount/captureCount from
+    // WorkflowContext — is provably stale the instant `signInWithPassword`
+    // resolves (that context hydrates and syncs persisted areas
+    // asynchronously AFTER first render; see useOnboardingRitual.ts's own
+    // comment). So there is no reliable "is this a brand-new account" signal
+    // available here that matches the CANONICAL predicate's own definition
+    // of "new" — re-deriving it from a fresh Supabase table count would be a
+    // SECOND, drifting definition (raw row counts diverge from
+    // `state.captureItems.length` through the reconcile layer in
+    // captureParse.ts/persistenceSync.ts).
+    //
+    // What IS honest and synchronous here: `hasCompletedOnboarding()` and
+    // `isOnboardingRerunRequested()`, the two `shouldShowOnboarding` inputs
+    // that are pure device-local localStorage, already exported by the
+    // module that owns the predicate (no new definition invented). Honor
+    // `?next=` only once this device has an established, completed account
+    // on it; otherwise land on Today and let the canonical predicate decide
+    // whether the ritual fires. Gating on a device signal rather than the
+    // destination path also means this isn't a per-route allowlist that
+    // rots as routes are added — `/health` had the identical bypass shape
+    // via HealthView.tsx's own `?next=/health` link and is covered by the
+    // same conditional.
+    //
+    // Honest tradeoff: an EXISTING account signing in on a fresh or cleared
+    // browser (no local completed-onboarding record) also lands on Today
+    // instead of its `?next=` destination — one extra click, recoverable.
+    // The bug this fixes (a brand-new account never seeing onboarding at
+    // all) is not recoverable without knowing about the Settings "run setup
+    // again" affordance. Erring toward the recoverable side is deliberate.
+    const isEstablishedDevice =
+      hasCompletedOnboarding() && !isOnboardingRerunRequested();
+    router.push(isEstablishedDevice ? nextPath : "/");
   }
 
   return (
