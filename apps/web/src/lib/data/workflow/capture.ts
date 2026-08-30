@@ -131,6 +131,86 @@ export async function syncQueuedCapture(
   return { provider: "supabase" };
 }
 
+export interface SyncJournaledCaptureInput {
+  client_capture_id: string;
+  area_id: string | null;
+  raw_text: string;
+  return_hook: string | null;
+}
+
+export interface SyncJournaledCaptureResult {
+  provider: "mock" | "supabase";
+  /** The account row's id, so the caller can alias the local capture to it. */
+  captureId: string | null;
+}
+
+/**
+ * #960 defect 3: push one journalled raw capture to the account.
+ *
+ * Unlike `syncQueuedCapture` (the offline-queue twin, which never stages its
+ * capture into local `captureItems` and so has nothing to reconcile — see
+ * `captureParse.ts`'s `enqueueOfflineCapture`), a capture reaching THIS path
+ * already lives in local state. Its local row must be retired once the
+ * account twin lands (`mergePersistedRows`), which needs the account id back
+ * — so this deliberately DOES `.select().single()`, and deliberately does
+ * NOT send `status`: an upsert that re-asserted `status: "new"` on every retry
+ * could resurrect a capture the user had already triaged past `new` in the
+ * gap between the account taking the row and this device's journal entry
+ * being cleared. Omitting the column from the upsert body means Postgrest's
+ * `ON CONFLICT DO UPDATE` never touches it — only a genuine INSERT sees the
+ * table's own `default 'new'`.
+ *
+ * Idempotent on the same `(user_id, client_capture_id)` index `syncQueuedCapture`
+ * already relies on (`capture_items_user_client_capture_id_key`) — a replay
+ * that already reached the server returns the existing row rather than
+ * throwing a unique violation.
+ */
+export async function syncJournaledCapture(
+  client: MinimalSupabaseClient | null,
+  input: SyncJournaledCaptureInput,
+): Promise<SyncJournaledCaptureResult> {
+  const clientCaptureId = input.client_capture_id?.trim();
+  if (!clientCaptureId) {
+    throw new Error("A journalled capture needs a client capture id.");
+  }
+
+  if (!client) return { provider: "mock", captureId: null };
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before saving captures to Supabase.",
+  );
+
+  const query = client.from("capture_items") as {
+    upsert: (
+      row: Record<string, unknown>,
+      options: { onConflict: string },
+    ) => {
+      select: (columns: string) => {
+        single: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .upsert(
+      {
+        user_id: user.id,
+        area_id: input.area_id,
+        raw_text: input.raw_text,
+        return_hook: input.return_hook,
+        client_capture_id: clientCaptureId,
+        capture_mode: "text",
+      },
+      { onConflict: "user_id,client_capture_id" },
+    )
+    .select(captureColumns)
+    .single();
+
+  if (error) throw new Error(getSupabaseMessage(error));
+  return { provider: "supabase", captureId: parseCapture(data).id };
+}
+
 export async function listCaptureItems(
   client: MinimalSupabaseClient | null,
 ): Promise<CaptureListResult> {

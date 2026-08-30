@@ -17,7 +17,6 @@ import type {
 } from "@lifeos/schemas";
 import {
   applyTaskReviewTransition,
-  createCaptureItem,
   createTimeBlockProposal,
   editTimeBlockProposal,
   rejectTimeBlockProposal,
@@ -27,6 +26,7 @@ import {
 import {
   findQueuedWriteToSupersede,
   hasPendingWrite,
+  journalCaptureWrite,
   journalExecutionSessionWrite,
   journalPlanPlacementWrite,
   journalPlanUnplacementWrite,
@@ -141,10 +141,33 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     syncPersistedWorkflowRows,
   } = deps;
 
+  /**
+   * #960 defect 3: the raw capture reaches the DEVICE journal before the
+   * network, exactly like every other write since #737-A.
+   *
+   * What this replaces: `if (!client || (localCapture.area_id && !persistedAreaId)) { markLocalOnly(...); return; }`
+   * — a client that existed but had not yet resolved the capture's area
+   * dropped the raw thought with NOTHING durable recording it anywhere. That
+   * window is exactly #960 defect 1's failing path: `WorkflowProvider`'s
+   * one-time account-sync effect ran on `/login` before sign-in, so
+   * `persistedAreasRef` stayed empty for the rest of the document's life
+   * unless something re-ran it. The capture is now journalled with late
+   * area-id resolution at replay time (see `CaptureWritePayload`), so a
+   * later sign-in — or reconnect, or the next mount — can still deliver it.
+   *
+   * A missing CLIENT is the one case kept exactly as before: there is
+   * nothing to journal FOR (demo mode, Supabase unconfigured), so the
+   * banner still says the capture is on this device and nothing more.
+   */
   async function persistCapture(
     localCapture: WorkflowState["captureItems"][number],
   ) {
     const client = createSupabaseBrowserClient();
+    if (!client) {
+      markLocalOnly(savedOnThisDeviceBanner("Your capture"));
+      return;
+    }
+
     const persistedAreaId = localCapture.area_id
       ? persistedAreaIdForWorkflowId(
           localCapture.area_id,
@@ -152,21 +175,38 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         )
       : null;
 
-    if (!client || (localCapture.area_id && !persistedAreaId)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your capture"));
+    let journalled;
+    try {
+      journalled = await journalCaptureWrite({
+        workflowCaptureId: localCapture.id,
+        workflowAreaId: localCapture.area_id,
+        persistedAreaId,
+        rawText: localCapture.raw_text,
+        returnHook: localCapture.return_hook ?? null,
+        // Reuses the local capture id as the idempotency key: stable across
+        // retries of the SAME capture, and it is what the account write
+        // ultimately stores as `client_capture_id` — the same uniqueness the
+        // offline capture queue already relies on.
+        clientCaptureId: localCapture.id,
+      });
+    } catch {
+      // The device itself refused to hold it. Nothing has the capture, and
+      // the banner must name that cause rather than blaming the account.
+      markDeviceStorageBlocked();
       return;
     }
 
-    const result = await createCaptureItem(client, {
-      raw_text: localCapture.raw_text,
-      return_hook: localCapture.return_hook ?? null,
-      area_id: persistedAreaId,
-    });
-    if (result.provider !== "supabase") {
+    try {
+      await replayJournaledWrites();
+    } catch {
+      // Best-effort: the capture stays journalled and the next replay retries.
+    }
+
+    if (await hasPendingWrite(journalled.client_write_id)) {
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your capture"));
       return;
     }
 
-    recordAccountAlias("captures", localCapture.id, result.capture.id);
     await syncPersistedWorkflowRows(client);
   }
 

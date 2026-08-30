@@ -69,6 +69,7 @@ import {
   recordPersonLinkRejection,
   recordWipEnforcementEvent,
   syncQueuedCapture,
+  syncJournaledCapture,
   unplanCalendarBlock,
   type MinimalSupabaseClient,
 } from "./data/workflow";
@@ -324,6 +325,20 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       mountedRef.current = false;
     };
   }, []);
+  // #960 defect 1: guards `runAccountSync` against running twice at once —
+  // the mount-effect call and a `SIGNED_IN` event fired by the auth listener
+  // in quick succession (e.g. a session already present at first paint).
+  // Without this a second concurrent run could read `persistedAreasRef`
+  // mid-write from the first.
+  const accountSyncInFlightRef = useRef(false);
+  // #960 defect 1/2: the auth listener below fires from a Supabase callback,
+  // not a React render, so it cannot close over the latest `syncStatus` —
+  // this mirror is what lets it read the CURRENT posture (signed-out vs
+  // already synced) before deciding whether a re-sync is owed.
+  const syncStatusRef = useRef<WorkflowSyncStatus>(initialSyncStatus);
+  useEffect(() => {
+    syncStatusRef.current = syncStatus;
+  }, [syncStatus]);
 
   const markLocalOnly = useCallback((message: string) => {
     setSyncStatus((current) => ({
@@ -969,6 +984,34 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             String(payload.workflow_task_id),
             persistedTaskIdByLocalIdRef.current,
           ),
+
+        // --- #960 defect 3: raw captures ---------------------------------
+        syncCapture: (args) => syncJournaledCapture(client, args),
+        // Same late resolution as the review's area, and the same rule: a
+        // capture whose CHOSEN area still has no account id waits rather than
+        // being filed under no area. A capture with no area at all resolves
+        // this to `null` too, but `captureHandler` tells the two apart via
+        // `workflow_area_id`.
+        resolveCaptureAreaId: (payload) =>
+          payload.workflow_area_id === null
+            ? null
+            : persistedAreaIdForWorkflowId(
+                String(payload.workflow_area_id),
+                persistedAreasRef.current,
+              ),
+        // Without this the local optimistic capture would never learn its
+        // account id and would sit alongside its own account twin forever
+        // once `syncPersistedWorkflowRows` next loads it (`mergePersistedRows`
+        // only retires a local row whose alias is recorded).
+        recordCaptureId: (payload, result) => {
+          if (result.captureId) {
+            recordAccountAlias(
+              "captures",
+              payload.workflow_capture_id,
+              result.captureId,
+            );
+          }
+        },
       });
     }, [recordAccountAlias]);
 
@@ -1479,60 +1522,136 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     setHasHydratedFromStorage(true);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function syncPersistedAreas() {
-      const client = createSupabaseBrowserClient();
-      if (!client) {
-        markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
-        return;
-      }
+  // #960 defects 1/2: extracted so both the mount effect below and the
+  // auth-state listener effect after it can run the SAME account-sync body.
+  // This used to be inline in one effect with an all-`[]` mount trigger;
+  // because `WorkflowProvider` mounts once from the root layout (wrapping
+  // every route, including `/login`), a signed-out mount latched
+  // `persistedAreasRef` empty for the rest of the document's life, with no
+  // second chance after sign-in. See the listener effect below for that
+  // second chance.
+  //
+  // `replayAfter` is opt-in rather than unconditional: the separate "sync on
+  // mount / on reconnect" effect further down already fires
+  // `replayJournaledWrites` on every mount, independently and un-awaited, so
+  // doing it again here on an ordinary mount would be a harmless but
+  // redundant extra drain. The auth listener is the one caller that NEEDS
+  // the ordering guarantee this parameter buys: replay strictly AFTER
+  // `applyPersistedAreas`/`syncPersistedWorkflowRows` have populated the
+  // refs below, or every journalled write throws "not known on this device"
+  // and immediately re-queues itself.
+  const runAccountSync = useCallback(
+    async (options?: { replayAfter?: boolean }): Promise<void> => {
+      // #960 defect 1: the mount effect and a `SIGNED_IN` event can land in
+      // the same tick (a session already present at first paint) — without
+      // this guard the second call could read `persistedAreasRef` mid-write
+      // from the first.
+      if (accountSyncInFlightRef.current) return;
+      accountSyncInFlightRef.current = true;
 
       try {
-        const result = await listAreas(client);
-        // jsdom-teardown race fix — same shape as `mountedRef` elsewhere in
-        // this file (see its note near the ref declarations): this effect's
-        // own `cancelled` flag already existed for exactly this purpose, but
-        // used to fire `markLocalOnly` even when cancelled was true. Bail
-        // first, before touching state at all.
-        if (cancelled) return;
-        if (result.provider !== "supabase") {
+        const client = createSupabaseBrowserClient();
+        if (!client) {
           markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
           return;
         }
-        applyPersistedAreas(result.areas);
-        await syncPersistedWorkflowRows(client, result.areas);
-        if (!cancelled) markAccountSynced();
-      } catch (error) {
-        if (!cancelled) markPersistedLoadFailure(error);
+
+        try {
+          const result = await listAreas(client);
+          // jsdom-teardown race fix — same shape as `mountedRef`'s own note
+          // near its declaration. Bail first, before touching state at all.
+          if (!mountedRef.current) return;
+          if (result.provider !== "supabase") {
+            markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
+            return;
+          }
+          applyPersistedAreas(result.areas);
+          await syncPersistedWorkflowRows(client, result.areas);
+          if (!mountedRef.current) return;
+          if (options?.replayAfter) {
+            // ORDERING IS LOAD-BEARING (#960 defect 1) — this must run AFTER
+            // the two calls above have populated `persistedAreasRef`.
+            try {
+              await replayJournaledWrites();
+            } catch {
+              // Best-effort: the journal stays populated and the next
+              // mount, reconnect, or sign-in retries it.
+            }
+          }
+          markAccountSynced();
+        } catch (error) {
+          if (mountedRef.current) markPersistedLoadFailure(error);
+        }
+      } finally {
+        // #737 C1 re-score ROUND 2 GAP 2: settled in a `finally`, for the
+        // same reason `rollupReadbackSettled` is. Every branch above already
+        // returns rather than throwing; the `finally` is what keeps this
+        // true if one ever stops.
+        if (mountedRef.current) setAreasReadbackSettled(true);
+        accountSyncInFlightRef.current = false;
       }
+    },
+    [
+      applyPersistedAreas,
+      markAccountSynced,
+      markPersistedLoadFailure,
+      markLocalOnly,
+      syncPersistedWorkflowRows,
+      replayJournaledWrites,
+    ],
+  );
+
+  useEffect(() => {
+    void runAccountSync();
+  }, [runAccountSync]);
+
+  // #960 defect 1: the SECOND chance. `runAccountSync`'s mount effect above
+  // runs EXACTLY ONCE per document. If that one run lands signed-out — the
+  // ordinary case for `/login` — `markSignedOutLocal` latches the posture
+  // and `persistedAreasRef` stays `[]` forever: sign-in afterwards is a
+  // client-side `router.push` (`login/page.tsx`), which never remounts this
+  // provider. A session becoming available while the provider is STILL in
+  // that posture is the one signal telling us to re-run the sync body — and,
+  // this time, strictly after it succeeds, drain whatever
+  // wins/reviews/plans/captures got journalled instead of sent while the
+  // account looked unreachable.
+  //
+  // Deliberately does NOT key off `markAccountSynced` firing — in the
+  // failing path it never does (there is nothing to become synced FROM), so
+  // wiring the replay to it would never trigger for the bug this exists to
+  // fix.
+  useEffect(() => {
+    const client = createSupabaseBrowserClient();
+    // The `typeof` guard (beyond the plain `!client` check every other call
+    // site here uses) is deliberate: several existing test suites stand in a
+    // minimal fake client shaped only for the surfaces they exercise (e.g.
+    // `auth.getUser` alone), predating this listener. A real Supabase client
+    // always has `onAuthStateChange`; this only protects against a
+    // test-only client that does not model it, never against production.
+    if (!client || typeof client.auth?.onAuthStateChange !== "function") {
+      return;
     }
 
-    // #737 C1 re-score ROUND 2 GAP 2: settled in a `finally`, for the same
-    // reason `rollupReadbackSettled` is. This flag now gates a rollup offer,
-    // so a path that left it false would remove the approve action with no
-    // error surface at all — a worse failure than the one being fixed. Every
-    // branch of `syncPersistedAreas` above already returns rather than
-    // throwing; the `finally` is what keeps that true if one ever stops.
-    void (async () => {
-      try {
-        await syncPersistedAreas();
-      } finally {
-        if (!cancelled) setAreasReadbackSettled(true);
-      }
-    })();
+    const { data: subscription } = client.auth.onAuthStateChange(
+      (event, session) => {
+        if (!session) return;
+        if (
+          event !== "SIGNED_IN" &&
+          event !== "INITIAL_SESSION" &&
+          event !== "TOKEN_REFRESHED"
+        ) {
+          return;
+        }
+        const posture = syncStatusRef.current;
+        if (posture.account !== "local-only" && !posture.signedOut) return;
+        void runAccountSync({ replayAfter: true });
+      },
+    );
 
     return () => {
-      cancelled = true;
+      subscription?.subscription?.unsubscribe();
     };
-  }, [
-    applyPersistedAreas,
-    markAccountSynced,
-    markPersistedLoadFailure,
-    markLocalOnly,
-    syncPersistedWorkflowRows,
-  ]);
+  }, [runAccountSync]);
 
   useEffect(() => {
     if (!hasHydratedFromStorage) {

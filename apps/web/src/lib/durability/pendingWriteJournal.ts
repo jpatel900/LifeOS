@@ -125,7 +125,13 @@ export type PendingWriteEntity =
   // resurrection). See `SUPERSEDES_KEY` in `durableWrites.ts` for how a
   // compensating entry cancels its target.
   | "plan_unplacement"
-  | "task_drop";
+  | "task_drop"
+  // #960 defect 3: a raw capture whose account write could not be resolved at
+  // the moment it was made (a client existed but the area id, or the
+  // account itself, had not synced yet). Previously `persistCapture` simply
+  // dropped these — `markLocalOnly` and returned, with no device-durable
+  // record anywhere. See `durableWrites.ts`'s `CaptureWritePayload`.
+  | "capture";
 
 export type PendingWritePayload = Record<string, unknown>;
 

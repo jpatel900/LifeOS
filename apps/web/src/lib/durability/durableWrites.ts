@@ -686,6 +686,35 @@ export interface TaskDropWritePayload extends CompensatingWritePayload {
   persisted_task_id: string | null;
 }
 
+/**
+ * Journalled shape of a raw capture — #960 defect 3.
+ *
+ * `persistCapture` used to open with
+ * `if (!client || (localCapture.area_id && !persistedAreaId)) { markLocalOnly(...); return; }`
+ * — a client that existed but had not yet resolved the capture's area (the
+ * #960 defect 1 window: signed out at mount, signed in later with no
+ * remount) dropped the raw capture with no device-durable record anywhere.
+ * It is now journalled on the same terms as every other write since #737-A,
+ * with late area-id resolution at replay time exactly like `ReviewWritePayload`.
+ */
+export interface CaptureWritePayload {
+  /** Workflow-local capture id, so the caller can alias the account id back. */
+  workflow_capture_id: string;
+  /**
+   * Workflow-local area id, or `null` for a capture with no area. Carried
+   * separately from `persisted_area_id` for the same reason
+   * `ReviewWritePayload.workflow_area_id` is: the two nulls mean opposite
+   * things, and the account write must not confuse "no area chosen" with
+   * "area chosen, not synced yet".
+   */
+  workflow_area_id: string | null;
+  /** Account area id when it was already known at capture time. */
+  persisted_area_id: string | null;
+  raw_text: string;
+  return_hook: string | null;
+  [key: string]: unknown;
+}
+
 export interface JournalRollupInput {
   workflowAreaId: string;
   persistedAreaId: string | null;
@@ -705,6 +734,21 @@ export interface JournalTaskDropInput {
   workflowTaskId: string;
   persistedTaskId: string | null;
   supersedesClientWriteId: string | null;
+}
+
+export interface JournalCaptureInput {
+  workflowCaptureId: string;
+  workflowAreaId: string | null;
+  persistedAreaId: string | null;
+  rawText: string;
+  returnHook: string | null;
+  /**
+   * The idempotency key, reused as the eventual `client_capture_id` sent to
+   * the server — the SAME uniqueness the offline capture queue already
+   * relies on (`capture_items_user_client_capture_id_key`), rather than
+   * minting a second one for the same kind of row.
+   */
+  clientCaptureId: string;
 }
 
 /** Journal one approved rollup. Throws on the same terms as the win path. */
@@ -748,6 +792,28 @@ export function journalTaskDropWrite(
       workflow_task_id: input.workflowTaskId,
       persisted_task_id: input.persistedTaskId,
       supersedes_client_write_id: input.supersedesClientWriteId,
+    },
+  });
+}
+
+/**
+ * Journal one raw capture — #960 defect 3. Throws on the same terms as the
+ * win path. Keyed by `clientCaptureId` (not a freshly minted id) so a retry
+ * of the SAME capture reuses its own journal entry instead of queueing a
+ * duplicate, exactly like `deriveWinClientWriteId` does for wins.
+ */
+export function journalCaptureWrite(
+  input: JournalCaptureInput,
+): Promise<PendingWrite<CaptureWritePayload>> {
+  return enqueuePendingWrite<CaptureWritePayload>({
+    entity: "capture",
+    clientWriteId: input.clientCaptureId,
+    payload: {
+      workflow_capture_id: input.workflowCaptureId,
+      workflow_area_id: input.workflowAreaId,
+      persisted_area_id: input.persistedAreaId,
+      raw_text: input.rawText,
+      return_hook: input.returnHook,
     },
   });
 }
@@ -934,6 +1000,23 @@ export interface DurableWriteServerOps {
   ): Promise<{ provider: "mock" | "supabase" }>;
   /** Late resolution of the task id for a drop journalled before it synced. */
   resolveTaskDropTaskId?(payload: TaskDropWritePayload): string | null;
+  /** #960 defect 3: send one journalled raw capture, idempotently. */
+  syncCapture?(args: SyncCaptureArgs): Promise<SyncCaptureResult>;
+  /**
+   * Late resolution of a capture journalled before its area had an account
+   * id. A null answer is only legitimate when the capture genuinely has no
+   * area — `captureHandler` tells the two apart via `workflow_area_id`.
+   */
+  resolveCaptureAreaId?(payload: CaptureWritePayload): string | null;
+  /**
+   * Record the account id for the capture this write created, so the local
+   * optimistic row is retired once its account twin lands
+   * (`mergePersistedRows`) instead of showing twice.
+   */
+  recordCaptureId?(
+    payload: CaptureWritePayload,
+    result: SyncCaptureResult,
+  ): void;
 }
 
 /** The account-side call for a journalled rollup. */
@@ -954,6 +1037,20 @@ export interface SyncPlanUnplacementArgs {
 /** The account-side call for a journalled task drop. */
 export interface SyncTaskDropArgs {
   task_id: string;
+}
+
+/** The account-side call for a journalled capture — #960 defect 3. */
+export interface SyncCaptureArgs {
+  client_capture_id: string;
+  area_id: string | null;
+  raw_text: string;
+  return_hook: string | null;
+}
+
+/** What the account gave back, so the local optimistic row can be aliased. */
+export interface SyncCaptureResult {
+  provider: "mock" | "supabase";
+  captureId: string | null;
 }
 
 /**
@@ -1395,6 +1492,41 @@ function taskDropHandler(ops: DurableWriteServerOps) {
 }
 
 /**
+ * #960 defect 3: replay one journalled raw capture. Same shape as
+ * `reviewHandler`'s area guard — `workflow_area_id !== null` is what tells
+ * "no area, on purpose" apart from "an area, not synced yet".
+ */
+function captureHandler(ops: DurableWriteServerOps) {
+  return async (write: PendingWrite): Promise<void> => {
+    const payload = write.payload as CaptureWritePayload;
+    const sync = ops.syncCapture;
+    if (!sync) {
+      throw new Error(
+        "Cannot send this capture yet: LifeOS cannot reach your account.",
+      );
+    }
+
+    const areaId =
+      payload.persisted_area_id ?? ops.resolveCaptureAreaId?.(payload) ?? null;
+
+    if (payload.workflow_area_id !== null && areaId === null) {
+      throw new Error(
+        "Cannot send this capture yet: its account area is not known on this device.",
+      );
+    }
+
+    const result = await sync({
+      client_capture_id: write.client_write_id,
+      area_id: areaId,
+      raw_text: payload.raw_text,
+      return_hook: payload.return_hook,
+    });
+    requireAccountWrite(result);
+    ops.recordCaptureId?.(payload, result);
+  };
+}
+
+/**
  * The entity -> handler map this slice wires. Entities absent from this map
  * are reported `skipped` by the kernel and stay queued, so a later slice
  * adding an entity without a handler loses nothing — it just does not sync
@@ -1428,6 +1560,7 @@ export function createDurableWriteHandlers(
     rollup: rollupHandler(ops),
     plan_unplacement: planUnplacementHandler(ops),
     task_drop: taskDropHandler(ops),
+    capture: captureHandler(ops),
   };
 }
 
