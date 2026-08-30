@@ -17,6 +17,7 @@ import type {
 } from "@lifeos/schemas";
 import {
   applyTaskReviewTransition,
+  createCaptureItem,
   createTimeBlockProposal,
   editTimeBlockProposal,
   rejectTimeBlockProposal,
@@ -190,8 +191,34 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         clientCaptureId: localCapture.id,
       });
     } catch {
-      // The device itself refused to hold it. Nothing has the capture, and
-      // the banner must name that cause rather than blaming the account.
+      // #960 review finding 3: the device itself refused to hold the journal
+      // entry (private mode, a full IndexedDB quota, a blocking extension) —
+      // but if the capture is otherwise fully RESOLVABLE (no area was chosen,
+      // or the chosen one already has an account id), there is no reason to
+      // lose the account write along with the journal write. Before the
+      // durability layer existed, this exact case (`client` present, area
+      // resolved or none) POSTed directly with no device tier at all; that
+      // path is kept alive here as a fallback so a storage-blocked device
+      // still reaches the account instead of regressing behind the new
+      // durable one. A failure from THIS call is not caught here — it
+      // propagates to the caller's `markPersistedSaveFailure`, the same
+      // classification a direct `createCaptureItem` failure has always had.
+      if (!localCapture.area_id || persistedAreaId) {
+        const result = await createCaptureItem(client, {
+          raw_text: localCapture.raw_text,
+          return_hook: localCapture.return_hook ?? null,
+          area_id: persistedAreaId,
+        });
+        if (result.provider === "supabase") {
+          recordAccountAlias("captures", localCapture.id, result.capture.id);
+          await syncPersistedWorkflowRows(client);
+        }
+        return;
+      }
+
+      // Genuinely unresolvable (a chosen area has not synced yet) AND the
+      // device cannot hold a retry either: nothing durable to fall back to,
+      // so the banner must name the true cause.
       markDeviceStorageBlocked();
       return;
     }

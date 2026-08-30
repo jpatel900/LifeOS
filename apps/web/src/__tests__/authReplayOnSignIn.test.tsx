@@ -34,6 +34,7 @@ import {
   clearPendingWrites,
   listPendingWrites,
 } from "@/lib/durability/pendingWriteJournal";
+import { journalWinWrite } from "@/lib/durability/durableWrites";
 import { SIGNED_OUT_SAVING_ON_THIS_DEVICE } from "@/lib/statusVocabulary";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
 
@@ -427,6 +428,20 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     expect(screen.getByTestId("sync-message")).not.toHaveTextContent(
       SIGNED_OUT_SAVING_ON_THIS_DEVICE,
     );
+
+    // #960 review finding 1 — POSITIVE assertion, not merely "the signed-out
+    // string is gone". `markAccountSynced` reads `pendingLocalChanges`
+    // SYNCHRONOUSLY, so without `runAccountSync`'s post-replay
+    // `refreshPendingLocalChanges()` call, a drain that fully emptied the
+    // journal (proven above: both pending counts are 0) still left the
+    // masthead holding the STALE "some of your work is saved on this
+    // device" fallback from before the drain — a chip that keeps claiming
+    // device-only when every write has in fact synced. The account posture
+    // must read `synced` with nothing left to say.
+    await waitFor(() => {
+      expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
+    });
+    expect(screen.getByTestId("sync-message").textContent).toBe("");
   });
 
   it("companion assertion: a genuinely signed-out session keeps showing the signed-out sentence (the fix cannot pass by deleting the state)", async () => {
@@ -454,5 +469,117 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     expect(screen.getByTestId("sync-message")).toHaveTextContent(
       SIGNED_OUT_SAVING_ON_THIS_DEVICE,
     );
+  });
+
+  // #960 review finding 2 — completeness. The two tests above both start
+  // from a SIGNED-OUT mount, which never reaches
+  // `runAccountSync`'s posture guard at all on the way in (the guard only
+  // matters for the LISTENER's decision to re-run). The bug this test pins
+  // is different: an ORDINARY signed-in fresh load — `INITIAL_SESSION`
+  // firing with a session already present, no prior signed-out posture, the
+  // shape a real return visit or hard reload takes. `initialSyncStatus`
+  // starts `account: "checking"`, which fails the listener's own
+  // `local-only`/`signedOut` guard, so the listener does nothing here BY
+  // DESIGN — the mount call itself must be the one that drains the journal,
+  // ordered, with no separate un-awaited replay racing it. Red on the
+  // pre-review-fix code: the mount call passed no `replayAfter`, so a win
+  // journalled in an earlier session (device-durable, per #737-A) was left
+  // to the old un-awaited "sync on mount" replay, which could fire BEFORE
+  // `persistedAreasRef` populated and had no ordering guarantee at all.
+  it("an ordinary signed-in fresh load (INITIAL_SESSION, no prior signed-out posture) still drains a journalled win with no user write", async () => {
+    // A win journalled in an EARLIER session (e.g. the tab crashed or was
+    // closed before the account took it) — present in the device journal
+    // before this mount even starts, exactly like a real reload.
+    await journalWinWrite({
+      workflowTaskId: PRESYNCED_TASK_ID,
+      persistedTaskId: PRESYNCED_TASK_ID,
+      persistedAreaId: null,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: "2026-08-29",
+    });
+
+    seedSessionStorageWithPresyncedTask();
+
+    // Signed in from the very first paint — `listAreas` succeeds on attempt
+    // 1, never throwing the signed-out shape the other two tests rely on.
+    //
+    // Deliberately delayed (a real macrotask, not a microtask): without this,
+    // every mocked promise in this file resolves in the same microtask tick,
+    // and a race between two un-awaited calls can accidentally land in the
+    // "lucky" order every single run — proving nothing about whether an
+    // ORDERING GUARANTEE exists versus mere scheduling coincidence. Forcing
+    // `listAreas` to resolve LATER than an un-awaited `replayJournaledWrites`
+    // call would (fake-indexeddb's own round trip) is what makes this test
+    // RED, deterministically, on the pre-review-fix mount effect (which fired
+    // the replay independently of this call, so a slow `listAreas` meant the
+    // replay ran first, found `persistedAreasRef` still empty, and had no
+    // second chance) and GREEN, deterministically, once the mount path is a
+    // single ordered chain (`runAccountSync({ replayAfter: true })`), which
+    // by construction cannot run the replay before this promise settles no
+    // matter how long it takes.
+    mockListAreas.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(
+            () => resolve({ provider: "supabase", areas: [PERSISTED_AREA] }),
+            30,
+          );
+        }),
+    );
+    mockListExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [
+        {
+          id: PRESYNCED_TASK_ID,
+          user_id: PERSISTED_AREA.user_id,
+          area_id: PERSISTED_AREA.id,
+          project_id: null,
+          source_capture_item_id: null,
+          title: "Shipped the onboarding flow",
+          description: null,
+          status: "active",
+          priority_score: null,
+          priority_confidence: null,
+          task_type: null,
+          is_reversible: null,
+          energy_type: null,
+          estimated_minutes_low: null,
+          estimated_minutes_high: null,
+          due_at: null,
+          definition_of_done: null,
+          first_tiny_step: null,
+          created_at: "2026-08-01T00:00:00.000Z",
+          updated_at: "2026-08-01T00:00:00.000Z",
+        },
+      ],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+    mockSyncJournaledWin.mockResolvedValue({ provider: "supabase" });
+
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+
+    // No click, no auth event fired by this test — the auth listener may or
+    // may not fire INITIAL_SESSION on its own in this fake client (it never
+    // does; `authListener.callback` is only invoked explicitly elsewhere in
+    // this file), so this is deliberately proving the MOUNT path alone
+    // drains the journal, exactly the completeness gap finding 2 named.
+    await waitFor(async () => {
+      const pending = await listPendingWrites("win");
+      expect(pending).toHaveLength(0);
+    });
+    expect(mockSyncJournaledWin).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ source_task_id: PRESYNCED_TASK_ID }),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
+    });
   });
 });

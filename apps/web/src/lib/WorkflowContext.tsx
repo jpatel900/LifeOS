@@ -1522,6 +1522,140 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     setHasHydratedFromStorage(true);
   }, []);
 
+  /**
+   * Audit P0#4 — read the DEVICE tier of "which days are closed" back out of
+   * the pending-write journal.
+   *
+   * This is the tier that makes the verdict honest offline and signed out. A
+   * close made with no account reachable is journalled, never sent, and stays
+   * in IndexedDB; without this read the Close moment would show its verdict
+   * once and then forget it on the next reload — the audit's finding again,
+   * one reload later. Reading the journal (rather than remembering in React)
+   * also means the verdict and the write agree by construction: if the entry
+   * is gone the account took it, and the account tier answers instead.
+   *
+   * Best-effort, like `refreshUnsyncedCount`: a device that cannot hold the
+   * journal at all has already told the user so via `markDeviceStorageBlocked`.
+   *
+   * #960 review finding 1: relocated ABOVE `runAccountSync` (it used to sit
+   * with the offline-queue drain, much further down this file) so
+   * `runAccountSync` can call it after its own ordered replay without a
+   * forward reference — its own dependency array is `[]`, so nothing about
+   * moving it changes what it closes over.
+   */
+  const refreshJournalledDurableState = useCallback(async () => {
+    try {
+      const pending = await listPendingWrites();
+      // See `mountedRef`'s note above the ref/refs block — a provider
+      // unmounted while this read was in flight must not touch state. One
+      // check covers every setter below: none of them awaits between here
+      // and the end of this try block.
+      if (!mountedRef.current) return;
+      setJournalledClosedDays(
+        pending
+          .filter((write) => write.entity === "review")
+          .map(
+            (write) =>
+              (write.payload as { period_start?: unknown }).period_start,
+          )
+          .filter((day): day is string => typeof day === "string"),
+      );
+      // #737 C1 re-score GAP 1. Read out of the SAME `listPendingWrites()`
+      // pass, and therefore on exactly the same lifecycle as the closed days
+      // above (mount, after every replay drain, and on `online`). That is not
+      // tidiness: a win logged offline and then drained must stop being
+      // reported as device-only in the same beat the drain finishes, or the
+      // Close moment shows a stale tier — which is the audit's finding again,
+      // one refresh later.
+      setJournalledLoggedWins(
+        pending
+          .filter((write) => write.entity === "win")
+          .map((write) => write.payload as Record<string, unknown>)
+          .filter(
+            (
+              payload,
+            ): payload is {
+              workflow_task_id: string;
+              persisted_task_id?: unknown;
+              title: string;
+              occurred_at: string;
+            } =>
+              typeof payload.workflow_task_id === "string" &&
+              typeof payload.title === "string" &&
+              typeof payload.occurred_at === "string",
+          )
+          // BOTH id spaces, because the journal deliberately stores both and
+          // the task can cross the sync boundary while its win is queued.
+          // Pre-sync the candidate carries the local id; once the task syncs,
+          // the id-alias merge replaces the row and the candidate carries the
+          // account uuid — while the queued payload still says the local id.
+          // Reporting only one of the two would re-offer the win at exactly
+          // that moment, and confirming would derive a SECOND key
+          // (`deriveWinClientWriteId` prefers the account id) and a second row.
+          .map((payload) => ({
+            taskId: payload.workflow_task_id,
+            taskIdAliases:
+              typeof payload.persisted_task_id === "string"
+                ? [payload.persisted_task_id]
+                : undefined,
+            title: payload.title,
+            occurredAt: payload.occurred_at,
+          })),
+      );
+      // #737 C1 re-score GAP 4: the device tier of "how many blockless
+      // sessions were finished today?". Read out of the SAME
+      // `listPendingWrites()` pass as everything above, so the moment a drain
+      // moves a session to the account it stops being reported here and starts
+      // being reported by the account tier — never both, never neither.
+      //
+      // The day comes from the JOURNAL ENTRY's own `created_at` (the instant
+      // the user saved the end sheet), resolved to their LOCAL day. Deriving
+      // it at read time from `new Date()` would re-date a session finished at
+      // 23:50 to the following morning.
+      setJournalledCompletedSessionDays(
+        pending
+          .filter((write) => write.entity === "execution_session")
+          .filter((write) => {
+            const payload = write.payload as {
+              outcome?: unknown;
+              workflow_block_id?: unknown;
+            };
+            return (
+              payload.outcome === "completed" &&
+              payload.workflow_block_id === null
+            );
+          })
+          .map((write) => localIsoDate(new Date(write.created_at)))
+          .filter((day) => !Number.isNaN(Date.parse(day))),
+      );
+      // #737 C1 re-score GAP 2: the device tier of "is this period already
+      // rolled up?", keyed the same way the hook keys its account tier.
+      setJournalledRollupKeys(
+        pending
+          .filter((write) => write.entity === "rollup")
+          .map((write) => write.payload as Record<string, unknown>)
+          .filter(
+            (
+              payload,
+            ): payload is {
+              workflow_area_id: string;
+              period_type: string;
+              period_start: string;
+            } =>
+              typeof payload.workflow_area_id === "string" &&
+              typeof payload.period_type === "string" &&
+              typeof payload.period_start === "string",
+          )
+          .map(
+            (payload) =>
+              `${payload.workflow_area_id}|${payload.period_type}|${payload.period_start}`,
+          ),
+      );
+    } catch {
+      // best-effort signal; a journal read failure must not break the shell
+    }
+  }, []);
+
   // #960 defects 1/2: extracted so both the mount effect below and the
   // auth-state listener effect after it can run the SAME account-sync body.
   // This used to be inline in one effect with an all-`[]` mount trigger;
@@ -1531,15 +1665,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // second chance after sign-in. See the listener effect below for that
   // second chance.
   //
-  // `replayAfter` is opt-in rather than unconditional: the separate "sync on
-  // mount / on reconnect" effect further down already fires
-  // `replayJournaledWrites` on every mount, independently and un-awaited, so
-  // doing it again here on an ordinary mount would be a harmless but
-  // redundant extra drain. The auth listener is the one caller that NEEDS
-  // the ordering guarantee this parameter buys: replay strictly AFTER
-  // `applyPersistedAreas`/`syncPersistedWorkflowRows` have populated the
-  // refs below, or every journalled write throws "not known on this device"
-  // and immediately re-queues itself.
+  // #960 review finding 2: `replayAfter` is now passed by BOTH callers (the
+  // mount effect and the auth listener), not opt-in for the listener alone.
+  // The old shape left an ordinary signed-in fresh load (`INITIAL_SESSION`,
+  // no prior signed-out posture) to the separate un-awaited "sync on mount"
+  // replay further down this file — the EXACT race this whole fix exists to
+  // end, just reached from a different starting posture. That un-awaited
+  // mount replay has been removed (see its effect's own comment): this is
+  // now the ONE mechanism that owns "replay the journal on mount", ordered
+  // strictly after the refs populate, on every mount, signed in or not.
   const runAccountSync = useCallback(
     async (options?: { replayAfter?: boolean }): Promise<void> => {
       // #960 defect 1: the mount effect and a `SIGNED_IN` event can land in
@@ -1577,7 +1711,21 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               // Best-effort: the journal stays populated and the next
               // mount, reconnect, or sign-in retries it.
             }
+            // #960 review finding 1: this was the only `replayJournaledWrites`
+            // call site with no matching refresh (compare the "sync on mount"
+            // effect and `persistCapture`/`persistMarkedSession` and friends,
+            // every one of which re-reads the journal right after draining
+            // it). Without this, a fully successful drain left
+            // `pendingLocalChanges` stale — `markAccountSynced` below reads it
+            // SYNCHRONOUSLY, so a stale `true` kept the masthead claiming
+            // "some work is saved on this device" even though nothing was.
+            // Awaited (not fire-and-forget) so `markAccountSynced` sees the
+            // POST-drain count on this very call, not one refresh cycle late.
+            if (!mountedRef.current) return;
+            await refreshPendingLocalChanges();
+            await refreshJournalledDurableState();
           }
+          if (!mountedRef.current) return;
           markAccountSynced();
         } catch (error) {
           if (mountedRef.current) markPersistedLoadFailure(error);
@@ -1598,11 +1746,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       markLocalOnly,
       syncPersistedWorkflowRows,
       replayJournaledWrites,
+      refreshPendingLocalChanges,
+      refreshJournalledDurableState,
     ],
   );
 
+  // #960 review finding 2: `replayAfter: true` on the mount call too — see
+  // `runAccountSync`'s own comment for why an ordinary signed-in fresh load
+  // must not be left to the old un-awaited mount replay (removed below).
   useEffect(() => {
-    void runAccountSync();
+    void runAccountSync({ replayAfter: true });
   }, [runAccountSync]);
 
   // #960 defect 1: the SECOND chance. `runAccountSync`'s mount effect above
@@ -1801,134 +1954,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  /**
-   * Audit P0#4 — read the DEVICE tier of "which days are closed" back out of
-   * the pending-write journal.
-   *
-   * This is the tier that makes the verdict honest offline and signed out. A
-   * close made with no account reachable is journalled, never sent, and stays
-   * in IndexedDB; without this read the Close moment would show its verdict
-   * once and then forget it on the next reload — the audit's finding again,
-   * one reload later. Reading the journal (rather than remembering in React)
-   * also means the verdict and the write agree by construction: if the entry
-   * is gone the account took it, and the account tier answers instead.
-   *
-   * Best-effort, like `refreshUnsyncedCount`: a device that cannot hold the
-   * journal at all has already told the user so via `markDeviceStorageBlocked`.
-   */
-  const refreshJournalledDurableState = useCallback(async () => {
-    try {
-      const pending = await listPendingWrites();
-      // See `mountedRef`'s note above the ref/refs block — a provider
-      // unmounted while this read was in flight must not touch state. One
-      // check covers every setter below: none of them awaits between here
-      // and the end of this try block.
-      if (!mountedRef.current) return;
-      setJournalledClosedDays(
-        pending
-          .filter((write) => write.entity === "review")
-          .map(
-            (write) =>
-              (write.payload as { period_start?: unknown }).period_start,
-          )
-          .filter((day): day is string => typeof day === "string"),
-      );
-      // #737 C1 re-score GAP 1. Read out of the SAME `listPendingWrites()`
-      // pass, and therefore on exactly the same lifecycle as the closed days
-      // above (mount, after every replay drain, and on `online`). That is not
-      // tidiness: a win logged offline and then drained must stop being
-      // reported as device-only in the same beat the drain finishes, or the
-      // Close moment shows a stale tier — which is the audit's finding again,
-      // one refresh later.
-      setJournalledLoggedWins(
-        pending
-          .filter((write) => write.entity === "win")
-          .map((write) => write.payload as Record<string, unknown>)
-          .filter(
-            (
-              payload,
-            ): payload is {
-              workflow_task_id: string;
-              persisted_task_id?: unknown;
-              title: string;
-              occurred_at: string;
-            } =>
-              typeof payload.workflow_task_id === "string" &&
-              typeof payload.title === "string" &&
-              typeof payload.occurred_at === "string",
-          )
-          // BOTH id spaces, because the journal deliberately stores both and
-          // the task can cross the sync boundary while its win is queued.
-          // Pre-sync the candidate carries the local id; once the task syncs,
-          // the id-alias merge replaces the row and the candidate carries the
-          // account uuid — while the queued payload still says the local id.
-          // Reporting only one of the two would re-offer the win at exactly
-          // that moment, and confirming would derive a SECOND key
-          // (`deriveWinClientWriteId` prefers the account id) and a second row.
-          .map((payload) => ({
-            taskId: payload.workflow_task_id,
-            taskIdAliases:
-              typeof payload.persisted_task_id === "string"
-                ? [payload.persisted_task_id]
-                : undefined,
-            title: payload.title,
-            occurredAt: payload.occurred_at,
-          })),
-      );
-      // #737 C1 re-score GAP 4: the device tier of "how many blockless
-      // sessions were finished today?". Read out of the SAME
-      // `listPendingWrites()` pass as everything above, so the moment a drain
-      // moves a session to the account it stops being reported here and starts
-      // being reported by the account tier — never both, never neither.
-      //
-      // The day comes from the JOURNAL ENTRY's own `created_at` (the instant
-      // the user saved the end sheet), resolved to their LOCAL day. Deriving
-      // it at read time from `new Date()` would re-date a session finished at
-      // 23:50 to the following morning.
-      setJournalledCompletedSessionDays(
-        pending
-          .filter((write) => write.entity === "execution_session")
-          .filter((write) => {
-            const payload = write.payload as {
-              outcome?: unknown;
-              workflow_block_id?: unknown;
-            };
-            return (
-              payload.outcome === "completed" &&
-              payload.workflow_block_id === null
-            );
-          })
-          .map((write) => localIsoDate(new Date(write.created_at)))
-          .filter((day) => !Number.isNaN(Date.parse(day))),
-      );
-      // #737 C1 re-score GAP 2: the device tier of "is this period already
-      // rolled up?", keyed the same way the hook keys its account tier.
-      setJournalledRollupKeys(
-        pending
-          .filter((write) => write.entity === "rollup")
-          .map((write) => write.payload as Record<string, unknown>)
-          .filter(
-            (
-              payload,
-            ): payload is {
-              workflow_area_id: string;
-              period_type: string;
-              period_start: string;
-            } =>
-              typeof payload.workflow_area_id === "string" &&
-              typeof payload.period_type === "string" &&
-              typeof payload.period_start === "string",
-          )
-          .map(
-            (payload) =>
-              `${payload.workflow_area_id}|${payload.period_type}|${payload.period_start}`,
-          ),
-      );
-    } catch {
-      // best-effort signal; a journal read failure must not break the shell
-    }
-  }, []);
-
   // Drain the offline queue to the spine when online. Idempotent (upsert on the
   // client_capture_id unique index), fault-isolated per item, and a failed item
   // stays queued for the next reconnect. Refreshes local rows after any sync so
@@ -2009,19 +2034,36 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // the capture queue's is the one already proven in use. The two drains are
   // independent — a failing capture sync must not hold back a queued win — so
   // each is fired on its own and neither awaits the other.
+  //
+  // #960 review finding 2 (harmony rule): the MOUNT half of the journal
+  // REPLAY used to fire HERE too — un-awaited, with no ordering guarantee
+  // against `runAccountSync`'s own area/workflow-rows reads above. That is
+  // the exact race #960 exists to end: a replay racing ahead of
+  // `persistedAreasRef` being populated makes every journalled write throw
+  // "not known on this device" and re-queue itself, on every ordinary mount,
+  // signed in or not. `runAccountSync({ replayAfter: true })` is now the ONE
+  // mechanism that owns "replay the journal on mount" (see its own comment),
+  // ordered strictly after the refs populate — so this effect no longer
+  // REPLAYS on mount at all. It still owns the OTHER moment named in this
+  // comment's title: reconnect (`online`), which `runAccountSync` does not
+  // cover and which needs no such ordering (the refs are already long
+  // populated by the time a live tab goes offline and back online).
+  //
+  // `refreshPendingLocalChanges` stays HERE, unconditionally, alongside
+  // `refreshJournalledDurableState` — it is not replay-specific cleanup.
+  // Every early-return branch of `runAccountSync` (no client at all, mock
+  // mode, an account read that returns a non-Supabase provider) calls
+  // `markLocalOnly`, which sets `pendingLocalChanges: true` regardless of
+  // whether anything is actually queued. Removing this call along with the
+  // racy replay above regressed exactly that: a mock-mode mount would latch
+  // "pending" forever with nothing ever queued to clear it, since
+  // `runAccountSync`'s OWN post-replay refresh (added for finding 1) never
+  // runs on the branches that return before reaching the replay at all.
   useEffect(() => {
     void refreshUnsyncedCount();
     void refreshJournalledDurableState();
+    void refreshPendingLocalChanges();
     void syncOfflineQueue();
-    // Audit P0#4: the replay may DELETE the day's journal entry (the account
-    // took it), so the device tier is re-read after every drain — otherwise a
-    // synced close would keep showing the device-only sentence.
-    void replayJournaledWrites().finally(() => {
-      void refreshJournalledDurableState();
-      // #737 C1 S5: a drain that emptied the journal must be able to CLEAR
-      // the device-only indicator, not only ever raise it.
-      void refreshPendingLocalChanges();
-    });
     if (typeof window === "undefined") return;
     const onOnline = () => {
       void syncOfflineQueue();
