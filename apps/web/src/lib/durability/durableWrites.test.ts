@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  journalCaptureWrite,
   journalReviewWrite,
   journalWinWrite,
   createDurableWriteHandlers,
@@ -619,6 +620,7 @@ describe("createDurableWriteHandlers", () => {
     const handlers = createDurableWriteHandlers(serverOps());
 
     expect(Object.keys(handlers).sort()).toEqual([
+      "capture",
       "execution_session",
       "plan_placement",
       "plan_unplacement",
@@ -628,5 +630,167 @@ describe("createDurableWriteHandlers", () => {
       "task_drop",
       "win",
     ]);
+  });
+});
+
+// #960 defect 3: a raw capture whose account write could not be resolved
+// (client present, area id not yet synced) used to be dropped by
+// `persistCapture` with no device-durable record anywhere. Same contract as
+// `reviewHandler`'s area guard: `workflow_area_id !== null` is what tells
+// "no area, on purpose" apart from "an area, not synced yet".
+describe("journalCaptureWrite / capture replay", () => {
+  it("journals the capture before any network call", async () => {
+    await journalCaptureWrite({
+      workflowCaptureId: "capture-local-1",
+      workflowAreaId: "area-local-1",
+      persistedAreaId: PERSISTED_AREA,
+      rawText: "Call the landlord back",
+      returnHook: null,
+      clientCaptureId: "client-capture-1",
+    });
+
+    const pending = await listPendingWrites("capture");
+    expect(pending).toHaveLength(1);
+    expect(pending[0]!.client_write_id).toBe("client-capture-1");
+    expect(pending[0]!.payload).toMatchObject({
+      workflow_capture_id: "capture-local-1",
+      persisted_area_id: PERSISTED_AREA,
+      raw_text: "Call the landlord back",
+    });
+  });
+
+  it("sends a journalled capture once, clears it, and records the account id", async () => {
+    const recordCaptureId = vi.fn();
+    const ops = serverOps({
+      syncCapture: vi.fn().mockResolvedValue({
+        provider: "supabase" as const,
+        captureId: "77777777-7777-4777-8777-777777777777",
+      }),
+      recordCaptureId,
+    });
+    await journalCaptureWrite({
+      workflowCaptureId: "capture-local-1",
+      workflowAreaId: "area-local-1",
+      persistedAreaId: PERSISTED_AREA,
+      rawText: "Call the landlord back",
+      returnHook: null,
+      clientCaptureId: "client-capture-1",
+    });
+
+    const summary = await replayDurableWrites(ops);
+
+    expect(summary).toMatchObject({ synced: 1, failed: 0, skipped: 0 });
+    expect(ops.syncCapture).toHaveBeenCalledWith({
+      client_capture_id: "client-capture-1",
+      area_id: PERSISTED_AREA,
+      raw_text: "Call the landlord back",
+      return_hook: null,
+    });
+    expect(recordCaptureId).toHaveBeenCalledWith(
+      expect.objectContaining({ workflow_capture_id: "capture-local-1" }),
+      expect.objectContaining({
+        captureId: "77777777-7777-4777-8777-777777777777",
+      }),
+    );
+    expect(await pendingWriteCount("capture")).toBe(0);
+
+    // Exactly-once: a second replay finds nothing to send.
+    const second = await replayDurableWrites(ops);
+    expect(second).toMatchObject({ synced: 0, failed: 0, skipped: 0 });
+    expect(ops.syncCapture).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a capture queued when its CHOSEN area has not synced yet", async () => {
+    // The user picked an area, journalled it with no persisted id yet — the
+    // exact #960 defect 1 window. Sending `area_id: null` would file the
+    // capture under no area permanently, so it must wait instead.
+    const ops = serverOps({
+      syncCapture: vi
+        .fn()
+        .mockResolvedValue({ provider: "supabase" as const, captureId: null }),
+    });
+    await journalCaptureWrite({
+      workflowCaptureId: "capture-local-1",
+      workflowAreaId: "area-local-1",
+      persistedAreaId: null,
+      rawText: "Call the landlord back",
+      returnHook: null,
+      clientCaptureId: "client-capture-1",
+    });
+
+    const summary = await replayDurableWrites(ops);
+
+    expect(summary).toMatchObject({ synced: 0, failed: 1 });
+    expect(ops.syncCapture).not.toHaveBeenCalled();
+    expect(await pendingWriteCount("capture")).toBe(1);
+  });
+
+  it("resolves the capture's area at replay time once it has synced", async () => {
+    const ops = serverOps({
+      syncCapture: vi.fn().mockResolvedValue({
+        provider: "supabase" as const,
+        captureId: "77777777-7777-4777-8777-777777777777",
+      }),
+    });
+    await journalCaptureWrite({
+      workflowCaptureId: "capture-local-1",
+      workflowAreaId: "area-local-1",
+      persistedAreaId: null,
+      rawText: "Call the landlord back",
+      returnHook: null,
+      clientCaptureId: "client-capture-1",
+    });
+
+    const summary = await replayDurableWrites({
+      ...ops,
+      resolveCaptureAreaId: () => PERSISTED_AREA,
+    });
+
+    expect(summary).toMatchObject({ synced: 1 });
+    expect(ops.syncCapture).toHaveBeenCalledWith(
+      expect.objectContaining({ area_id: PERSISTED_AREA }),
+    );
+  });
+
+  it("sends a capture with genuinely no area straight through, unlike one waiting to resolve", async () => {
+    const ops = serverOps({
+      syncCapture: vi.fn().mockResolvedValue({
+        provider: "supabase" as const,
+        captureId: "77777777-7777-4777-8777-777777777777",
+      }),
+    });
+    await journalCaptureWrite({
+      workflowCaptureId: "capture-local-1",
+      workflowAreaId: null,
+      persistedAreaId: null,
+      rawText: "Call the landlord back",
+      returnHook: null,
+      clientCaptureId: "client-capture-1",
+    });
+
+    const summary = await replayDurableWrites(ops);
+
+    expect(summary).toMatchObject({ synced: 1 });
+    expect(ops.syncCapture).toHaveBeenCalledWith(
+      expect.objectContaining({ area_id: null }),
+    );
+  });
+
+  it("keeps a capture queued (never dropped) when no syncCapture op is wired", async () => {
+    await journalCaptureWrite({
+      workflowCaptureId: "capture-local-1",
+      workflowAreaId: null,
+      persistedAreaId: null,
+      rawText: "Call the landlord back",
+      returnHook: null,
+      clientCaptureId: "client-capture-1",
+    });
+
+    const summary = await replayDurableWrites(
+      serverOps() as DurableWriteServerOps,
+    );
+
+    expect(summary).toMatchObject({ synced: 0, failed: 1, skipped: 0 });
+    expect(await pendingWriteCount("capture")).toBe(1);
   });
 });

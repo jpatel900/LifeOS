@@ -18,6 +18,7 @@ import {
   applyCompostTransitions,
   createCaptureItem,
   syncQueuedCapture,
+  syncJournaledCapture,
   syncJournaledWin,
   syncJournaledReviewEntry,
   createExecutionSession,
@@ -560,6 +561,88 @@ describe("workflow data provider", () => {
       client_capture_id: "queued-abc123",
     });
     expect(result.provider).toBe("mock");
+  });
+
+  // #960 defect 3: `persistCapture` used to drop a raw capture on the floor
+  // (`markLocalOnly`, no journal entry, no write) whenever a Supabase client
+  // existed but the capture's area id had not resolved yet — exactly the
+  // window #960 defect 1 could leave open indefinitely. It is now journalled
+  // and replayed through `syncJournaledCapture`, this function.
+  it("syncs a journalled capture and returns its account id, so the local optimistic row can be aliased", async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        id: "77777777-7777-4777-8777-777777777777",
+        user_id: userId,
+        area_id: areaId,
+        raw_text: "Call the landlord back",
+        raw_audio_ref: null,
+        return_hook: null,
+        client_capture_id: "journal-capture-1",
+        capture_mode: "text",
+        inferred_area_confidence: null,
+        status: "new",
+        created_at: "2026-08-29T12:00:00.000Z",
+      },
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ single });
+    const upsert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ upsert });
+
+    const result = await syncJournaledCapture(authenticatedClient(from), {
+      client_capture_id: "journal-capture-1",
+      area_id: areaId,
+      raw_text: "Call the landlord back",
+      return_hook: null,
+    });
+
+    expect(result.provider).toBe("supabase");
+    expect(result.captureId).toBe("77777777-7777-4777-8777-777777777777");
+    expect(from).toHaveBeenCalledWith("capture_items");
+    // Deliberately no `status` in the upserted row — see the function's own
+    // doc comment for why re-asserting `status: "new"` on a retry would risk
+    // resurrecting a capture the user had already triaged past `new`.
+    const [upsertedRow, upsertOptions] = upsert.mock.calls[0] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(upsertedRow).toEqual({
+      user_id: userId,
+      area_id: areaId,
+      raw_text: "Call the landlord back",
+      return_hook: null,
+      client_capture_id: "journal-capture-1",
+      capture_mode: "text",
+    });
+    expect(upsertedRow).not.toHaveProperty("status");
+    expect(upsertOptions).toEqual({ onConflict: "user_id,client_capture_id" });
+  });
+
+  it("refuses to sync a journalled capture without a client capture id", async () => {
+    const upsert = vi.fn();
+    const from = vi.fn().mockReturnValue({ upsert });
+
+    await expect(
+      syncJournaledCapture(authenticatedClient(from), {
+        client_capture_id: "   ",
+        area_id: areaId,
+        raw_text: "Call the landlord back",
+        return_hook: null,
+      }),
+    ).rejects.toThrow(/client capture id/i);
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("keeps journalled-capture sync a no-op in mock mode", async () => {
+    const result = await syncJournaledCapture(null, {
+      client_capture_id: "journal-capture-1",
+      area_id: null,
+      raw_text: "Call the landlord back",
+      return_hook: null,
+    });
+
+    expect(result.provider).toBe("mock");
+    expect(result.captureId).toBeNull();
   });
 
   it("keeps capture working in mock mode", async () => {

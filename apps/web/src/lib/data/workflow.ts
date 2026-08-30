@@ -130,11 +130,16 @@ export {
 export {
   createCaptureItem,
   syncQueuedCapture,
+  syncJournaledCapture,
   listCaptureItems,
   resolveCaptureItems,
   applyCompostTransitions,
 } from "./workflow/capture";
-export type { SyncQueuedCaptureInput } from "./workflow/capture";
+export type {
+  SyncQueuedCaptureInput,
+  SyncJournaledCaptureInput,
+  SyncJournaledCaptureResult,
+} from "./workflow/capture";
 
 // --- planning ---
 export {

@@ -21,10 +21,6 @@ import {
 import CapturePage from "../app/capture/page";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
-import {
-  ACCOUNT_NEEDS_APP_UPDATE,
-  ACCOUNT_SAVE_FAILED,
-} from "@/lib/statusVocabulary";
 import { stubParseCaptureFetch } from "./helpers/parseCaptureFetch";
 
 // #687: the demoted stage pages (/capture, /triage, /execute, ...) are
@@ -57,6 +53,7 @@ const {
   mockListPlanningItems,
   mockListExecutionReviewItems,
   mockCreateCaptureItem,
+  mockSyncJournaledCapture,
   mockCreateTask,
   mockCreateTimeBlockProposal,
   mockCreateSupabaseBrowserClient,
@@ -66,6 +63,11 @@ const {
   mockListPlanningItems: vi.fn(),
   mockListExecutionReviewItems: vi.fn(),
   mockCreateCaptureItem: vi.fn(),
+  // #960 defect 3: captures now reach the account through the SAME
+  // journal-and-replay path every other write uses (`syncJournaledCapture`),
+  // not a direct `createCaptureItem` call — see `persistCapture` in
+  // `lib/workflowContext/persistenceSync.ts`.
+  mockSyncJournaledCapture: vi.fn(),
   mockCreateTask: vi.fn(),
   mockCreateTimeBlockProposal: vi.fn(),
   // #737 C1 S3: the replay path calls `requireSupabaseUser` and looks the task
@@ -104,6 +106,7 @@ vi.mock("@/lib/data/workflow", async () => {
     listPlanningItems: mockListPlanningItems,
     listExecutionReviewItems: mockListExecutionReviewItems,
     createCaptureItem: mockCreateCaptureItem,
+    syncJournaledCapture: mockSyncJournaledCapture,
     createTask: mockCreateTask,
     createTimeBlockProposal: mockCreateTimeBlockProposal,
   };
@@ -300,6 +303,10 @@ beforeEach(async () => {
       status: "new",
       created_at: "2026-05-27T00:00:00.000Z",
     },
+  });
+  mockSyncJournaledCapture.mockResolvedValue({
+    provider: "supabase",
+    captureId: "44444444-4444-4444-8444-444444444444",
   });
   mockCreateTask.mockResolvedValue({
     provider: "supabase",
@@ -552,8 +559,19 @@ describe("WorkflowProvider persisted area sync", () => {
     });
   });
 
+  // #960 defect 3: a capture is now journalled BEFORE any network call and
+  // the account write is a REPLAY of that journal entry (`persistCapture` in
+  // `lib/workflowContext/persistenceSync.ts`), exactly like every other
+  // durable write since #737-A (wins, reviews, plans, triage accepts,
+  // rollups). None of THOSE ever surface a replay failure as `sync-error` —
+  // a failed replay just leaves the write queued and reports "local-only,
+  // pending retry", because the write is safe on the device and the next
+  // mount/reconnect/sign-in retries it. A capture whose account write throws
+  // now gets the identical treatment, not the old immediate-`sync-error`
+  // behavior that only `createCaptureItem`'s direct (non-durable) call ever
+  // had.
   it("surfaces save failures as local-only pending retry", async () => {
-    mockCreateCaptureItem.mockRejectedValue(new Error("insert timeout"));
+    mockSyncJournaledCapture.mockRejectedValue(new Error("insert timeout"));
 
     render(
       <WorkflowProvider>
@@ -572,10 +590,13 @@ describe("WorkflowProvider persisted area sync", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("sync-account")).toHaveTextContent(
-        "sync-error",
+        "local-only",
       );
       expect(screen.getByTestId("sync-message")).toHaveTextContent(
-        ACCOUNT_SAVE_FAILED,
+        "Your capture is saved on this device",
+      );
+      expect(screen.getByTestId("sync-message")).toHaveTextContent(
+        "LifeOS will add it to your account as soon as it can",
       );
     });
   });
@@ -673,8 +694,19 @@ describe("WorkflowProvider persisted area sync", () => {
     });
   });
 
-  it("surfaces missing server capabilities with Health guidance", async () => {
-    mockCreateCaptureItem.mockRejectedValue({
+  // #960 defect 3: a missing-server-capability failure (PGRST202) used to get
+  // its own distinct Health-guidance banner because `createCaptureItem` threw
+  // synchronously and `markPersistedSaveFailure` classified the error. Now
+  // that a capture's account write is a replay of a journal entry — same as
+  // every other durable write — this class of failure gets the SAME neutral
+  // "local-only, pending retry" treatment every other entity already gets on
+  // ANY replay failure (wins, reviews, plans, drafts, rollups never
+  // distinguish PGRST202 from a plain network error either). The raw
+  // capture is still never lost; it stays queued and would go to Health only
+  // if this device could not journal it at all, not because the account's
+  // reply was unusual.
+  it("keeps a capture queued (local-only, pending retry) rather than lost when the account reports a missing server capability", async () => {
+    mockSyncJournaledCapture.mockRejectedValue({
       code: "PGRST202",
       message: "Could not find the public.create_capture_item function",
     });
@@ -696,10 +728,10 @@ describe("WorkflowProvider persisted area sync", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("sync-account")).toHaveTextContent(
-        "sync-error",
+        "local-only",
       );
       expect(screen.getByTestId("sync-message")).toHaveTextContent(
-        ACCOUNT_NEEDS_APP_UPDATE,
+        "Your capture is saved on this device",
       );
     });
   });
