@@ -67,19 +67,32 @@ const AUTH_SESSION_MISSING_ERROR = {
   message: "Auth session missing!",
 };
 
-let authStateCallback:
-  | ((event: string, session: { user: { email: string } } | null) => void)
-  | undefined;
+// Since #966 the WorkflowProvider subscribes to auth changes alongside this
+// page, so the mock must fan out to every subscriber the way the real
+// GoTrueClient does — a single-slot callback would let whichever component
+// subscribes last silently evict the other.
+let authStateCallbacks: Array<
+  (event: string, session: { user: { email: string } } | null) => void
+> = [];
+
+function emitAuthEvent(
+  event: string,
+  session: { user: { email: string } } | null,
+) {
+  for (const callback of [...authStateCallbacks]) {
+    callback(event, session);
+  }
+}
 
 function buildClient() {
-  authStateCallback = undefined;
+  authStateCallbacks = [];
   mocks.getUser.mockResolvedValue({
     data: { user: null },
     error: AUTH_SESSION_MISSING_ERROR,
   });
   mocks.getSession.mockResolvedValue({ data: { session: null }, error: null });
   mocks.onAuthStateChange.mockImplementation((callback) => {
-    authStateCallback = callback;
+    authStateCallbacks.push(callback);
     return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
   });
   return {
@@ -142,13 +155,19 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     // The redirect effect must be listening for the auth transition before it
     // decides anything — give it a tick to subscribe.
     await waitFor(() => {
-      expect(mocks.onAuthStateChange).toHaveBeenCalled();
+      // Two subscribers since #966: this page's redirect effect AND the
+      // WorkflowProvider's replay listener. Waiting for "called at least
+      // once" would let the provider's earlier subscription satisfy the wait
+      // while the page has not subscribed yet — the emitted event would then
+      // miss the page (the mock, unlike the real GoTrueClient, does not
+      // replay INITIAL_SESSION to late subscribers). Wait for both.
+      expect(authStateCallbacks.length).toBeGreaterThanOrEqual(2);
     });
 
     // The session resolves a moment later — the auth client's own transition
     // event, the same shape AuthAffordance.tsx already reacts to.
     await act(async () => {
-      authStateCallback?.("SIGNED_IN", { user: { email: "jay@example.com" } });
+      emitAuthEvent("SIGNED_IN", { user: { email: "jay@example.com" } });
       await Promise.resolve();
     });
 
@@ -170,7 +189,7 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     // navigation — it does not stop this component's JS) must NOT schedule
     // a second reload. `sessionConfirmedRef` is the guard.
     await act(async () => {
-      authStateCallback?.("TOKEN_REFRESHED", {
+      emitAuthEvent("TOKEN_REFRESHED", {
         user: { email: "jay@example.com" },
       });
       await Promise.resolve();
@@ -183,12 +202,18 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     renderAreasPage();
 
     await waitFor(() => {
-      expect(mocks.onAuthStateChange).toHaveBeenCalled();
+      // Two subscribers since #966: this page's redirect effect AND the
+      // WorkflowProvider's replay listener. Waiting for "called at least
+      // once" would let the provider's earlier subscription satisfy the wait
+      // while the page has not subscribed yet — the emitted event would then
+      // miss the page (the mock, unlike the real GoTrueClient, does not
+      // replay INITIAL_SESSION to late subscribers). Wait for both.
+      expect(authStateCallbacks.length).toBeGreaterThanOrEqual(2);
     });
 
     // The auth client confirms: no session, ever.
     await act(async () => {
-      authStateCallback?.("INITIAL_SESSION", null);
+      emitAuthEvent("INITIAL_SESSION", null);
       await Promise.resolve();
     });
 
@@ -202,7 +227,7 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     // A later, unrelated re-fire of the same negative transition must not
     // call replace a second time (hasRedirectedRef's once-ever invariant).
     await act(async () => {
-      authStateCallback?.("INITIAL_SESSION", null);
+      emitAuthEvent("INITIAL_SESSION", null);
       await Promise.resolve();
     });
     expect(mocks.routerReplace).toHaveBeenCalledTimes(1);
