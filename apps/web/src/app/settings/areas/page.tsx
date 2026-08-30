@@ -81,6 +81,18 @@ export default function AreasSettingsPage() {
   // own `onAuthStateChange` transition — the same primitive
   // `AuthAffordance.tsx` already uses to track presence — and only
   // redirects once that transition reports there really is no session.
+  //
+  // No `sessionStorage` reload-count sentinel was added on top of
+  // `sessionConfirmedRef` (considered on review). `sessionConfirmedRef`
+  // already closes the one repeat-reload gap that existed WITHIN a single
+  // document (a second session-bearing event before the scheduled reload
+  // lands — see the check inside the callback below). A reload loop ACROSS
+  // multiple fresh document loads would require the underlying auth state
+  // itself to flap between signed-out and signed-in on every single mount,
+  // which is a production auth/session bug in its own right, not something
+  // a client-side sentinel here should paper over — and a counter cheap
+  // enough to add without its own edge cases (when does it reset? what
+  // resets it after a real, wanted reload?) would still not catch that.
   const sessionConfirmedRef = useRef<"unconfirmed" | "signed-in">(
     "unconfirmed",
   );
@@ -106,21 +118,30 @@ export default function AreasSettingsPage() {
       (_event, session) => {
         if (!active || hasRedirectedRef.current) return;
         if (session) {
-          sessionConfirmedRef.current = "signed-in";
           // A session showed up after all. `state.status` is STILL
           // "signed-out" though — `useAreasLoadState`'s mount effect already
           // burned its one shot and will never re-check on its own (that is
           // the entire reason this effect exists and is subscribed at all;
           // see the guard above). Just cancelling the redirect here would
-          // strand the visitor on the permanent "Redirecting to sign in"
+          // strand the visitor on the permanent "Checking your sign-in…"
           // screen below with no areas and no retry. A full reload is the
           // smallest honest recovery: a fresh mount re-runs everything
           // (this effect, `useAreasLoadState`'s own load) against the now-
-          // confirmed session. This also makes a cross-tab sign-out arriving
-          // after this point moot in practice — the reload unmounts this
-          // effect (cleanup below sets `active = false` and unsubscribes)
-          // before any further transition on this client could reach the
-          // callback below.
+          // confirmed session.
+          //
+          // `sessionConfirmedRef` doubles as the once-per-document reload
+          // sentinel: `window.location.reload()` only SCHEDULES a
+          // navigation — it does not unmount this component or stop JS
+          // synchronously, so a SECOND session-bearing event (another tab
+          // signing in again, a second `TOKEN_REFRESHED`) could otherwise
+          // re-enter this branch and call `reload()` a second time before
+          // the first reload actually lands. Checking the ref before acting
+          // makes that a no-op instead. The same ref, checked in the `else`
+          // branch below, is also what stops a LATER `null`-session event
+          // (e.g. a cross-tab sign-out) from redirecting after a session was
+          // already confirmed here — not anything about the reload itself.
+          if (sessionConfirmedRef.current === "signed-in") return;
+          sessionConfirmedRef.current = "signed-in";
           if (typeof window !== "undefined") {
             window.location.reload();
           }
@@ -228,20 +249,25 @@ export default function AreasSettingsPage() {
         />
       ) : null}
 
-      {/* #742: `useAreasLoadState` classified the load signed-out-shaped.
-          Almost always the redirect effect above is already on its way to
-          `/login` and this is only the brief frame before that navigation
-          lands — same calm, dashed-card shape as the "loading" state just
-          above rather than a full alert with its own sign-in button, since
-          there is nothing left to decide here.
-          Part of #960 (defect 3): in the narrow rescue window described in
-          the redirect effect's own comment (a session confirmed after this
-          status latched), the redirect never fires and this frame is
-          instead cut short by a full reload — never a screen the visitor is
-          stuck looking at. */}
+      {/* #742: `useAreasLoadState` classified the load signed-out-shaped, and
+          the redirect effect above is deciding what to do about it. Two
+          honest outcomes share this one frame, which is why the copy stays
+          neutral instead of naming either ("Redirecting to sign in" was
+          wrong for the second one — copy-truth doctrine, caught on review):
+            - almost always: the effect confirms there is no session and
+              sends the visitor to `/login` — this is the brief frame before
+              that navigation lands; or
+            - the narrow rescue window (see the redirect effect's own
+              comment): a session gets confirmed after this status latched,
+              and the effect reloads the page in place instead of
+              navigating anywhere.
+          Either way there is nothing left to decide here and nothing the
+          visitor can do from this screen, so it keeps the same calm,
+          dashed-card shape as the "loading" state just above rather than a
+          full alert. */}
       {state.status === "signed-out" ? (
         <WorkflowLoadingState
-          title="Redirecting to sign in"
+          title="Checking your sign-in…"
           description="Areas are stored on your account, not on this device."
         />
       ) : null}

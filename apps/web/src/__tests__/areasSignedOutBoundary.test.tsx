@@ -136,9 +136,13 @@ describe("signed-out /settings/areas boundary + door (#742, Final UX Loop C2-S0)
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
 
     // The transitional frame is truthful about what's happening, and reads
-    // as an ordinary status (role="status"), never an alarm.
+    // as an ordinary status (role="status"), never an alarm. Copy is
+    // neutral ("Checking your sign-in…", not "Redirecting to sign in") —
+    // Part of #960's rescue path can end this same frame with an in-place
+    // reload instead of a navigation, so the title must not commit to one
+    // outcome (copy-truth doctrine, caught on review).
     const redirectingRegion = screen
-      .getByText("Redirecting to sign in")
+      .getByText("Checking your sign-in…")
       .closest("[role]");
     expect(redirectingRegion?.getAttribute("role")).toBe("status");
 

@@ -23,13 +23,20 @@ import { WorkflowProvider } from "@/lib/WorkflowContext";
  *
  * Independent review caught that a first version of this suite only pinned
  * "never redirects" and missed that the rescued visitor was left stranded on
- * a permanent "Redirecting to sign in" screen — `useAreasLoadState`'s status
- * never un-latches from "signed-out" on its own, so cancelling the redirect
+ * a permanent "signed-out" screen — `useAreasLoadState`'s status never
+ * un-latches from "signed-out" on its own, so cancelling the redirect
  * without recovering renders that screen forever, with no areas and no
  * retry. The fix triggers `window.location.reload()` once a session is
  * confirmed after the fact; jsdom cannot actually navigate, so the
  * behavioral proxy here is asserting that reload call actually happens —
  * the one thing that ends the stuck frame in a real browser.
+ *
+ * A second review round caught that `reload()` only SCHEDULES a navigation
+ * — it does not stop this component's JS or unmount it synchronously — so a
+ * SECOND session-bearing event arriving before that reload lands could
+ * re-enter the branch and call `reload()` again. `page.tsx` now checks
+ * `sessionConfirmedRef` before reloading; this suite pins that a second
+ * `SIGNED_IN`-shaped event does not produce a second `reload()` call.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -153,10 +160,23 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     // redirect is not enough on its own — `useAreasLoadState`'s status is
     // still latched to "signed-out" and nothing else in this component ever
     // re-checks it. Without a recovery step the visitor would be stuck
-    // looking at "Redirecting to sign in" forever. Asserting the reload call
-    // is the proxy for "the stuck frame actually ends" since jsdom cannot
-    // perform a real navigation.
+    // looking at this screen forever. Asserting the reload call is the
+    // proxy for "the stuck frame actually ends" since jsdom cannot perform a
+    // real navigation.
     expect(mocks.reload).toHaveBeenCalledTimes(1);
+
+    // Second review round: a SECOND session-bearing event arriving before
+    // the scheduled reload actually lands (`reload()` only schedules
+    // navigation — it does not stop this component's JS) must NOT schedule
+    // a second reload. `sessionConfirmedRef` is the guard.
+    await act(async () => {
+      authStateCallback?.("TOKEN_REFRESHED", {
+        user: { email: "jay@example.com" },
+      });
+      await Promise.resolve();
+    });
+    expect(mocks.reload).toHaveBeenCalledTimes(1);
+    expect(mocks.routerReplace).not.toHaveBeenCalled();
   });
 
   it("still redirects a genuinely signed-out visitor exactly once", async () => {
@@ -187,7 +207,7 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     });
     expect(mocks.routerReplace).toHaveBeenCalledTimes(1);
 
-    expect(screen.queryByText("Redirecting to sign in")).not.toBeNull();
+    expect(screen.queryByText("Checking your sign-in…")).not.toBeNull();
 
     // A genuine signed-out visitor is navigated away, not reloaded in place.
     expect(mocks.reload).not.toHaveBeenCalled();
