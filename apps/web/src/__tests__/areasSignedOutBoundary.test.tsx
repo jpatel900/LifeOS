@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => ({
   createSupabaseBrowserClient: vi.fn(),
   getUser: vi.fn(),
   getSession: vi.fn(),
+  onAuthStateChange: vi.fn(),
+  unsubscribe: vi.fn(),
   routerReplace: vi.fn(),
   routerPush: vi.fn(),
 }));
@@ -72,8 +74,23 @@ function signedOutClient() {
   // that is missing the method, which would otherwise pollute this test's
   // DOM with unrelated noise.
   mocks.getSession.mockResolvedValue({ data: { session: null }, error: null });
+  // Part of #960 (defect 3): page.tsx's redirect effect now gates on the
+  // auth client's own `onAuthStateChange` transition instead of trusting
+  // `useAreasLoadState`'s one-shot classification directly (see
+  // `areasLateSessionEject.test.tsx` for the late-resolving-session pin this
+  // guards against). The real client fires this immediately with the
+  // current (here: no) session, so this fixture mirrors that — a genuinely
+  // signed-out visitor still resolves to "no session" and still redirects.
+  mocks.onAuthStateChange.mockImplementation((callback) => {
+    callback("INITIAL_SESSION", null);
+    return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
+  });
   return {
-    auth: { getUser: mocks.getUser, getSession: mocks.getSession },
+    auth: {
+      getUser: mocks.getUser,
+      getSession: mocks.getSession,
+      onAuthStateChange: mocks.onAuthStateChange,
+    },
     from: vi.fn(() => {
       throw new Error(
         "test setup: signedOutClient().from() should never be reached — " +
@@ -119,9 +136,13 @@ describe("signed-out /settings/areas boundary + door (#742, Final UX Loop C2-S0)
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
 
     // The transitional frame is truthful about what's happening, and reads
-    // as an ordinary status (role="status"), never an alarm.
+    // as an ordinary status (role="status"), never an alarm. Copy is
+    // neutral ("Checking your sign-in…", not "Redirecting to sign in") —
+    // Part of #960's rescue path can end this same frame with an in-place
+    // reload instead of a navigation, so the title must not commit to one
+    // outcome (copy-truth doctrine, caught on review).
     const redirectingRegion = screen
-      .getByText("Redirecting to sign in")
+      .getByText("Checking your sign-in…")
       .closest("[role]");
     expect(redirectingRegion?.getAttribute("role")).toBe("status");
 
