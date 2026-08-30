@@ -125,4 +125,14 @@ export const MIGRATION_DRIFT_ALLOWLIST = [
       'submissions land as Pending, approved to the board" (2026-08-23 00:02 local = ' +
       "04:02Z, minutes after this ledger row). Not a LifeOS migration.",
   },
+  {
+    version: "20260827044113",
+    name: "riseup_feedback_archived_flag",
+    reason:
+      "RiseUp Cockpit project migration (separate repo jpatel900/riseup-cockpit) applied " +
+      "directly by RiseUp's own pipeline to this shared Supabase project on 2026-08-27. " +
+      "Confirmed against the live ledger's statements column (drift-response, 2026-08-30): " +
+      "it only alters public.riseup_feedback (adds the archived flag and rewrites the anon " +
+      "read/submit policies) — zero LifeOS surface. Not a LifeOS migration.",
+  },
 ];
