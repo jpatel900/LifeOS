@@ -20,6 +20,16 @@ import { WorkflowProvider } from "@/lib/WorkflowContext";
  * `onAuthStateChange` transition — the same primitive `AuthAffordance.tsx`
  * already uses) before it fires, while a genuinely signed-out visitor is
  * still sent to `/login` exactly once.
+ *
+ * Independent review caught that a first version of this suite only pinned
+ * "never redirects" and missed that the rescued visitor was left stranded on
+ * a permanent "Redirecting to sign in" screen — `useAreasLoadState`'s status
+ * never un-latches from "signed-out" on its own, so cancelling the redirect
+ * without recovering renders that screen forever, with no areas and no
+ * retry. The fix triggers `window.location.reload()` once a session is
+ * confirmed after the fact; jsdom cannot actually navigate, so the
+ * behavioral proxy here is asserting that reload call actually happens —
+ * the one thing that ends the stuck frame in a real browser.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -30,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   unsubscribe: vi.fn(),
   routerReplace: vi.fn(),
   routerPush: vi.fn(),
+  reload: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/browser", () => ({
@@ -78,13 +89,27 @@ function buildClient() {
   };
 }
 
+// jsdom's real `window.location` has a non-configurable `reload` (spyOn
+// throws "Cannot redefine property"), so the whole `location` object is
+// replaced with a stub for this suite instead — the same pattern this
+// repo's other navigation tests use when they need to observe `reload`.
+const originalLocation = window.location;
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.createSupabaseBrowserClient.mockReturnValue(buildClient());
+  Object.defineProperty(window, "location", {
+    configurable: true,
+    value: { ...originalLocation, reload: mocks.reload },
+  });
 });
 
 afterEach(() => {
   cleanup();
+  Object.defineProperty(window, "location", {
+    configurable: true,
+    value: originalLocation,
+  });
 });
 
 function renderAreasPage() {
@@ -123,6 +148,15 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     // It must never have redirected — neither before the session arrived nor
     // after.
     expect(mocks.routerReplace).not.toHaveBeenCalled();
+
+    // Behavioral pin (finding 2/4 from independent review): cancelling the
+    // redirect is not enough on its own — `useAreasLoadState`'s status is
+    // still latched to "signed-out" and nothing else in this component ever
+    // re-checks it. Without a recovery step the visitor would be stuck
+    // looking at "Redirecting to sign in" forever. Asserting the reload call
+    // is the proxy for "the stuck frame actually ends" since jsdom cannot
+    // perform a real navigation.
+    expect(mocks.reload).toHaveBeenCalledTimes(1);
   });
 
   it("still redirects a genuinely signed-out visitor exactly once", async () => {
@@ -153,8 +187,9 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     });
     expect(mocks.routerReplace).toHaveBeenCalledTimes(1);
 
-    expect(
-      screen.queryByText("Redirecting to sign in"),
-    ).not.toBeNull();
+    expect(screen.queryByText("Redirecting to sign in")).not.toBeNull();
+
+    // A genuine signed-out visitor is navigated away, not reloaded in place.
+    expect(mocks.reload).not.toHaveBeenCalled();
   });
 });

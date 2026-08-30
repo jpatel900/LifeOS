@@ -53,11 +53,27 @@ export default function AreasSettingsPage() {
 
   // Part of #960 (defect 3): `useAreasLoadState.ts`'s `loadAreas` effect
   // runs exactly once on mount and NEVER re-checks — if that one call fails
-  // signed-out-shaped, `state.status` latches "signed-out" forever, even for
-  // a visitor whose session resolves a moment later (a token still being
-  // read from storage, a sign-in redirect still completing). Trusting that
-  // single classification directly — as this effect used to — ejected that
-  // visitor to /login anyway, mid-restore.
+  // signed-out-shaped, `state.status` latches "signed-out" forever, even if
+  // the auth client itself resolves a session afterward.
+  //
+  // IMPORTANT, honest scope (independent review, see PR discussion): the
+  // actual production trigger for defect 3 — a real reload where a session
+  // restores AFTER this redirect would have fired — is still UNPROVEN.
+  // `GoTrueClient`'s own `getUser()` and `onAuthStateChange` both await the
+  // same internal `initializePromise`, and on an "Auth session missing" 401
+  // the client clears its stored session BEFORE that promise resolves — so
+  // within ONE document load there is no window where the first check fails
+  // signed-out-shaped and a LATER `onAuthStateChange` callback from that same
+  // initialization still reports a session. What this subscription actually
+  // rescues is narrower than "any session that resolves later": two real
+  // windows only —
+  //   1. a session becoming valid in ANOTHER tab, forwarded to this one
+  //      through the same client instance (storage/broadcast event), and
+  //   2. a `TOKEN_REFRESHED` (or other) transition firing after
+  //      initialization has already completed.
+  // Runtime instrumentation is still needed to confirm which (if either) is
+  // what real users hit. Until then, treat this as honest hardening against
+  // those two windows — not a proven fix for the exact defect-3 repro.
   //
   // The fix does not touch `hasRedirectedRef`'s once-ever guard above; it
   // changes what feeds the CONDITION. Instead of redirecting the instant
@@ -65,12 +81,6 @@ export default function AreasSettingsPage() {
   // own `onAuthStateChange` transition — the same primitive
   // `AuthAffordance.tsx` already uses to track presence — and only
   // redirects once that transition reports there really is no session.
-  // `onAuthStateChange` fires once immediately with the client's current
-  // (possibly still-resolving) session state and again on every later
-  // transition, so a session that resolves after the fact arrives as a
-  // later callback with `session` set and short-circuits the redirect for
-  // good; a genuinely signed-out visitor still gets exactly one `null`
-  // callback and is still sent to the door exactly once.
   const sessionConfirmedRef = useRef<"unconfirmed" | "signed-in">(
     "unconfirmed",
   );
@@ -97,6 +107,23 @@ export default function AreasSettingsPage() {
         if (!active || hasRedirectedRef.current) return;
         if (session) {
           sessionConfirmedRef.current = "signed-in";
+          // A session showed up after all. `state.status` is STILL
+          // "signed-out" though — `useAreasLoadState`'s mount effect already
+          // burned its one shot and will never re-check on its own (that is
+          // the entire reason this effect exists and is subscribed at all;
+          // see the guard above). Just cancelling the redirect here would
+          // strand the visitor on the permanent "Redirecting to sign in"
+          // screen below with no areas and no retry. A full reload is the
+          // smallest honest recovery: a fresh mount re-runs everything
+          // (this effect, `useAreasLoadState`'s own load) against the now-
+          // confirmed session. This also makes a cross-tab sign-out arriving
+          // after this point moot in practice — the reload unmounts this
+          // effect (cleanup below sets `active = false` and unsubscribes)
+          // before any further transition on this client could reach the
+          // callback below.
+          if (typeof window !== "undefined") {
+            window.location.reload();
+          }
           return;
         }
         if (sessionConfirmedRef.current === "signed-in") return;
@@ -201,12 +228,17 @@ export default function AreasSettingsPage() {
         />
       ) : null}
 
-      {/* #742: nobody is signed in. The redirect effect above is already on
-          its way to `/login`; this is only the brief frame before that
-          navigation lands, so it reuses the same calm, dashed-card shape as
-          the "loading" state just above rather than a full alert with its
-          own sign-in button — there is nothing left to decide here, the
-          door itself renders next. */}
+      {/* #742: `useAreasLoadState` classified the load signed-out-shaped.
+          Almost always the redirect effect above is already on its way to
+          `/login` and this is only the brief frame before that navigation
+          lands — same calm, dashed-card shape as the "loading" state just
+          above rather than a full alert with its own sign-in button, since
+          there is nothing left to decide here.
+          Part of #960 (defect 3): in the narrow rescue window described in
+          the redirect effect's own comment (a session confirmed after this
+          status latched), the redirect never fires and this frame is
+          instead cut short by a full reload — never a screen the visitor is
+          stuck looking at. */}
       {state.status === "signed-out" ? (
         <WorkflowLoadingState
           title="Redirecting to sign in"
