@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { DiagnosticsDisclosure } from "../../components/DiagnosticsDisclosure";
 import { WorkflowLoadingState } from "../../components/WorkflowLoadingState";
 import { saveModeLabel } from "../../../lib/statusVocabulary";
-import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { AreaCharterPanel } from "./AreaCharterPanel";
 import { DataExportPanel } from "./DataExportPanel";
@@ -50,115 +49,13 @@ export default function AreasSettingsPage() {
   // because the actual invariant is "navigate once, ever" — not "only when
   // these particular values happen to be referentially stable."
   const hasRedirectedRef = useRef(false);
-
-  // Part of #960 (defect 3): `useAreasLoadState.ts`'s `loadAreas` effect
-  // runs exactly once on mount and NEVER re-checks — if that one call fails
-  // signed-out-shaped, `state.status` latches "signed-out" forever, even if
-  // the auth client itself resolves a session afterward.
-  //
-  // IMPORTANT, honest scope (independent review, see PR discussion): the
-  // actual production trigger for defect 3 — a real reload where a session
-  // restores AFTER this redirect would have fired — is still UNPROVEN.
-  // `GoTrueClient`'s own `getUser()` and `onAuthStateChange` both await the
-  // same internal `initializePromise`, and on an "Auth session missing" 401
-  // the client clears its stored session BEFORE that promise resolves — so
-  // within ONE document load there is no window where the first check fails
-  // signed-out-shaped and a LATER `onAuthStateChange` callback from that same
-  // initialization still reports a session. What this subscription actually
-  // rescues is narrower than "any session that resolves later": two real
-  // windows only —
-  //   1. a session becoming valid in ANOTHER tab, forwarded to this one
-  //      through the same client instance (storage/broadcast event), and
-  //   2. a `TOKEN_REFRESHED` (or other) transition firing after
-  //      initialization has already completed.
-  // Runtime instrumentation is still needed to confirm which (if either) is
-  // what real users hit. Until then, treat this as honest hardening against
-  // those two windows — not a proven fix for the exact defect-3 repro.
-  //
-  // The fix does not touch `hasRedirectedRef`'s once-ever guard above; it
-  // changes what feeds the CONDITION. Instead of redirecting the instant
-  // `state.status` turns "signed-out", this subscribes to the auth client's
-  // own `onAuthStateChange` transition — the same primitive
-  // `AuthAffordance.tsx` already uses to track presence — and only
-  // redirects once that transition reports there really is no session.
-  //
-  // No `sessionStorage` reload-count sentinel was added on top of
-  // `sessionConfirmedRef` (considered on review). `sessionConfirmedRef`
-  // already closes the one repeat-reload gap that existed WITHIN a single
-  // document (a second session-bearing event before the scheduled reload
-  // lands — see the check inside the callback below). A reload loop ACROSS
-  // multiple fresh document loads would require the underlying auth state
-  // itself to flap between signed-out and signed-in on every single mount,
-  // which is a production auth/session bug in its own right, not something
-  // a client-side sentinel here should paper over — and a counter cheap
-  // enough to add without its own edge cases (when does it reset? what
-  // resets it after a real, wanted reload?) would still not catch that.
-  const sessionConfirmedRef = useRef<"unconfirmed" | "signed-in">(
-    "unconfirmed",
-  );
   useEffect(() => {
-    if (state.status !== "signed-out" || hasRedirectedRef.current) {
-      return;
-    }
-
-    const client = createSupabaseBrowserClient();
-    if (!client?.auth) {
-      // No auth client at all (Supabase not configured): nothing can ever
-      // confirm a session, so there is nothing to wait for — same behavior
-      // as before this fix.
+    if (state.status === "signed-out" && !hasRedirectedRef.current) {
       hasRedirectedRef.current = true;
       router.replace(
         `/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`,
       );
-      return;
     }
-
-    let active = true;
-    const { data: subscription } = client.auth.onAuthStateChange(
-      (_event, session) => {
-        if (!active || hasRedirectedRef.current) return;
-        if (session) {
-          // A session showed up after all. `state.status` is STILL
-          // "signed-out" though — `useAreasLoadState`'s mount effect already
-          // burned its one shot and will never re-check on its own (that is
-          // the entire reason this effect exists and is subscribed at all;
-          // see the guard above). Just cancelling the redirect here would
-          // strand the visitor on the permanent "Checking your sign-in…"
-          // screen below with no areas and no retry. A full reload is the
-          // smallest honest recovery: a fresh mount re-runs everything
-          // (this effect, `useAreasLoadState`'s own load) against the now-
-          // confirmed session.
-          //
-          // `sessionConfirmedRef` doubles as the once-per-document reload
-          // sentinel: `window.location.reload()` only SCHEDULES a
-          // navigation — it does not unmount this component or stop JS
-          // synchronously, so a SECOND session-bearing event (another tab
-          // signing in again, a second `TOKEN_REFRESHED`) could otherwise
-          // re-enter this branch and call `reload()` a second time before
-          // the first reload actually lands. Checking the ref before acting
-          // makes that a no-op instead. The same ref, checked in the `else`
-          // branch below, is also what stops a LATER `null`-session event
-          // (e.g. a cross-tab sign-out) from redirecting after a session was
-          // already confirmed here — not anything about the reload itself.
-          if (sessionConfirmedRef.current === "signed-in") return;
-          sessionConfirmedRef.current = "signed-in";
-          if (typeof window !== "undefined") {
-            window.location.reload();
-          }
-          return;
-        }
-        if (sessionConfirmedRef.current === "signed-in") return;
-        hasRedirectedRef.current = true;
-        router.replace(
-          `/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`,
-        );
-      },
-    );
-
-    return () => {
-      active = false;
-      subscription?.subscription?.unsubscribe();
-    };
   }, [state.status, pathname, router]);
 
   // #691: resolve the badge from the SAME context area list every other
@@ -249,25 +146,15 @@ export default function AreasSettingsPage() {
         />
       ) : null}
 
-      {/* #742: `useAreasLoadState` classified the load signed-out-shaped, and
-          the redirect effect above is deciding what to do about it. Two
-          honest outcomes share this one frame, which is why the copy stays
-          neutral instead of naming either ("Redirecting to sign in" was
-          wrong for the second one — copy-truth doctrine, caught on review):
-            - almost always: the effect confirms there is no session and
-              sends the visitor to `/login` — this is the brief frame before
-              that navigation lands; or
-            - the narrow rescue window (see the redirect effect's own
-              comment): a session gets confirmed after this status latched,
-              and the effect reloads the page in place instead of
-              navigating anywhere.
-          Either way there is nothing left to decide here and nothing the
-          visitor can do from this screen, so it keeps the same calm,
-          dashed-card shape as the "loading" state just above rather than a
-          full alert. */}
+      {/* #742: nobody is signed in. The redirect effect above is already on
+          its way to `/login`; this is only the brief frame before that
+          navigation lands, so it reuses the same calm, dashed-card shape as
+          the "loading" state just above rather than a full alert with its
+          own sign-in button — there is nothing left to decide here, the
+          door itself renders next. */}
       {state.status === "signed-out" ? (
         <WorkflowLoadingState
-          title="Checking your sign-in…"
+          title="Redirecting to sign in"
           description="Areas are stored on your account, not on this device."
         />
       ) : null}
