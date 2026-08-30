@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => ({
   createSupabaseBrowserClient: vi.fn(),
   getUser: vi.fn(),
   getSession: vi.fn(),
+  onAuthStateChange: vi.fn(),
+  unsubscribe: vi.fn(),
   routerReplace: vi.fn(),
   routerPush: vi.fn(),
 }));
@@ -72,8 +74,23 @@ function signedOutClient() {
   // that is missing the method, which would otherwise pollute this test's
   // DOM with unrelated noise.
   mocks.getSession.mockResolvedValue({ data: { session: null }, error: null });
+  // Part of #960 (defect 3): page.tsx's redirect effect now gates on the
+  // auth client's own `onAuthStateChange` transition instead of trusting
+  // `useAreasLoadState`'s one-shot classification directly (see
+  // `areasLateSessionEject.test.tsx` for the late-resolving-session pin this
+  // guards against). The real client fires this immediately with the
+  // current (here: no) session, so this fixture mirrors that — a genuinely
+  // signed-out visitor still resolves to "no session" and still redirects.
+  mocks.onAuthStateChange.mockImplementation((callback) => {
+    callback("INITIAL_SESSION", null);
+    return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
+  });
   return {
-    auth: { getUser: mocks.getUser, getSession: mocks.getSession },
+    auth: {
+      getUser: mocks.getUser,
+      getSession: mocks.getSession,
+      onAuthStateChange: mocks.onAuthStateChange,
+    },
     from: vi.fn(() => {
       throw new Error(
         "test setup: signedOutClient().from() should never be reached — " +

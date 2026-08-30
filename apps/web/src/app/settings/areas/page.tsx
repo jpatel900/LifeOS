@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { DiagnosticsDisclosure } from "../../components/DiagnosticsDisclosure";
 import { WorkflowLoadingState } from "../../components/WorkflowLoadingState";
 import { saveModeLabel } from "../../../lib/statusVocabulary";
+import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { AreaCharterPanel } from "./AreaCharterPanel";
 import { DataExportPanel } from "./DataExportPanel";
@@ -49,13 +50,67 @@ export default function AreasSettingsPage() {
   // because the actual invariant is "navigate once, ever" — not "only when
   // these particular values happen to be referentially stable."
   const hasRedirectedRef = useRef(false);
+
+  // Part of #960 (defect 3): `useAreasLoadState.ts`'s `loadAreas` effect
+  // runs exactly once on mount and NEVER re-checks — if that one call fails
+  // signed-out-shaped, `state.status` latches "signed-out" forever, even for
+  // a visitor whose session resolves a moment later (a token still being
+  // read from storage, a sign-in redirect still completing). Trusting that
+  // single classification directly — as this effect used to — ejected that
+  // visitor to /login anyway, mid-restore.
+  //
+  // The fix does not touch `hasRedirectedRef`'s once-ever guard above; it
+  // changes what feeds the CONDITION. Instead of redirecting the instant
+  // `state.status` turns "signed-out", this subscribes to the auth client's
+  // own `onAuthStateChange` transition — the same primitive
+  // `AuthAffordance.tsx` already uses to track presence — and only
+  // redirects once that transition reports there really is no session.
+  // `onAuthStateChange` fires once immediately with the client's current
+  // (possibly still-resolving) session state and again on every later
+  // transition, so a session that resolves after the fact arrives as a
+  // later callback with `session` set and short-circuits the redirect for
+  // good; a genuinely signed-out visitor still gets exactly one `null`
+  // callback and is still sent to the door exactly once.
+  const sessionConfirmedRef = useRef<"unconfirmed" | "signed-in">(
+    "unconfirmed",
+  );
   useEffect(() => {
-    if (state.status === "signed-out" && !hasRedirectedRef.current) {
+    if (state.status !== "signed-out" || hasRedirectedRef.current) {
+      return;
+    }
+
+    const client = createSupabaseBrowserClient();
+    if (!client?.auth) {
+      // No auth client at all (Supabase not configured): nothing can ever
+      // confirm a session, so there is nothing to wait for — same behavior
+      // as before this fix.
       hasRedirectedRef.current = true;
       router.replace(
         `/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`,
       );
+      return;
     }
+
+    let active = true;
+    const { data: subscription } = client.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!active || hasRedirectedRef.current) return;
+        if (session) {
+          sessionConfirmedRef.current = "signed-in";
+          return;
+        }
+        if (sessionConfirmedRef.current === "signed-in") return;
+        hasRedirectedRef.current = true;
+        router.replace(
+          `/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`,
+        );
+      },
+    );
+
+    return () => {
+      active = false;
+      subscription?.subscription?.unsubscribe();
+    };
   }, [state.status, pathname, router]);
 
   // #691: resolve the badge from the SAME context area list every other
