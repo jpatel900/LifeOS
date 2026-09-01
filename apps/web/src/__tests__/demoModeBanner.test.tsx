@@ -60,4 +60,37 @@ describe("DemoModeBanner (FR-029 loud non-persistence)", () => {
 
     expect(container).toBeEmptyDOMElement();
   });
+
+  /**
+   * #934 Option C — nothing links to /login in demo mode today (the state
+   * the live deploy actually runs in). RED on unmodified main: no link
+   * exists anywhere in this component's output.
+   */
+  it("exposes a link to /login in demo mode, in its own reserved trailing column", () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+
+    render(<DemoModeBanner />);
+
+    const link = screen.getByRole("link", { name: /sign in/i });
+    expect(link).toHaveAttribute("href", "/login");
+
+    // Direct-measurement finding (see the component's own doc comment): a
+    // dedicated second ROW measurably pushes settings/areas below the fold
+    // at both pinned viewports, because that surface has ~0px of headroom
+    // against the hit-target-overlap-pin's fold cutoff. The link must
+    // instead be `absolute` (contributing zero extra height to the
+    // document flow) inside a column the sentence's own `pr-*` padding
+    // reserves, never a sibling row. Pinning the `absolute` class is what
+    // stops a future edit from quietly reintroducing the reverted,
+    // pin-breaking second-row shape.
+    expect(link.className).toMatch(/\babsolute\b/);
+  });
+
+  it("renders no link to /login when Supabase is configured", () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+
+    render(<DemoModeBanner />);
+
+    expect(screen.queryByRole("link", { name: /sign in/i })).toBeNull();
+  });
 });

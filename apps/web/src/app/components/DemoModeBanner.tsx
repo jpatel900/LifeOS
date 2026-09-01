@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { cn } from "@/lib/utils";
+import { HIT_TARGET_MIN } from "@/app/components/moments/hitTarget";
 
 /**
  * FR-029 loud non-persistence (F-G3b), RECONCILED WITH REALITY by #737 C1 S5.
@@ -62,6 +65,47 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
  * #660 audit line X1: colors are the `--warning`/`--warning-foreground`/
  * `--warning-border` tokens (globals.css), not hardcoded Tailwind palette
  * classes.
+ *
+ * ## LAYOUT — Option C (#934 OWNER-GATE, decided 2026-08-30)
+ *
+ * Two PRIOR attempts to give this banner a reachable "Sign in" door were
+ * reverted (see #934's PR body for the measured failures):
+ *  1. Adding the door to `AuthAffordance.tsx`'s masthead cluster broke
+ *     `moments-home-parity.spec.ts` at 1366x768 — the masthead is already at
+ *     flex-wrap capacity.
+ *  2. An inline "Sign in" text link inside this banner's own sentence wrapped
+ *     to a third line at 390px, growing this banner's height on every one of
+ *     the ~15 surfaces it renders on (root `AppShell`) and pushing
+ *     `settings/areas`'s pre-existing content below the fold — masking a
+ *     hit-target-overlap-pin count, not satisfying one.
+ *
+ * DIRECT MEASUREMENT (this slice) found the failure mode is not "wrapping"
+ * specifically — it is ANY added banner height at all. `settings/areas` sits
+ * at essentially zero pixel headroom against the viewport fold at both pinned
+ * sizes: adding as little as 2-4px of extra flow height to this globally
+ * rendered banner drops its hit-target-overlap-pin desktop count from 23 to
+ * 11 and its mobile count from 10 to 7 (verified with `hit-target-overlap-pin
+ * .spec.ts`, isolated Playwright context, not eyeballed). A literal
+ * two-ROW layout (sentence, then a second row for the link) was tried first
+ * and failed this exact way even using the invisible-hit-area technique.
+ *
+ * The layout that actually holds the pin is a FIXED-WIDTH TRAILING COLUMN,
+ * not a second row: `pr-16` on the sentence reserves real, permanent
+ * horizontal space on the right so the link never renders on top of the
+ * warning text (the sentence's own available width shrinks by the same
+ * amount at every viewport, so its wrap point is deterministic and never
+ * depends on this link's own text length), and the link itself is
+ * `absolute` inside that reserved column — contributing ZERO extra height to
+ * the document flow, so `settings/areas` (and every other of the ~15
+ * surfaces this banner renders on) measures identically to before this
+ * change. `HIT_TARGET_MIN` (not `HIT_TARGET_INVISIBLE`) on purpose: the
+ * negative margin `HIT_TARGET_INVISIBLE` uses to avoid pushing flow siblings
+ * fights an `absolute right-*` offset (margin still applies to an
+ * absolutely-positioned box's offset), which was measured to push the link's
+ * own box outside the viewport and introduce real horizontal overflow
+ * (`moments-home-parity.spec.ts`'s no-horizontal-overflow assertion, caught
+ * by running it, not by reasoning about it). `HIT_TARGET_MIN`'s literal
+ * 44x44 box has no such margin, so it stays fully inside the reserved column.
  */
 export function DemoModeBanner() {
   if (isSupabaseConfigured()) {
@@ -72,10 +116,20 @@ export function DemoModeBanner() {
     <div
       role="alert"
       data-testid="demo-mode-banner"
-      className="sticky top-0 z-50 border-b-4 border-warning-border bg-warning px-4 py-2 text-center text-sm font-bold text-warning-foreground"
+      className="sticky top-0 z-50 border-b-4 border-warning-border bg-warning py-2 pl-4 pr-16 text-center text-sm font-bold text-warning-foreground relative"
     >
       Demo mode — there is no account to save to here. Nothing you do leaves
       this browser, and clearing its data ends it.
+      <Link
+        href="/login"
+        data-testid="demo-banner-signin-link"
+        className={cn(
+          HIT_TARGET_MIN,
+          "absolute right-2 top-1 text-xs font-semibold underline underline-offset-2 hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-warning",
+        )}
+      >
+        Sign in
+      </Link>
     </div>
   );
 }
