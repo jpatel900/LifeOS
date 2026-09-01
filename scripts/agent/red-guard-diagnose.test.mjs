@@ -143,7 +143,12 @@ test("the Telegram notice is at most two lines and names the hold", () => {
 });
 
 test("confirm-to-arm only arms on a human label, never against wont-fix", () => {
-  const base = { state: "OPEN", headRef: "guard/revert-main-360cce42" };
+  const base = {
+    state: "OPEN",
+    headRef: "guard/revert-main-360cce42",
+    title: "",
+    body: "",
+  };
   assert.equal(
     evaluateConfirmArm({ ...base, labels: [CONFIRM_LABEL] }).arm,
     true,
@@ -162,6 +167,27 @@ test("confirm-to-arm only arms on a human label, never against wont-fix", () => 
       headRef: "claude/red-guard-notify-hold",
     }).arm,
     false,
+  );
+});
+
+test("confirm-to-arm never arms an owner-gated revert PR, even confirmed", () => {
+  const base = {
+    state: "OPEN",
+    headRef: "guard/revert-main-360cce42",
+    labels: [CONFIRM_LABEL],
+    title: "",
+  };
+  assert.equal(
+    evaluateConfirmArm({
+      ...base,
+      body: "## OWNER RATIFICATION REQUIRED\n\nSomeone edited this in.",
+    }).arm,
+    false,
+  );
+  assert.equal(
+    evaluateConfirmArm({ ...base, body: null }).arm,
+    false,
+    "unreadable body fails closed",
   );
 });
 
