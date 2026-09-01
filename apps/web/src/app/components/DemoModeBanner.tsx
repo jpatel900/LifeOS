@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { cn } from "@/lib/utils";
 import { HIT_TARGET_MIN } from "@/app/components/moments/hitTarget";
@@ -106,26 +107,55 @@ import { HIT_TARGET_MIN } from "@/app/components/moments/hitTarget";
  * (`moments-home-parity.spec.ts`'s no-horizontal-overflow assertion, caught
  * by running it, not by reasoning about it). `HIT_TARGET_MIN`'s literal
  * 44x44 box has no such margin, so it stays fully inside the reserved column.
+ * No `relative` on this div: `position: sticky` already establishes a
+ * containing block for an absolutely-positioned descendant (same as
+ * `relative`/`absolute`/`fixed` do), so a separate `relative` class was dead.
+ *
+ * #974 polish: "Sign in" measures 39.3px wide inside a 44px-min-width box,
+ * against the `pr-16` (64px) reservation — real slack today, but slack a
+ * future copy change could quietly eat into (nothing stopped the link from
+ * wrapping onto a second line inside its own box before this). `whitespace-
+ * nowrap` below turns "the copy got too long" into "the link visibly grows
+ * past the reserved column" (caught by the width assertion in
+ * `demoModeBanner.test.tsx` and `hit-target-overlap-pin.spec.ts`'s existing
+ * overlap check) instead of a silent second line that could creep under the
+ * sentence text unnoticed.
+ *
+ * #974 polish: `?next=<path>` matches the configured door's own contract
+ * (`AuthAffordance.tsx`'s signed-out pill) — a person who signs in from
+ * here returns to the page they were reading, not always to `/`.
+ *
+ * VERIFIER FINDING, not a defect of this component: in demo mode, the same
+ * `isSupabaseConfigured()` check that shows this banner is also why
+ * `createSupabaseBrowserClient()` returns a null client (`/login`'s own
+ * `AuthAffordance.tsx`-adjacent logic) — so this door is honest about
+ * REACHABILITY (a person can always find `/login` and read why accounts
+ * aren't set up here), not about a working sign-in, which only exists once
+ * the deploy's `NEXT_PUBLIC_SUPABASE_*` env is configured.
  */
 export function DemoModeBanner() {
+  const pathname = usePathname();
+
   if (isSupabaseConfigured()) {
     return null;
   }
+
+  const nextParam = pathname && pathname !== "/login" ? pathname : "/";
 
   return (
     <div
       role="alert"
       data-testid="demo-mode-banner"
-      className="sticky top-0 z-50 border-b-4 border-warning-border bg-warning py-2 pl-4 pr-16 text-center text-sm font-bold text-warning-foreground relative"
+      className="sticky top-0 z-50 border-b-4 border-warning-border bg-warning py-2 pl-4 pr-16 text-center text-sm font-bold text-warning-foreground"
     >
       Demo mode — there is no account to save to here. Nothing you do leaves
       this browser, and clearing its data ends it.
       <Link
-        href="/login"
+        href={`/login?next=${encodeURIComponent(nextParam)}`}
         data-testid="demo-banner-signin-link"
         className={cn(
           HIT_TARGET_MIN,
-          "absolute right-2 top-1 text-xs font-semibold underline underline-offset-2 hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-warning",
+          "absolute right-2 top-1 whitespace-nowrap text-xs font-semibold underline underline-offset-2 hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-warning",
         )}
       >
         Sign in

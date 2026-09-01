@@ -46,28 +46,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* #687 round-8 finding 3 (fresh-eyes judge): settings had no skip
-          link at all — home's `#stage-content` skip link (MomentsThemeShell.tsx)
-          is the first focusable element on the page; this matches that
-          contract. Placed here, before the nav `<header>` below, so it is
-          ALSO the first focusable element in the settings shell — a skip
-          link placed after the thing it is meant to let you skip past would
-          not skip anything. Targets `settings/areas/page.tsx`'s own
-          `id="stage-content"` `<main>` (that page owns its single main
-          landmark, matching the codebase's existing convention of each real
-          page supplying its own — see that file's own comment — rather than
-          this shared shell wrapping `{children}` in a second one, which
-          would double up with `not-found.tsx`'s own `<main>` when an unknown
-          `/settings/*` route renders the 404 through this same shell).
-          Global `bg-primary`/`text-primary-foreground` tokens, not the
-          `.lifeos-cockpit`-scoped `--btn`/`--btn-fg` MomentsThemeShell.tsx
-          uses — this shell is never inside that scope. */}
-      <a
-        href="#stage-content"
-        className="sr-only rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
-      >
-        Skip to stage content
-      </a>
+      {/* #687 round-8 finding 3 originally added a settings-scoped
+          `#stage-content` skip link here — SUPERSEDED by #974: the true root
+          `AppShell` (below, in this same file) now renders one shared skip
+          link ahead of `DemoModeBanner`, app-wide, so it is Tab #1 on every
+          route including this one; a second, identically-labelled instance
+          here would make `getByRole("link", { name: "Skip to stage
+          content" })` ambiguous. Targets the same `settings/areas/page.tsx`
+          `id="stage-content"` `<main>` this one used to. */}
       <header className="border-b border-border bg-card/95 px-4 py-3">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-baseline gap-3">
@@ -182,6 +168,42 @@ export function AppShell({ children }: { children: ReactNode }) {
     >
       <WorkflowProvider>
         <ServiceWorkerRegister />
+        {/*
+         * #974 polish (verifier finding on #934's demo-banner PR): once
+         * `DemoModeBanner` got a real, always-focusable "Sign in" link
+         * (`demo-banner-signin-link`), it silently became the FIRST
+         * focusable element on every route, ahead of every page's own
+         * `#stage-content` skip link — a skip link that isn't first is not a
+         * skip link, it is decoration. This shell-level skip link is the
+         * fix: rendered before `DemoModeBanner` so it is Tab #1 app-wide,
+         * same target contract (`#stage-content`) and same root-scoped
+         * token pair (`bg-primary`/`text-primary-foreground`) the removed
+         * `AdminShell`/`/login` versions used — this component sits outside
+         * the `.lifeos-cockpit` scope `MomentsThemeShell.tsx`/
+         * `LifeOSCockpit.tsx` use, so it cannot reuse their `--btn`/`--btn-fg`
+         * tokens.
+         *
+         * REPLACES the four separate per-page/per-shell skip links this
+         * codebase had accumulated (`MomentsThemeShell.tsx`, `AdminShell`
+         * below, `LifeOSCockpit.tsx`, `/login`'s own) — kept as one shared
+         * implementation, not four, because two identically-labelled "Skip
+         * to stage content" links on one page make
+         * `getByRole("link", { name: "Skip to stage content" })` ambiguous
+         * and give a screen-reader user two skip targets to the same place.
+         * Each removed comment block records the geometry lesson its own
+         * page taught (in particular `/login`'s centered-`<main>` hit-target
+         * quirk) for whoever next needs it. `sr-only` (Tailwind:
+         * `position: absolute` even at rest) means this link contributes
+         * zero layout height, so `DemoModeBanner`'s geometry — measured and
+         * pinned in #974 — is untouched by adding it above the banner;
+         * verified with the same three e2e gates after this change.
+         */}
+        <a
+          href="#stage-content"
+          className="sr-only rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+        >
+          Skip to stage content
+        </a>
         <DemoModeBanner />
         {children}
       </WorkflowProvider>

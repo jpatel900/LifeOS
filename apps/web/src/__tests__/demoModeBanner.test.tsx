@@ -5,12 +5,18 @@ vi.mock("@/lib/supabase/config", () => ({
   isSupabaseConfigured: vi.fn(),
 }));
 
+const navigationMock = vi.hoisted(() => ({ pathname: "/" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => navigationMock.pathname,
+}));
+
 import { DemoModeBanner } from "@/app/components/DemoModeBanner";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 describe("DemoModeBanner (FR-029 loud non-persistence)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    navigationMock.pathname = "/";
   });
 
   it("is unmissable when the app runs on the demo fallback", () => {
@@ -68,11 +74,15 @@ describe("DemoModeBanner (FR-029 loud non-persistence)", () => {
    */
   it("exposes a link to /login in demo mode, in its own reserved trailing column", () => {
     vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    navigationMock.pathname = "/";
 
     render(<DemoModeBanner />);
 
     const link = screen.getByRole("link", { name: /sign in/i });
-    expect(link).toHaveAttribute("href", "/login");
+    // #974: carries `?next=<path>`, same contract as `AuthAffordance.tsx`'s
+    // configured door — `/` collapses to the root path, same as that
+    // component's own `nextParam` fallback.
+    expect(link).toHaveAttribute("href", "/login?next=%2F");
 
     // Direct-measurement finding (see the component's own doc comment): a
     // dedicated second ROW measurably pushes settings/areas below the fold
@@ -84,6 +94,37 @@ describe("DemoModeBanner (FR-029 loud non-persistence)", () => {
     // stops a future edit from quietly reintroducing the reverted,
     // pin-breaking second-row shape.
     expect(link.className).toMatch(/\babsolute\b/);
+    // #974: `whitespace-nowrap` is the copy-length guard — without it, a
+    // future longer "Sign in" label could wrap onto a second line inside the
+    // reserved column with no test catching it (jsdom computes no layout, so
+    // the actual pixel-width proof lives in
+    // `demo-mode-banner-signin-link.spec.ts`, a real-browser e2e test; this
+    // pins the class that makes that proof meaningful).
+    expect(link.className).toMatch(/\bwhitespace-nowrap\b/);
+  });
+
+  /**
+   * #974: matches `AuthAffordance.tsx`'s configured-door contract — a person
+   * who signs in returns to the page they were reading, not always to `/`.
+   */
+  it("carries the current path as ?next= when not already on /login", () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    navigationMock.pathname = "/settings/areas";
+
+    render(<DemoModeBanner />);
+
+    const link = screen.getByRole("link", { name: /sign in/i });
+    expect(link).toHaveAttribute("href", "/login?next=%2Fsettings%2Fareas");
+  });
+
+  it("does not double-encode /login as its own ?next= target", () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    navigationMock.pathname = "/login";
+
+    render(<DemoModeBanner />);
+
+    const link = screen.getByRole("link", { name: /sign in/i });
+    expect(link).toHaveAttribute("href", "/login?next=%2F");
   });
 
   it("renders no link to /login when Supabase is configured", () => {
