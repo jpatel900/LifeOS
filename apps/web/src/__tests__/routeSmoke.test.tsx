@@ -12,6 +12,7 @@ import SettingsLayout from "../app/settings/layout";
 import AreasOverviewPage from "../app/areas/page";
 import TriagePage from "../app/triage/page";
 import LoginPage from "../app/login/page";
+import NotFoundPage from "../app/not-found";
 import { AppShell } from "../app/components/AppShell";
 import RootLayout from "../app/layout";
 
@@ -113,8 +114,17 @@ describe("handoff cockpit route provider wiring", () => {
    * the regression, and pins the DOM order it demands: the skip link
    * strictly precedes the banner's sign-in link, everywhere the banner
    * renders — checked on `/` (moments home), `/settings/areas` (AdminShell),
-   * and `/login` (no masthead of its own), matching the three routes the
-   * coordinator's manual tab-through measured.
+   * `/login` (no masthead of its own), and the 404 (added on #974 second
+   * review — see the `#stage-content` target assertion below).
+   *
+   * #974 SECOND REVIEW: the 404 route was added here because
+   * `not-found.tsx`'s `<main>` was missing `id="stage-content"` entirely —
+   * the shared skip link rendered fine there (this test alone would have
+   * stayed green), but activating it landed on a same-page anchor to
+   * NOTHING. `AppShell` wraps every route including the 404, so the target
+   * must exist on every route that inherits the link, not just the ones
+   * that happened to already have one before this link existed. This test
+   * now asserts the target's presence directly, not just the link's.
    */
   it.each([
     [
@@ -133,8 +143,9 @@ describe("handoff cockpit route provider wiring", () => {
       ),
     ],
     ["/login", async () => <LoginPage />],
+    ["404 (not-found.tsx)", async () => <NotFoundPage />],
   ])(
-    "keeps the skip link as the first focusable element, ahead of the demo banner's sign-in link, on %s (#974)",
+    "keeps the skip link as the first focusable element with a real #stage-content target, ahead of the demo banner's sign-in link, on %s (#974)",
     async (pathname, createPage) => {
       const { container } = renderThroughAppShell(await createPage(), pathname);
 
@@ -159,6 +170,11 @@ describe("handoff cockpit route provider wiring", () => {
       // AFTER the skip link).
       const position = skipLink.compareDocumentPosition(signInLink as Node);
       expect(Boolean(position & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+
+      // The regression this route was added to catch: a skip link that
+      // exists but targets nothing is as broken as no skip link at all.
+      const stageContent = container.querySelector("#stage-content");
+      expect(stageContent).not.toBeNull();
     },
   );
 

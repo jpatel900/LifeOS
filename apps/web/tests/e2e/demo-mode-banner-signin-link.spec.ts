@@ -10,8 +10,9 @@ import { expect, test } from "@playwright/test";
  * hit-target count breaks).
  *
  * That reservation is only as safe as the copy staying short: "Sign in" measures
- * 39.3px wide inside a 44px-min-width box against the 64px reservation — real
- * slack today, 12px of it, with no pin on the actual number. `whitespace-nowrap`
+ * 39.3px wide inside a 44px-min-width box against the 56px real bound (64px
+ * `pr-16` minus the link's own `right-2` offset) — real slack today, with no
+ * pin on the actual number. `whitespace-nowrap`
  * (`DemoModeBanner.tsx`) turns a future copy change that would have silently
  * wrapped the link onto a second line (potentially under the sentence text)
  * into a link that visibly grows past its own box instead — this is the
@@ -20,7 +21,11 @@ import { expect, test } from "@playwright/test";
  * cannot compute layout so this cannot be a unit test.
  */
 test.describe("demo banner sign-in link stays inside its reserved column", () => {
-  const RESERVED_COLUMN_PX = 64; // `pr-16` in DemoModeBanner.tsx
+  // #974 second review: 64 (`pr-16`) is the column `DemoModeBanner.tsx`
+  // reserves on the sentence, but the link itself sits at `right-2` (8px)
+  // INSIDE that column — its real available width before it would start
+  // overlapping the sentence's own `pr-16` edge is 64 - 8 = 56, not 64.
+  const RESERVED_COLUMN_PX = 56; // `pr-16` (64) minus the link's own `right-2` (8)
 
   for (const viewport of [
     { id: "mobile", width: 390, height: 844 },

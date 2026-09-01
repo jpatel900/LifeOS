@@ -197,10 +197,28 @@ export function AppShell({ children }: { children: ReactNode }) {
          * zero layout height, so `DemoModeBanner`'s geometry — measured and
          * pinned in #974 — is untouched by adding it above the banner;
          * verified with the same three e2e gates after this change.
+         *
+         * REFUTED FIX (#974 second review), two regressions neither of the
+         * three geometry/a11y gates could see, because none of them press
+         * Tab:
+         *  1. The copied class string dropped `min-h-[44px] min-w-[44px]` —
+         *     measured focused size 165x24 (was 165x44 on every one of the
+         *     four removed per-page versions). Restored below.
+         *  2. Both this link and `DemoModeBanner` are `z-50`, and this link
+         *     now precedes the banner in DOM — on a z-index tie, later DOM
+         *     order paints on top, so the STICKY banner painted over the
+         *     FOCUSED, visible pill. Measured directly:
+         *     `elementFromPoint` at the focused pill's own center returned
+         *     `#demo-mode-banner`, not this link. `focus:z-[60]` (strictly
+         *     above the banner's `z-50`, not tied) fixes the paint order;
+         *     `hit-target-overlap-pin.spec.ts`/`a11y-axe-pin.spec.ts` never
+         *     press Tab so neither caught this — `demo-skip-link-focus-pin
+         *     .spec.ts` (new) does, on every route this link's target must
+         *     exist on.
          */}
         <a
           href="#stage-content"
-          className="sr-only rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+          className="sr-only min-h-[44px] min-w-[44px] rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60]"
         >
           Skip to stage content
         </a>
