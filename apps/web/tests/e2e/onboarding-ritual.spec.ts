@@ -4,6 +4,14 @@ import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
 /**
  * #581 (epic #555 item 7) — the three-step onboarding ritual.
  *
+ * C3 (Part of #687, C3 card 10) — the ritual now lives at its own route,
+ * `/welcome`, instead of rendering inline on top of `/`. A zero-state
+ * session landing on `/` hands off there via a client-side `replace` (no
+ * reload — Target Card 10 criterion 1); reloading `/welcome` directly
+ * re-derives the same eligibility and shows the ritual again; completing or
+ * skipping through it hands back to `/` (Today), where the #551 state-truth
+ * surfaces are the payoff.
+ *
  * Trigger truth (design note): first session with zero areas AND zero
  * captures, deterministic over WorkflowContext state. The demo provider
  * seeds four mock areas into a fresh context, so a *plain* fresh demo load
@@ -55,11 +63,30 @@ test.describe("onboarding ritual on a zero-state session (#581)", () => {
     );
   });
 
+  // C3 own-URL, criteria 1 + the reload contract: a brand-new (zero-state)
+  // session hands off from `/` to `/welcome` with no full reload — a single
+  // `page.goto("/")` is the only navigation this test ever issues; the URL
+  // change to `/welcome` happens on its own, client-side. Reloading once
+  // there re-derives the same eligibility and keeps the ritual showing at
+  // that same URL.
+  test("a zero-state session hands off from / to /welcome with no reload, and a reload there keeps the ritual", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/welcome$/);
+    await expect(page.getByTestId("welcome-screen")).toBeVisible();
+    await expect(page.getByTestId("onboarding-ritual")).toBeVisible();
+
+    await page.reload();
+    await expect(page).toHaveURL(/\/welcome$/);
+    await expect(page.getByTestId("onboarding-ritual")).toBeVisible();
+  });
+
   test("runs areas -> day -> first capture to a truthful home, and never re-shows", async ({
     page,
   }) => {
     await page.goto("/");
-    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await expect(page).toHaveURL(/\/welcome$/);
     await expect(page.getByTestId("onboarding-ritual")).toBeVisible();
 
     // Step 1 — areas: the three prefilled editable chips persist on continue.
@@ -94,12 +121,20 @@ test.describe("onboarding ritual on a zero-state session (#581)", () => {
       page.getByTestId("onboarding-capture-conclusion"),
     ).toContainText("back to: what you were doing");
 
-    // The ritual closes onto the Start moment, where the #551 state-truth
-    // surfaces are the payoff: hero visible, and a pending-triage surface
-    // showing the captured thought waiting for a decision — which is also
-    // the proof the capture stayed RAW: a parsed capture would have left the
-    // pending-triage count and become a draft instead.
-    await expect(page.getByTestId("onboarding-ritual")).toBeHidden();
+    // The ritual hands off to Today at a truthful URL — no reload, a plain
+    // client-side replace — where the #551 state-truth surfaces are the
+    // payoff: hero visible, and a pending-triage surface showing the
+    // captured thought waiting for a decision (also proof the capture
+    // stayed RAW: a parsed capture would have left the pending-triage count
+    // and become a draft instead).
+    // A bare `/\/$/` would be too strict here: Today's own moment self-heal
+    // (`useMomentUrlState`, unrelated to this slice) legitimately appends
+    // `?moment=...` the instant it mounts — the truthful-URL claim this test
+    // owns is "back on Today's root", not "no query string at all", the same
+    // lenient shape the pre-existing rerun test below already used.
+    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/);
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await expect(page.getByTestId("onboarding-ritual")).toHaveCount(0);
     await expect(page.getByTestId("start-moment")).toBeVisible();
     await expect(page.getByTestId("start-hero")).toBeVisible();
     // With no first move queued (zero state), the pending item is PROMOTED
@@ -121,7 +156,7 @@ test.describe("onboarding ritual on a zero-state session (#581)", () => {
   test("every step is skippable and skipping still completes for good", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/welcome");
     await expect(page.getByTestId("onboarding-ritual")).toBeVisible();
 
     // Skip step 1 (persists the default areas), skip step 2 (keeps app
@@ -132,6 +167,9 @@ test.describe("onboarding ritual on a zero-state session (#581)", () => {
     await expect(page.getByTestId("onboarding-step-capture")).toBeVisible();
     await page.getByTestId("onboarding-capture-skip").click();
 
+    // Root + optional query, same lenient shape as the other "back on
+    // Today" assertions in this file (see the first one's own comment).
+    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/);
     await expect(page.getByTestId("onboarding-ritual")).toHaveCount(0);
     await expect(page.getByTestId("today-moments")).toBeVisible();
 
@@ -142,15 +180,34 @@ test.describe("onboarding ritual on a zero-state session (#581)", () => {
 });
 
 test.describe("onboarding ritual stays out of the way (#581)", () => {
-  test("a plain fresh demo context (seeded areas) never shows the ritual", async ({
+  test("a plain fresh demo context (seeded areas) never shows the ritual, and / never hands off", async ({
     page,
   }) => {
     await page.goto("/");
     await expect(page.getByTestId("today-moments")).toBeVisible();
     await expect(page.getByTestId("onboarding-ritual")).toHaveCount(0);
+    await expect(page).toHaveURL(/\/(?:\?.*)?$/);
   });
 
-  test("Settings offers 'Run setup again', which re-admits the ritual once", async ({
+  // C3 own-URL: `/welcome` is exactly as ineligible for an established
+  // account as the old inline ritual was — visiting it directly (bookmark,
+  // typed URL) bounces straight back to Today rather than stranding the
+  // account on a screen with nothing left to set up.
+  test("an established account visiting /welcome directly bounces back to Today", async ({
+    page,
+  }) => {
+    await page.goto("/welcome");
+    // A bare `/\/$/` would be too strict here: Today's own moment self-heal
+    // (`useMomentUrlState`, unrelated to this slice) legitimately appends
+    // `?moment=...` the instant it mounts — the truthful-URL claim this test
+    // owns is "back on Today's root", not "no query string at all", the same
+    // lenient shape the pre-existing rerun test below already used.
+    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/);
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await expect(page.getByTestId("onboarding-ritual")).toHaveCount(0);
+  });
+
+  test("Settings offers 'Run setup again', which re-admits the ritual once, at its own URL", async ({
     page,
   }) => {
     await page.goto("/settings/areas");
@@ -158,24 +215,24 @@ test.describe("onboarding ritual stays out of the way (#581)", () => {
     await page.locator("summary", { hasText: "Run setup again" }).click();
     await page.getByTestId("onboarding-rerun-button").click();
 
-    // C2-S6 RE-ANCHOR (#687), not a widening: `useMomentUrlState` now
-    // `replaceState`s `?moment=<value>` onto every moments-home URL at mount
-    // (see its own JSDoc) — even a bare `/` visit — so a bare `/\/$/` suffix
-    // pin is stale truth from before that contract landed (same class of fix
-    // nav-truth.spec.ts's `expectParam` already made). The criterion this
-    // test actually owns is "lands back on the moments-home root", not which
-    // moment resolves: `heuristicMoment` reads the wall-clock hour
-    // (playwright.config.ts), so pinning a specific `?moment=` value here
-    // would make the test flaky by time of day. Match root path + any query,
-    // reject any other path.
-    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/);
+    // C3 own-URL: the rerun button now navigates straight to `/welcome`
+    // (OnboardingRerunPanel.tsx) rather than to `/` and relying on Today to
+    // hand off a second time — one client-side navigation, not two.
+    await expect(page).toHaveURL(/\/welcome$/);
     await expect(page.getByTestId("onboarding-ritual")).toBeVisible();
 
     // #687 (trigger-truth split verdict) defect 2 — the "once" this test's
     // title claims was never actually asserted. Abandon the ritual here (no
     // step completed) and reload — the rerun request is consumed the moment
     // the ritual activated above, so it must NOT re-admit a second time.
+    // With nothing left to set up, `/welcome` bounces straight back to Today.
     await page.reload();
+    // A bare `/\/$/` would be too strict here: Today's own moment self-heal
+    // (`useMomentUrlState`, unrelated to this slice) legitimately appends
+    // `?moment=...` the instant it mounts — the truthful-URL claim this test
+    // owns is "back on Today's root", not "no query string at all", the same
+    // lenient shape the pre-existing rerun test below already used.
+    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/);
     await expect(page.getByTestId("today-moments")).toBeVisible();
     await expect(page.getByTestId("onboarding-ritual")).toHaveCount(0);
   });

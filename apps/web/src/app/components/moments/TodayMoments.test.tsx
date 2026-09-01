@@ -7,8 +7,14 @@ import { act, fireEvent, screen } from "@testing-library/react";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// C3 (onboarding own-URL): `replace` is hoisted out so the new hand-off
+// test below can assert on it directly — every other test in this file
+// stays on the pre-existing `push`-only shape (never called by
+// TodayMoments.tsx itself, only by children it mounts).
+const routerMock = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => routerMock,
   // #688: AuthAffordance (masthead sign-in door) reads the current path for
   // its ?next= return target.
   usePathname: () => "/",
@@ -28,6 +34,7 @@ import {
   renderToday,
   resetTodayMomentsMountTracking,
 } from "@/__tests__/helpers/todayMomentsHarness";
+import { writeOnboardingOutcomeToast } from "@/lib/onboarding/onboarding";
 
 // C2-S13 (#687): FILE-LEVEL, applies to every `describe` below regardless of
 // nesting. `resetTodayMomentsMountTracking` (harness) resets both
@@ -46,6 +53,8 @@ describe("TodayMoments", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
     window.localStorage.clear();
     window.sessionStorage.clear();
+    routerMock.push.mockClear();
+    routerMock.replace.mockClear();
   });
 
   afterEach(() => {
@@ -68,6 +77,69 @@ describe("TodayMoments", () => {
 
     expect(screen.queryByTestId("onboarding-ritual")).not.toBeInTheDocument();
     expect(screen.getByTestId("today-moments")).toBeInTheDocument();
+  });
+
+  // C3 (Part of #687, C3 card 10, red-first): before this slice the ritual
+  // rendered INLINE right here, on `/`, with no address of its own. This
+  // pins the hand-off half of the own-URL contract — a zero-state session
+  // landing on Today must hop to `/welcome` (a client-side `replace`, no
+  // reload) instead of ever painting the ritual, or ordinary Today content,
+  // in place. `/welcome` itself independently re-derives the same
+  // eligibility and actually renders the ritual — see
+  // `app/welcome/page.test.tsx`.
+  it("hands a zero-state session off to /welcome instead of rendering the ritual inline (C3 own-URL)", async () => {
+    window.sessionStorage.setItem(
+      "lifeos.phase2.workflow",
+      JSON.stringify({
+        areas: [],
+        captureItems: [],
+        taskDrafts: [],
+        projectDrafts: [],
+        ambiguityAssessments: [],
+        timeBlockProposalDrafts: [],
+        projects: [],
+        tasks: [],
+        timeBlockProposals: [],
+        calendarBlocks: [],
+        executionSessions: [],
+        healthChecks: [],
+        reviewLog: [],
+        wipRefusal: null,
+      }),
+    );
+
+    renderToday({ initialMoment: "start" });
+
+    await vi.waitFor(() => {
+      expect(routerMock.replace).toHaveBeenCalledWith("/welcome");
+    });
+    // The ritual never renders inline here anymore, and neither does the
+    // ordinary Today content it used to be gated against — `today-moments`
+    // itself (the component's own root wrapper) still mounts, but its
+    // masthead/moment content is suppressed for the hand-off tick.
+    expect(screen.queryByTestId("onboarding-ritual")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("start-moment")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("moments-settings-link"),
+    ).not.toBeInTheDocument();
+  });
+
+  // C3 (onboarding own-URL, red-first via the real dev server —
+  // tests/e2e/onboarding-ritual.spec.ts): completing the ritual on
+  // `/welcome` stages this same record before handing off to `/` — proving
+  // here, at the unit tier, that TodayMoments' wrapper actually reads it and
+  // forces the Start moment (the design note's payoff), independent of
+  // whatever the clock heuristic would otherwise resolve. A `?moment=`
+  // URL param was tried first and reverted — it is subject to the SAME
+  // `isRemount` staleness check a genuine hand-off can trip (see
+  // `hasStagedOnboardingOutcomeToast`'s own doc comment) — so this pins the
+  // mechanism that actually ships, not the one that looked simpler on paper.
+  it("forces the Start moment once, after a staged onboarding-completion hand-off (C3 own-URL)", async () => {
+    writeOnboardingOutcomeToast("captured");
+
+    renderToday();
+
+    expect(await screen.findByTestId("start-moment")).toBeInTheDocument();
   });
 
   it("prefills the capture overlay from a share-target ?shared_text= param", async () => {

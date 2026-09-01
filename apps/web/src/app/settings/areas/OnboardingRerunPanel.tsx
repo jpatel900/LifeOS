@@ -9,7 +9,14 @@ import { requestOnboardingRerun } from "@/lib/onboarding/onboarding";
  * #581 — the "run setup again" affordance from the onboarding design note.
  * Writes the device-local rerun request (an active account has areas and
  * captures, so the zero-state trigger alone could never re-admit the
- * ritual) and lands on the moments home, where the ritual picks it up.
+ * ritual) and lands on the ritual's own route.
+ *
+ * C3 (onboarding own-URL): used to `push("/")` and rely on Today detecting
+ * the rerun request and handing off. That extra hop is unnecessary here —
+ * unlike a fresh sign-in, this click is the moment eligibility becomes true
+ * (`requestOnboardingRerun()` just above it is exactly what
+ * `shouldShowOnboarding` checks first), so navigating straight to
+ * `/welcome` is both correct and one fewer client-side redirect.
  */
 export function OnboardingRerunPanel() {
   const router = useRouter();
@@ -27,7 +34,7 @@ export function OnboardingRerunPanel() {
           variant="secondary"
           onClick={() => {
             requestOnboardingRerun();
-            router.push("/");
+            router.push("/welcome");
           }}
           data-testid="onboarding-rerun-button"
         >
