@@ -11,6 +11,7 @@ import {
   SAFE_AUTOMERGE_BLOCKING_LABELS,
   SAFE_AUTOMERGE_REQUIRED_LABELS,
   evaluateAutomationPolicy,
+  evaluateOwnerGateBlock,
   normalizePath,
 } from "./automation-policy.mjs";
 
@@ -161,11 +162,20 @@ function collectContext() {
     ? pullRequest.labels.map((label) => label?.name).filter(Boolean)
     : [];
 
+  // pull_request events always carry a `body` key (string or null when the
+  // author left no description) — a genuinely missing pull_request object
+  // already threw above via the missing SHAs check, so this is never the
+  // "could not be read" case evaluateOwnerGateBlock fails closed on.
+  const title = typeof pullRequest.title === "string" ? pullRequest.title : "";
+  const body = typeof pullRequest.body === "string" ? pullRequest.body : "";
+
   return {
     changedPaths: gitDiffNameOnly(baseSha, headSha),
     diffStats: gitDiffStats(baseSha, headSha),
     draft: Boolean(pullRequest.draft),
     labels,
+    title,
+    body,
   };
 }
 
@@ -175,6 +185,14 @@ function collectContext() {
 // attempted route's; when both labels are present, either route arming
 // suffices and reasons come from whichever came closer.
 function classifyCombinedEligibility(context) {
+  // Owner decision 2026-08-30: the owner-gate/ratification block sits above
+  // both routes. Neither route may arm auto-merge while it applies, no
+  // matter what labels or paths would otherwise clear it.
+  const ownerGate = evaluateOwnerGateBlock(context);
+  if (ownerGate.blocked) {
+    return { eligible: false, reasons: ownerGate.reasons, route: null };
+  }
+
   const docsRoute = classifyEligibility(context);
   const additiveRequested = context.labels.includes(ADDITIVE_TESTS_LABEL);
 
@@ -524,6 +542,74 @@ function runSelfTest() {
     },
   ];
 
+  // Owner decision 2026-08-30 (post-#935): owner-gate/ratification/draft
+  // PRs must never arm, on EITHER route, no matter how clean the labels
+  // and paths otherwise look. Each REFUSE fixture below pairs an
+  // otherwise-fully-eligible docs-allowlist PR (the #935 shape) with one
+  // block condition; the last fixture is the control — the same PR with
+  // no block condition — proving the gate does not false-positive on a
+  // normal green PR.
+  const ownerGateBaseInput = {
+    labels: ["automerge:safe", "risk:low"],
+    changedPaths: ["docs/adr/0009-example.md"],
+    draft: false,
+    title: "docs: ratify ADR 0009",
+    body: "Routine ADR documentation update. No open questions.",
+  };
+
+  const ownerGateCases = [
+    {
+      name: "REFUSE: unchecked OWNER-GATE checkbox in body",
+      input: {
+        ...ownerGateBaseInput,
+        body: "Summary.\n\n- [ ] OWNER-GATE: pick the vendor before merge.\n",
+      },
+      expected: { eligible: false, reasonCount: 1, route: null },
+    },
+    {
+      name: "REFUSE: OWNER RATIFICATION REQUIRED in body (#935 shape)",
+      input: {
+        ...ownerGateBaseInput,
+        body: "## OWNER RATIFICATION REQUIRED\n\nADR 0009 needs the owner's sign-off before this merges.",
+      },
+      expected: { eligible: false, reasonCount: 1, route: null },
+    },
+    {
+      name: "REFUSE: OWNER-GATE heading in body",
+      input: {
+        ...ownerGateBaseInput,
+        body: "## OWNER-GATE\n\nDo not merge until reviewed.",
+      },
+      expected: { eligible: false, reasonCount: 1, route: null },
+    },
+    {
+      name: "REFUSE: owner-gate label present",
+      input: {
+        ...ownerGateBaseInput,
+        labels: [...ownerGateBaseInput.labels, "owner-gate"],
+      },
+      expected: { eligible: false, reasonCount: 1, route: null },
+    },
+    {
+      name: "REFUSE: draft PR (existing rule, still covered under the combined gate)",
+      input: { ...ownerGateBaseInput, draft: true },
+      expected: { eligible: false, reasonCount: 1, route: null },
+    },
+    {
+      name: "REFUSE: body could not be read — fails closed",
+      input: { ...ownerGateBaseInput, body: null },
+      expected: { eligible: false, reasonCount: 1, route: null },
+    },
+    {
+      name: "ALLOW: same PR shape, no block condition, checked OWNER-GATE box doesn't block",
+      input: {
+        ...ownerGateBaseInput,
+        body: "Summary.\n\n- [x] OWNER-GATE: vendor picked, see comment.\n",
+      },
+      expected: { eligible: true, reasonCount: 0, route: "docs-allowlist" },
+    },
+  ];
+
   for (const testCase of cases) {
     const result = classifyEligibility(testCase.input);
 
@@ -539,8 +625,12 @@ function runSelfTest() {
     );
   }
 
-  for (const testCase of additiveCases) {
-    const result = classifyCombinedEligibility(testCase.input);
+  for (const testCase of [...additiveCases, ...ownerGateCases]) {
+    const result = classifyCombinedEligibility({
+      title: "",
+      body: "",
+      ...testCase.input,
+    });
 
     assert.equal(
       result.eligible,
@@ -560,7 +650,7 @@ function runSelfTest() {
   }
 
   console.log(
-    `Self-test passed (${cases.length + additiveCases.length} cases).`,
+    `Self-test passed (${cases.length + additiveCases.length + ownerGateCases.length} cases).`,
   );
 }
 

@@ -1,3 +1,15 @@
+# Owner decision 2026-08-30 (post-#935 incident): this sync must never arm
+# auto-merge — and must disarm it if already armed — on a PR that is a
+# draft, carries an unchecked "- [ ] OWNER-GATE" line, has "OWNER
+# RATIFICATION REQUIRED" in its body, has an "OWNER-GATE" heading in its
+# body, or carries an `owner-gate` label. That check lives in
+# scripts/agent/automation-policy.mjs (evaluateOwnerGateBlock) and runs
+# before either eligibility route in check-safe-automerge.mjs, so it
+# applies no matter what labels or paths the PR otherwise satisfies. If
+# the PR body cannot be read, the sync fails closed (treats it as blocked)
+# rather than arming. `types: edited` is included so an edit to the title
+# or body (adding/removing a ratification marker) re-runs this check
+# immediately instead of waiting for the next label/push event.
 name: Safe Auto-merge
 
 on:
@@ -10,6 +22,7 @@ on:
       - unlabeled
       - ready_for_review
       - converted_to_draft
+      - edited
 
 concurrency:
   group: safe-automerge-${{ github.event.pull_request.number }}
@@ -68,7 +81,6 @@ jobs:
           script: |
             const eligible = process.env.ELIGIBLE === 'true';
             let pullRequestId = process.env.PR_NODE_ID;
-            const autoMergeEnabled = Boolean(context.payload.pull_request?.auto_merge);
 
             if (!pullRequestId) {
               // Some event deliveries omit node_id from the payload; fetch it
@@ -135,14 +147,15 @@ jobs:
               }
             }
 
-            if (!autoMergeEnabled) {
-              setOutputs(
-                'not-enabled',
-                'Pull request is ineligible, and GitHub auto-merge is not enabled.',
-              );
-              return;
-            }
-
+            // Owner decision 2026-08-30: always attempt the disable when
+            // ineligible, even if the payload's `auto_merge` field says
+            // disabled — that field can be absent from some event
+            // deliveries (see the node_id fallback above), and trusting an
+            // absent/stale field here is exactly how a PR stays armed
+            // after it becomes owner-gated. The catch block below already
+            // treats "wasn't enabled anyway" as a normal, non-failing
+            // outcome, so this costs nothing when autoMergeEnabled was
+            // already accurate.
             try {
               const result = await github.graphql(
                 `

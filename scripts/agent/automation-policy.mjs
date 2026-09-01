@@ -133,6 +133,67 @@ export const HIGH_RISK_PATH_PATTERNS = [
   "turbo.json",
 ];
 
+// Owner decision 2026-08-30: no PR may ever be armed for auto-merge (by
+// EITHER the safe-automerge sync or the self-merge window) while it is
+// still owner-gated, in draft, or a ratification PR — regardless of which
+// labels or path allowlists it otherwise satisfies. The 2026-08-30 incident
+// (#935) was a ratification PR ("OWNER RATIFICATION REQUIRED" in the body)
+// that the safe-automerge sync armed anyway. This check is a hard block
+// layered on top of every other eligibility route, not a replacement for
+// any of them.
+//
+// A label named `owner-gate` is checked if the repo ever creates one; today
+// no such label exists, so that check is a no-op until one is added.
+export const OWNER_GATE_LABEL = "owner-gate";
+
+// An unchecked `- [ ] OWNER-GATE:` line (AGENTS.md rule 11's follow-up
+// marker convention). Checked boxes (`- [x] OWNER-GATE:`) do not block —
+// resolving the item is exactly what checking the box records.
+const OWNER_GATE_CHECKBOX_RE = /^\s*-\s*\[\s\]\s*OWNER-GATE\b/im;
+// "OWNER RATIFICATION REQUIRED" anywhere in the body (the ratification-PR
+// marker #935 used).
+const OWNER_RATIFICATION_RE = /OWNER RATIFICATION REQUIRED/i;
+// "OWNER-GATE" inside a markdown heading (# .. OWNER-GATE .. or with a
+// leading emoji/other heading marker before it).
+const OWNER_GATE_HEADING_RE = /^\s{0,3}#{1,6}[^\n]*OWNER-GATE/im;
+
+// Fail closed: `body` must be a string (even "") to say "the body was
+// successfully read and contains no marker". Pass `null`/`undefined` only
+// when the body genuinely could not be fetched — that always blocks.
+export function evaluateOwnerGateBlock({ title, body, labels }) {
+  const reasons = [];
+  const safeLabels = Array.isArray(labels) ? labels : [];
+  const safeTitle = typeof title === "string" ? title : "";
+
+  if (typeof body !== "string") {
+    reasons.push(
+      "PR body could not be read — failing closed (never arm without it).",
+    );
+    return { blocked: true, reasons };
+  }
+
+  if (
+    OWNER_GATE_CHECKBOX_RE.test(body) ||
+    OWNER_GATE_CHECKBOX_RE.test(safeTitle)
+  ) {
+    reasons.push("Unchecked `- [ ] OWNER-GATE` line present.");
+  }
+  if (
+    OWNER_RATIFICATION_RE.test(body) ||
+    OWNER_RATIFICATION_RE.test(safeTitle)
+  ) {
+    reasons.push('PR contains "OWNER RATIFICATION REQUIRED".');
+  }
+  if (OWNER_GATE_HEADING_RE.test(body)) {
+    reasons.push('PR body contains an "OWNER-GATE" heading.');
+  }
+  if (safeLabels.includes(OWNER_GATE_LABEL)) {
+    reasons.push(`Owner-gate label present: \`${OWNER_GATE_LABEL}\`.`);
+  }
+
+  return { blocked: reasons.length > 0, reasons };
+}
+
 export function normalizePath(value) {
   return String(value ?? "")
     .replace(/\\/g, "/")

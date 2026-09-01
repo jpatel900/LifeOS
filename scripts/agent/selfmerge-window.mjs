@@ -23,6 +23,7 @@ import {
   SAFE_AUTOMERGE_BLOCKING_LABELS,
   SELFMERGE_WINDOW,
   evaluateAutomationPolicy,
+  evaluateOwnerGateBlock,
 } from "./automation-policy.mjs";
 
 const MARKER_PREFIX = "<!-- selfmerge-window:";
@@ -31,6 +32,8 @@ export function evaluateSelfmergeCandidate({
   enabled,
   labels,
   draft,
+  title,
+  body,
   mergeStateStatus,
   mainHealthy,
   guardRevertOpen,
@@ -48,6 +51,15 @@ export function evaluateSelfmergeCandidate({
     reasons.push(
       "Self-merge window class is disabled (SELFMERGE_WINDOW.enabled=false).",
     );
+    return { armable: false, reasons, renotify: false };
+  }
+
+  // Owner decision 2026-08-30 (post-#935): the owner-gate/ratification/draft
+  // block applies to this lane too, above every other check — a PR must
+  // never self-merge while it applies, no matter how it otherwise scores.
+  const ownerGate = evaluateOwnerGateBlock({ title, body, labels });
+  if (ownerGate.blocked) {
+    reasons.push(...ownerGate.reasons);
     return { armable: false, reasons, renotify: false };
   }
 
@@ -218,6 +230,38 @@ function armIfEligible(number) {
   } else {
     const lines = result.reasons.map((r) => `  - ${r}`).join("\n");
     console.log(`PR #${number} not armed:\n${lines}`);
+    disarmIfNeeded(number);
+  }
+}
+
+// Owner decision 2026-08-30: a PR that lost eligibility (owner-gate applied
+// after arming, a label flipped, etc.) must be disarmed, not just skipped —
+// the earlier arm() call already scheduled a merge that would otherwise
+// still land the moment CI turns green. Deliberately unconditional: it does
+// NOT gate on `context.autoMergeArmed` first, because that flag comes from
+// a `gh pr view` snapshot that can be stale (another process armed it a
+// moment ago) the same way `safe-automerge.yml`'s payload-derived
+// `auto_merge` flag can be stale. Always attempt the disable; treat "it
+// wasn't armed anyway" as a normal, silent no-op rather than an error.
+function disarmIfNeeded(number) {
+  try {
+    gh(["pr", "merge", String(number), "--disable-auto"]);
+    console.log(`DISARMED auto-merge for PR #${number} (no longer eligible).`);
+  } catch (error) {
+    const message = String(error?.message ?? error);
+    // Same message set safe-automerge.yml's disable branch treats as a
+    // normal no-op, kept in sync deliberately (one policy, two call sites).
+    if (
+      /auto-merge is disabled|auto-merge is not enabled|already disabled|not currently enabled/i.test(
+        message,
+      )
+    ) {
+      // Nothing to disarm — expected on every PR that was never armed.
+      return;
+    }
+    console.log(
+      `PR #${number}: failed to disarm auto-merge: ${message.slice(0, 200)}`,
+    );
   }
 }
 
@@ -257,19 +301,27 @@ function collectPr(prNumber) {
     "view",
     String(prNumber),
     "--json",
-    "number,labels,isDraft,mergeStateStatus,reviewDecision,headRefOid,files,comments",
+    "number,labels,isDraft,mergeStateStatus,reviewDecision,headRefOid,files,comments,title,body,autoMergeRequest",
   ]);
   const marker = parseMarker(pr.comments ?? []);
+  // gh reports body as "" (not null) when the description is empty; a
+  // failed/malformed API response would have thrown in ghJson() already,
+  // so reaching here means the body was read (fail-closed lives in
+  // evaluateOwnerGateBlock's typeof check for the genuinely-unreachable
+  // case).
   return {
     number: pr.number,
     labels: (pr.labels ?? []).map((label) => label.name),
     draft: Boolean(pr.isDraft),
+    title: typeof pr.title === "string" ? pr.title : "",
+    body: typeof pr.body === "string" ? pr.body : "",
     mergeStateStatus: pr.mergeStateStatus,
     reviewDecision: pr.reviewDecision ?? "",
     changedPaths: (pr.files ?? []).map((file) => file.path),
     headSha: pr.headRefOid,
     notifiedHeadSha: marker?.headSha ?? null,
     notifiedAtIso: marker?.notifiedAt ?? null,
+    autoMergeArmed: Boolean(pr.autoMergeRequest),
   };
 }
 
@@ -290,6 +342,18 @@ function runNotify() {
     pullRequest.draft
   ) {
     console.log("PR not opted in (or draft); nothing to notify.");
+    return;
+  }
+  const ownerGate = evaluateOwnerGateBlock({
+    title: pullRequest.title,
+    body: typeof pullRequest.body === "string" ? pullRequest.body : "",
+    labels,
+  });
+  if (ownerGate.blocked) {
+    console.log(
+      `PR is owner-gated; skipping notify (never arms this lane either):\n${ownerGate.reasons.map((r) => `  - ${r}`).join("\n")}`,
+    );
+    disarmIfNeeded(pullRequest.number);
     return;
   }
   const context = collectPr(pullRequest.number);
@@ -335,6 +399,7 @@ function runScan() {
       console.log(`ARMED auto-merge for PR #${number}.`);
       continue;
     }
+    disarmIfNeeded(number);
     if (result.renotify) {
       postNotification(number, context.headSha);
     }
@@ -349,6 +414,8 @@ function runSelfTest() {
     enabled: true,
     labels: [SELFMERGE_WINDOW.labels[0], "risk:low"],
     draft: false,
+    title: "fix(areas): tidy loading state",
+    body: "Routine cleanup, no open questions.",
     mergeStateStatus: "CLEAN",
     mainHealthy: true,
     guardRevertOpen: false,
@@ -429,6 +496,49 @@ function runSelfTest() {
       name: "draft blocks",
       input: { ...eligible, draft: true },
       expected: { armable: false },
+    },
+    // Owner decision 2026-08-30 (post-#935): the same owner-gate block as
+    // the safe-automerge lane, layered above this lane's own checks. The
+    // last fixture is the control — otherwise-armable PR, no block
+    // condition — proving the gate doesn't false-positive.
+    {
+      name: "REFUSE: unchecked OWNER-GATE checkbox in body",
+      input: {
+        ...eligible,
+        body: "Summary.\n\n- [ ] OWNER-GATE: confirm the migration plan.\n",
+      },
+      expected: { armable: false },
+    },
+    {
+      name: "REFUSE: OWNER RATIFICATION REQUIRED in body (#935 shape)",
+      input: {
+        ...eligible,
+        body: "## OWNER RATIFICATION REQUIRED\n\nNeeds sign-off.",
+      },
+      expected: { armable: false },
+    },
+    {
+      name: "REFUSE: OWNER-GATE heading in body",
+      input: { ...eligible, body: "## OWNER-GATE\n\nDo not merge yet." },
+      expected: { armable: false },
+    },
+    {
+      name: "REFUSE: owner-gate label present",
+      input: { ...eligible, labels: [...eligible.labels, "owner-gate"] },
+      expected: { armable: false },
+    },
+    {
+      name: "REFUSE: body could not be read — fails closed",
+      input: { ...eligible, body: null },
+      expected: { armable: false },
+    },
+    {
+      name: "ALLOW: same PR shape, checked OWNER-GATE box doesn't block",
+      input: {
+        ...eligible,
+        body: "Summary.\n\n- [x] OWNER-GATE: resolved, see comment.\n",
+      },
+      expected: { armable: true },
     },
   ];
 

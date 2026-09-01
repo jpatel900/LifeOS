@@ -8,6 +8,15 @@
 #   pauses itself whenever main is red or a guard revert PR is open.
 # Demotion: flip SELFMERGE_WINDOW.enabled to false in
 #   scripts/agent/automation-policy.mjs (one-line PR).
+#
+# Owner decision 2026-08-30 (post-#935 incident): same as the Safe
+# Auto-merge workflow — this lane must never arm, and must disarm if
+# already armed, on a draft/owner-gated/ratification PR (checked via
+# evaluateOwnerGateBlock in scripts/agent/automation-policy.mjs, fail-closed
+# if the body can't be read). The scan job disarms on every run where a
+# previously-armed PR no longer passes; `types: edited` on the notify job
+# reacts to a title/body edit immediately instead of waiting for the next
+# 10-minute cron tick.
 
 name: Self-merge Window
 
@@ -19,6 +28,7 @@ on:
       - labeled
       - synchronize
       - ready_for_review
+      - edited
   schedule:
     - cron: "*/10 * * * *"
   # The live test 2026-08-05 showed GitHub's cron never fired for 2+ hours
