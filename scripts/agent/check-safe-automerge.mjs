@@ -566,6 +566,48 @@ function runSelfTest() {
       },
       expected: { eligible: false, reasonCount: 1, route: null },
     },
+    // GFM checkbox-bypass variants (verifier finding, HIGH): any of these
+    // renders as a live, unchecked GitHub task list, so all must block.
+    {
+      name: "REFUSE: `*` bullet instead of `-`",
+      input: {
+        ...ownerGateBaseInput,
+        body: "Summary.\n\n* [ ] OWNER-GATE: pick vendor.\n",
+      },
+      expected: { eligible: false, reasonCount: 1, route: null },
+    },
+    {
+      name: "REFUSE: `+` bullet instead of `-`",
+      input: {
+        ...ownerGateBaseInput,
+        body: "Summary.\n\n+ [ ] OWNER-GATE: pick vendor.\n",
+      },
+      expected: { eligible: false, reasonCount: 1, route: null },
+    },
+    {
+      name: "REFUSE: empty box `[]` (no space)",
+      input: {
+        ...ownerGateBaseInput,
+        body: "Summary.\n\n- [] OWNER-GATE: pick vendor.\n",
+      },
+      expected: { eligible: false, reasonCount: 1, route: null },
+    },
+    {
+      name: "REFUSE: box with two spaces `[  ]`",
+      input: {
+        ...ownerGateBaseInput,
+        body: "Summary.\n\n- [  ] OWNER-GATE: pick vendor.\n",
+      },
+      expected: { eligible: false, reasonCount: 1, route: null },
+    },
+    {
+      name: "REFUSE: blockquoted checkbox line `> - [ ]`",
+      input: {
+        ...ownerGateBaseInput,
+        body: "Summary.\n\n> - [ ] OWNER-GATE: pick vendor.\n",
+      },
+      expected: { eligible: false, reasonCount: 1, route: null },
+    },
     {
       name: "REFUSE: OWNER RATIFICATION REQUIRED in body (#935 shape)",
       input: {

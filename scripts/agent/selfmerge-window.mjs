@@ -54,9 +54,12 @@ export function evaluateSelfmergeCandidate({
     return { armable: false, reasons, renotify: false };
   }
 
-  // Owner decision 2026-08-30 (post-#935): the owner-gate/ratification/draft
-  // block applies to this lane too, above every other check — a PR must
-  // never self-merge while it applies, no matter how it otherwise scores.
+  // Owner decision 2026-08-30 (post-#935): the owner-gate/ratification
+  // block applies to this lane too, checked before the label/path rules
+  // below — a PR must never self-merge while it applies, no matter how it
+  // otherwise scores. (Draft is enforced separately, a few lines down —
+  // it isn't part of evaluateOwnerGateBlock, see the comment on
+  // OWNER_GATE_LABEL in automation-policy.mjs for why.)
   const ownerGate = evaluateOwnerGateBlock({ title, body, labels });
   if (ownerGate.blocked) {
     reasons.push(...ownerGate.reasons);
@@ -386,26 +389,38 @@ function runScan() {
     return;
   }
   for (const { number } of candidates) {
-    const context = collectPr(number);
-    const result = evaluateSelfmergeCandidate({
-      enabled: SELFMERGE_WINDOW.enabled,
-      ...context,
-      ...health,
-      nowIso: new Date().toISOString(),
-      windowMinutes: SELFMERGE_WINDOW.windowMinutes,
-    });
-    if (result.armable) {
-      gh(["pr", "merge", String(number), "--squash", "--auto"]);
-      console.log(`ARMED auto-merge for PR #${number}.`);
-      continue;
+    // Owner decision 2026-08-30 (verifier finding #4): isolate each PR. A
+    // single `gh` hiccup (rate limit, transient API error) on one PR must
+    // not abort the whole sweep — every later PR in this tick would then
+    // be neither armed nor disarmed, which is exactly the fail-open shape
+    // this whole PR exists to close. Log and move on; the next cron tick
+    // (10 minutes, or the next workflow_run) retries this PR.
+    try {
+      const context = collectPr(number);
+      const result = evaluateSelfmergeCandidate({
+        enabled: SELFMERGE_WINDOW.enabled,
+        ...context,
+        ...health,
+        nowIso: new Date().toISOString(),
+        windowMinutes: SELFMERGE_WINDOW.windowMinutes,
+      });
+      if (result.armable) {
+        gh(["pr", "merge", String(number), "--squash", "--auto"]);
+        console.log(`ARMED auto-merge for PR #${number}.`);
+        continue;
+      }
+      disarmIfNeeded(number);
+      if (result.renotify) {
+        postNotification(number, context.headSha);
+      }
+      console.log(
+        `PR #${number} not armed:\n${result.reasons.map((reason) => `  - ${reason}`).join("\n")}`,
+      );
+    } catch (error) {
+      console.log(
+        `PR #${number}: scan failed, skipping this tick: ${String(error?.message ?? error).slice(0, 200)}`,
+      );
     }
-    disarmIfNeeded(number);
-    if (result.renotify) {
-      postNotification(number, context.headSha);
-    }
-    console.log(
-      `PR #${number} not armed:\n${result.reasons.map((reason) => `  - ${reason}`).join("\n")}`,
-    );
   }
 }
 
@@ -506,6 +521,38 @@ function runSelfTest() {
       input: {
         ...eligible,
         body: "Summary.\n\n- [ ] OWNER-GATE: confirm the migration plan.\n",
+      },
+      expected: { armable: false },
+    },
+    // GFM checkbox-bypass variants (verifier finding, HIGH).
+    {
+      name: "REFUSE: `*` bullet instead of `-`",
+      input: { ...eligible, body: "Summary.\n\n* [ ] OWNER-GATE: confirm.\n" },
+      expected: { armable: false },
+    },
+    {
+      name: "REFUSE: `+` bullet instead of `-`",
+      input: { ...eligible, body: "Summary.\n\n+ [ ] OWNER-GATE: confirm.\n" },
+      expected: { armable: false },
+    },
+    {
+      name: "REFUSE: empty box `[]` (no space)",
+      input: { ...eligible, body: "Summary.\n\n- [] OWNER-GATE: confirm.\n" },
+      expected: { armable: false },
+    },
+    {
+      name: "REFUSE: box with two spaces `[  ]`",
+      input: {
+        ...eligible,
+        body: "Summary.\n\n- [  ] OWNER-GATE: confirm.\n",
+      },
+      expected: { armable: false },
+    },
+    {
+      name: "REFUSE: blockquoted checkbox line `> - [ ]`",
+      input: {
+        ...eligible,
+        body: "Summary.\n\n> - [ ] OWNER-GATE: confirm.\n",
       },
       expected: { armable: false },
     },

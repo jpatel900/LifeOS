@@ -1,15 +1,19 @@
 # Owner decision 2026-08-30 (post-#935 incident): this sync must never arm
-# auto-merge — and must disarm it if already armed — on a PR that is a
-# draft, carries an unchecked "- [ ] OWNER-GATE" line, has "OWNER
-# RATIFICATION REQUIRED" in its body, has an "OWNER-GATE" heading in its
-# body, or carries an `owner-gate` label. That check lives in
-# scripts/agent/automation-policy.mjs (evaluateOwnerGateBlock) and runs
-# before either eligibility route in check-safe-automerge.mjs, so it
-# applies no matter what labels or paths the PR otherwise satisfies. If
-# the PR body cannot be read, the sync fails closed (treats it as blocked)
-# rather than arming. `types: edited` is included so an edit to the title
-# or body (adding/removing a ratification marker) re-runs this check
-# immediately instead of waiting for the next label/push event.
+# auto-merge — and must disarm it if already armed — on a PR that carries
+# an unchecked OWNER-GATE task-list line (any GFM bullet: -, *, or +;
+# blockquoted or not), has "OWNER RATIFICATION REQUIRED" in its body, has
+# an "OWNER-GATE" heading in its body, or carries the `owner-gate` label.
+# That check (evaluateOwnerGateBlock in scripts/agent/automation-policy.mjs)
+# runs before either eligibility route in check-safe-automerge.mjs, so it
+# applies no matter what labels or paths the PR otherwise satisfies, and
+# fails closed (treats it as blocked) if the PR body cannot be read. Draft
+# is a separate, pre-existing rule enforced inside each route in
+# check-safe-automerge.mjs — not part of evaluateOwnerGateBlock, but
+# nothing bypasses it either. `types: edited` is included so an edit to
+# the title or body (adding/removing a ratification marker) re-runs this
+# check immediately instead of waiting for the next label/push event, and
+# `if: always()` on the sync step below means the disarm branch still
+# runs even when the eligibility step itself throws.
 name: Safe Auto-merge
 
 on:
@@ -70,8 +74,23 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/agent/check-safe-automerge.mjs
 
+      # Owner decision 2026-08-30 (verifier finding #3): `if: always()` is
+      # load-bearing. Without it, GitHub Actions skips this step whenever
+      # the eligibility step above throws — which means a PR that was
+      # already armed, then edited to add a ratification marker in a way
+      # that makes the evaluator throw (or any other eligibility-script
+      # failure), would stay armed forever with no later event to retry
+      # it (unlike selfmerge-window.mjs, this lane has no cron re-scan).
+      # A failed/skipped eligibility step leaves `steps.eligibility.outputs
+      # .eligible` empty, so `ELIGIBLE` below is `''`, and
+      # `'' === 'true'` is `false` — the script already takes the disable
+      # branch for that case (verified: `node scripts/agent/
+      # check-safe-automerge.mjs` with PR_BASE_SHA/PR_HEAD_SHA unset
+      # throws and writes no GITHUB_OUTPUT, so `eligible` is always `''`,
+      # never `'true'`, on a thrown eligibility check).
       - name: Sync GitHub auto-merge setting
         id: sync
+        if: always()
         uses: actions/github-script@v8
         env:
           ELIGIBLE: ${{ steps.eligibility.outputs.eligible }}
@@ -204,6 +223,7 @@ jobs:
             }
 
       - name: Write workflow summary
+        if: always()
         env:
           ELIGIBLE: ${{ steps.eligibility.outputs.eligible }}
           REASONS_MARKDOWN: ${{ steps.eligibility.outputs.reasons_markdown }}

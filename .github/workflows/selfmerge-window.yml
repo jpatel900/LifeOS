@@ -11,12 +11,14 @@
 #
 # Owner decision 2026-08-30 (post-#935 incident): same as the Safe
 # Auto-merge workflow — this lane must never arm, and must disarm if
-# already armed, on a draft/owner-gated/ratification PR (checked via
+# already armed, on an owner-gated/ratification PR (checked via
 # evaluateOwnerGateBlock in scripts/agent/automation-policy.mjs, fail-closed
-# if the body can't be read). The scan job disarms on every run where a
-# previously-armed PR no longer passes; `types: edited` on the notify job
-# reacts to a title/body edit immediately instead of waiting for the next
-# 10-minute cron tick.
+# if the body can't be read); draft stays the pre-existing separate check
+# it always was. The scan job disarms on every run where a previously-armed
+# PR no longer passes, isolating each PR in its own try/catch so one `gh`
+# hiccup can't skip the rest of the sweep; `types: edited` on the notify
+# job reacts to a title/body edit immediately instead of waiting for the
+# next 10-minute cron tick.
 
 name: Self-merge Window
 

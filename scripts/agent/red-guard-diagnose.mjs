@@ -28,6 +28,8 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import process from "node:process";
 
+import { evaluateOwnerGateBlock } from "./automation-policy.mjs";
+
 export const CONFIRM_LABEL = "revert:confirm";
 export const WONT_FIX_LABEL = "revert:wont-fix";
 export const MARKER_PREFIX = "<!-- red-guard-diagnosis:";
@@ -277,7 +279,7 @@ export function renderTelegramNotice({ prNumber, prUrl, classification }) {
 // Pure: confirm-to-arm and stand-down decisions
 // ---------------------------------------------------------------------------
 
-export function evaluateConfirmArm({ labels, state, headRef }) {
+export function evaluateConfirmArm({ labels, state, headRef, title, body }) {
   const names = Array.isArray(labels) ? labels : [];
   if (state && state.toUpperCase() !== "OPEN") {
     return { arm: false, comment: null, reason: "PR is not open." };
@@ -287,6 +289,20 @@ export function evaluateConfirmArm({ labels, state, headRef }) {
       arm: false,
       comment: null,
       reason: "Not a Main Red Guard revert PR.",
+    };
+  }
+  // Owner decision 2026-08-30 (post-#935, verifier finding #2): wired into
+  // this arm path too, for consistency with safe-automerge.yml and
+  // selfmerge-window.mjs — even though this lane already requires a human
+  // to add `revert:confirm`, that human could still be confirming a PR
+  // whose body someone else edited to add an owner-gate marker after the
+  // fact. Fail-closed if the body can't be read, same as the other two.
+  const ownerGate = evaluateOwnerGateBlock({ title, body, labels: names });
+  if (ownerGate.blocked) {
+    return {
+      arm: false,
+      comment: null,
+      reason: ownerGate.reasons.join(" "),
     };
   }
   if (!names.includes(CONFIRM_LABEL)) {
@@ -547,7 +563,7 @@ function prContext(repo, prNumber) {
     "--repo",
     repo,
     "--json",
-    "number,state,labels,headRefName,autoMergeRequest,body,comments,url",
+    "number,state,labels,headRefName,autoMergeRequest,title,body,comments,url",
   ]);
   return {
     number: pr.number,
@@ -555,6 +571,7 @@ function prContext(repo, prNumber) {
     labels: (pr.labels ?? []).map((label) => label.name),
     headRef: pr.headRefName,
     autoMergeArmed: Boolean(pr.autoMergeRequest),
+    title: typeof pr.title === "string" ? pr.title : "",
     body: pr.body ?? "",
     comments: pr.comments ?? [],
     url: pr.url,
@@ -839,7 +856,12 @@ export function runSelfTest() {
   assert.match(notice, /HELD/);
 
   // Confirm-to-arm.
-  const base = { state: "OPEN", headRef: "guard/revert-main-360cce42" };
+  const base = {
+    state: "OPEN",
+    headRef: "guard/revert-main-360cce42",
+    title: "",
+    body: "",
+  };
   assert.equal(
     evaluateConfirmArm({ ...base, labels: [CONFIRM_LABEL] }).arm,
     true,
@@ -862,6 +884,20 @@ export function runSelfTest() {
       labels: [CONFIRM_LABEL],
       headRef: "claude/some-feature",
     }).arm,
+    false,
+  );
+  // Owner decision 2026-08-30 (post-#935, verifier finding #2): the
+  // owner-gate block applies here too, even with a human confirm label.
+  assert.equal(
+    evaluateConfirmArm({
+      ...base,
+      labels: [CONFIRM_LABEL],
+      body: "## OWNER RATIFICATION REQUIRED\n\nedited in later",
+    }).arm,
+    false,
+  );
+  assert.equal(
+    evaluateConfirmArm({ ...base, labels: [CONFIRM_LABEL], body: null }).arm,
     false,
   );
 

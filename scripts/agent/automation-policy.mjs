@@ -134,22 +134,35 @@ export const HIGH_RISK_PATH_PATTERNS = [
 ];
 
 // Owner decision 2026-08-30: no PR may ever be armed for auto-merge (by
-// EITHER the safe-automerge sync or the self-merge window) while it is
-// still owner-gated, in draft, or a ratification PR — regardless of which
-// labels or path allowlists it otherwise satisfies. The 2026-08-30 incident
-// (#935) was a ratification PR ("OWNER RATIFICATION REQUIRED" in the body)
-// that the safe-automerge sync armed anyway. This check is a hard block
-// layered on top of every other eligibility route, not a replacement for
-// any of them.
+// EITHER the safe-automerge sync, the self-merge window, or Main Red
+// Guard's confirm-arm) while it is still owner-gated or a ratification PR
+// — regardless of which labels or path allowlists it otherwise satisfies.
+// The 2026-08-30 incident (#935) was a ratification PR ("OWNER
+// RATIFICATION REQUIRED" in the body) that the safe-automerge sync armed
+// anyway. This check is a hard block layered on top of every other
+// eligibility route, not a replacement for any of them.
 //
-// A label named `owner-gate` is checked if the repo ever creates one; today
-// no such label exists, so that check is a no-op until one is added.
+// Draft is a separate, pre-existing rule, not part of this function: each
+// caller already refuses a draft PR on its own (classifyEligibility /
+// classifyAdditiveTestsEligibility in check-safe-automerge.mjs, the
+// `draft` check in selfmerge-window.mjs's evaluateSelfmergeCandidate).
+// It has equal priority to everything checked here — nothing bypasses it
+// — it just isn't duplicated into this function too.
+//
+// The `owner-gate` label exists in this repo (created 2026-08-30,
+// "gh label create owner-gate") specifically so this check has something
+// live to match; apply it to hold any PR back regardless of its body text.
 export const OWNER_GATE_LABEL = "owner-gate";
 
-// An unchecked `- [ ] OWNER-GATE:` line (AGENTS.md rule 11's follow-up
+// An unchecked OWNER-GATE task-list line (AGENTS.md rule 11's follow-up
 // marker convention). Checked boxes (`- [x] OWNER-GATE:`) do not block —
-// resolving the item is exactly what checking the box records.
-const OWNER_GATE_CHECKBOX_RE = /^\s*-\s*\[\s\]\s*OWNER-GATE\b/im;
+// resolving the item is exactly what checking the box records. GFM accepts
+// any of `-`/`*`/`+` as the bullet (AGENTS.md never mandates `-`), an
+// optional blockquote `>` prefix (GitHub still renders `> - [ ] ...` as a
+// task list inside a quoted block), and the box itself may hold zero, one,
+// or more spaces (`[]`, `[ ]`, `[  ]` all render as unchecked — only a
+// non-whitespace mark like `x` checks it).
+const OWNER_GATE_CHECKBOX_RE = /^\s*(?:>\s*)*[-*+]\s*\[\s*\]\s*OWNER-GATE\b/im;
 // "OWNER RATIFICATION REQUIRED" anywhere in the body (the ratification-PR
 // marker #935 used).
 const OWNER_RATIFICATION_RE = /OWNER RATIFICATION REQUIRED/i;
@@ -176,7 +189,7 @@ export function evaluateOwnerGateBlock({ title, body, labels }) {
     OWNER_GATE_CHECKBOX_RE.test(body) ||
     OWNER_GATE_CHECKBOX_RE.test(safeTitle)
   ) {
-    reasons.push("Unchecked `- [ ] OWNER-GATE` line present.");
+    reasons.push("Unchecked OWNER-GATE task-list line present.");
   }
   if (
     OWNER_RATIFICATION_RE.test(body) ||
