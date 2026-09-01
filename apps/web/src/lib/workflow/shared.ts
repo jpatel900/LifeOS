@@ -6,7 +6,19 @@ import type {
   Phase2TimeBlockProposal,
   Phase2TimeBlockProposalDraft,
 } from "@lifeos/schemas";
-import { areas, healthChecks } from "../mockData";
+import {
+  areas,
+  healthChecks,
+  demoSeedCalendarBlocks,
+  demoSeedCaptureItems,
+  demoSeedReviewLog,
+  demoSeedTaskDrafts,
+  demoSeedTasks,
+  demoSeedTimeBlockProposals,
+  hasDemoSeedId,
+} from "../mockData";
+import { isSupabaseConfigured } from "../supabase/config";
+import { isDemoSeedEnabled } from "../flags";
 import type {
   Phase2MockArea,
   Phase2MockCalendarBlock,
@@ -164,7 +176,14 @@ export function nowIso() {
   return new Date().toISOString();
 }
 
-export function createInitialWorkflowState(): WorkflowState {
+/**
+ * The genuinely-empty shape — no captures, drafts, tasks, blocks, sessions,
+ * or review log, whatever else is going on. This is what "start fresh"
+ * (`resetWorkflow` -> the reducer's `reset` case) always returns, even when
+ * the seeded demo below is what a first visit shows: a reset must produce a
+ * state a person can trust is actually cleared, not the sample content again.
+ */
+export function createEmptyWorkflowState(): WorkflowState {
   return {
     areas,
     captureItems: [],
@@ -182,6 +201,51 @@ export function createInitialWorkflowState(): WorkflowState {
     wipRefusal: null,
     accountIdByLocalId: createEmptyAccountIdAliases(),
   };
+}
+
+/**
+ * The empty shape with the #687 demo-seed sample layered on top — a handful
+ * of captures across triage states, one pending draft, a planned task with a
+ * scheduled time block, and one already-done task (the "completed win"). See
+ * `lib/mockData.ts`'s demoSeed* exports for the content and why every id is
+ * `demo-seed-`-prefixed.
+ */
+export function createSeededDemoWorkflowState(): WorkflowState {
+  return {
+    ...createEmptyWorkflowState(),
+    captureItems: demoSeedCaptureItems,
+    taskDrafts: demoSeedTaskDrafts,
+    tasks: demoSeedTasks,
+    timeBlockProposals: demoSeedTimeBlockProposals,
+    calendarBlocks: demoSeedCalendarBlocks,
+    reviewLog: demoSeedReviewLog,
+  };
+}
+
+/**
+ * The reducer's real initial state. Seeded with the #687 demo sample exactly
+ * when the app is running unconfigured (no Supabase — the same condition
+ * `DemoModeBanner` gates on) AND the seed has not been switched off
+ * (`isDemoSeedEnabled`, off by default for the whole test suite —
+ * `src/setupTests.ts`). A configured deploy — including a signed-out visitor
+ * on one — never sees sample rows, not even briefly before an account load
+ * replaces them.
+ */
+export function createInitialWorkflowState(): WorkflowState {
+  if (!isSupabaseConfigured() && isDemoSeedEnabled()) {
+    return createSeededDemoWorkflowState();
+  }
+  return createEmptyWorkflowState();
+}
+
+/** True when any row family in `state` still holds a #687 demo-seed row. */
+export function workflowStateHasDemoSeed(state: WorkflowState): boolean {
+  return (
+    state.captureItems.some((item) => hasDemoSeedId(item.id)) ||
+    state.taskDrafts.some((draft) => hasDemoSeedId(draft.id)) ||
+    state.tasks.some((task) => hasDemoSeedId(task.id)) ||
+    state.calendarBlocks.some((block) => hasDemoSeedId(block.id))
+  );
 }
 
 export function hasLaunchSequenceStep(

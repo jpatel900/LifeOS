@@ -32,6 +32,7 @@ import {
   carryForwardTask,
   createLocalProposalFromTask,
   createInitialWorkflowState,
+  createEmptyWorkflowState,
   deferTask,
   dropTask,
   editDraft,
@@ -349,6 +350,18 @@ export function createSyncedInitialState() {
   const initial = createInitialWorkflowState();
   syncWorkflowIdCounterFromState(initial);
   return initial;
+}
+
+/**
+ * #687 demo-seed: "start fresh" always lands on the genuinely-empty shape,
+ * never back on the sample content a first visit shows — see
+ * `createEmptyWorkflowState` (workflow/shared.ts) for why the two must
+ * diverge.
+ */
+export function createSyncedEmptyState() {
+  const empty = createEmptyWorkflowState();
+  syncWorkflowIdCounterFromState(empty);
+  return empty;
 }
 
 export function isUuid(value: string | null | undefined) {
@@ -1072,7 +1085,7 @@ export function workflowReducer(
     case "saveReview":
       return saveReview(state);
     case "reset":
-      return createSyncedInitialState();
+      return createSyncedEmptyState();
     default:
       return state;
   }

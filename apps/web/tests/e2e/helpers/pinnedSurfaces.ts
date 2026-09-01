@@ -49,6 +49,13 @@ import { pinMomentPreference } from "./momentPreference";
  * surface instead of three.
  */
 export async function preparePinnedSurfaces(page: Page): Promise<void> {
+  // #687 demo-seed: every non-onboarding surface below was measured against
+  // the pristine-but-not-onboarding state (real areas, zero everything
+  // else) — restore exactly that before either pin's baselines are walked,
+  // same reasoning as moments-home-parity.spec.ts's own beforeEach. The
+  // three onboarding surfaces override this with `seedZeroWorkflowState`
+  // (unconditional — see its own comment) inside their own `goto`.
+  await seedNoSampleWorkflowState(page);
   await pinMomentPreference(page, "start");
 }
 
@@ -137,14 +144,89 @@ const ZERO_WORKFLOW_STATE = {
   wipRefusal: null,
 };
 
+// #687 demo-seed: unconditional (no "if not already set" guard), unlike
+// `seedNoSampleWorkflowState` below — the three onboarding surfaces call
+// this AFTER `preparePinnedSurfaces` has already run (which now seeds via
+// `seedNoSampleWorkflowState`), and an onboarding surface's whole point is
+// to force the zero-areas state regardless of whatever ran before it.
 async function seedZeroWorkflowState(page: Page) {
+  await page.addInitScript(
+    ([key, value]) => {
+      window.sessionStorage.setItem(key, value);
+    },
+    [WORKFLOW_STORAGE_KEY, JSON.stringify(ZERO_WORKFLOW_STATE)] as const,
+  );
+}
+
+/**
+ * #687 demo-seed (owner 2026-08-30): the unconfigured (no Supabase) fallback
+ * this whole E2E lane already runs against now seeds `createInitialWorkflowState`
+ * with sample captures/tasks/etc on a genuinely first visit (no `sessionStorage`
+ * snapshot yet) — see `apps/web/src/lib/workflow/shared.ts`. Every spec in
+ * this repo that navigates to `/` expecting the OLD pristine-but-not-onboarding
+ * state (real areas, zero everything else) must now seed that state
+ * explicitly instead of assuming a fresh page load provides it — otherwise it
+ * is asserting on the demo sample, which is a different, and now correct,
+ * behavior. Reuses `seedZeroWorkflowState`'s `addInitScript`-before-`sessionStorage`-
+ * read idiom, with `areas` populated (mirrors `lib/mockData.ts`'s `areas`
+ * export) so `shouldShowOnboarding`'s `areaCount === 0` branch is not
+ * accidentally triggered — this is NOT the onboarding zero-state above, it is
+ * "areas exist, nothing else does yet".
+ */
+const NO_SEED_WORKFLOW_STATE = {
+  areas: [
+    {
+      id: "area-main-job",
+      user_id: "00000000-0000-0000-0000-000000000001",
+      name: "Main Job",
+      color: "#4c80cd",
+      created_at: "2026-05-07T00:00:00.000Z",
+    },
+    {
+      id: "area-personal",
+      user_id: "00000000-0000-0000-0000-000000000001",
+      name: "Personal",
+      color: "#439458",
+      created_at: "2026-05-07T00:00:00.000Z",
+    },
+    {
+      id: "area-volunteer",
+      user_id: "00000000-0000-0000-0000-000000000001",
+      name: "Volunteer Work",
+      color: "#8965ba",
+      created_at: "2026-05-07T00:00:00.000Z",
+    },
+    {
+      id: "area-side-project",
+      user_id: "00000000-0000-0000-0000-000000000001",
+      name: "Side Project",
+      color: "#d87248",
+      created_at: "2026-05-07T00:00:00.000Z",
+    },
+  ],
+  captureItems: [],
+  taskDrafts: [],
+  projectDrafts: [],
+  ambiguityAssessments: [],
+  timeBlockProposalDrafts: [],
+  projects: [],
+  tasks: [],
+  timeBlockProposals: [],
+  calendarBlocks: [],
+  executionSessions: [],
+  healthChecks: [],
+  reviewLog: [],
+  wipRefusal: null,
+};
+
+export async function seedNoSampleWorkflowState(page: Page) {
   await page.addInitScript(
     ([key, value]) => {
       if (!window.sessionStorage.getItem(key)) {
         window.sessionStorage.setItem(key, value);
       }
     },
-    [WORKFLOW_STORAGE_KEY, JSON.stringify(ZERO_WORKFLOW_STATE)] as const,
+    [WORKFLOW_STORAGE_KEY, JSON.stringify(NO_SEED_WORKFLOW_STATE)] as const,
   );
 }
 

@@ -62,8 +62,25 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
  * #660 audit line X1: colors are the `--warning`/`--warning-foreground`/
  * `--warning-border` tokens (globals.css), not hardcoded Tailwind palette
  * classes.
+ *
+ * #687 demo-seed (owner 2026-08-30): a first visit to this fallback now
+ * shows sample captures and tasks instead of an empty shell, so a person
+ * must be told plainly that what they see is not theirs. `hasSeedData`
+ * defaults to false and is deliberately NOT read from `useWorkflow()` inside
+ * this component — `demoModeBanner.test.tsx` renders `<DemoModeBanner />`
+ * standalone, outside a `WorkflowProvider`, and always has; a context read
+ * here would throw for that (already-passing) coverage. The caller
+ * (`AppShell.tsx`, which sits inside the provider) passes the real value.
+ * The sentence is keyed to actual seed rows still being present — not to
+ * demo mode generally — so it goes silent the moment "Reset this browser"
+ * (Settings, `LocalResetPanel.tsx`) clears them, the same way the rest of
+ * this banner never claims more than is currently true.
  */
-export function DemoModeBanner() {
+export function DemoModeBanner({
+  hasSeedData = false,
+}: {
+  hasSeedData?: boolean;
+} = {}) {
   if (isSupabaseConfigured()) {
     return null;
   }
@@ -76,6 +93,13 @@ export function DemoModeBanner() {
     >
       Demo mode — there is no account to save to here. Nothing you do leaves
       this browser, and clearing its data ends it.
+      {hasSeedData ? (
+        <>
+          {" "}
+          The captures and tasks you see are sample data, not yours — clear them
+          any time in Settings with Reset this browser.
+        </>
+      ) : null}
     </div>
   );
 }

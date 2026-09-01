@@ -11,6 +11,9 @@ export {
   WIP_ENFORCEMENT_LIMIT,
   syncWorkflowIdCounterFromState,
   createInitialWorkflowState,
+  createEmptyWorkflowState,
+  createSeededDemoWorkflowState,
+  workflowStateHasDemoSeed,
   hasLaunchSequenceStep,
 } from "./workflow/shared";
 export type {
