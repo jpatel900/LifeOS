@@ -270,6 +270,14 @@ describe("TodayMoments", () => {
   // MastheadThemeToggle — see each file's own regression test). Regression:
   // a future gap bump back to `gap-2` on this row silently reopens the wrap
   // now that Inter is the shipping font.
+  //
+  // Still `gap-1.5` after the #687 main-red incident (2026-09-02): an
+  // earlier attempt at that fix tightened this to `gap-1` (buying only
+  // ~1.3px, refuted by review — see git history), but the actual fix landed
+  // structurally instead (TodayMoments.tsx's brand+date row: `flex-nowrap` +
+  // `min-w-0` + a truncating date span), which makes the masthead's height
+  // invariant to width pressure from ANY row regardless of this cluster's
+  // own gap. This gap stays at its R3-C value.
   describe("masthead right-cluster gap (#483 round 3, Inter reflow)", () => {
     it("uses the tightened gap-1.5, not the pre-Inter-reflow gap-2", () => {
       renderToday({ initialMoment: "start" });
@@ -280,6 +288,33 @@ describe("TodayMoments", () => {
       const rightCluster = momentSwitcherSlot.parentElement!;
       expect(rightCluster).toHaveClass("gap-1.5");
       expect(rightCluster.className).not.toMatch(/\bgap-2\b/);
+    });
+  });
+
+  // #687 main-red incident (2026-09-02): the masthead's brand+date row used
+  // to be `flex-wrap`, so a wide enough `formatMastheadDate` string (a long
+  // weekday name, colliding with a wide selected-area name or the
+  // AuthAffordance pill in the cluster to its right) could force the date
+  // onto its own second line, adding ~50px of masthead height that ate the
+  // capture pill's clearance over the Areas card at 1366x768. The
+  // structural fix makes that impossible: `flex-nowrap` + `min-w-0` on the
+  // row, `truncate` (`overflow-hidden text-ellipsis whitespace-nowrap`) +
+  // `min-w-0` on the date span itself, so the date degrades to an ellipsis
+  // under width pressure instead of wrapping. Regression: removing
+  // `flex-nowrap`/`min-w-0`/`truncate` here reopens the wrap.
+  describe("masthead brand+date row (#687, structural date-wrap fix)", () => {
+    it("is flex-nowrap with min-w-0, and the date span truncates instead of wrapping", () => {
+      renderToday({ initialMoment: "start" });
+
+      const dateSpan = screen.getByTestId("today-moments-date");
+      const brandRow = dateSpan.parentElement!;
+
+      expect(brandRow).toHaveClass("flex-nowrap");
+      expect(brandRow).toHaveClass("min-w-0");
+      expect(brandRow.className).not.toMatch(/\bflex-wrap\b/);
+
+      expect(dateSpan).toHaveClass("truncate");
+      expect(dateSpan).toHaveClass("min-w-0");
     });
   });
 

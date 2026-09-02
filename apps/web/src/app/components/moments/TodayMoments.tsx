@@ -2115,22 +2115,109 @@ function TodayMomentsContent({
                  MomentSwitcher's is a small padding harmonization, not a
                  demotion — it's still the only accent-filled control and
                  remains by far the widest. */}
-          <div className="flex flex-wrap items-baseline gap-3">
-            <span className="text-sm font-semibold tracking-tight">
+          {/* `flex-wrap`->`flex-nowrap` + `min-w-0` + a truncating date span
+              (Part of #687, main-red incident 2026-09-02 — STRUCTURAL fix,
+              replaces an earlier gap-shaving attempt that only bought
+              ~1.3px and was refuted by review): root cause was that this
+              row (brand text + `formatMastheadDate`) and the control
+              cluster to its right SHARE the header's width budget, and this
+              row used to be `flex-wrap`. `formatMastheadDate` renders a
+              real weekday name — "Wednesday" (9 chars) is ~25-34px wider
+              than a short one like "Tuesday"/"Friday" — and the cluster's
+              own width varies too (a longer selected area name via
+              AreaSelector, or the AuthAffordance "Sign in"/who pill once
+              Supabase is configured, which CI's device tier never
+              exercises because demo mode renders nothing there). ANY
+              combination that left this row even 1px short of its natural
+              content width used to force the date span (a `flex-wrap`
+              child can't partially shrink — a few px short means a full
+              extra line) onto its own second line, adding ~50px of
+              masthead height that cascaded down through
+              StartMoment/PipelineOverview/ScheduleCard and ate the
+              pill-to-Areas-card clearance `moments-home-parity.spec.ts`
+              pins at 1366x768 (measured -19.39px on 2026-09-02, a
+              Wednesday). A gap-shaving fix only ever covers the specific
+              width deficit it was measured against — the real, unbounded
+              variable here is text content (weekday name, area name, auth
+              state), not a fixed px shortfall.
+
+              The structural fix removes the failure mode instead of
+              chasing its budget: `flex-nowrap` means this row's two
+              children can never wrap onto separate lines regardless of how
+              tight the available width gets, `min-w-0` on the row lets it
+              shrink below its own natural content width (the flex default
+              of `min-width: auto` would otherwise refuse to), and the date
+              span's own `min-w-0 truncate` (Tailwind's `overflow-hidden
+              text-ellipsis whitespace-nowrap`) means when the row IS
+              squeezed, the date is what gives — visually clipping to an
+              ellipsis — never the header's height. `shrink-0` on the brand
+              label keeps "LifeOS · Today" itself always fully legible; the
+              date is the one degrading gracefully, since it's the lower-
+              priority half of this row (brand identity > exact date
+              string when both can't fit). Header height is now invariant
+              to weekday name, area name, and auth state — verified
+              directly against all three varying simultaneously.
+
+              One more piece is required for that invariant to actually
+              hold: `flex-nowrap` alone stops THIS row's own children from
+              wrapping, but the header's default flexbox shrink algorithm
+              (both header children default to `flex-shrink: 1`)
+              distributes any width deficit between BOTH header children
+              proportionally to their natural size, regardless of which one
+              can actually absorb it gracefully. Once this row stopped
+              visibly wrapping, the SAME deficit it used to absorb was
+              still being silently redirected onto the control cluster
+              (still `flex-wrap` below) — enough, in the true worst case,
+              to wrap THAT instead (measured directly: header stayed 96px
+              tall with this row's date merely truncated, because the
+              cluster had wrapped in its place instead).
+
+              `shrink-[100]` here (vs. the cluster's own `md:shrink-0`
+              below) rebalances that competition at the narrow end of
+              `sm`+ instead of removing it there: below `md` (640-767px)
+              this row absorbs ~99% of any header-width deficit first — via
+              `truncate`, which can shrink it arbitrarily far — before the
+              cluster gives up any width at all. That weighting is NOT
+              enough on its own at the required desktop widths, though:
+              measured directly, the cluster is ALREADY at true zero
+              headroom against its own natural single-line width (the R3-C
+              comment below already documented this as a standing
+              constraint) — even the ~0.6px sliver `shrink-[100]` still
+              lets through to a `flex-shrink: 1` sibling was enough to flip
+              it into wrap at exactly 1366px (a flex-wrap child has no
+              partial-credit: 0.6px short means the SAME full extra line as
+              27px short). So the cluster additionally gets `md:shrink-0`
+              at `md`+ (768px, safely covering every one of this fix's
+              required widths — 1280/1366/1440): an outright ban on the
+              header ever taking width from it there, full stop. `md:` and
+              not unconditional `shrink-0`, because AT `sm` (640px, where
+              the header first becomes a row) the cluster's own natural
+              width alone can already exceed the viewport, and legitimately
+              needs to keep shrinking/wrapping there — plain `shrink-0` was
+              tried first and broke exactly that width (measured: 836px of
+              content in a 641px box, a real horizontal-overflow regression
+              `moments-home-parity.spec.ts`'s own Pipeline-rail-clipping
+              guard caught at 640px). This threads both needles: the
+              cluster keeps its pre-existing, already-tested tight-width
+              fallback at 640-767px, and gets absolute (not merely
+              favored) protection at every width this fix actually has to
+              hold — 768px and up. */}
+          <div className="flex min-w-0 flex-nowrap shrink-[100] items-baseline gap-3">
+            <span className="shrink-0 text-sm font-semibold tracking-tight">
               LifeOS · Today
             </span>
             {/* Finding #2: the masthead had no date. Derived from the
                 real `now` this component already threads through every
                 other time-aware surface — never a fixed/fake string. */}
             <span
-              className="text-sm text-muted-foreground"
+              className="min-w-0 truncate text-sm text-muted-foreground"
               data-testid="today-moments-date"
             >
               {formatMastheadDate(now)}
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 md:shrink-0">
             <div
               className="hidden sm:contents"
               data-testid="masthead-momentswitcher-slot"
