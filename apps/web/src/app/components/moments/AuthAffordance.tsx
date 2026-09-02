@@ -17,9 +17,20 @@ import { HIT_TARGET_MIN } from "./hitTarget";
  * current session and signing out.
  *
  * Three honest states:
- * - accounts not set up here (Supabase not configured): render nothing. A
- *   "Sign in" door would dead-end on a page that can't sign anyone in, so we
- *   don't show one — this device is simply local-only.
+ * - accounts not set up here (Supabase not configured): render nothing HERE.
+ *   #934/#974 changed what this meant: it used to mean no door anywhere on
+ *   the page ("a 'Sign in' door would dead-end on a page that can't sign
+ *   anyone in, so we don't show one") — that claim is false app-wide now.
+ *   The masthead-cluster door still stays hidden in this state specifically
+ *   (adding it broke `moments-home-parity.spec.ts` at 1366x768, the cluster
+ *   is already at flex-wrap capacity — see #934's PR body), but
+ *   `DemoModeBanner.tsx` renders its OWN "Sign in" door in this exact same
+ *   state, on every route, right where the loud non-persistence warning
+ *   already tells the person their work has nowhere to go. `/login` itself
+ *   explains honestly when accounts aren't set up here (its own
+ *   "Accounts aren't set up here" notice) rather than pretending to sign
+ *   anyone in — the door buys reachability to that honest explanation, not
+ *   a working sign-in, until the deploy's env is actually configured.
  * - configured + no session: a plain "Sign in" pill -> /login?next=<here>, so
  *   the person returns to the page they were on after signing in.
  * - configured + signed in: a quiet who + "Sign out", matching the masthead's

@@ -12,6 +12,7 @@ import SettingsLayout from "../app/settings/layout";
 import AreasOverviewPage from "../app/areas/page";
 import TriagePage from "../app/triage/page";
 import LoginPage from "../app/login/page";
+import NotFoundPage from "../app/not-found";
 import { AppShell } from "../app/components/AppShell";
 import RootLayout from "../app/layout";
 
@@ -95,6 +96,87 @@ describe("handoff cockpit route provider wiring", () => {
       ),
     ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
   });
+
+  /**
+   * #974 polish (verifier finding on #934's demo-banner PR): once
+   * `DemoModeBanner` gained a real, always-focusable `demo-banner-signin-link`
+   * (`/login`), it silently became the FIRST focusable element on every
+   * route, ahead of the app's own `#stage-content` skip link — a skip link
+   * that isn't first is decoration, not a skip link. Fixed by rendering a
+   * shared skip link in `AppShell` itself, ahead of `DemoModeBanner`.
+   *
+   * The existing skip-link tests above/below use a narrow selector
+   * (`a[href="#stage-content"],button,input,...`) that never matched the
+   * banner's `a[href="/login"]` link — the very reason the regression shipped
+   * unnoticed by those tests. This one uses the SAME broad selector
+   * `tests/e2e/helpers/interactiveGeometry.ts` scans with (anchors by `href`
+   * generally, not just `#stage-content`), so it actually would have caught
+   * the regression, and pins the DOM order it demands: the skip link
+   * strictly precedes the banner's sign-in link, everywhere the banner
+   * renders — checked on `/` (moments home), `/settings/areas` (AdminShell),
+   * `/login` (no masthead of its own), and the 404 (added on #974 second
+   * review — see the `#stage-content` target assertion below).
+   *
+   * #974 SECOND REVIEW: the 404 route was added here because
+   * `not-found.tsx`'s `<main>` was missing `id="stage-content"` entirely —
+   * the shared skip link rendered fine there (this test alone would have
+   * stayed green), but activating it landed on a same-page anchor to
+   * NOTHING. `AppShell` wraps every route including the 404, so the target
+   * must exist on every route that inherits the link, not just the ones
+   * that happened to already have one before this link existed. This test
+   * now asserts the target's presence directly, not just the link's.
+   */
+  it.each([
+    [
+      "/",
+      async () => {
+        delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+        return HomePage({ searchParams: Promise.resolve({}) });
+      },
+    ],
+    [
+      "/settings/areas",
+      async () => (
+        <SettingsLayout>
+          <AreasSettingsPage />
+        </SettingsLayout>
+      ),
+    ],
+    ["/login", async () => <LoginPage />],
+    ["404 (not-found.tsx)", async () => <NotFoundPage />],
+  ])(
+    "keeps the skip link as the first focusable element with a real #stage-content target, ahead of the demo banner's sign-in link, on %s (#974)",
+    async (pathname, createPage) => {
+      const { container } = renderThroughAppShell(await createPage(), pathname);
+
+      const skipLink = await screen.findByRole("link", {
+        name: "Skip to stage content",
+      });
+      const signInLink = container.querySelector(
+        '[data-testid="demo-banner-signin-link"]',
+      );
+      expect(signInLink).not.toBeNull();
+
+      // Broad selector — every anchor, button, form control, or explicit
+      // tabindex, not just the `#stage-content` target — is what a real Tab
+      // key actually visits first. The skip link must be it.
+      const firstFocusable = container.querySelector(
+        'a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])',
+      );
+      expect(firstFocusable).toBe(skipLink);
+
+      // And directly: the skip link precedes the sign-in link in document
+      // order (DOCUMENT_POSITION_FOLLOWING means the sign-in link comes
+      // AFTER the skip link).
+      const position = skipLink.compareDocumentPosition(signInLink as Node);
+      expect(Boolean(position & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+
+      // The regression this route was added to catch: a skip link that
+      // exists but targets nothing is as broken as no skip link at all.
+      const stageContent = container.querySelector("#stage-content");
+      expect(stageContent).not.toBeNull();
+    },
+  );
 
   /**
    * #687 round-9 judge (defect 2): "#stage-content sits inside the
@@ -186,12 +268,17 @@ describe("handoff cockpit route provider wiring", () => {
   ])(
     "renders %s through the shared cockpit",
     async (pathname, createPage, text) => {
-      renderThroughAppShell(await createPage(), pathname);
+      // #974: the skip link used to be the cockpit's OWN first child
+      // (`LifeOSCockpit.tsx`); it now lives once, shell-wide, in
+      // `AppShell.tsx` (ahead of `DemoModeBanner`) — checked against the
+      // full render root, not scoped to the cockpit subtree, since the
+      // cockpit itself no longer contains one.
+      const { container } = renderThroughAppShell(await createPage(), pathname);
 
       const cockpit = await screen.findByTestId("lifeos-cockpit");
       expect(cockpit).toBeDefined();
       expect(
-        cockpit.querySelector(
+        container.querySelector(
           'a[href="#stage-content"],button,input,select,textarea,[tabindex]:not([tabindex="-1"])',
         ),
       ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
