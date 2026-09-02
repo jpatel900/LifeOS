@@ -2014,9 +2014,20 @@ function TodayMomentsContent({
           `#stage-content` section below, only rendered while it actually
           fronts the moments content (`showingMastheadAndMoments` — neither
           ritual is standing in for it), so a skip-link Tab from
-          `#stage-content` reaches real content, never the nav. */}
+          `#stage-content` reaches real content, never the nav.
+
+          `sm:gap-0` (Part of #687, main-red incident 2026-09-02): at
+          `sm:flex-row`, `gap-3` forced a 12px MINIMUM gap between the
+          brand+date block and the control cluster even though
+          `sm:justify-between` already spaces them apart on its own whenever
+          there's room. That forced minimum was silently eating into the
+          header's already-tight width budget (see the brand+date row's own
+          comment below) on every long-weekday date, contributing to the
+          #687 masthead-wrap incident. Dropping to 0 at `sm`+ only matters in
+          that already-tight case; every date with slack to spare still
+          renders with visible breathing room via `justify-between`. */}
       {showingMastheadAndMoments ? (
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
           {/* D-10 (#483): one composed masthead bar — brand+date on the
               left, every control (moments, area, time display, theme,
               settings) in a single tightened-gap cluster on the right,
@@ -2115,7 +2126,30 @@ function TodayMomentsContent({
                  MomentSwitcher's is a small padding harmonization, not a
                  demotion — it's still the only accent-filled control and
                  remains by far the widest. */}
-          <div className="flex flex-wrap items-baseline gap-3">
+          {/* `gap-3`->`gap-1.5` (Part of #687, main-red incident 2026-09-02):
+              root cause of the main-red incident — this row (brand text +
+              `formatMastheadDate`) and the control cluster to its right
+              share the header's width budget (see the header's own comment
+              above). `formatMastheadDate` renders a real weekday name, and
+              "Wednesday" (9 chars) is ~25-34px wider than a short one like
+              "Tuesday"/"Friday". On a long-weekday date the browser's
+              flexbox shrink algorithm took a few px away from THIS row to
+              keep the header's line-1 total inside its available width —
+              just enough to force the date span (a `flex-wrap` child can't
+              partially shrink) onto its own second line, adding ~50px of
+              masthead height that cascaded down through
+              StartMoment/PipelineOverview/ScheduleCard and ate the
+              pill-to-Areas-card clearance `moments-home-parity.spec.ts`
+              pins at 1366x768 (measured -19.39px on 2026-09-02, a
+              Wednesday — this suite had simply never run on a long-weekday
+              date before). This gap step, paired with the right cluster's
+              own `gap-1.5`->`gap-1` (see TodayMoments.test.tsx's "masthead
+              right-cluster gap" describe block) and the header's
+              `sm:gap-0`, reclaims enough width that this row never has to
+              shrink below its own single-line content width for ANY
+              weekday/day-count combination — verified directly against the
+              worst case ("Wednesday" + a 2-digit day). */}
+          <div className="flex flex-wrap items-baseline gap-1.5">
             <span className="text-sm font-semibold tracking-tight">
               LifeOS · Today
             </span>
@@ -2130,7 +2164,7 @@ function TodayMomentsContent({
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1">
             <div
               className="hidden sm:contents"
               data-testid="masthead-momentswitcher-slot"

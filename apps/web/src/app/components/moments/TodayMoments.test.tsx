@@ -270,15 +270,39 @@ describe("TodayMoments", () => {
   // MastheadThemeToggle — see each file's own regression test). Regression:
   // a future gap bump back to `gap-2` on this row silently reopens the wrap
   // now that Inter is the shipping font.
-  describe("masthead right-cluster gap (#483 round 3, Inter reflow)", () => {
-    it("uses the tightened gap-1.5, not the pre-Inter-reflow gap-2", () => {
+  //
+  // Tightened again, `gap-1.5`->`gap-1`, fixing the main-red incident of
+  // 2026-09-02 (Part of #687): the masthead's other flex-wrap row — brand +
+  // `formatMastheadDate` — competes for the SAME header width budget (see
+  // TodayMoments.tsx's `<header>`, a `flex justify-between` with no
+  // explicit gap at `sm`+). `formatMastheadDate` renders a real weekday
+  // name ("Wednesday" is the longest, 9 chars) that is ~25-34px wider than
+  // a short one ("Tuesday"/"Friday") — on a long-weekday day, the browser's
+  // flexbox shrink algorithm silently stole a few px from the brand+date
+  // row to keep the header's own line-1 total inside its available width,
+  // which was just enough to force the date span onto its own second line
+  // (a `flex-wrap` child can't partially shrink — a few px short means a
+  // full extra line, ~50px of height). That extra masthead height cascaded
+  // down through StartMoment/PipelineOverview/ScheduleCard, eating the
+  // pill-to-Areas-card clearance `moments-home-parity.spec.ts` pins at
+  // 1366x768 (measured -19.39px on 2026-09-02, a Wednesday — CI had simply
+  // never run this suite on a long-weekday date before). This one more
+  // notch of right-cluster gap (plus the header's own inter-row gap, see
+  // TodayMoments.tsx) reclaims enough width that the brand+date row never
+  // has to shrink below its own single-line content width for ANY
+  // weekday/day-count combination — verified against the worst case
+  // ("Wednesday" + a 2-digit day) directly. Regression: a gap bump back to
+  // `gap-1.5` on this row reopens that wrap on every Wednesday/Thursday.
+  describe("masthead right-cluster gap (#687, masthead-date-width fix)", () => {
+    it("uses the tightened gap-1, not the pre-fix gap-1.5", () => {
       renderToday({ initialMoment: "start" });
 
       const momentSwitcherSlot = screen.getByTestId(
         "masthead-momentswitcher-slot",
       );
       const rightCluster = momentSwitcherSlot.parentElement!;
-      expect(rightCluster).toHaveClass("gap-1.5");
+      expect(rightCluster).toHaveClass("gap-1");
+      expect(rightCluster.className).not.toMatch(/\bgap-1\.5\b/);
       expect(rightCluster.className).not.toMatch(/\bgap-2\b/);
     });
   });

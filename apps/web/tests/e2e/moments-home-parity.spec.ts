@@ -277,6 +277,18 @@ test.describe("moments home capture pill clears content on the empty Start day a
     test(`pill never covers the rail/schedule/areas card at ${viewport.width}x${viewport.height}, scroll 0 and end`, async ({
       page,
     }) => {
+      // Pinned to a Wednesday with a 2-digit day (the masthead date's own
+      // worst case, see formatMastheadDate.ts): "Wednesday" is the longest
+      // weekday name and a 2-digit day is wider than a 1-digit one, so this
+      // is the widest realistic value `today-moments-date` ever renders.
+      // Left unpinned, this guard measured the real wall-clock date and
+      // silently passed on every day except the ~2/7 where the weekday name
+      // was long enough to overflow the masthead's zero-headroom width
+      // budget and wrap the header to a second line — exactly what broke
+      // main on 2026-09-02 (a Wednesday) despite this file having run green
+      // on every prior (shorter-weekday) date. Pinning proves the fix holds
+      // under the worst case on every run, not just on short-weekday days.
+      await page.clock.setFixedTime(new Date("2026-09-16T09:00:00"));
       await page.setViewportSize(viewport);
       await page.goto("/");
       await expect(page.getByTestId("today-moments")).toBeVisible();
@@ -631,6 +643,13 @@ test.describe("moments home capture pill keeps a real clearance margin under the
     test(`pill clears the Areas card by a real margin at 1366x768 in ${theme} theme, scroll 0 and end`, async ({
       page,
     }) => {
+      // Pinned for the same reason as the R4-A guard above: the masthead
+      // date string's width varies by weekday name length, and an unpinned
+      // real clock only exercises that variance on whichever day CI happens
+      // to run — it silently passed on every date but the ~2/7 with a long
+      // weekday name (see 2026-09-02, a Wednesday). Wednesday + a 2-digit
+      // day is that string's worst case.
+      await page.clock.setFixedTime(new Date("2026-09-16T09:00:00"));
       await page.setViewportSize({ width: 1366, height: 768 });
       await page.goto("/");
       await expect(page.getByTestId("today-moments")).toBeVisible();
