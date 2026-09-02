@@ -283,18 +283,54 @@ export function getAreaById(
  * looking at the sample can never collide with, or get re-minted over, one
  * of these ids.
  *
- * Dates are computed relative to "now" (same idiom the rest of this file
- * already uses), not hardcoded calendar dates, so the sample never reads as
- * stale and pins that assert on it never flake as today's date moves on.
+ * Independent verifier round 1 (#687): the original version of this module
+ * built its arrays ONCE, at module-import time (top-level `const`s calling
+ * `new Date()`). That freezes every timestamp at whatever moment the server
+ * process happened to load this file — stale for the lifetime of that
+ * process, not "now" for the visitor actually looking at it — and a fixed
+ * `+3h` offset silently crosses local midnight for anyone loading the app
+ * after roughly 21:00, landing the "planned task" outside today's calendar
+ * day (`Close`/`Plan` read `isSameCalendarDay`, so it would vanish from
+ * "today"). Every builder below is now a FUNCTION, called fresh each time
+ * `createSeededDemoWorkflowState()` runs (`lib/workflow/shared.ts` — once
+ * per render, including every SSR request), and the one time-of-day
+ * offset (`demoSeedLaterTodayIso`) clamps to a fixed ceiling before local
+ * midnight instead of drifting past it.
  */
-export const DEMO_SEED_ID_PREFIX = "demo-seed-";
+const DEMO_SEED_ID_PREFIX = "demo-seed-";
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 function demoSeedIso(offsetMs: number): string {
   return new Date(Date.now() + offsetMs).toISOString();
 }
 
-const HOUR_MS = 60 * 60 * 1000;
-const DAY_MS = 24 * HOUR_MS;
+/**
+ * A point in time `minutesFromNow` from now, guaranteed to stay on TODAY's
+ * local calendar day (never crosses midnight into tomorrow) and always
+ * strictly after `now`. Clamps to 23:55 local time when the naive offset
+ * would land tomorrow; in the rare case `now` itself is already past that
+ * ceiling, falls back to one minute from now (still today, still future).
+ */
+function demoSeedLaterTodayDate(minutesFromNow: number): Date {
+  const now = new Date();
+  const requested = new Date(now.getTime() + minutesFromNow * 60_000);
+  const ceiling = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    23,
+    55,
+    0,
+    0,
+  );
+  const candidate =
+    requested.getTime() <= ceiling.getTime() ? requested : ceiling;
+  return candidate.getTime() > now.getTime()
+    ? candidate
+    : new Date(now.getTime() + 60_000);
+}
 
 // Two raw, unsorted captures ("new" — nothing has looked at them yet).
 // One capture already parsed and waiting on a triage decision (paired with
@@ -302,162 +338,229 @@ const DAY_MS = 24 * HOUR_MS;
 // is what keeps a "triage_required" row out of the unsorted list, not the
 // status column, so both must agree).
 // One capture already sorted into an accepted, completed task ("resolved").
-export const demoSeedCaptureItems: Phase2CaptureItem[] = [
-  {
-    id: `${DEMO_SEED_ID_PREFIX}capture-1`,
-    user_id: MOCK_USER_ID,
-    area_id: "area-main-job",
-    raw_text: "Follow up with the client about the contract redline",
-    return_hook: null,
-    client_capture_id: null,
-    capture_mode: "text",
-    inferred_area_confidence: null,
-    status: "new",
-    created_at: demoSeedIso(-2 * HOUR_MS),
-  },
-  {
-    id: `${DEMO_SEED_ID_PREFIX}capture-2`,
-    user_id: MOCK_USER_ID,
-    area_id: "area-personal",
-    raw_text: "Pick up the prescription refill",
-    return_hook: null,
-    client_capture_id: null,
-    capture_mode: "text",
-    inferred_area_confidence: null,
-    status: "new",
-    created_at: demoSeedIso(-5 * HOUR_MS),
-  },
-  {
-    id: `${DEMO_SEED_ID_PREFIX}capture-3`,
-    user_id: MOCK_USER_ID,
-    area_id: "area-main-job",
-    raw_text: "Draft the Q2 planning doc outline",
-    return_hook: null,
-    client_capture_id: null,
-    capture_mode: "text",
-    inferred_area_confidence: 0.82,
-    status: "triage_required",
-    created_at: demoSeedIso(-1 * DAY_MS),
-  },
-  {
-    id: `${DEMO_SEED_ID_PREFIX}capture-4`,
-    user_id: MOCK_USER_ID,
-    area_id: "area-volunteer",
-    raw_text: "Confirm the venue for the fundraiser",
-    return_hook: null,
-    client_capture_id: null,
-    capture_mode: "text",
-    inferred_area_confidence: null,
-    status: "resolved",
-    created_at: demoSeedIso(-2 * DAY_MS),
-  },
-];
+export function buildDemoSeedCaptureItems(): Phase2CaptureItem[] {
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}capture-1`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      raw_text: "Follow up with the client about the contract redline",
+      return_hook: null,
+      client_capture_id: null,
+      capture_mode: "text",
+      inferred_area_confidence: null,
+      status: "new",
+      created_at: demoSeedIso(-2 * HOUR_MS),
+    },
+    {
+      id: `${DEMO_SEED_ID_PREFIX}capture-2`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-personal",
+      raw_text: "Pick up the prescription refill",
+      return_hook: null,
+      client_capture_id: null,
+      capture_mode: "text",
+      inferred_area_confidence: null,
+      status: "new",
+      created_at: demoSeedIso(-5 * HOUR_MS),
+    },
+    {
+      id: `${DEMO_SEED_ID_PREFIX}capture-3`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      raw_text: "Draft the Q2 planning doc outline",
+      return_hook: null,
+      client_capture_id: null,
+      capture_mode: "text",
+      inferred_area_confidence: 0.82,
+      status: "triage_required",
+      created_at: demoSeedIso(-1 * DAY_MS),
+    },
+    {
+      id: `${DEMO_SEED_ID_PREFIX}capture-4`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-volunteer",
+      raw_text: "Confirm the venue for the fundraiser",
+      return_hook: null,
+      client_capture_id: null,
+      capture_mode: "text",
+      inferred_area_confidence: null,
+      status: "resolved",
+      created_at: demoSeedIso(-2 * DAY_MS),
+    },
+  ];
+}
 
 // One AI-parsed draft, still pending a triage decision — pairs with
-// demoSeedCaptureItems[2] ("Draft the Q2 planning doc outline").
-export const demoSeedTaskDrafts: Phase2TaskDraft[] = [
-  {
-    id: `${DEMO_SEED_ID_PREFIX}draft-1`,
-    user_id: MOCK_USER_ID,
-    capture_item_id: `${DEMO_SEED_ID_PREFIX}capture-3`,
-    area_id: "area-main-job",
-    title: "Draft the Q2 planning doc outline",
-    description: null,
-    confidence: 0.82,
-    estimated_minutes_low: 20,
-    estimated_minutes_high: 40,
-    first_tiny_step: "Open a blank doc and list the three sections",
-    breakdown: null,
-    person_mentions: [],
-    is_commitment: false,
-    status: "pending",
-    created_at: demoSeedIso(-1 * DAY_MS),
-  },
-];
+// buildDemoSeedCaptureItems()[2] ("Draft the Q2 planning doc outline").
+export function buildDemoSeedTaskDrafts(): Phase2TaskDraft[] {
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}draft-1`,
+      user_id: MOCK_USER_ID,
+      capture_item_id: `${DEMO_SEED_ID_PREFIX}capture-3`,
+      area_id: "area-main-job",
+      title: "Draft the Q2 planning doc outline",
+      description: null,
+      confidence: 0.82,
+      estimated_minutes_low: 20,
+      estimated_minutes_high: 40,
+      first_tiny_step: "Open a blank doc and list the three sections",
+      breakdown: null,
+      person_mentions: [],
+      is_commitment: false,
+      status: "pending",
+      created_at: demoSeedIso(-1 * DAY_MS),
+    },
+  ];
+}
 
-// One planned task with a scheduled (future) time block, and one completed
-// win — the task an accepted capture turned into, already done.
-export const demoSeedTasks: Phase2MockTask[] = [
-  {
-    id: `${DEMO_SEED_ID_PREFIX}task-1`,
-    user_id: MOCK_USER_ID,
-    area_id: "area-main-job",
-    title: "Prep slides for Monday standup",
-    description: null,
-    status: "scheduled",
-    priority_score: 2,
-    priority_confidence: null,
-    task_type: null,
-    energy_type: null,
-    estimated_minutes_low: 30,
-    estimated_minutes_high: 45,
-    due_at: null,
-    definition_of_done: null,
-    first_tiny_step: null,
-    created_at: demoSeedIso(-3 * HOUR_MS),
-    updated_at: demoSeedIso(-3 * HOUR_MS),
-    project_id: null,
-    source_capture_item_id: null,
-  },
-  {
-    id: `${DEMO_SEED_ID_PREFIX}task-2`,
-    user_id: MOCK_USER_ID,
-    area_id: "area-volunteer",
-    title: "Confirm the venue for the fundraiser",
-    description: null,
-    status: "done",
-    priority_score: 3,
-    priority_confidence: null,
-    task_type: null,
-    energy_type: null,
-    estimated_minutes_low: 15,
-    estimated_minutes_high: 30,
-    due_at: null,
-    definition_of_done: null,
-    first_tiny_step: null,
-    created_at: demoSeedIso(-2 * DAY_MS),
-    updated_at: demoSeedIso(-1 * DAY_MS),
-    project_id: "proj-volunteer-1",
-    source_capture_item_id: `${DEMO_SEED_ID_PREFIX}capture-4`,
-  },
-];
+// One planned task with a scheduled (later-today) time block, and one
+// completed win — the task an accepted capture turned into, already done
+// earlier TODAY (not yesterday — see buildDemoSeedCalendarBlocks' completed
+// block below, which is what actually drives Close's "completed today"
+// count and Review's session list).
+export function buildDemoSeedTasks(): Phase2MockTask[] {
+  const wonEarlierToday = demoSeedIso(-3 * HOUR_MS);
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}task-1`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      title: "Prep slides for Monday standup",
+      description: null,
+      status: "scheduled",
+      priority_score: 2,
+      priority_confidence: null,
+      task_type: null,
+      energy_type: null,
+      estimated_minutes_low: 30,
+      estimated_minutes_high: 45,
+      due_at: null,
+      definition_of_done: null,
+      first_tiny_step: null,
+      created_at: demoSeedIso(-3 * HOUR_MS),
+      updated_at: demoSeedIso(-3 * HOUR_MS),
+      project_id: null,
+      source_capture_item_id: null,
+    },
+    {
+      id: `${DEMO_SEED_ID_PREFIX}task-2`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-volunteer",
+      title: "Confirm the venue for the fundraiser",
+      description: null,
+      status: "done",
+      priority_score: 3,
+      priority_confidence: null,
+      task_type: null,
+      energy_type: null,
+      estimated_minutes_low: 15,
+      estimated_minutes_high: 30,
+      due_at: null,
+      definition_of_done: null,
+      first_tiny_step: null,
+      // Completed a few hours ago TODAY (not yesterday) so Close's
+      // "completed today" count and the win-harvest candidates both see it —
+      // independent verifier round 1 finding 5.
+      created_at: demoSeedIso(-2 * DAY_MS),
+      updated_at: wonEarlierToday,
+      project_id: "proj-volunteer-1",
+      source_capture_item_id: `${DEMO_SEED_ID_PREFIX}capture-4`,
+    },
+  ];
+}
 
-export const demoSeedTimeBlockProposals: Phase2MockTimeBlockProposal[] = [
-  {
-    id: `${DEMO_SEED_ID_PREFIX}proposal-1`,
-    user_id: MOCK_USER_ID,
-    area_id: "area-main-job",
-    task_id: `${DEMO_SEED_ID_PREFIX}task-1`,
-    proposed_start: demoSeedIso(3 * HOUR_MS),
-    proposed_end: demoSeedIso(3 * HOUR_MS + 45 * 60 * 1000),
-    rationale: "Block focused time before the Monday standup.",
-    conflict_flag: false,
-    status: "accepted",
-    created_at: demoSeedIso(-3 * HOUR_MS),
-  },
-];
+export function buildDemoSeedTimeBlockProposals(): Phase2MockTimeBlockProposal[] {
+  const window = demoSeedLaterTodayDate(180); // ~3h from now, clamped to stay today
+  const start = window;
+  const end = new Date(window.getTime() + 45 * 60_000);
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}proposal-1`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      task_id: `${DEMO_SEED_ID_PREFIX}task-1`,
+      proposed_start: start.toISOString(),
+      proposed_end: end.toISOString(),
+      rationale: "Block focused time before the Monday standup.",
+      conflict_flag: false,
+      status: "accepted",
+      created_at: demoSeedIso(-3 * HOUR_MS),
+    },
+  ];
+}
 
-export const demoSeedCalendarBlocks: Phase2MockCalendarBlock[] = [
-  {
-    id: `${DEMO_SEED_ID_PREFIX}block-1`,
-    user_id: MOCK_USER_ID,
-    area_id: "area-main-job",
-    task_id: `${DEMO_SEED_ID_PREFIX}task-1`,
-    proposal_id: `${DEMO_SEED_ID_PREFIX}proposal-1`,
-    google_event_id: null,
-    start_at: demoSeedIso(3 * HOUR_MS),
-    end_at: demoSeedIso(3 * HOUR_MS + 45 * 60 * 1000),
-    status: "scheduled",
-    created_at: demoSeedIso(-3 * HOUR_MS),
-    updated_at: demoSeedIso(-3 * HOUR_MS),
-  },
-];
+export function buildDemoSeedCalendarBlocks(): Phase2MockCalendarBlock[] {
+  const scheduledWindow = demoSeedLaterTodayDate(180);
+  const scheduledStart = scheduledWindow;
+  const scheduledEnd = new Date(scheduledWindow.getTime() + 45 * 60_000);
+  // The win's own block: completed a few hours ago, still today (used by
+  // Close's completedToday count, which reads calendar_blocks — see
+  // momentsViewModel/close.ts).
+  const completedEnd = new Date(Date.now() - 2 * HOUR_MS);
+  const completedStart = new Date(completedEnd.getTime() - 30 * 60_000);
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}block-1`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      task_id: `${DEMO_SEED_ID_PREFIX}task-1`,
+      proposal_id: `${DEMO_SEED_ID_PREFIX}proposal-1`,
+      google_event_id: null,
+      start_at: scheduledStart.toISOString(),
+      end_at: scheduledEnd.toISOString(),
+      status: "scheduled",
+      created_at: demoSeedIso(-3 * HOUR_MS),
+      updated_at: demoSeedIso(-3 * HOUR_MS),
+    },
+    {
+      id: `${DEMO_SEED_ID_PREFIX}block-2`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-volunteer",
+      task_id: `${DEMO_SEED_ID_PREFIX}task-2`,
+      proposal_id: null,
+      google_event_id: null,
+      start_at: completedStart.toISOString(),
+      end_at: completedEnd.toISOString(),
+      status: "completed",
+      created_at: completedStart.toISOString(),
+      updated_at: completedEnd.toISOString(),
+    },
+  ];
+}
+
+// The focus session behind the completed block above — gives Review's
+// session list (`ReviewSheet.tsx`'s "Focus sessions will appear here"
+// fallback) real content instead of staying inert (independent verifier
+// round 1 finding 5).
+export function buildDemoSeedExecutionSessions(): Phase2MockExecutionSession[] {
+  const completedAt = new Date(Date.now() - 2 * HOUR_MS);
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}session-1`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-volunteer",
+      task_id: `${DEMO_SEED_ID_PREFIX}task-2`,
+      calendar_block_id: `${DEMO_SEED_ID_PREFIX}block-2`,
+      planned_minutes: 30,
+      actual_minutes: 28,
+      paused_minutes: 0,
+      distraction_minutes: 0,
+      productivity_rating: 4,
+      status: "completed",
+      outcome: "completed",
+      notes: "Venue confirmed for the fundraiser.",
+      created_at: completedAt.toISOString(),
+    },
+  ];
+}
 
 // One closed daily review, so the Review moment has something on the log
 // besides "nothing yet".
-export const demoSeedReviewLog: string[] = [
-  `Review saved: ${demoSeedIso(-1 * DAY_MS)}`,
-];
+export function buildDemoSeedReviewLog(): string[] {
+  return [`Review saved: ${demoSeedIso(-1 * DAY_MS)}`];
+}
 
 /** True when any row in `state` came from the demo seed above. */
 export function hasDemoSeedId(id: string | null | undefined): boolean {

@@ -6,9 +6,11 @@ import {
   createEmptyWorkflowState,
   createInitialWorkflowState,
   createSeededDemoWorkflowState,
+  markDemoSeedCleared,
   workflowStateHasDemoSeed,
 } from "@/lib/workflow";
 import { workflowReducer } from "@/lib/workflowContext/reducerCore";
+import { buildCloseVM } from "@/app/components/moments/momentsViewModel/close";
 
 const navigationMock = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -42,10 +44,17 @@ function restoreEnv(key: string, original: string | undefined) {
 
 describe("demo seed data (#687)", () => {
   describe("createInitialWorkflowState gating", () => {
+    beforeEach(() => {
+      window.sessionStorage.clear();
+      window.localStorage.clear();
+    });
+
     afterEach(() => {
       restoreEnv("NEXT_PUBLIC_DEMO_SEED", ORIGINAL_DEMO_SEED);
       vi.resetModules();
       vi.doUnmock("@/lib/supabase/config");
+      window.sessionStorage.clear();
+      window.localStorage.clear();
     });
 
     it("stays empty when the seed flag is off (the whole suite's default)", () => {
@@ -56,12 +65,58 @@ describe("demo seed data (#687)", () => {
       expect(workflowStateHasDemoSeed(state)).toBe(false);
     });
 
-    it("seeds when unconfigured and the flag is on", () => {
+    it("seeds when unconfigured and the flag is on, for a genuinely fresh tab", () => {
       process.env.NEXT_PUBLIC_DEMO_SEED = "true";
       const state = createInitialWorkflowState();
       expect(state.captureItems.length).toBeGreaterThan(0);
       expect(state.tasks.length).toBeGreaterThan(0);
       expect(workflowStateHasDemoSeed(state)).toBe(true);
+    });
+
+    // Independent verifier round 1 finding 2: "Reset this browser" writes a
+    // `localStorage` marker (`resetWorkflow`, WorkflowContext.tsx), which
+    // must survive into a brand-new tab — simulated here as a fresh
+    // `createInitialWorkflowState()` call with clean `sessionStorage` (a new
+    // tab has none) but the SAME `localStorage` (shared by the browser).
+    it("stays empty in a simulated new tab after 'Reset this browser' (localStorage marker survives, per finding 2)", () => {
+      process.env.NEXT_PUBLIC_DEMO_SEED = "true";
+
+      // Before any reset, a fresh tab seeds normally.
+      expect(workflowStateHasDemoSeed(createInitialWorkflowState())).toBe(true);
+
+      markDemoSeedCleared();
+      window.sessionStorage.clear(); // "new tab": no per-tab snapshot
+
+      const newTabState = createInitialWorkflowState();
+      expect(workflowStateHasDemoSeed(newTabState)).toBe(false);
+      expect(newTabState).toEqual(createEmptyWorkflowState());
+    });
+
+    // Independent verifier round 1 finding 4 (hydration race): the
+    // seed-or-not decision must be made SYNCHRONOUSLY inside the same call
+    // that produces the first render, not left for a later effect to
+    // correct — otherwise a fast reader (or a measurement tool) can observe
+    // the wrong answer between the two. Simulates the e2e no-sample seam
+    // (`tests/e2e/helpers/pinnedSurfaces.ts`'s `seedNoSampleWorkflowState`):
+    // a `sessionStorage` snapshot already exists for this tab BEFORE
+    // `createInitialWorkflowState` is ever called — same as
+    // `page.addInitScript` writing it before any page script runs. Repeated
+    // (not just called once) because a race is exactly the kind of bug a
+    // single passing call cannot rule out.
+    it("never seeds when a sessionStorage snapshot already exists for this tab (no hydration-race window), repeated", () => {
+      process.env.NEXT_PUBLIC_DEMO_SEED = "true";
+      const STORAGE_KEY = "lifeos.phase2.workflow";
+
+      for (let i = 0; i < 5; i += 1) {
+        window.sessionStorage.clear();
+        window.sessionStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(createEmptyWorkflowState()),
+        );
+
+        const state = createInitialWorkflowState();
+        expect(workflowStateHasDemoSeed(state)).toBe(false);
+      }
     });
   });
 
@@ -90,11 +145,15 @@ describe("demo seed data (#687)", () => {
     beforeEach(() => {
       process.env.NEXT_PUBLIC_DEMO_SEED = "true";
       delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+      window.sessionStorage.clear();
+      window.localStorage.clear();
     });
 
     afterEach(() => {
       restoreEnv("NEXT_PUBLIC_DEMO_SEED", ORIGINAL_DEMO_SEED);
       restoreEnv("NEXT_PUBLIC_MOMENTS_HOME", ORIGINAL_MOMENTS_HOME);
+      window.sessionStorage.clear();
+      window.localStorage.clear();
     });
 
     it("renders the seeded captures and tasks on the moments home instead of an empty pipeline", async () => {
@@ -136,6 +195,33 @@ describe("demo seed data (#687)", () => {
       const banner = screen.getByTestId("demo-mode-banner");
       expect(banner).toHaveTextContent(/sample data, not yours/i);
       expect(banner).toHaveTextContent(/Reset this browser/i);
+    });
+  });
+
+  /**
+   * Independent verifier round 1 finding 5: the original seed's "win" was a
+   * task marked done YESTERDAY, so Close's own "completed today" count
+   * (which reads `calendar_blocks` with a completed block on TODAY's local
+   * day — `momentsViewModel/close.ts`) stayed at 0, and Review's session
+   * list stayed empty because no `executionSessions` were ever seeded at
+   * all. Both now have real content: a completed block + session earlier
+   * TODAY, tied to the same "done" task.
+   */
+  describe("Close and Review actually reflect the seeded win (finding 5)", () => {
+    it("counts the seeded win in Close's completedToday", () => {
+      const state = createSeededDemoWorkflowState();
+      const vm = buildCloseVM(state, { now: new Date() });
+      expect(vm.completedToday).toBeGreaterThanOrEqual(1);
+    });
+
+    it("seeds at least one execution session for Review's session list", () => {
+      const state = createSeededDemoWorkflowState();
+      expect(state.executionSessions.length).toBeGreaterThan(0);
+      expect(
+        state.executionSessions.every(
+          (session) => session.outcome === "completed",
+        ),
+      ).toBe(true);
     });
   });
 });

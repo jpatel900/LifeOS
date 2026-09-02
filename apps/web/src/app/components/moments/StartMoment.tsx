@@ -198,7 +198,13 @@ export function StartMoment({
       <button
         type="button"
         onClick={onOpenTriage}
-        className="workflow-surface-body text-left text-sm text-muted-foreground underline-offset-4 hover:underline"
+        // #687 demo-seed follow-up: this control was unreachable in demo mode
+        // before the seed (never a first move AND a pending triage draft at
+        // once), so its sub-44px height went unnoticed — the seed makes it
+        // reachable again (hit-target-overlap-pin.spec.ts), and a real
+        // control gets the same 44px floor every other tappable control in
+        // this file already has, not a re-baseline.
+        className="workflow-surface-body inline-flex min-h-[44px] touch-manipulation items-center text-left text-sm text-muted-foreground underline-offset-4 hover:underline"
         data-testid="start-pending-triage"
       >
         {pendingTriage === 1

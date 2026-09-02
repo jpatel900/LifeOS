@@ -376,3 +376,49 @@ describe("handoff cockpit route provider wiring", () => {
     ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
   });
 });
+
+/**
+ * #687 demo-seed, independent verifier round 1 finding 6 — a genuine
+ * opt-in, in THIS file (not only `demoSeed.test.tsx`), that the moments
+ * home route actually renders the seeded sample on a first visit. The rest
+ * of this file inherits the suite-wide `NEXT_PUBLIC_DEMO_SEED=false`
+ * default and is unaffected by the seed's existence.
+ */
+describe("moments home first visit in demo mode (#687 demo-seed)", () => {
+  const ORIGINAL_DEMO_SEED = process.env.NEXT_PUBLIC_DEMO_SEED;
+  const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_DEMO_SEED = "true";
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    window.sessionStorage.clear();
+    window.localStorage.clear();
+  });
+
+  afterAll(() => {
+    if (ORIGINAL_DEMO_SEED === undefined) {
+      delete process.env.NEXT_PUBLIC_DEMO_SEED;
+    } else {
+      process.env.NEXT_PUBLIC_DEMO_SEED = ORIGINAL_DEMO_SEED;
+    }
+    if (ORIGINAL_MOMENTS_HOME === undefined) {
+      delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    } else {
+      process.env.NEXT_PUBLIC_MOMENTS_HOME = ORIGINAL_MOMENTS_HOME;
+    }
+  });
+
+  it("renders / with the seeded sample content, not an empty shell", async () => {
+    const { container } = render(
+      <AppShell>
+        {await HomePage({ searchParams: Promise.resolve({}) })}
+      </AppShell>,
+    );
+
+    await screen.findByTestId("today-moments");
+
+    expect(
+      container.querySelector('[data-testid="demo-mode-banner"]'),
+    ).toHaveTextContent(/sample data, not yours/i);
+  });
+});

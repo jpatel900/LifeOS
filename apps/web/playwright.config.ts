@@ -46,7 +46,22 @@ export default defineConfig({
           // /triage, ...) stay live and their specs are unaffected. The code
           // default (lib/flags.ts) stays OFF so prod is not flipped by merging
           // this; the actual prod go-live is a separate env change (P7c).
-          env: { NEXT_PUBLIC_MOMENTS_HOME: "true" },
+          //
+          // #687 demo-seed, independent verifier round 1: this
+          // playwright.config.ts webServer block is ONLY used for a direct
+          // `npx playwright test` run — CI (and `pnpm test:e2e`) go through
+          // `scripts/run-playwright-e2e.mjs`, which spawns its OWN server and
+          // sets `PLAYWRIGHT_DISABLE_WEBSERVER=1` so THIS block never runs.
+          // The real fix for the CI failures (nav-truth.spec.ts,
+          // capture-sort-triage.spec.ts, capture-status-truth.spec.ts — every
+          // spec navigating `/` in unconfigured mode, only three of which
+          // were ever re-targeted for the seed's existence) lives in that
+          // script, not here. Kept in sync anyway so a direct local
+          // `npx playwright test` run behaves the same as CI.
+          env: {
+            NEXT_PUBLIC_MOMENTS_HOME: "true",
+            NEXT_PUBLIC_DEMO_SEED: "false",
+          },
         },
       }),
 });

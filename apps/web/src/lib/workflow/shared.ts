@@ -9,12 +9,13 @@ import type {
 import {
   areas,
   healthChecks,
-  demoSeedCalendarBlocks,
-  demoSeedCaptureItems,
-  demoSeedReviewLog,
-  demoSeedTaskDrafts,
-  demoSeedTasks,
-  demoSeedTimeBlockProposals,
+  buildDemoSeedCalendarBlocks,
+  buildDemoSeedCaptureItems,
+  buildDemoSeedExecutionSessions,
+  buildDemoSeedReviewLog,
+  buildDemoSeedTaskDrafts,
+  buildDemoSeedTasks,
+  buildDemoSeedTimeBlockProposals,
   hasDemoSeedId,
 } from "../mockData";
 import { isSupabaseConfigured } from "../supabase/config";
@@ -29,6 +30,12 @@ import type {
 
 export const WIP_ENFORCEMENT_POLICY_ID = "wip_enforcement.v1";
 export const WIP_ENFORCEMENT_LIMIT = 3;
+
+// Moved here (from workflowContext/reducerCore.ts, which now re-exports it
+// unchanged) so `createInitialWorkflowState` below can read this tab's
+// existing snapshot synchronously without an import cycle — reducerCore.ts
+// already imports from this module, not the other way around.
+export const STORAGE_KEY = "lifeos.phase2.workflow";
 
 export interface WipSlotHolder {
   task_id: string;
@@ -203,48 +210,140 @@ export function createEmptyWorkflowState(): WorkflowState {
   };
 }
 
+// See `workflowStateHasDemoSeed` below for why this tracks the seed's own
+// reviewLog array by reference.
+let lastDemoSeedReviewLog: readonly string[] | null = null;
+
 /**
  * The empty shape with the #687 demo-seed sample layered on top — a handful
  * of captures across triage states, one pending draft, a planned task with a
- * scheduled time block, and one already-done task (the "completed win"). See
- * `lib/mockData.ts`'s demoSeed* exports for the content and why every id is
- * `demo-seed-`-prefixed.
+ * scheduled time block, a completed win with its own focus session, and a
+ * closed daily review. See `lib/mockData.ts`'s `buildDemoSeed*` builders for
+ * the content and why every id is `demo-seed-`-prefixed.
+ *
+ * Independent verifier round 1: each builder is a FUNCTION, called here
+ * fresh on every invocation (not a module-level constant computed once at
+ * import time) — see `lib/mockData.ts`'s header comment on why a frozen
+ * "now" goes stale for the life of the server process.
  */
 export function createSeededDemoWorkflowState(): WorkflowState {
+  const reviewLog = buildDemoSeedReviewLog();
+  lastDemoSeedReviewLog = reviewLog;
   return {
     ...createEmptyWorkflowState(),
-    captureItems: demoSeedCaptureItems,
-    taskDrafts: demoSeedTaskDrafts,
-    tasks: demoSeedTasks,
-    timeBlockProposals: demoSeedTimeBlockProposals,
-    calendarBlocks: demoSeedCalendarBlocks,
-    reviewLog: demoSeedReviewLog,
+    captureItems: buildDemoSeedCaptureItems(),
+    taskDrafts: buildDemoSeedTaskDrafts(),
+    tasks: buildDemoSeedTasks(),
+    timeBlockProposals: buildDemoSeedTimeBlockProposals(),
+    calendarBlocks: buildDemoSeedCalendarBlocks(),
+    executionSessions: buildDemoSeedExecutionSessions(),
+    reviewLog,
   };
 }
 
+// #687 demo-seed, independent verifier round 1 finding 2 — "Reset this
+// browser" (LocalResetPanel.tsx) says "This browser now starts from empty
+// local state", but the reducer's own snapshot lives in `sessionStorage`
+// (per-TAB, reducerCore.ts's STORAGE_KEY), so a genuinely new tab after a
+// reset would see the sample again, falsifying the word "browser" the copy
+// already uses. This is a `localStorage` marker instead — it survives new
+// tabs, matching what the sentence actually promises. Written once, by
+// `resetWorkflow` (WorkflowContext.tsx) itself, and never cleared: a person
+// who resets is choosing "not this again", not "reseed me on my next visit".
+const DEMO_SEED_CLEARED_KEY = "lifeos.demoSeed.cleared";
+
+export function markDemoSeedCleared(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(DEMO_SEED_CLEARED_KEY, "true");
+  } catch {
+    // Storage blocked (private mode, quota) — the reset itself (the reducer
+    // dispatch) still succeeds; only the "stay cleared in a new tab" promise
+    // is unmet, same degrade-quietly posture `loadStoredStateFromSession`
+    // already uses for a blocked session store.
+  }
+}
+
+function hasDemoSeedBeenCleared(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(DEMO_SEED_CLEARED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 /**
- * The reducer's real initial state. Seeded with the #687 demo sample exactly
- * when the app is running unconfigured (no Supabase — the same condition
- * `DemoModeBanner` gates on) AND the seed has not been switched off
- * (`isDemoSeedEnabled`, off by default for the whole test suite —
- * `src/setupTests.ts`). A configured deploy — including a signed-out visitor
- * on one — never sees sample rows, not even briefly before an account load
- * replaces them.
+ * The reducer's real initial state.
+ *
+ * Independent verifier round 1 finding 4 (hydration race): the previous
+ * version always returned this same answer regardless of `window`, so the
+ * seed-or-not decision only ever became correct once a LATER `useEffect`
+ * (`WorkflowContext.tsx`'s sessionStorage-hydrate effect) dispatched a
+ * correction — after first paint. A fast reader (or a scan/measurement tool)
+ * landing between those two moments saw the WRONG answer: the seed on a
+ * surface meant to be measured empty, live and clickable. Fixed at the root
+ * instead of papered over with timing: this function now makes the whole
+ * decision SYNCHRONOUSLY, inside the same `useReducer` lazy initializer call
+ * that produces the very first render (`createSyncedInitialState`,
+ * `WorkflowContext.tsx`) — there is no second, later correction to race.
+ *
+ * - On the server (`typeof window === "undefined"`, every SSR pass) this
+ *   ALWAYS returns empty — the server cannot know about this tab's
+ *   `sessionStorage` or this browser's `localStorage` marker, and guessing
+ *   would be a lie one of the two renders would have to correct anyway.
+ * - On the client, the seed applies only to a genuinely fresh tab: no
+ *   existing `sessionStorage` snapshot for this tab (an existing snapshot
+ *   means either a real reload — that snapshot's own content, not the seed,
+ *   is what should show, same as before this fix — or another surface
+ *   already decided the state this tab starts from, e.g. the e2e no-sample
+ *   seam in `tests/e2e/helpers/pinnedSurfaces.ts`) AND the
+ *   `DEMO_SEED_CLEARED_KEY` marker has never been set.
  */
 export function createInitialWorkflowState(): WorkflowState {
-  if (!isSupabaseConfigured() && isDemoSeedEnabled()) {
-    return createSeededDemoWorkflowState();
+  if (typeof window === "undefined") {
+    return createEmptyWorkflowState();
+  }
+  if (
+    !isSupabaseConfigured() &&
+    isDemoSeedEnabled() &&
+    !hasDemoSeedBeenCleared()
+  ) {
+    let hasExistingSnapshot = false;
+    try {
+      hasExistingSnapshot = window.sessionStorage.getItem(STORAGE_KEY) !== null;
+    } catch {
+      hasExistingSnapshot = false;
+    }
+    if (!hasExistingSnapshot) {
+      return createSeededDemoWorkflowState();
+    }
   }
   return createEmptyWorkflowState();
 }
 
-/** True when any row family in `state` still holds a #687 demo-seed row. */
+/**
+ * True when any row family in `state` still holds a #687 demo-seed row.
+ *
+ * Six of the seven checks are id-based and durable (ids survive a
+ * `sessionStorage` JSON round-trip on reload). `reviewLog` has no id — its
+ * check instead tracks the exact array reference `createSeededDemoWorkflowState`
+ * last produced (declared above), which is necessarily best-effort: it only
+ * recognizes the seed's line on the render that built it, not after a
+ * reload re-parses it into a new array with equal content. That is an
+ * acceptable gap — this function decides only whether the demo banner
+ * mentions sample data, never anything load-bearing — and the other six
+ * checks below carry the real signal.
+ */
 export function workflowStateHasDemoSeed(state: WorkflowState): boolean {
   return (
     state.captureItems.some((item) => hasDemoSeedId(item.id)) ||
     state.taskDrafts.some((draft) => hasDemoSeedId(draft.id)) ||
     state.tasks.some((task) => hasDemoSeedId(task.id)) ||
-    state.calendarBlocks.some((block) => hasDemoSeedId(block.id))
+    state.calendarBlocks.some((block) => hasDemoSeedId(block.id)) ||
+    state.timeBlockProposals.some((proposal) => hasDemoSeedId(proposal.id)) ||
+    state.executionSessions.some((session) => hasDemoSeedId(session.id)) ||
+    state.reviewLog === lastDemoSeedReviewLog
   );
 }
 

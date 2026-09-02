@@ -236,6 +236,16 @@ async function main() {
       // webServer is disabled here), so the flag must be set on THIS spawn;
       // an explicit outer NEXT_PUBLIC_MOMENTS_HOME still wins if provided.
       NEXT_PUBLIC_MOMENTS_HOME: process.env.NEXT_PUBLIC_MOMENTS_HOME ?? "true",
+      // #687 demo-seed, independent verifier round 1 — THIS is the server
+      // CI actually runs the whole e2e suite against (playwright.config.ts's
+      // own `webServer` block is disabled below via
+      // PLAYWRIGHT_DISABLE_WEBSERVER, so setting the flag there alone never
+      // reached CI). Every spec in this lane navigates `/` in unconfigured
+      // mode; only hit-target-overlap-pin/a11y-axe-pin/moments-home-parity
+      // were re-targeted for the seed's existence, so the default here stays
+      // OFF — same reasoning as the MOMENTS_HOME line above, an explicit
+      // outer NEXT_PUBLIC_DEMO_SEED still wins if one is ever set.
+      NEXT_PUBLIC_DEMO_SEED: process.env.NEXT_PUBLIC_DEMO_SEED ?? "false",
     },
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",

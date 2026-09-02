@@ -14,6 +14,7 @@ export {
   createEmptyWorkflowState,
   createSeededDemoWorkflowState,
   workflowStateHasDemoSeed,
+  markDemoSeedCleared,
   hasLaunchSequenceStep,
 } from "./workflow/shared";
 export type {

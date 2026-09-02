@@ -6,6 +6,7 @@ import {
   appendRawCapture,
   backlogDraft,
   createInitialWorkflowState,
+  createSeededDemoWorkflowState,
   createLocalProposalFromTask,
   createRawCaptureItem,
   dropTask,
@@ -27,8 +28,20 @@ import {
 
 export const GOLDEN_AREA_ID = "area-main-job";
 
-export function workflowSeed(): WorkflowState {
-  return createInitialWorkflowState();
+/**
+ * #687 demo-seed, independent verifier round 1 finding 6: the whole test
+ * suite forces the seed off (`src/setupTests.ts`), so every one of this
+ * helper's 28 consumers was already auditing the empty shape before this
+ * PR and keeps doing exactly that by default — unchanged. `seeded: true`
+ * opts one call into the OTHER shape the app actually boots into for an
+ * unconfigured visitor, bypassing the env gate directly
+ * (`createSeededDemoWorkflowState`) rather than fighting the suite-wide
+ * flag per call site.
+ */
+export function workflowSeed(seeded = false): WorkflowState {
+  return seeded
+    ? createSeededDemoWorkflowState()
+    : createInitialWorkflowState();
 }
 
 /**

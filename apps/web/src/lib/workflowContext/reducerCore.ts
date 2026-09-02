@@ -61,6 +61,7 @@ import {
 // consumed only by the state layer, so they ride the submodule path.
 import {
   createEmptyAccountIdAliases,
+  STORAGE_KEY,
   type AccountIdAliasFamily,
   type AccountIdAliases,
 } from "../workflow/shared";
@@ -77,7 +78,11 @@ import type {
 import { persistedAreaIdForWorkflowAreaId } from "../workflowAreaMapping";
 import type { ParsedWorkflowResult } from "../ai/parseCaptureWorkflow";
 
-export const STORAGE_KEY = "lifeos.phase2.workflow";
+// #687 demo-seed: STORAGE_KEY now lives in workflow/shared.ts (this file's
+// initializer needs it too, and shared.ts cannot import back from here
+// without a cycle) — re-exported unchanged so nothing importing it from
+// this module needs to change.
+export { STORAGE_KEY };
 
 export type WorkflowAction =
   | {
