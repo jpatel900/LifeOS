@@ -13,22 +13,52 @@ import AreasOverviewPage from "../app/areas/page";
 import TriagePage from "../app/triage/page";
 import LoginPage from "../app/login/page";
 import NotFoundPage from "../app/not-found";
+import WelcomePage from "../app/welcome/page";
 import { AppShell } from "../app/components/AppShell";
 import RootLayout from "../app/layout";
 
 const navigationMock = vi.hoisted(() => ({
   pathname: "/capture",
   push: vi.fn(),
+  // C3 (onboarding own-URL): `/welcome`'s own page and `TodayMoments.tsx`'s
+  // wrapper both call `router.replace` — needed here so mounting either
+  // through this file's `renderThroughAppShell` doesn't throw on a missing
+  // mock method. No test in this file asserts on it.
+  replace: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => navigationMock.pathname,
-  useRouter: () => ({ push: navigationMock.push }),
+  useRouter: () => ({
+    push: navigationMock.push,
+    replace: navigationMock.replace,
+  }),
   // #687: /login's own form reads ?next= via useSearchParams (wrapped in its
   // own Suspense boundary) — no test here exercises that param, so an empty
   // string is enough to satisfy the hook.
   useSearchParams: () => new URLSearchParams(),
 }));
+
+// C3 (onboarding own-URL): the same zero-state sessionStorage seed
+// `tests/e2e/onboarding-ritual.spec.ts` and `app/welcome/page.test.tsx`
+// already use, so `/welcome`'s shell-contract test below renders the
+// ritual for real rather than bouncing straight back to `/`.
+const ZERO_WORKFLOW_STATE = {
+  areas: [],
+  captureItems: [],
+  taskDrafts: [],
+  projectDrafts: [],
+  ambiguityAssessments: [],
+  timeBlockProposalDrafts: [],
+  projects: [],
+  tasks: [],
+  timeBlockProposals: [],
+  calendarBlocks: [],
+  executionSessions: [],
+  healthChecks: [],
+  reviewLog: [],
+  wipRefusal: null,
+};
 
 // C2-S14 (#687 round-8, defect 1): `page.tsx` now reads `next/headers`
 // `cookies()`, a real Next.js request-scoped API this vitest environment
@@ -461,5 +491,31 @@ describe("handoff cockpit route provider wiring", () => {
         'a[href="#stage-content"],button,input,select,textarea,[tabindex]:not([tabindex="-1"])',
       ),
     ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
+  });
+
+  // C3 (onboarding own-URL, Part of #687): `/welcome` reuses the same
+  // `MomentsThemeShell` `/` does — this pins that the reuse actually holds
+  // the same shell contract (one h1, a working skip link whose target
+  // excludes the shell's own chrome), the same way every other route in
+  // this file is pinned, rather than trusting "it shares a component" as
+  // proof on its own.
+  it("gives /welcome the same shell contract as home: one h1 and a working skip link (C3)", async () => {
+    window.sessionStorage.setItem(
+      "lifeos.phase2.workflow",
+      JSON.stringify(ZERO_WORKFLOW_STATE),
+    );
+
+    const { container } = renderThroughAppShell(<WelcomePage />, "/welcome");
+
+    expect(await screen.findByTestId("welcome-screen")).toBeDefined();
+    expect(await screen.findByTestId("onboarding-ritual")).toBeDefined();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(
+      container.querySelector(
+        'a[href="#stage-content"],button,input,select,textarea,[tabindex]:not([tabindex="-1"])',
+      ),
+    ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
+
+    window.sessionStorage.clear();
   });
 });

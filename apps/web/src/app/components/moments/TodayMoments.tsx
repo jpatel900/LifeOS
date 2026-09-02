@@ -302,7 +302,17 @@ export interface TodayMomentsProps {
 export function TodayMoments(props: TodayMomentsProps) {
   const router = useRouter();
   const { state } = useWorkflow();
-  const onboarding = useOnboardingRitual({ state });
+  // C3 verifier fix — `consumeRerunOnActivate: false`: this instance only
+  // ever DETECTS eligibility to redirect elsewhere; it never renders the
+  // ritual. Letting it also consume the one-shot Settings rerun flag (the
+  // hook's default behavior) meant it could clear the flag before
+  // `/welcome`'s own hook instance — the one that actually renders — ever
+  // got a chance to see it, silently swallowing a rerun reached via a path
+  // through `/`. See useOnboardingRitual.ts's own file-header comment.
+  const onboarding = useOnboardingRitual({
+    state,
+    consumeRerunOnActivate: false,
+  });
   const onboardingOwnsScreen = onboarding.active || onboarding.pending;
 
   useEffect(() => {

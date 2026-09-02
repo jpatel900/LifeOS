@@ -257,15 +257,21 @@ export function readAndClearOnboardingOutcomeToast():
  * This exists because the pre-C3 inline ritual forced `setMoment("start")`
  * directly on `TodayMoments`' own local state on completion — state
  * `/welcome` (a different route) has no access to. A `?moment=start` URL
- * param would say the same thing but is NOT equivalent: `TodayMoments.tsx`'s
- * `resolvedInitialMoment` treats a URL-carried moment as stale on a
- * "remount" (`isRemount`, see deepLink.ts), and the hand-off from `/welcome`
- * can itself follow an earlier TRANSIENT mount of Today (the same
- * mock/demo-then-real-state hydration delay `useOnboardingRitual`'s own doc
- * comment names) that already flipped that flag — so the URL tier is not
- * reliable for this one signal. The `initialMoment` PROP has no such
- * staleness check (it "always wins outright"), which is why this reads into
- * that tier instead.
+ * param was tried first, red-handed on the real dev server (not jsdom):
+ * `tests/e2e/onboarding-ritual.spec.ts`'s completion assertion landed on
+ * Close, not Start, even though the address bar carried `?moment=start` at
+ * the hand-off. Correction (this comment previously overstated the cause):
+ * `resolvedInitialMoment`'s `isRemount` staleness check
+ * (`TodayMoments.tsx`) only gates the SERVER-passed `deepLink` PROP tier —
+ * the live `window.location.search` read a few lines below it is NOT
+ * isRemount-gated, so that theory does not by itself explain the failure.
+ * The exact mechanism was not pinned down further (candidates include
+ * ordering between the client router's history write and this component's
+ * own `useState` initializer running); rather than keep guessing, this
+ * reads the `initialMoment` PROP instead, which is checked FIRST and
+ * unconditionally in `resolvedInitialMoment` — it bypasses every URL/
+ * deepLink/cookie resolution tier entirely, so it is correct regardless of
+ * which of them the real cause turns out to be.
  */
 export function hasStagedOnboardingOutcomeToast(): boolean {
   try {
