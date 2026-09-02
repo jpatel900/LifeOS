@@ -1,6 +1,10 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { cn } from "@/lib/utils";
+import { HIT_TARGET_MIN } from "@/app/components/moments/hitTarget";
 
 /**
  * FR-029 loud non-persistence (F-G3b), RECONCILED WITH REALITY by #737 C1 S5.
@@ -63,43 +67,99 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
  * `--warning-border` tokens (globals.css), not hardcoded Tailwind palette
  * classes.
  *
- * #687 demo-seed (owner 2026-08-30): a first visit to this fallback now
- * shows sample captures and tasks instead of an empty shell, so a person
- * must be told plainly that what they see is not theirs. `hasSeedData`
- * defaults to false and is deliberately NOT read from `useWorkflow()` inside
- * this component — `demoModeBanner.test.tsx` renders `<DemoModeBanner />`
- * standalone, outside a `WorkflowProvider`, and always has; a context read
- * here would throw for that (already-passing) coverage. The caller
- * (`AppShell.tsx`, which sits inside the provider) passes the real value.
- * The sentence is keyed to actual seed rows still being present — not to
- * demo mode generally — so it goes silent the moment "Reset this browser"
- * (Settings, `LocalResetPanel.tsx`) clears them, the same way the rest of
- * this banner never claims more than is currently true.
+ * ## LAYOUT — Option C (#934 OWNER-GATE, decided 2026-08-30)
+ *
+ * Two PRIOR attempts to give this banner a reachable "Sign in" door were
+ * reverted (see #934's PR body for the measured failures):
+ *  1. Adding the door to `AuthAffordance.tsx`'s masthead cluster broke
+ *     `moments-home-parity.spec.ts` at 1366x768 — the masthead is already at
+ *     flex-wrap capacity.
+ *  2. An inline "Sign in" text link inside this banner's own sentence wrapped
+ *     to a third line at 390px, growing this banner's height on every one of
+ *     the ~15 surfaces it renders on (root `AppShell`) and pushing
+ *     `settings/areas`'s pre-existing content below the fold — masking a
+ *     hit-target-overlap-pin count, not satisfying one.
+ *
+ * DIRECT MEASUREMENT (this slice) found the failure mode is not "wrapping"
+ * specifically — it is ANY added banner height at all. `settings/areas` sits
+ * at essentially zero pixel headroom against the viewport fold at both pinned
+ * sizes: adding as little as 2-4px of extra flow height to this globally
+ * rendered banner drops its hit-target-overlap-pin desktop count from 23 to
+ * 11 and its mobile count from 10 to 7 (verified with `hit-target-overlap-pin
+ * .spec.ts`, isolated Playwright context, not eyeballed). A literal
+ * two-ROW layout (sentence, then a second row for the link) was tried first
+ * and failed this exact way even using the invisible-hit-area technique.
+ *
+ * The layout that actually holds the pin is a FIXED-WIDTH TRAILING COLUMN,
+ * not a second row: `pr-16` on the sentence reserves real, permanent
+ * horizontal space on the right so the link never renders on top of the
+ * warning text (the sentence's own available width shrinks by the same
+ * amount at every viewport, so its wrap point is deterministic and never
+ * depends on this link's own text length), and the link itself is
+ * `absolute` inside that reserved column — contributing ZERO extra height to
+ * the document flow, so `settings/areas` (and every other of the ~15
+ * surfaces this banner renders on) measures identically to before this
+ * change. `HIT_TARGET_MIN` (not `HIT_TARGET_INVISIBLE`) on purpose: the
+ * negative margin `HIT_TARGET_INVISIBLE` uses to avoid pushing flow siblings
+ * fights an `absolute right-*` offset (margin still applies to an
+ * absolutely-positioned box's offset), which was measured to push the link's
+ * own box outside the viewport and introduce real horizontal overflow
+ * (`moments-home-parity.spec.ts`'s no-horizontal-overflow assertion, caught
+ * by running it, not by reasoning about it). `HIT_TARGET_MIN`'s literal
+ * 44x44 box has no such margin, so it stays fully inside the reserved column.
+ * No `relative` on this div: `position: sticky` already establishes a
+ * containing block for an absolutely-positioned descendant (same as
+ * `relative`/`absolute`/`fixed` do), so a separate `relative` class was dead.
+ *
+ * #974 polish: "Sign in" measures 39.3px wide inside a 44px-min-width box,
+ * against the `pr-16` (64px) reservation — real slack today, but slack a
+ * future copy change could quietly eat into (nothing stopped the link from
+ * wrapping onto a second line inside its own box before this). `whitespace-
+ * nowrap` below turns "the copy got too long" into "the link visibly grows
+ * past the reserved column" (caught by the width assertion in
+ * `demoModeBanner.test.tsx` and `hit-target-overlap-pin.spec.ts`'s existing
+ * overlap check) instead of a silent second line that could creep under the
+ * sentence text unnoticed.
+ *
+ * #974 polish: `?next=<path>` matches the configured door's own contract
+ * (`AuthAffordance.tsx`'s signed-out pill) — a person who signs in from
+ * here returns to the page they were reading, not always to `/`.
+ *
+ * VERIFIER FINDING, not a defect of this component: in demo mode, the same
+ * `isSupabaseConfigured()` check that shows this banner is also why
+ * `createSupabaseBrowserClient()` returns a null client (`/login`'s own
+ * `AuthAffordance.tsx`-adjacent logic) — so this door is honest about
+ * REACHABILITY (a person can always find `/login` and read why accounts
+ * aren't set up here), not about a working sign-in, which only exists once
+ * the deploy's `NEXT_PUBLIC_SUPABASE_*` env is configured.
  */
-export function DemoModeBanner({
-  hasSeedData = false,
-}: {
-  hasSeedData?: boolean;
-} = {}) {
+export function DemoModeBanner() {
+  const pathname = usePathname();
+
   if (isSupabaseConfigured()) {
     return null;
   }
+
+  const nextParam = pathname && pathname !== "/login" ? pathname : "/";
 
   return (
     <div
       role="alert"
       data-testid="demo-mode-banner"
-      className="sticky top-0 z-50 border-b-4 border-warning-border bg-warning px-4 py-2 text-center text-sm font-bold text-warning-foreground"
+      className="sticky top-0 z-50 border-b-4 border-warning-border bg-warning py-2 pl-4 pr-16 text-center text-sm font-bold text-warning-foreground"
     >
       Demo mode — there is no account to save to here. Nothing you do leaves
       this browser, and clearing its data ends it.
-      {hasSeedData ? (
-        <>
-          {" "}
-          The captures and tasks you see are sample data, not yours — clear them
-          any time in Settings with Reset this browser.
-        </>
-      ) : null}
+      <Link
+        href={`/login?next=${encodeURIComponent(nextParam)}`}
+        data-testid="demo-banner-signin-link"
+        className={cn(
+          HIT_TARGET_MIN,
+          "absolute right-2 top-1 whitespace-nowrap text-xs font-semibold underline underline-offset-2 hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-warning",
+        )}
+      >
+        Sign in
+      </Link>
     </div>
   );
 }

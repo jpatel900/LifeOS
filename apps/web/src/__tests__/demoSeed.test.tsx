@@ -11,6 +11,7 @@ import {
 } from "@/lib/workflow";
 import { workflowReducer } from "@/lib/workflowContext/reducerCore";
 import { buildCloseVM } from "@/app/components/moments/momentsViewModel/close";
+import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
 
 const navigationMock = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -183,7 +184,19 @@ describe("demo seed data (#687)", () => {
       ).toHaveTextContent("1");
     });
 
-    it("marks the sample data as sample data in the demo banner, in plain language", async () => {
+    // #974 (merged underneath this branch) rebuilt DemoModeBanner around a
+    // hard, measured constraint: ANY added height to this globally-rendered
+    // banner drops hit-target-overlap-pin's settings-areas count from 23/10
+    // to 11/7 (settings/areas sits at ~0px headroom against the fold at both
+    // pinned viewports — see that component's own doc comment). This PR's
+    // earlier "sample data, not yours" sentence would reintroduce exactly
+    // that regression, so it is dropped — the banner stays byte-identical
+    // to #974's version regardless of the seed. Sample-data truthfulness is
+    // still real: `workflowStateHasDemoSeed` (lib/workflow.ts) is exported
+    // for a future zero-height marker (AGENT-TODO, PR body), and "Reset this
+    // browser" (Settings, LocalResetPanel.tsx) genuinely clears it — pinned
+    // above and in the marker/new-tab tests.
+    it("does not grow the demo banner's height for the seed (would break hit-target-overlap-pin's settings-areas pin, #974)", async () => {
       render(
         <AppShell>
           {await HomePage({ searchParams: Promise.resolve({}) })}
@@ -193,8 +206,10 @@ describe("demo seed data (#687)", () => {
       await screen.findByTestId("today-moments");
 
       const banner = screen.getByTestId("demo-mode-banner");
-      expect(banner).toHaveTextContent(/sample data, not yours/i);
-      expect(banner).toHaveTextContent(/Reset this browser/i);
+      expect(banner).toHaveTextContent(
+        "Demo mode — there is no account to save to here. Nothing you do leaves this browser, and clearing its data ends it.",
+      );
+      expect(banner).not.toHaveTextContent(/sample data/i);
     });
   });
 
@@ -222,6 +237,48 @@ describe("demo seed data (#687)", () => {
           (session) => session.outcome === "completed",
         ),
       ).toBe(true);
+    });
+  });
+
+  /**
+   * #975 (merged underneath this branch, C3 card 10) moved the setup ritual
+   * to its own `/welcome` route, hand-off decided by the same deterministic
+   * predicate as before (`shouldShowOnboarding`, lib/onboarding/onboarding.ts):
+   * `areaCount === 0 && captureCount === 0`. A seeded first visit must NOT
+   * be treated as a brand-new account needing the ritual — decided here as
+   * "never": `createSeededDemoWorkflowState`'s `areas` is always the same 4
+   * real areas `createEmptyWorkflowState` uses (mockData.ts's `areas`,
+   * structural, never emptied by the seed), so `areaCount` is never 0 for
+   * EITHER shape, seeded or not. The predicate was never touched by this
+   * PR — this pins that the seed's own content (captures, tasks, drafts)
+   * cannot accidentally satisfy it either, now or if `shouldShowOnboarding`
+   * is later widened to look at more than just areas.
+   */
+  describe("the seeded state never satisfies the onboarding zero-state predicate (#975 /welcome interaction)", () => {
+    it("a seeded first visit is never eligible for the onboarding ritual", () => {
+      const seeded = createSeededDemoWorkflowState();
+      const eligible = shouldShowOnboarding({
+        areaCount: seeded.areas.length,
+        captureCount: seeded.captureItems.length,
+        completed: false,
+        rerunRequested: false,
+      });
+      expect(eligible).toBe(false);
+    });
+
+    it("a genuinely empty (post-reset) state is STILL not eligible, because areas are structural, not sample content", () => {
+      const empty = createEmptyWorkflowState();
+      const eligible = shouldShowOnboarding({
+        areaCount: empty.areas.length,
+        captureCount: empty.captureItems.length,
+        completed: false,
+        rerunRequested: false,
+      });
+      // Documents the existing (pre-#687) behavior this PR does not change:
+      // the demo fallback always carries 4 real areas, so the zero-state
+      // ritual has never fired in demo mode, seeded or not — a real account
+      // is what starts with genuinely zero areas.
+      expect(eligible).toBe(false);
     });
   });
 });

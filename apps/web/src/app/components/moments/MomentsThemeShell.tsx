@@ -66,12 +66,14 @@ export function MomentsThemeShell({ children }: { children: ReactNode }) {
           `sm:pb-8rem` stays the original desktop value, where the navigator
           doesn't render and the pill floats at its #553 offset. */}
       <div className="mx-auto flex min-h-dvh w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-[calc(env(safe-area-inset-bottom)+7rem)] pt-4 sm:px-6 sm:pb-[calc(env(safe-area-inset-bottom)+8rem)] sm:pt-6">
-        <a
-          href="#stage-content"
-          className="sr-only rounded-full bg-[var(--btn)] px-4 py-2 font-bold text-[var(--btn-fg)] focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
-        >
-          Skip to stage content
-        </a>
+        {/* This div used to open with its own `#stage-content` skip link
+            (`--btn`/`--btn-fg` tokens, scoped to the `.lifeos-cockpit` class
+            this shell applies) — SUPERSEDED by #974: the true root
+            `AppShell.tsx` now renders one shared skip link ahead of
+            `DemoModeBanner`, app-wide, so it is Tab #1 here too; a second,
+            identically-labelled link would make
+            `getByRole("link", { name: "Skip to stage content" })`
+            ambiguous. Still targets the same `#stage-content` id below. */}
         {/* #687 round-9 judge (defect 2): the `#stage-content` id/tabIndex
             used to live on a div HERE, wrapping `{children}` in full —
             including `TodayMoments.tsx`'s own masthead `<header>`, so the

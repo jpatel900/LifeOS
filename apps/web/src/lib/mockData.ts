@@ -332,6 +332,37 @@ function demoSeedLaterTodayDate(minutesFromNow: number): Date {
     : new Date(now.getTime() + 60_000);
 }
 
+/**
+ * The mirror image of `demoSeedLaterTodayDate`, for a point in the PAST
+ * that must still land on TODAY's local calendar day — a completed block or
+ * session "a couple of hours ago" wrongly lands on YESTERDAY whenever the
+ * app is opened early enough in the local morning (within `minutesAgo` of
+ * midnight). Found by the demo suite itself flaking right after a real
+ * local-midnight rollover (`buildCloseVM`'s `completedToday`, which reads
+ * `isSameCalendarDay`, went from 1 to 0) — the same class of bug
+ * `demoSeedLaterTodayDate` already fixes in the other direction. Clamps to
+ * 00:05 local time (floor) when the naive offset would land yesterday; in
+ * the vanishingly rare case `now` itself is before that floor, falls back
+ * to one minute ago (still today, still in the past).
+ */
+function demoSeedEarlierTodayDate(minutesAgo: number): Date {
+  const now = new Date();
+  const requested = new Date(now.getTime() - minutesAgo * 60_000);
+  const floor = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    0,
+    5,
+    0,
+    0,
+  );
+  const candidate = requested.getTime() >= floor.getTime() ? requested : floor;
+  return candidate.getTime() < now.getTime()
+    ? candidate
+    : new Date(now.getTime() - 60_000);
+}
+
 // Two raw, unsorted captures ("new" — nothing has looked at them yet).
 // One capture already parsed and waiting on a triage decision (paired with
 // demoSeedTaskDrafts[0] below via capture_item_id — captureHasTriageDecision
@@ -421,7 +452,7 @@ export function buildDemoSeedTaskDrafts(): Phase2TaskDraft[] {
 // block below, which is what actually drives Close's "completed today"
 // count and Review's session list).
 export function buildDemoSeedTasks(): Phase2MockTask[] {
-  const wonEarlierToday = demoSeedIso(-3 * HOUR_MS);
+  const wonEarlierToday = demoSeedEarlierTodayDate(180).toISOString();
   return [
     {
       id: `${DEMO_SEED_ID_PREFIX}task-1`,
@@ -495,11 +526,14 @@ export function buildDemoSeedCalendarBlocks(): Phase2MockCalendarBlock[] {
   const scheduledWindow = demoSeedLaterTodayDate(180);
   const scheduledStart = scheduledWindow;
   const scheduledEnd = new Date(scheduledWindow.getTime() + 45 * 60_000);
-  // The win's own block: completed a few hours ago, still today (used by
-  // Close's completedToday count, which reads calendar_blocks — see
-  // momentsViewModel/close.ts).
-  const completedEnd = new Date(Date.now() - 2 * HOUR_MS);
-  const completedStart = new Date(completedEnd.getTime() - 30 * 60_000);
+  // The win's own block: completed a few hours ago, still TODAY (used by
+  // Close's completedToday count, which reads calendar_blocks —
+  // momentsViewModel/close.ts). `demoSeedEarlierTodayDate`, not a raw
+  // `Date.now() - 2h`: a raw offset lands on YESTERDAY whenever the app is
+  // opened early in the local morning (within 2h of midnight) — found by
+  // this exact seed flaking right after a real midnight rollover.
+  const completedEnd = demoSeedEarlierTodayDate(120);
+  const completedStart = demoSeedEarlierTodayDate(150);
   return [
     {
       id: `${DEMO_SEED_ID_PREFIX}block-1`,
@@ -535,7 +569,7 @@ export function buildDemoSeedCalendarBlocks(): Phase2MockCalendarBlock[] {
 // fallback) real content instead of staying inert (independent verifier
 // round 1 finding 5).
 export function buildDemoSeedExecutionSessions(): Phase2MockExecutionSession[] {
-  const completedAt = new Date(Date.now() - 2 * HOUR_MS);
+  const completedAt = demoSeedEarlierTodayDate(120);
   return [
     {
       id: `${DEMO_SEED_ID_PREFIX}session-1`,

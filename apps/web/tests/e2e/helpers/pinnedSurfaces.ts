@@ -214,7 +214,49 @@ const NO_SEED_WORKFLOW_STATE = {
   timeBlockProposals: [],
   calendarBlocks: [],
   executionSessions: [],
-  healthChecks: [],
+  // NOT `[]` — unlike ZERO_WORKFLOW_STATE above (a genuinely brand-new
+  // account with nothing synced yet), this shape stands in for
+  // `createEmptyWorkflowState()` (lib/workflow/shared.ts), which keeps the
+  // real, always-populated `healthChecks` array (lib/mockData.ts) —
+  // demo mode's health checks are static copy, not something a reset or a
+  // fresh tab ever empties. An empty array here diverged from that real
+  // shape just enough to shift the Areas card's height and break
+  // moments-home-parity.spec.ts's fine (20px) pill-clearance margins —
+  // found by running it, not by reasoning about it.
+  healthChecks: [
+    {
+      id: "health-auth",
+      subsystem: "auth",
+      status: "healthy",
+      score: 100,
+      summary:
+        "Signing in works. This demo isn't linked to a real account yet.",
+    },
+    {
+      id: "health-database",
+      subsystem: "database",
+      status: "watch",
+      score: 75,
+      summary:
+        "Your work is kept on this device only. It isn't saved to an account yet.",
+    },
+    {
+      id: "health-ai",
+      subsystem: "ai_parsing",
+      status: "watch",
+      score: 60,
+      summary:
+        "The AI helper isn't turned on yet. Anything you capture is sorted with built-in rules.",
+    },
+    {
+      id: "health-calendar",
+      subsystem: "calendar_connector",
+      status: "watch",
+      score: 50,
+      summary:
+        "No calendar is connected yet, so everything you plan stays inside LifeOS.",
+    },
+  ],
   reviewLog: [],
   wipRefusal: null,
 };

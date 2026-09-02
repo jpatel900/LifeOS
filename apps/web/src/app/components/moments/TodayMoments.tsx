@@ -56,8 +56,11 @@ import {
 import type { PurposeGaugeResponse } from "@/lib/purpose/purposeGaugePolicy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useOnboardingRitual } from "./useOnboardingRitual";
-import { OnboardingRitual } from "./OnboardingRitual";
-import { readDayShapePreferences } from "@/lib/onboarding/onboarding";
+import {
+  hasStagedOnboardingOutcomeToast,
+  readDayShapePreferences,
+  readAndClearOnboardingOutcomeToast,
+} from "@/lib/onboarding/onboarding";
 import { buildPipelineCounts } from "./pipelineCounts";
 import { TriageSheet } from "./TriageSheet";
 import { PlanSheet } from "./PlanSheet";
@@ -272,7 +275,62 @@ export interface TodayMomentsProps {
   cookieAreaId?: string | null;
 }
 
-export function TodayMoments({
+// C3 (onboarding own-URL): the real thin root — everything the OLD single
+// `TodayMoments` export used to do now lives in `TodayMomentsContent`
+// below, mounted ONLY when onboarding does not own the screen.
+//
+// Caught red-first (`tests/e2e/onboarding-ritual.spec.ts`, real dev server —
+// not reproducible in jsdom, where effects don't race a real async
+// navigation the way they do here): gating the OLD `TodayMoments`' internal
+// JSX (rendering the ritual `null` while handing off) was not enough on its
+// own. `TodayMomentsContent` mounts a WHOLE tree of OTHER effects that write
+// straight to `window.location` with the raw History API — the moment/area
+// URL self-heals, the invalid-param scrub, the legacy-moment migration —
+// none of them gated on "are we mid hand-off", because before this slice
+// there was no such thing to gate on: the ritual only ever stood in front of
+// this same mounted tree, never routed away from it. `router.replace` is an
+// async, queued navigation; those raw effects run synchronously in the same
+// commit and, left mounted, kept winning the race — the address bar ended up
+// on `/?moment=close&area=all` (a self-heal's own write), never `/welcome`.
+//
+// The fix is structural, not one more gate to add to the pile: don't mount
+// `TodayMomentsContent` — and none of its raw-URL effects — AT ALL while
+// onboarding owns the screen. `useOnboardingRitual` reads `WorkflowContext`
+// (a plain context consumer, safe to call again inside `TodayMomentsContent`
+// once it actually mounts) so this costs nothing extra when onboarding is
+// not eligible, which is the overwhelming common case.
+export function TodayMoments(props: TodayMomentsProps) {
+  const router = useRouter();
+  const { state } = useWorkflow();
+  const onboarding = useOnboardingRitual({ state });
+  const onboardingOwnsScreen = onboarding.active || onboarding.pending;
+
+  useEffect(() => {
+    if (!onboardingOwnsScreen) return;
+    router.replace("/welcome");
+  }, [onboardingOwnsScreen, router]);
+
+  if (onboardingOwnsScreen) return null;
+
+  // C3 (onboarding own-URL): forces the Start moment on the ONE render that
+  // follows a `/welcome` hand-off — the design note's payoff ("the ritual
+  // closes onto the Start moment, where the #551 state-truth surfaces show
+  // the captured thought") that the pre-C3 inline ritual got for free by
+  // calling `setMoment("start")` directly on this component's own local
+  // state, which `/welcome` (a different route) cannot reach. Read via
+  // `initialMoment` (wins outright, immune to the `isRemount` staleness a
+  // URL-carried `?moment=` would be subject to — see
+  // `hasStagedOnboardingOutcomeToast`'s own doc comment for why that tier
+  // isn't reliable for this one signal) rather than mutating `props`, so an
+  // explicit `initialMoment` a caller (tests) DOES pass still wins.
+  const initialMoment =
+    props.initialMoment ??
+    (hasStagedOnboardingOutcomeToast() ? "start" : undefined);
+
+  return <TodayMomentsContent {...props} initialMoment={initialMoment} />;
+}
+
+function TodayMomentsContent({
   initialMoment,
   now: nowProp,
   deepLink,
@@ -335,7 +393,6 @@ export function TodayMoments({
     selectedAreaId: contextSelectedAreaId,
     setSelectedAreaId,
     syncStatus,
-    syncPersistedAreas,
     submitCaptureText,
     startTaskSession,
     markSession,
@@ -500,17 +557,40 @@ export function TodayMoments({
     ? contextSelectedAreaId
     : resolvedInitialAreaId;
 
-  // #581: the onboarding ritual owns the screen ahead of everything else on
-  // a zero-state (or Settings-rerun) session. The re-entry ritual is
-  // disabled while onboarding is eligible/active — a brand-new account has
-  // nothing to be welcomed back to.
+  // #581/Part of #687 (own-URL): the onboarding ritual owns the screen ahead
+  // of everything else on a zero-state (or Settings-rerun) session. The
+  // re-entry ritual is disabled while onboarding is eligible/active — a
+  // brand-new account has nothing to be welcomed back to.
+  //
+  // C3 (onboarding own-URL): the ritual itself now RENDERS at `/welcome`, not
+  // here — this hook stays mounted on `/` only to detect eligibility (the
+  // predicate needs live WorkflowContext state, which `/welcome` reads
+  // independently through the same hook) and to hand off. `active`/`pending`
+  // both mean "the ritual owns the screen"; Today must show neither its own
+  // content NOR the ritual inline while either is true — it hands off via
+  // the effect below instead. Reusing `onboarding.pending` here closes a
+  // pre-existing gap (the old inline render only checked `active`, so the one
+  // render between "eligibility detected" and the mount effect flipping
+  // `status` to "active" briefly painted ordinary Today content — see
+  // useOnboardingRitual's own `pending` doc comment) — folding it in here
+  // means that tick now hands off too, instead of flashing a stale greeting.
   const onboarding = useOnboardingRitual({ state });
   const onboardingActive = onboarding.active;
+  const onboardingOwnsScreen = onboardingActive || onboarding.pending;
+
+  // Hands off to the ritual's own URL the moment eligibility is known — a
+  // client-side `replace` (no reload, no extra history entry), so a
+  // brand-new account's first screen after sign-in is `/welcome` itself
+  // (Target Card 10 criterion 1), not a flash of Today underneath it.
+  useEffect(() => {
+    if (!onboardingOwnsScreen) return;
+    router.replace("/welcome");
+  }, [onboardingOwnsScreen, router]);
 
   const ritual = useReEntryRitual({
     state,
     now,
-    enabled: !onboardingActive && !onboarding.pending,
+    enabled: !onboardingOwnsScreen,
     refreshPersistedWorkflow,
   });
   const ritualActive =
@@ -519,8 +599,10 @@ export function TodayMoments({
   // the render's own header gate, so the two can never drift apart —
   // whether the masthead (and the moment/pipeline content it fronts) is
   // showing at all, as opposed to one of the two rituals standing in for it.
+  // Now also excludes `onboarding.pending` (see the comment above) so the
+  // hand-off tick renders nothing instead of a stale Today greeting.
   const showingMastheadAndMoments =
-    !onboardingActive && !(ritualActive && ritual.summary && ritual.plan);
+    !onboardingOwnsScreen && !(ritualActive && ritual.summary && ritual.plan);
 
   const [recoverySwapIndex, setRecoverySwapIndex] = useState(0);
 
@@ -1248,6 +1330,27 @@ export function TodayMoments({
       },
       action ? TOAST_WITH_ACTION_DURATION_MS : TOAST_DURATION_MS,
     );
+  }, []);
+
+  // C3 (onboarding own-URL): the ritual's payoff toast ("Captured — you're
+  // set up" / "You're set up") used to fire from THIS component's own
+  // `onComplete` handler, back when the ritual rendered inline here. Now it
+  // completes on `/welcome` and hands off to Today via `router.replace("/")`
+  // — a plain navigation carries no message. `/welcome`'s page.tsx stashes
+  // the outcome in a one-shot sessionStorage record (mirrors the existing
+  // `CAPTURE_DRAFT_KEY` idiom above) right before that replace; this reads
+  // and clears it exactly once, on mount, so a reload of Today afterward
+  // never repeats a toast for a hand-off that already happened.
+  const onboardingOutcomeConsumedRef = useRef(false);
+  useEffect(() => {
+    if (onboardingOutcomeConsumedRef.current) return;
+    onboardingOutcomeConsumedRef.current = true;
+    const outcome = readAndClearOnboardingOutcomeToast();
+    if (!outcome) return;
+    showToast(
+      outcome === "captured" ? "Captured — you're set up" : "You're set up",
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // #590 slice 3: Flow moment's focus-session + task-map wiring, extracted
@@ -2108,27 +2211,14 @@ export function TodayMoments({
         tabIndex={-1}
         className="grid gap-6 focus:outline-none"
       >
-        {onboardingActive ? (
-          // #581: the onboarding ritual stands in for the moments content the
-          // same way the re-entry ritual does; completing (or skipping) it
-          // unmounts onto the Start moment, where the #551 state-truth
-          // surfaces show whatever was just captured.
-          <OnboardingRitual
-            onSubmit={(text, hook) =>
-              submitCaptureText(text, selectedAreaId, hook)
-            }
-            onAreasPersisted={syncPersistedAreas}
-            onComplete={(outcome) => {
-              onboarding.complete();
-              setMoment("start");
-              showToast(
-                outcome === "captured"
-                  ? "Captured — you're set up"
-                  : "You're set up",
-              );
-            }}
-          />
-        ) : ritualActive && ritual.summary && ritual.plan ? (
+        {/* C3 (onboarding own-URL): the ritual itself no longer renders
+            here — it lives at `/welcome` now (see that route's page.tsx).
+            This tick (eligibility detected, hand-off effect above not yet
+            navigated) renders nothing rather than a beat of stale Today
+            content underneath the redirect. */}
+        {onboardingOwnsScreen ? null : ritualActive &&
+          ritual.summary &&
+          ritual.plan ? (
           <ReEntryRitual
             summary={ritual.summary}
             plan={ritual.plan}

@@ -30,6 +30,14 @@
 export const ONBOARDING_COMPLETED_KEY = "lifeos.onboarding.completed";
 export const ONBOARDING_RERUN_KEY = "lifeos.onboarding.rerun";
 export const DAY_SHAPE_PREFERENCES_KEY = "lifeos.preferences.dayShape";
+// C3 (onboarding own-URL): the ritual now completes on `/welcome`, which
+// hands off to Today (`/`) via a plain `router.replace` — a navigation
+// carries no message of its own. This one-shot sessionStorage record is how
+// `/welcome`'s page.tsx tells Today which payoff toast to show. sessionStorage
+// (not localStorage): it must survive exactly the one hand-off navigation,
+// never a later session — same reasoning as TodayMoments.tsx's own
+// CAPTURE_DRAFT_KEY.
+export const ONBOARDING_OUTCOME_TOAST_KEY = "lifeos.onboarding.outcomeToast";
 
 export const SESSION_LENGTH_OPTIONS = [25, 45, 60] as const;
 export type SessionLengthMinutes = (typeof SESSION_LENGTH_OPTIONS)[number];
@@ -182,5 +190,87 @@ export function writeDayShapePreferences(prefs: DayShapePreferences): void {
     );
   } catch {
     // Blocked storage — the ritual still completes; defaults stay in effect.
+  }
+}
+
+function safeSessionStorage(): Storage | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * C3 (onboarding own-URL): called by `/welcome`'s page.tsx immediately
+ * before it hands off to Today (`router.replace("/")`) on ritual completion.
+ * `outcome` mirrors `OnboardingRitual`'s own `OnboardingOutcome` union
+ * (`"captured" | "skipped"`) by value, not by importing that component's
+ * type — this module is imported by `OnboardingRitual.tsx` itself, and this
+ * keeps the dependency one-directional.
+ */
+export function writeOnboardingOutcomeToast(
+  outcome: "captured" | "skipped",
+): void {
+  try {
+    safeSessionStorage()?.setItem(ONBOARDING_OUTCOME_TOAST_KEY, outcome);
+  } catch {
+    // Blocked storage — the hand-off still happens; Today just shows no toast.
+  }
+}
+
+/**
+ * Read-once-and-clear: Today's mount effect calls this exactly once so a
+ * later reload of `/` never repeats a toast for a hand-off that already
+ * happened. Returns null when nothing was staged (the ordinary case — most
+ * visits to Today do not follow an onboarding completion).
+ */
+export function readAndClearOnboardingOutcomeToast():
+  | "captured"
+  | "skipped"
+  | null {
+  try {
+    const storage = safeSessionStorage();
+    const raw = storage?.getItem(ONBOARDING_OUTCOME_TOAST_KEY) ?? null;
+    if (raw !== "captured" && raw !== "skipped") return null;
+    storage?.removeItem(ONBOARDING_OUTCOME_TOAST_KEY);
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * C3 (onboarding own-URL) — a non-consuming peek at the same one-shot
+ * record `writeOnboardingOutcomeToast`/`readAndClearOnboardingOutcomeToast`
+ * share, used by `TodayMoments.tsx`'s wrapper to force the Start moment
+ * exactly this once, WITHOUT clearing the record — clearing stays the sole
+ * job of `readAndClearOnboardingOutcomeToast`'s own consumer (Today's toast
+ * effect), so the two reads can never race each other into double-clearing
+ * or a lost toast. Its presence at all is itself the signal ("did the
+ * ritual just hand off here"); the outcome value carried is irrelevant to
+ * this caller.
+ *
+ * This exists because the pre-C3 inline ritual forced `setMoment("start")`
+ * directly on `TodayMoments`' own local state on completion — state
+ * `/welcome` (a different route) has no access to. A `?moment=start` URL
+ * param would say the same thing but is NOT equivalent: `TodayMoments.tsx`'s
+ * `resolvedInitialMoment` treats a URL-carried moment as stale on a
+ * "remount" (`isRemount`, see deepLink.ts), and the hand-off from `/welcome`
+ * can itself follow an earlier TRANSIENT mount of Today (the same
+ * mock/demo-then-real-state hydration delay `useOnboardingRitual`'s own doc
+ * comment names) that already flipped that flag — so the URL tier is not
+ * reliable for this one signal. The `initialMoment` PROP has no such
+ * staleness check (it "always wins outright"), which is why this reads into
+ * that tier instead.
+ */
+export function hasStagedOnboardingOutcomeToast(): boolean {
+  try {
+    return safeSessionStorage()?.getItem(ONBOARDING_OUTCOME_TOAST_KEY) != null;
+  } catch {
+    return false;
   }
 }
