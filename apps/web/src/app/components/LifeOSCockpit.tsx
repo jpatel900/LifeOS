@@ -439,14 +439,12 @@ export function LifeOSCockpit({
       data-testid="lifeos-cockpit"
     >
       <div className="mx-auto flex min-h-screen w-full max-w-[var(--max)] flex-col gap-5 px-4 py-4 sm:px-6 sm:py-6">
-        {/* This div used to open with its own `#stage-content` skip link
-            (`--btn`/`--btn-fg` tokens, scoped to the `.lifeos-cockpit` class
-            this shell applies) — SUPERSEDED by #974: the true root
-            `AppShell.tsx` now renders one shared skip link ahead of
-            `DemoModeBanner`, app-wide, so it is Tab #1 here too; a second,
-            identically-labelled link would make
-            `getByRole("link", { name: "Skip to stage content" })`
-            ambiguous. Still targets the same `#stage-content` id below. */}
+        <a
+          href="#stage-content"
+          className="sr-only rounded-full bg-[var(--btn)] px-4 py-2 font-bold text-[var(--btn-fg)] focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+        >
+          Skip to stage content
+        </a>
         {/* C1 (#660 surface audit): was `flex-wrap` with the area-chip row
             forced to `basis-full` below `sm` — the moments masthead grammar
             is a single row (StartMoment.tsx). Recomposed to one row that

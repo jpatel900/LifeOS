@@ -29,23 +29,10 @@ import {
  * `global-error.tsx` (a render that THREW), nothing here failed — the URL
  * simply does not name anything this app serves, and the one honest next
  * step is the same for every case, so it is the only thing offered.
- *
- * `id="stage-content"` (#974 second review): `AppShell.tsx`'s shared skip
- * link targets this id on every route it renders on — this route is one of
- * them (the shell wraps the whole app, 404 included) — and this `<main>`
- * was missing the id entirely, so "Skip to stage content" here activated a
- * same-page anchor to nothing. `tabIndex={-1}` makes it a valid programmatic
- * focus target without adding it to the Tab order, matching every other
- * `#stage-content` main/section in this codebase (`/login`'s own,
- * `settings/areas/page.tsx`'s own).
  */
 export default function NotFound() {
   return (
-    <main
-      id="stage-content"
-      tabIndex={-1}
-      className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-md items-center"
-    >
+    <main className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-md items-center">
       <Card className="workflow-primary-card workflow-flagship-card w-full">
         <CardHeader className="space-y-3">
           <CardTitle>Page not found</CardTitle>
