@@ -8,6 +8,29 @@ test.beforeEach(async ({ page }) => {
   await stubParseCaptureRoute(page);
 });
 
+// #687 main-red incident (2026-09-02): `formatMastheadDate` renders a real
+// weekday + day + month string, and its width varies with the calendar.
+// This is the MEASURED widest value it can ever render — swept every
+// weekday name against every month name against a 1- and 2-digit day via an
+// in-page canvas `measureText` using the date span's own computed font
+// (Inter): "Wednesday" is the longest weekday (9 chars), and among the two
+// 9-char months ("September") a 2-digit day is wider than a 1-digit one, so
+// the true maximum is a 2-digit-day Wednesday in September. 2026-09-30 is
+// the highest such day this calendar year (getDate() width is who-cares
+// beyond 2 digits — every 2-digit day measures the same to within rounding).
+// `new Date("...T09:00:00")` (no `Z`/offset) is parsed as LOCAL time, so
+// which weekday it resolves to depends on the runner's timezone — pinning
+// `timezoneId` alongside this string is what makes "2026-09-30" reliably
+// mean Wednesday everywhere (the exact gap this fix's review caught: this
+// literal, unpinned, renders as Thursday the 17th under
+// `PLAYWRIGHT_TZ=Pacific/Auckland`).
+const MASTHEAD_DATE_WORST_CASE_ISO = "2026-09-30T09:00:00";
+const MASTHEAD_DATE_WORST_CASE_TIMEZONE = "America/Toronto";
+
+async function pinMastheadWorstCaseDate(page: import("@playwright/test").Page) {
+  await page.clock.setFixedTime(new Date(MASTHEAD_DATE_WORST_CASE_ISO));
+}
+
 /**
  * Moments pass P7 — parity proof (pre-flip).
  *
@@ -269,6 +292,9 @@ test.describe("moments home capture pill clears the Pipeline row (#477)", () => 
 // exactly the "tim" cut-off bug, whether or not the user could later scroll
 // clear of it.
 test.describe("moments home capture pill clears content on the empty Start day at every desktop height (#483 round 4)", () => {
+  // See MASTHEAD_DATE_WORST_CASE_TIMEZONE's own comment above.
+  test.use({ timezoneId: MASTHEAD_DATE_WORST_CASE_TIMEZONE });
+
   for (const viewport of [
     { width: 1366, height: 768 },
     { width: 1280, height: 800 },
@@ -277,18 +303,16 @@ test.describe("moments home capture pill clears content on the empty Start day a
     test(`pill never covers the rail/schedule/areas card at ${viewport.width}x${viewport.height}, scroll 0 and end`, async ({
       page,
     }) => {
-      // Pinned to a Wednesday with a 2-digit day (the masthead date's own
-      // worst case, see formatMastheadDate.ts): "Wednesday" is the longest
-      // weekday name and a 2-digit day is wider than a 1-digit one, so this
-      // is the widest realistic value `today-moments-date` ever renders.
-      // Left unpinned, this guard measured the real wall-clock date and
-      // silently passed on every day except the ~2/7 where the weekday name
-      // was long enough to overflow the masthead's zero-headroom width
-      // budget and wrap the header to a second line — exactly what broke
-      // main on 2026-09-02 (a Wednesday) despite this file having run green
-      // on every prior (shorter-weekday) date. Pinning proves the fix holds
-      // under the worst case on every run, not just on short-weekday days.
-      await page.clock.setFixedTime(new Date("2026-09-16T09:00:00"));
+      // Pinned to the masthead date's own measured worst case (see
+      // MASTHEAD_DATE_WORST_CASE_ISO's comment above). Left unpinned, this
+      // guard measured the real wall-clock date and silently passed on
+      // every day except the ~4/7 where the weekday name was long enough
+      // to overflow the masthead's width budget and wrap the header to a
+      // second line — exactly what broke main on 2026-09-02 (a Wednesday)
+      // despite this file having run green on every prior date. Pinning to
+      // the measured maximum proves the fix holds under the worst case on
+      // every run, not just on short-weekday days.
+      await pinMastheadWorstCaseDate(page);
       await page.setViewportSize(viewport);
       await page.goto("/");
       await expect(page.getByTestId("today-moments")).toBeVisible();
@@ -639,6 +663,9 @@ test.describe("moments home Pipeline rail never clips a stage, in either mode (#
 // well above that noise band is what actually proves the fix, not a bare
 // `> 0`.
 test.describe("moments home capture pill keeps a real clearance margin under the Areas card, regardless of theme (#483 round 5, blocker 2)", () => {
+  // See MASTHEAD_DATE_WORST_CASE_TIMEZONE's own comment above.
+  test.use({ timezoneId: MASTHEAD_DATE_WORST_CASE_TIMEZONE });
+
   for (const theme of ["light", "dark"] as const) {
     test(`pill clears the Areas card by a real margin at 1366x768 in ${theme} theme, scroll 0 and end`, async ({
       page,
@@ -646,10 +673,11 @@ test.describe("moments home capture pill keeps a real clearance margin under the
       // Pinned for the same reason as the R4-A guard above: the masthead
       // date string's width varies by weekday name length, and an unpinned
       // real clock only exercises that variance on whichever day CI happens
-      // to run — it silently passed on every date but the ~2/7 with a long
-      // weekday name (see 2026-09-02, a Wednesday). Wednesday + a 2-digit
-      // day is that string's worst case.
-      await page.clock.setFixedTime(new Date("2026-09-16T09:00:00"));
+      // to run — it silently passed on every date but the worst-case
+      // weekdays (see 2026-09-02, a Wednesday). See
+      // MASTHEAD_DATE_WORST_CASE_ISO's own comment for the measured
+      // maximum this is now pinned to.
+      await pinMastheadWorstCaseDate(page);
       await page.setViewportSize({ width: 1366, height: 768 });
       await page.goto("/");
       await expect(page.getByTestId("today-moments")).toBeVisible();
@@ -693,6 +721,171 @@ test.describe("moments home capture pill keeps a real clearance margin under the
       }
     });
   }
+});
+
+// #687 structural-fix verification (fixes main red at a629d608, part of the
+// masthead-date-wrap incident): the R4-A/R5 guards above pin the masthead
+// DATE string's own worst case, but the masthead's width budget is also
+// squeezed by the CONTROL CLUSTER on the same row — a longer selected-area
+// name (AreaSelector) or the AuthAffordance "Sign in"/who pill (rendered
+// only once Supabase is configured; CI's device tier runs in demo mode,
+// where AuthAffordance renders nothing, so this pressure is otherwise
+// invisible to this whole suite). An earlier version of this fix reclaimed
+// a fixed number of px via tighter gaps — that only ever covers the
+// specific width deficit it was measured against, and review found real
+// combinations (worst-case date + "Volunteer Work" selected; worst-case
+// date + a simulated auth pill) that still re-wrapped the header and drove
+// clearance negative even with that fix applied. The STRUCTURAL fix
+// (TodayMoments.tsx's brand+date row: `flex-nowrap` + `min-w-0` + a
+// truncating date span) has no such budget to exhaust — the date span
+// degrades to an ellipsis under ANY amount of width pressure instead of
+// wrapping the header, so clearance should hold regardless of what else is
+// squeezing the row. This proves that directly, stacking the worst-case
+// date with each width-pressure source individually.
+test.describe("moments home masthead never wraps under combined width pressure (#687 structural fix verification)", () => {
+  test.use({ timezoneId: MASTHEAD_DATE_WORST_CASE_TIMEZONE });
+
+  const DESKTOP_VIEWPORTS = [
+    { width: 1280, height: 900 },
+    { width: 1366, height: 768 },
+    { width: 1440, height: 900 },
+  ];
+
+  // #574/#593: AreaSelector's rendered width scales with the selected
+  // area's name. "Volunteer Work" is the demo seed's longest area name
+  // (tied with "Side Project" by word count but wider glyphs) — see
+  // TodayMoments.tsx's own `<header>` comment history for why this
+  // specific name has reopened the masthead-wrap bug before.
+  const VOLUNTEER_WORK_AREA_ID = "area-volunteer";
+
+  async function measureClearance(page: import("@playwright/test").Page) {
+    const pill = page.getByTestId("capture-affordance");
+    const areasCard = page.getByTestId("side-rail-areas-card");
+    await expect(pill).toBeVisible();
+    await expect(areasCard).toBeVisible();
+
+    const results: Record<string, number> = {};
+    for (const position of ["zero", "end"] as const) {
+      await page.evaluate((pos) => {
+        window.scrollTo(
+          0,
+          pos === "zero" ? 0 : document.documentElement.scrollHeight,
+        );
+      }, position);
+      const pillBox = await pill.boundingBox();
+      const areasBox = await areasCard.boundingBox();
+      expect(pillBox, `pill box at scroll ${position}`).not.toBeNull();
+      expect(areasBox, `areas box at scroll ${position}`).not.toBeNull();
+      results[position] = pillBox!.y - (areasBox!.y + areasBox!.height);
+    }
+    return results;
+  }
+
+  for (const viewport of DESKTOP_VIEWPORTS) {
+    test(`worst-case date + "Volunteer Work" selected clears the Areas card by a real margin at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await pinMastheadWorstCaseDate(page);
+      await page.setViewportSize(viewport);
+      await page.goto(`/?area=${VOLUNTEER_WORK_AREA_ID}`);
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await expect(
+        page.getByTestId("today-moments-area-switcher"),
+      ).toContainText("Volunteer Work");
+
+      const clearance = await measureClearance(page);
+      for (const [position, value] of Object.entries(clearance)) {
+        expect(
+          value,
+          `pill-to-areas-card clearance at scroll ${position}, area=Volunteer Work, ${viewport.width}x${viewport.height} was ${value}px`,
+        ).toBeGreaterThan(20);
+      }
+    });
+  }
+
+  // HONEST LIMITATION: AuthAffordance only renders a pill once
+  // `isSupabaseConfigured()` is true, which is a build-time env check the
+  // E2E dev server never satisfies (no Supabase env is wired into the
+  // device-tier webServer — see HIT-1 at the top of this file) — a real
+  // signed-in run of this exact scenario is not feasible in this suite as
+  // configured. This test SIMULATES the pill's width contribution instead
+  // of exercising the real component: it injects a DOM node matching
+  // AuthAffordance's real rendered footprint (a `PILL_CLASS` pill,
+  // `HIT_TARGET_MIN` sized, holding the longest real copy the component
+  // ever shows — a signed-in short-label pill with "Sign out", wider than
+  // the signed-out "Sign in" pill) into the same masthead cluster slot,
+  // then proves the structural fix holds with it present. This is a
+  // deliberate stand-in, not proof against the real component — flagged
+  // here and in the PR body as residual risk until a signed-in device-tier
+  // (or a dedicated Supabase-configured) run can exercise the real pill.
+  for (const viewport of DESKTOP_VIEWPORTS) {
+    test(`worst-case date + a simulated AuthAffordance pill clears the Areas card by a real margin at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await pinMastheadWorstCaseDate(page);
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      await page.evaluate(() => {
+        const cluster = document.querySelector(
+          '[data-testid="masthead-settingslink-slot"]',
+        )?.parentElement;
+        if (!cluster) {
+          throw new Error(
+            "masthead-settingslink-slot not found — cluster DOM shape changed, update this simulated-pill injection",
+          );
+        }
+        const fake = document.createElement("span");
+        fake.setAttribute("data-testid", "simulated-auth-affordance-pill");
+        fake.className =
+          "inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 text-xs font-semibold text-muted-foreground min-h-[44px] min-w-[44px]";
+        fake.textContent = "Sign out";
+        cluster.appendChild(fake);
+      });
+      await expect(
+        page.getByTestId("simulated-auth-affordance-pill"),
+      ).toBeVisible();
+
+      const clearance = await measureClearance(page);
+      for (const [position, value] of Object.entries(clearance)) {
+        expect(
+          value,
+          `pill-to-areas-card clearance at scroll ${position}, simulated auth pill present, ${viewport.width}x${viewport.height} was ${value}px`,
+        ).toBeGreaterThan(20);
+      }
+    });
+  }
+
+  // Unchanged-at-mobile check: the brand+date row's `flex-nowrap` applies
+  // at every breakpoint (it is not `sm:`-scoped), but below `sm` the header
+  // itself is `flex-col` — brand+date gets the full viewport width to
+  // itself, not a shared budget — so the date should never need to
+  // truncate there. Proves the structural fix didn't introduce a NEW mobile
+  // regression (accidental truncation) while fixing the desktop one.
+  test("worst-case date renders the full, untruncated date string at 390px (mobile masthead has its own full-width row)", async ({
+    page,
+  }) => {
+    await pinMastheadWorstCaseDate(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+
+    const dateSpan = page.getByTestId("today-moments-date");
+    await expect(dateSpan).toBeVisible();
+    await expect(dateSpan).toHaveText("Wednesday 30 September");
+
+    const scrollWidth = await dateSpan.evaluate((el) => el.scrollWidth);
+    const clientWidth = await dateSpan.evaluate((el) => el.clientWidth);
+    expect(
+      scrollWidth,
+      `date span truncated at 390px: scrollWidth=${scrollWidth} > clientWidth=${clientWidth}`,
+    ).toBeLessThanOrEqual(clientWidth);
+  });
 });
 
 // R6 (premium push #483 round 6, regression fix): the fix above shipped an
