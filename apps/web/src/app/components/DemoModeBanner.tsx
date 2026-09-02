@@ -132,8 +132,41 @@ import { HIT_TARGET_MIN } from "@/app/components/moments/hitTarget";
  * REACHABILITY (a person can always find `/login` and read why accounts
  * aren't set up here), not about a working sign-in, which only exists once
  * the deploy's `NEXT_PUBLIC_SUPABASE_*` env is configured.
+ *
+ * ## #687 demo-seed round 2 — labelling the sample without growing the banner
+ *
+ * Round 1 tried adding a SECOND sentence when the seed is present ("...The
+ * captures and tasks you see are sample data..."). Refuted: that grows this
+ * banner's flow height exactly the way #974's two prior attempts above did,
+ * for the same reason — `settings/areas` has ~0px headroom against the
+ * hit-target-overlap-pin fold cutoff, so ANY added height (not just
+ * wrapping) drops its count from 23/10 to 11/7.
+ *
+ * Fixed by SWAPPING the one sentence instead of appending to it —
+ * `hasSeedData` selects between two single-line variants of equal or
+ * shorter length than the original, so neither can wrap to an extra line at
+ * any of the three measured widths (320/390/1366 — `demoModeBanner.test.tsx`
+ * pins this with real DOM height, not just string length):
+ *
+ *   default:  "Demo mode — there is no account to save to here. Nothing you
+ *              do leaves this browser, and clearing its data ends it."
+ *   seeded:   "Demo mode — this is sample data. Nothing you do leaves this
+ *              browser, and clearing its data ends it."
+ *
+ * The seeded variant is 8 characters SHORTER than the default (drops "there
+ * is no account to save to here", adds "this is sample data") and keeps
+ * every other clause verbatim — including "clearing its data ends it",
+ * which #737-A already established is the one claim in this banner that
+ * must never be dropped. `hasSeedData` defaults to `false` and this
+ * component stays context-free (`demoModeBanner.test.tsx` renders it
+ * standalone, outside any `WorkflowProvider`); `AppShell.tsx`'s
+ * `DemoModeBannerConnected` supplies the real value from `useWorkflow()`.
  */
-export function DemoModeBanner() {
+export function DemoModeBanner({
+  hasSeedData = false,
+}: {
+  hasSeedData?: boolean;
+} = {}) {
   const pathname = usePathname();
 
   if (isSupabaseConfigured()) {
@@ -148,8 +181,17 @@ export function DemoModeBanner() {
       data-testid="demo-mode-banner"
       className="sticky top-0 z-50 border-b-4 border-warning-border bg-warning py-2 pl-4 pr-16 text-center text-sm font-bold text-warning-foreground"
     >
-      Demo mode — there is no account to save to here. Nothing you do leaves
-      this browser, and clearing its data ends it.
+      {hasSeedData ? (
+        <>
+          Demo mode — this is sample data. Nothing you do leaves this browser,
+          and clearing its data ends it.
+        </>
+      ) : (
+        <>
+          Demo mode — there is no account to save to here. Nothing you do leaves
+          this browser, and clearing its data ends it.
+        </>
+      )}
       <Link
         href={`/login?next=${encodeURIComponent(nextParam)}`}
         data-testid="demo-banner-signin-link"

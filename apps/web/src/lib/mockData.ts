@@ -410,8 +410,17 @@ export function buildDemoSeedCaptureItems(): Phase2CaptureItem[] {
     {
       id: `${DEMO_SEED_ID_PREFIX}capture-4`,
       user_id: MOCK_USER_ID,
-      area_id: "area-volunteer",
-      raw_text: "Confirm the venue for the fundraiser",
+      // area-main-job, not area-volunteer: this capture's task/block/session
+      // below are the seed's "completed win", and buildCockpitViewModel
+      // (lib/cockpit/viewModel.ts) scopes Review's session list to the
+      // CURRENTLY SELECTED area — WorkflowContext's default selection is
+      // always `areas[0].id` (area-main-job). A win seeded into a
+      // non-default area never renders on a first visit; found by tracing
+      // why Review kept showing "Focus sessions will appear here" despite
+      // `buildDemoSeedExecutionSessions()` returning a row (round 2 finding
+      // 5) — the state had it, the DOM never did.
+      area_id: "area-main-job",
+      raw_text: "Confirm the contract redline is signed off",
       return_hook: null,
       client_capture_id: null,
       capture_mode: "text",
@@ -478,8 +487,9 @@ export function buildDemoSeedTasks(): Phase2MockTask[] {
     {
       id: `${DEMO_SEED_ID_PREFIX}task-2`,
       user_id: MOCK_USER_ID,
-      area_id: "area-volunteer",
-      title: "Confirm the venue for the fundraiser",
+      // area-main-job — see buildDemoSeedCaptureItems()'s capture-4 comment.
+      area_id: "area-main-job",
+      title: "Confirm the contract redline is signed off",
       description: null,
       status: "done",
       priority_score: 3,
@@ -496,7 +506,10 @@ export function buildDemoSeedTasks(): Phase2MockTask[] {
       // independent verifier round 1 finding 5.
       created_at: demoSeedIso(-2 * DAY_MS),
       updated_at: wonEarlierToday,
-      project_id: "proj-volunteer-1",
+      // null, not proj-volunteer-1 — that project belongs to area-volunteer;
+      // this task moved to area-main-job (see capture-4's comment above), so
+      // the old cross-area project reference would have been a dangling FK.
+      project_id: null,
       source_capture_item_id: `${DEMO_SEED_ID_PREFIX}capture-4`,
     },
   ];
@@ -551,7 +564,7 @@ export function buildDemoSeedCalendarBlocks(): Phase2MockCalendarBlock[] {
     {
       id: `${DEMO_SEED_ID_PREFIX}block-2`,
       user_id: MOCK_USER_ID,
-      area_id: "area-volunteer",
+      area_id: "area-main-job",
       task_id: `${DEMO_SEED_ID_PREFIX}task-2`,
       proposal_id: null,
       google_event_id: null,
@@ -574,7 +587,7 @@ export function buildDemoSeedExecutionSessions(): Phase2MockExecutionSession[] {
     {
       id: `${DEMO_SEED_ID_PREFIX}session-1`,
       user_id: MOCK_USER_ID,
-      area_id: "area-volunteer",
+      area_id: "area-main-job",
       task_id: `${DEMO_SEED_ID_PREFIX}task-2`,
       calendar_block_id: `${DEMO_SEED_ID_PREFIX}block-2`,
       planned_minutes: 30,
@@ -584,7 +597,7 @@ export function buildDemoSeedExecutionSessions(): Phase2MockExecutionSession[] {
       productivity_rating: 4,
       status: "completed",
       outcome: "completed",
-      notes: "Venue confirmed for the fundraiser.",
+      notes: "Redline signed off by the client.",
       created_at: completedAt.toISOString(),
     },
   ];
