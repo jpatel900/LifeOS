@@ -174,6 +174,14 @@ export function DemoModeBanner({
   }
 
   const nextParam = pathname && pathname !== "/login" ? pathname : "/";
+  // #687 demo-seed round 3 (finding C): `hasSeedData` reflects the GLOBAL
+  // WorkflowContext state, which survives an in-tab navigation — a judge
+  // who saw the seed on `/` and then opened `/login` would otherwise be
+  // told "this is sample data" about a page that has none, and lose the
+  // "no account to save to here" clause `/login` is exactly the moment for.
+  // The default sentence is the true one on `/login` regardless of what the
+  // rest of the tab is showing.
+  const showSeededCopy = hasSeedData && pathname !== "/login";
 
   return (
     <div
@@ -181,7 +189,7 @@ export function DemoModeBanner({
       data-testid="demo-mode-banner"
       className="sticky top-0 z-50 border-b-4 border-warning-border bg-warning py-2 pl-4 pr-16 text-center text-sm font-bold text-warning-foreground"
     >
-      {hasSeedData ? (
+      {showSeededCopy ? (
         <>
           Demo mode — this is sample data. Nothing you do leaves this browser,
           and clearing its data ends it.

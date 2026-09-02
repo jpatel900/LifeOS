@@ -8,6 +8,9 @@ dist/
 .next-seeded/
 out/
 
+# Playwright seeded-server file-protection snapshot (scripts/run-playwright-e2e.mjs / tests/e2e/helpers/protectTrackedFiles.mjs)
+.protected-files-snapshot.json
+
 # Turbo
 .turbo/
 

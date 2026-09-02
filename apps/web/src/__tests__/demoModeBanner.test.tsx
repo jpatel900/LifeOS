@@ -166,4 +166,25 @@ describe("DemoModeBanner (FR-029 loud non-persistence)", () => {
 
     expect(screen.getByRole("alert")).not.toHaveTextContent(/sample data/i);
   });
+
+  /**
+   * #687 demo-seed round 3, finding C — `hasSeedData` reflects the GLOBAL
+   * WorkflowContext state, which survives an in-tab navigation. A judge who
+   * saw the seed on `/` and then opened `/login` would otherwise be told
+   * "this is sample data" about a page with none, and lose the "no account
+   * to save to here" clause `/login` is exactly the moment for. `/login`
+   * always gets the default sentence, whatever `hasSeedData` says.
+   */
+  it("shows the default (non-seeded) sentence on /login even when hasSeedData is true", () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    navigationMock.pathname = "/login";
+
+    render(<DemoModeBanner hasSeedData />);
+
+    const banner = screen.getByRole("alert");
+    expect(banner).toHaveTextContent(
+      "Demo mode — there is no account to save to here.",
+    );
+    expect(banner).not.toHaveTextContent(/sample data/i);
+  });
 });

@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import process from "node:process";
@@ -9,6 +10,42 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(scriptDir, "..");
 const webDir = path.join(repoRoot, "apps", "web");
+
+// #687 demo-seed round 3 (MUST-FIX) — a `next dev` process started with a
+// non-default `distDir` (the seeded server's `NEXT_DIST_DIR=.next-seeded`,
+// below) REWRITES two TRACKED files on startup to match: `next-env.d.ts`'s
+// `.next/types/routes.d.ts` reference flips to `.next-seeded/...`, and
+// `tsconfig.json` gains a `.next-seeded/types/**/*.ts` include entry (plus
+// Next's own JSON re-formatting of the whole file). Left alone, every local
+// `pnpm test:e2e` run leaves the tree dirty and `pnpm format:check` fails on
+// `tsconfig.json` afterward — and worse, `next-env.d.ts` now points the
+// MAIN build (plain `pnpm dev`, which never populates `.next-seeded/`) at a
+// directory that doesn't exist for it.
+//
+// Snapshot both files before either server starts, restore them on every
+// exit path (normal completion, signal, or a startup failure) — belt and
+// braces rather than only "at the end", since the timing of exactly when
+// Next rewrites them is an implementation detail this script does not
+// control.
+const filesToProtect = [
+  path.join(webDir, "next-env.d.ts"),
+  path.join(webDir, "tsconfig.json"),
+];
+const originalFileContents = new Map(
+  filesToProtect.map((file) => [file, fs.readFileSync(file, "utf8")]),
+);
+
+function restoreProtectedFiles() {
+  for (const [file, original] of originalFileContents) {
+    try {
+      if (fs.readFileSync(file, "utf8") !== original) {
+        fs.writeFileSync(file, original);
+      }
+    } catch (error) {
+      console.error(`[playwright-e2e] failed to restore ${file}:`, error);
+    }
+  }
+}
 const requestedPort = Number(process.env.PLAYWRIGHT_PORT ?? "3100");
 const requestedSeededPort = process.env.PLAYWRIGHT_SEEDED_PORT
   ? Number(process.env.PLAYWRIGHT_SEEDED_PORT)
@@ -224,6 +261,11 @@ function cleanupServers(serverProcesses) {
   for (const serverProcess of serverProcesses) {
     cleanupServer(serverProcess);
   }
+  // Every exit path (normal completion, SIGINT/SIGTERM, an uncaught error,
+  // a server that failed to start) routes through here — the one place
+  // that must always restore the two tracked files a seeded `next dev`
+  // rewrites (see the header comment).
+  restoreProtectedFiles();
 }
 
 function exitWithSignal(serverProcesses, code) {

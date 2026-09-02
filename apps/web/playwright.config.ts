@@ -13,6 +13,13 @@ const seededPort = Number(
   process.env.PLAYWRIGHT_SEEDED_PORT ?? String(port + 1),
 );
 const seededBaseURL = `http://127.0.0.1:${seededPort}`;
+// #687 demo-seed round 3 (finding B) — filled in with the resolved default
+// when not already set, so ANY spec file (regardless of which project runs
+// it) can read both ports and navigate cross-origin to compare the main and
+// seeded servers in one test — `demo-mode-banner-signin-link.spec.ts`'s
+// height/wrap guard does exactly that.
+process.env.PLAYWRIGHT_PORT = String(port);
+process.env.PLAYWRIGHT_SEEDED_PORT = String(seededPort);
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -20,6 +27,15 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   timeout: 60_000,
+  // #687 demo-seed round 3 (MUST-FIX) — the seeded server's own file
+  // protection for a direct `npx playwright test` run (CI's own protection
+  // lives in `scripts/run-playwright-e2e.mjs`, which spawns the servers
+  // itself before this config's `globalSetup` even runs — harmless overlap,
+  // its own snapshot/restore is a no-op there since the outer script's
+  // restore runs last with the TRUE pre-mutation snapshot). See
+  // `tests/e2e/helpers/protectTrackedFiles.mjs`.
+  globalSetup: "./tests/e2e/helpers/globalSetupProtectTrackedFiles.mjs",
+  globalTeardown: "./tests/e2e/helpers/globalTeardownRestoreTrackedFiles.mjs",
   use: {
     baseURL,
     trace: "retain-on-failure",
