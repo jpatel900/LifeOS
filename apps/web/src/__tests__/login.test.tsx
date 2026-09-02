@@ -141,11 +141,14 @@ describe("LoginPage", () => {
     expect(mocks.signInWithPassword).not.toHaveBeenCalled();
   });
 
-  // #592: successful auth routes to Today (`/`), not Settings — Today owns
-  // the first-use decision via the deterministic zero-state predicate
-  // (lib/onboarding/onboarding.ts), which routing straight to Settings
-  // used to bypass entirely.
-  it("submits credentials and routes to Today when sign-in succeeds", async () => {
+  // #592/C3: successful auth routes toward the onboarding decision, not
+  // Settings — the deterministic zero-state predicate
+  // (lib/onboarding/onboarding.ts) is what decides whether the ritual
+  // actually fires. C3 (onboarding own-URL) — Part of #687: a device with
+  // no completed-onboarding record routes STRAIGHT to `/welcome` now, not
+  // `/` — see login/page.tsx's own comment for why routing through `/`
+  // first used to silently swallow a Settings-requested rerun.
+  it("submits credentials and routes to the ritual's own URL when sign-in succeeds on a device with no completed onboarding", async () => {
     render(<LoginPage />);
     fillCredentials("user_a@example.test", "password123");
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
@@ -157,7 +160,7 @@ describe("LoginPage", () => {
       });
     });
     await waitFor(() => {
-      expect(mocks.push).toHaveBeenCalledWith("/");
+      expect(mocks.push).toHaveBeenCalledWith("/welcome");
     });
   });
 
@@ -181,33 +184,45 @@ describe("LoginPage", () => {
     });
   });
 
-  // Part of #687: a brand-new account (or any device with no completed
-  // onboarding record — e.g. a fresh browser, or one where the device-local
-  // record was never written) reached Settings via its own signed-out
-  // redirect (`/login?next=%2Fsettings%2Fareas`, see
-  // settings/areas/page.tsx), landed back in Settings after sign-in, and
-  // TodayMoments.tsx — the ONLY place the onboarding ritual mounts — never
-  // rendered. `?next=` must not override Today for a device that has not
-  // completed onboarding, regardless of which page produced it.
-  it("ignores ?next= and routes to Today when this device has not completed onboarding (Part of #687)", async () => {
+  // Part of #687, updated by C3 (onboarding own-URL): a brand-new account
+  // (or any device with no completed onboarding record — e.g. a fresh
+  // browser, or one where the device-local record was never written)
+  // reached Settings via its own signed-out redirect
+  // (`/login?next=%2Fsettings%2Fareas`, see settings/areas/page.tsx), and
+  // used to land back in Settings after sign-in with the ritual never
+  // rendering anywhere. `?next=` must not override the ritual's own URL for
+  // a device that has not completed onboarding, regardless of which page
+  // produced it. Asserts the ACTUAL destination (`/welcome`, where the
+  // ritual renders), not merely "not /settings/areas" — a guard that only
+  // proves the wrong page was avoided, without proving the right one was
+  // reached, would pass even if this route silently went nowhere useful.
+  it("ignores ?next= and routes to the ritual's own URL when this device has not completed onboarding (Part of #687)", async () => {
     mocks.search = "next=%2Fsettings%2Fareas";
     render(<LoginPage />);
     fillCredentials("user_a@example.test", "password123");
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
-      expect(mocks.push).toHaveBeenCalledWith("/");
+      expect(mocks.push).toHaveBeenCalledWith("/welcome");
     });
     expect(mocks.push).not.toHaveBeenCalledWith("/settings/areas");
+    expect(mocks.push).not.toHaveBeenCalledWith("/");
   });
 
-  // Part of #687: the device signal is gated on the SAME two inputs
-  // `shouldShowOnboarding` reads, not a per-route allowlist — a completed
-  // device that has explicitly requested a rerun (Settings' "run setup
-  // again") must also see Today, not its ?next= destination, since the
-  // canonical predicate would show the ritual again regardless of
-  // completion.
-  it("ignores ?next= and routes to Today when a rerun of onboarding was requested (Part of #687)", async () => {
+  // Part of #687, updated by C3 (onboarding own-URL): the device signal is
+  // gated on the SAME two inputs `shouldShowOnboarding` reads, not a
+  // per-route allowlist — a completed device that has explicitly requested
+  // a rerun (Settings' "run setup again") must also land on the ritual's
+  // own URL, not its ?next= destination, since the canonical predicate
+  // would show the ritual again regardless of completion.
+  //
+  // This is the guard the C3 verifier found HOLLOWED: routing to `/` and
+  // asserting only that (the pre-own-URL shape) kept passing even after `/`
+  // stopped being where the ritual renders at all — a `/` that silently
+  // swallowed the rerun request (see login/page.tsx's own comment on the
+  // bug this fix closes) would have passed this exact assertion. Re-targeted
+  // to the actual destination the ritual now lives at.
+  it("ignores ?next= and routes to the ritual's own URL when a rerun of onboarding was requested (Part of #687)", async () => {
     window.localStorage.setItem(
       ONBOARDING_COMPLETED_KEY,
       JSON.stringify({ completedAt: new Date().toISOString() }),
@@ -219,8 +234,9 @@ describe("LoginPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
-      expect(mocks.push).toHaveBeenCalledWith("/");
+      expect(mocks.push).toHaveBeenCalledWith("/welcome");
     });
+    expect(mocks.push).not.toHaveBeenCalledWith("/settings/areas");
   });
 
   // Open-redirect guard: a crafted ?next= must never bounce a freshly
