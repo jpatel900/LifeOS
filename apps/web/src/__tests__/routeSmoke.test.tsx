@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import HomePage from "../app/page";
@@ -461,5 +461,61 @@ describe("handoff cockpit route provider wiring", () => {
         'a[href="#stage-content"],button,input,select,textarea,[tabindex]:not([tabindex="-1"])',
       ),
     ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
+  });
+});
+
+/**
+ * #687 demo-seed, independent verifier round 1 finding 6 — a genuine
+ * opt-in, in THIS file (not only `demoSeed.test.tsx`), that the moments
+ * home route actually renders the seeded sample on a first visit. The rest
+ * of this file inherits the suite-wide `NEXT_PUBLIC_DEMO_SEED=false`
+ * default and is unaffected by the seed's existence.
+ */
+describe("moments home first visit in demo mode (#687 demo-seed)", () => {
+  const ORIGINAL_DEMO_SEED = process.env.NEXT_PUBLIC_DEMO_SEED;
+  const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_DEMO_SEED = "true";
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    window.sessionStorage.clear();
+    window.localStorage.clear();
+  });
+
+  afterAll(() => {
+    if (ORIGINAL_DEMO_SEED === undefined) {
+      delete process.env.NEXT_PUBLIC_DEMO_SEED;
+    } else {
+      process.env.NEXT_PUBLIC_DEMO_SEED = ORIGINAL_DEMO_SEED;
+    }
+    if (ORIGINAL_MOMENTS_HOME === undefined) {
+      delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    } else {
+      process.env.NEXT_PUBLIC_MOMENTS_HOME = ORIGINAL_MOMENTS_HOME;
+    }
+  });
+
+  it("renders / with the seeded sample content, not an empty shell", async () => {
+    render(
+      <AppShell>
+        {await HomePage({ searchParams: Promise.resolve({}) })}
+      </AppShell>,
+    );
+
+    await screen.findByTestId("today-moments");
+
+    // The default moment depends on time of day — the Pipeline rail (where
+    // the seeded captures/draft show up as non-zero counts) lives on Start.
+    fireEvent.click(await screen.findByTestId("moment-switcher-start"));
+
+    // Both testids only render at all once at least one Pipeline stage is
+    // non-zero (PipelineOverview.tsx) — their mere presence already proves
+    // this is not an empty shell. #974 (merged underneath this branch) gave
+    // the demo banner a hard, measured zero-added-height constraint (its own
+    // doc comment), so the seed is proven here, not through banner copy —
+    // see demoSeed.test.tsx's dedicated test for why that copy was dropped.
+    expect(
+      await screen.findByTestId("pipeline-overview-count-capture"),
+    ).toBeInTheDocument();
   });
 });

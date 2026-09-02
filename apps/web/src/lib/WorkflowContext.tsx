@@ -33,6 +33,7 @@ import {
   updateTaskFirstTinyStep,
   updateProposal,
   clearWipRefusal,
+  markDemoSeedCleared,
   type WipRefusal,
   type WorkflowState,
 } from "./workflow";
@@ -2697,6 +2698,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // unsynced-capture badge to zero in the same tab, matching the stores it
     // now actually reflects.
     resetWorkflow: async () => {
+      // #687 demo-seed, independent verifier round 1 finding 2: a reset
+      // must stay reset in a NEW tab too, not just this one — this browser's
+      // `localStorage` marker (unlike the reducer's own per-tab
+      // `sessionStorage` snapshot) is what "Reset this browser" actually
+      // promises (LocalResetPanel.tsx's copy). Written before the dispatch
+      // so `createInitialWorkflowState` never has a chance to seed again
+      // even if something re-mounts the provider before this promise chain
+      // finishes.
+      markDemoSeedCleared();
       await Promise.all([
         clearQueue(),
         clearStoredTaskDrafts(),

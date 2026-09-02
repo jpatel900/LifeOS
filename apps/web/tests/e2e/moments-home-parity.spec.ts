@@ -1,11 +1,23 @@
 import { expect, test } from "@playwright/test";
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
+import { seedNoSampleWorkflowState } from "./helpers/pinnedSurfaces";
 
 // HIGH-1 (#670): /api/parse-capture requires a verified bearer token and the
 // E2E dev server has no Supabase env, so every capture flow in this file runs
 // against the deterministic mock-parser stub (task-map lifecycle precedent).
+//
+// #687 demo-seed (owner 2026-08-30): the unconfigured fallback this whole
+// lane runs against now seeds a first, no-`sessionStorage` visit with sample
+// captures/tasks (`lib/workflow/shared.ts`'s `createInitialWorkflowState`).
+// Every test in this file was written against the OLD pristine-but-not-
+// onboarding state (real areas, zero everything else) — `seedNoSampleWorkflowState`
+// (helpers/pinnedSurfaces.ts) restores exactly that state via the same
+// pre-navigation `sessionStorage` seam the onboarding zero-state already
+// uses, so this file keeps measuring what it always measured. The seed
+// itself is covered separately (`apps/web/src/__tests__/demoSeed.test.tsx`).
 test.beforeEach(async ({ page }) => {
   await stubParseCaptureRoute(page);
+  await seedNoSampleWorkflowState(page);
 });
 
 /**
