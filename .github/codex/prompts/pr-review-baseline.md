@@ -49,7 +49,6 @@ Focus on:
 - workflow/CI permission safety
 - user-facing truthfulness
 - test meaningfulness
-- simplicity, within the diff only: needless abstractions or indirection with a single caller, wiring that exists only to pass a value through, logic an existing helper already covers, dead or unreachable code, and code that could be shorter with the same behaviour. Name the concrete smaller form. Report these as `[LOW]` or `[NIT]` unless they hide a correctness problem. Skip this when the change is a straight copy of an existing pattern in the repo.
 
 Constraints:
 
