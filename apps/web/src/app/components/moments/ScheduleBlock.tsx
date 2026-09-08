@@ -123,7 +123,14 @@ export function ScheduleBlock({ block, timeDisplay, now }: ScheduleBlockProps) {
       className={cn(
         "workflow-compact-item moments-row flex items-center gap-3",
         isNow && "area-accent-card",
-        isDone && "opacity-60",
+        // #687 demo-seed round 2: `opacity-60` on the whole row compounded
+        // with `text-muted-foreground` on the title below to fail WCAG AA
+        // contrast (measured on the seeded state, where a completed row is
+        // finally reachable without a placed+completed block first — same
+        // "unreachable before the seed" class as `start-pending-triage` and
+        // the win-title input). `text-muted-foreground` + `line-through`
+        // alone (already the compliant token used everywhere else in this
+        // app) is the "done" signal now — no opacity fade on TEXT, ever.
       )}
       data-testid="schedule-block"
       data-state={block.state}

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Settings as SettingsIcon } from "lucide-react";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import { workflowStateHasDemoSeed } from "@/lib/workflow";
 import { historyReplaceState } from "@/lib/rawHistory";
 import { buildCockpitAccentStyle } from "@/lib/cockpit/accent";
 import { resolveSelectedArea } from "@/lib/areaAccent";
@@ -1997,7 +1998,20 @@ function TodayMomentsContent({
   );
 
   return (
-    <div className="grid gap-6" data-testid="today-moments" style={accentStyle}>
+    <div
+      className="grid gap-6"
+      data-testid="today-moments"
+      // #687 demo-seed round 2 — a settled marker a test can wait on, not a
+      // sleep. `createInitialWorkflowState` (lib/workflow/shared.ts)
+      // decides seeded-vs-empty SYNCHRONOUSLY inside the client's own first
+      // render (no window on the server, so SSR always renders empty; the
+      // client's hydration render is the first and only render that can
+      // know the answer) — this attribute reflects that same render's
+      // result, so waiting for it means waiting for exactly the render that
+      // matters, not an arbitrary delay.
+      data-demo-seeded={workflowStateHasDemoSeed(state) ? "true" : "false"}
+      style={accentStyle}
+    >
       {/* #687 round-9 judge (defect 2): the skip link's target used to be
           an ANCESTOR of this masthead (`MomentsThemeShell.tsx`'s own
           `#stage-content` div wrapped this component's entire output,

@@ -290,7 +290,16 @@ export function CloseMoment({
                         }))
                       }
                       aria-label={`Win title for ${win.title}`}
-                      className="text-sm"
+                      // #687 demo-seed round 2: shadcn's default Input height
+                      // (h-10, 40px) is a real, reachable sub-44px control —
+                      // unreachable before the seed made a win-harvest
+                      // candidate available on a fresh, unconfigured visit
+                      // (same class of defect `start-pending-triage` had).
+                      // min-h-[44px] wins the merge (Input's own classes come
+                      // first, so a later h-10 in the merged string is
+                      // overridden by this class ordering — verified with
+                      // Playwright's real box measurement, not by reasoning).
+                      className="min-h-[44px] text-sm"
                       data-testid={`close-moment-win-title-${win.taskId}`}
                     />
                     <div className="flex items-center justify-between gap-2">

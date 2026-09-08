@@ -75,3 +75,60 @@ test.describe("demo banner sign-in link stays inside its reserved column", () =>
     );
   });
 });
+
+/**
+ * #687 demo-seed round 3 (finding B) — the real-browser height/wrap proof
+ * `demoModeBanner.test.tsx`'s own comment already claims lives here.
+ * `DemoModeBanner.tsx` swaps its one sentence for a seeded variant ("Demo
+ * mode — this is sample data...") instead of appending a second one,
+ * specifically so it cannot regress `#974`'s measured settings-areas
+ * hit-target count (23/10 -> 11/7 on as little as 2-4px of added banner
+ * height). jsdom computes no layout, so the only place that claim can
+ * actually be checked is here: navigate to BOTH servers (main = unseeded,
+ * seeded = `NEXT_PUBLIC_DEMO_SEED=true` — `playwright.config.ts` exposes
+ * both ports via `PLAYWRIGHT_PORT`/`PLAYWRIGHT_SEEDED_PORT` regardless of
+ * which project runs this file) and assert the seeded banner's rendered
+ * height never EXCEEDS the unseeded one, at all three widths that matter:
+ * 320 (the narrowest real phone this app supports), 390 (this file's own
+ * mobile pin width), and 1366 (this file's own desktop pin width, and the
+ * exact width `moments-home-parity.spec.ts`'s pill-clearance guards use).
+ */
+test.describe("demo banner sample-data label never grows the banner (#687 round 3, finding B)", () => {
+  const mainPort = process.env.PLAYWRIGHT_PORT;
+  const seededPort = process.env.PLAYWRIGHT_SEEDED_PORT;
+
+  for (const width of [320, 390, 1366]) {
+    test(`seeded banner height <= unseeded banner height at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+
+      await page.goto(`http://127.0.0.1:${mainPort}/`);
+      const unseededBanner = page.getByTestId("demo-mode-banner");
+      await expect(unseededBanner).toBeVisible();
+      const unseededBox = await unseededBanner.boundingBox();
+      expect(unseededBox, "unseeded banner box").not.toBeNull();
+      await expect(unseededBanner).not.toContainText(/sample data/i);
+
+      await page.goto(`http://127.0.0.1:${seededPort}/`);
+      const seededBanner = page.getByTestId("demo-mode-banner");
+      // A fresh seeded visit only decides seeded-vs-empty on the client's
+      // hydration render (`createInitialWorkflowState`,
+      // lib/workflow/shared.ts) — wait for the settled marker
+      // (`TodayMoments.tsx`) so this measures the seeded sentence, not a
+      // pre-hydration flash of the unseeded one.
+      await expect(
+        page.locator('[data-testid="today-moments"][data-demo-seeded="true"]'),
+      ).toBeAttached({ timeout: 15_000 });
+      await expect(seededBanner).toBeVisible();
+      await expect(seededBanner).toContainText(/sample data/i);
+      const seededBox = await seededBanner.boundingBox();
+      expect(seededBox, "seeded banner box").not.toBeNull();
+
+      expect(
+        seededBox!.height,
+        `seeded banner height (${seededBox!.height}) must not exceed unseeded (${unseededBox!.height}) at ${width}px`,
+      ).toBeLessThanOrEqual(unseededBox!.height);
+    });
+  }
+});

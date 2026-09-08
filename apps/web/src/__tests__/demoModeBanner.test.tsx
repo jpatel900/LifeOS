@@ -134,4 +134,57 @@ describe("DemoModeBanner (FR-029 loud non-persistence)", () => {
 
     expect(screen.queryByRole("link", { name: /sign in/i })).toBeNull();
   });
+
+  /**
+   * #687 demo-seed round 2 — the independent verifier refuted round 1's
+   * choice to drop sample-data labelling entirely (a judge seeing unlabeled
+   * fake data is a truth regression). `hasSeedData` swaps the ONE sentence
+   * for an equal-or-shorter variant instead of appending a second one, so it
+   * cannot grow this banner's height — the real-browser height/wrap proof at
+   * 320/390/1366 lives in `demo-mode-banner-signin-link.spec.ts` (jsdom has
+   * no layout engine); this pins the content contract only.
+   */
+  it("labels the sample as sample data when hasSeedData is true, without dropping the durable-truth clauses", () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+
+    render(<DemoModeBanner hasSeedData />);
+
+    const banner = screen.getByRole("alert");
+    expect(banner).toHaveTextContent(
+      "Demo mode — this is sample data. Nothing you do leaves this browser, and clearing its data ends it.",
+    );
+    const text = banner.textContent ?? "";
+    expect(text).not.toMatch(/nothing here is saved/i);
+    expect(text).not.toMatch(/only in this tab/i);
+    expect(text).not.toMatch(/vanish on reload/i);
+  });
+
+  it("defaults to the non-seeded sentence when hasSeedData is omitted", () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+
+    render(<DemoModeBanner />);
+
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/sample data/i);
+  });
+
+  /**
+   * #687 demo-seed round 3, finding C — `hasSeedData` reflects the GLOBAL
+   * WorkflowContext state, which survives an in-tab navigation. A judge who
+   * saw the seed on `/` and then opened `/login` would otherwise be told
+   * "this is sample data" about a page with none, and lose the "no account
+   * to save to here" clause `/login` is exactly the moment for. `/login`
+   * always gets the default sentence, whatever `hasSeedData` says.
+   */
+  it("shows the default (non-seeded) sentence on /login even when hasSeedData is true", () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    navigationMock.pathname = "/login";
+
+    render(<DemoModeBanner hasSeedData />);
+
+    const banner = screen.getByRole("alert");
+    expect(banner).toHaveTextContent(
+      "Demo mode — there is no account to save to here.",
+    );
+    expect(banner).not.toHaveTextContent(/sample data/i);
+  });
 });

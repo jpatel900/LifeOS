@@ -1,3 +1,4 @@
+import type { Phase2CaptureItem, Phase2TaskDraft } from "@lifeos/schemas";
 import type {
   Phase2MockCalendarBlock,
   Phase2MockDailyReviewSummary,
@@ -271,4 +272,344 @@ export function getAreaById(
 ): Phase2MockArea | undefined {
   if (!areaId) return undefined;
   return areas.find((a) => a.id === areaId);
+}
+
+/**
+ * #687 demo-seed (owner 2026-08-30) — the sample content layered onto the
+ * empty initial workflow state when the app is unconfigured (no Supabase)
+ * and `isDemoSeedEnabled()` (`lib/flags.ts`) is on. Every id here is prefixed
+ * `demo-seed-`, which does NOT match `WORKFLOW_GENERATED_ID`
+ * (`lib/workflow/shared.ts`) — a real capture/task/etc a person creates while
+ * looking at the sample can never collide with, or get re-minted over, one
+ * of these ids.
+ *
+ * Independent verifier round 1 (#687): the original version of this module
+ * built its arrays ONCE, at module-import time (top-level `const`s calling
+ * `new Date()`). That freezes every timestamp at whatever moment the server
+ * process happened to load this file — stale for the lifetime of that
+ * process, not "now" for the visitor actually looking at it — and a fixed
+ * `+3h` offset silently crosses local midnight for anyone loading the app
+ * after roughly 21:00, landing the "planned task" outside today's calendar
+ * day (`Close`/`Plan` read `isSameCalendarDay`, so it would vanish from
+ * "today"). Every builder below is now a FUNCTION, called fresh each time
+ * `createSeededDemoWorkflowState()` runs (`lib/workflow/shared.ts` — once
+ * per render, including every SSR request), and the one time-of-day
+ * offset (`demoSeedLaterTodayIso`) clamps to a fixed ceiling before local
+ * midnight instead of drifting past it.
+ */
+const DEMO_SEED_ID_PREFIX = "demo-seed-";
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+function demoSeedIso(offsetMs: number): string {
+  return new Date(Date.now() + offsetMs).toISOString();
+}
+
+/**
+ * A point in time `minutesFromNow` from now, guaranteed to stay on TODAY's
+ * local calendar day (never crosses midnight into tomorrow) and always
+ * strictly after `now`. Clamps to 23:55 local time when the naive offset
+ * would land tomorrow; in the rare case `now` itself is already past that
+ * ceiling, falls back to one minute from now (still today, still future).
+ */
+function demoSeedLaterTodayDate(minutesFromNow: number): Date {
+  const now = new Date();
+  const requested = new Date(now.getTime() + minutesFromNow * 60_000);
+  const ceiling = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    23,
+    55,
+    0,
+    0,
+  );
+  const candidate =
+    requested.getTime() <= ceiling.getTime() ? requested : ceiling;
+  return candidate.getTime() > now.getTime()
+    ? candidate
+    : new Date(now.getTime() + 60_000);
+}
+
+/**
+ * The mirror image of `demoSeedLaterTodayDate`, for a point in the PAST
+ * that must still land on TODAY's local calendar day — a completed block or
+ * session "a couple of hours ago" wrongly lands on YESTERDAY whenever the
+ * app is opened early enough in the local morning (within `minutesAgo` of
+ * midnight). Found by the demo suite itself flaking right after a real
+ * local-midnight rollover (`buildCloseVM`'s `completedToday`, which reads
+ * `isSameCalendarDay`, went from 1 to 0) — the same class of bug
+ * `demoSeedLaterTodayDate` already fixes in the other direction. Clamps to
+ * 00:05 local time (floor) when the naive offset would land yesterday; in
+ * the vanishingly rare case `now` itself is before that floor, falls back
+ * to one minute ago (still today, still in the past).
+ */
+function demoSeedEarlierTodayDate(minutesAgo: number): Date {
+  const now = new Date();
+  const requested = new Date(now.getTime() - minutesAgo * 60_000);
+  const floor = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    0,
+    5,
+    0,
+    0,
+  );
+  const candidate = requested.getTime() >= floor.getTime() ? requested : floor;
+  return candidate.getTime() < now.getTime()
+    ? candidate
+    : new Date(now.getTime() - 60_000);
+}
+
+// Two raw, unsorted captures ("new" — nothing has looked at them yet).
+// One capture already parsed and waiting on a triage decision (paired with
+// demoSeedTaskDrafts[0] below via capture_item_id — captureHasTriageDecision
+// is what keeps a "triage_required" row out of the unsorted list, not the
+// status column, so both must agree).
+// One capture already sorted into an accepted, completed task ("resolved").
+export function buildDemoSeedCaptureItems(): Phase2CaptureItem[] {
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}capture-1`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      raw_text: "Follow up with the client about the contract redline",
+      return_hook: null,
+      client_capture_id: null,
+      capture_mode: "text",
+      inferred_area_confidence: null,
+      status: "new",
+      created_at: demoSeedIso(-2 * HOUR_MS),
+    },
+    {
+      id: `${DEMO_SEED_ID_PREFIX}capture-2`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-personal",
+      raw_text: "Pick up the prescription refill",
+      return_hook: null,
+      client_capture_id: null,
+      capture_mode: "text",
+      inferred_area_confidence: null,
+      status: "new",
+      created_at: demoSeedIso(-5 * HOUR_MS),
+    },
+    {
+      id: `${DEMO_SEED_ID_PREFIX}capture-3`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      raw_text: "Draft the Q2 planning doc outline",
+      return_hook: null,
+      client_capture_id: null,
+      capture_mode: "text",
+      inferred_area_confidence: 0.82,
+      status: "triage_required",
+      created_at: demoSeedIso(-1 * DAY_MS),
+    },
+    {
+      id: `${DEMO_SEED_ID_PREFIX}capture-4`,
+      user_id: MOCK_USER_ID,
+      // area-main-job, not area-volunteer: this capture's task/block/session
+      // below are the seed's "completed win", and buildCockpitViewModel
+      // (lib/cockpit/viewModel.ts) scopes Review's session list to the
+      // CURRENTLY SELECTED area — WorkflowContext's default selection is
+      // always `areas[0].id` (area-main-job). A win seeded into a
+      // non-default area never renders on a first visit; found by tracing
+      // why Review kept showing "Focus sessions will appear here" despite
+      // `buildDemoSeedExecutionSessions()` returning a row (round 2 finding
+      // 5) — the state had it, the DOM never did.
+      area_id: "area-main-job",
+      raw_text: "Confirm the contract redline is signed off",
+      return_hook: null,
+      client_capture_id: null,
+      capture_mode: "text",
+      inferred_area_confidence: null,
+      status: "resolved",
+      created_at: demoSeedIso(-2 * DAY_MS),
+    },
+  ];
+}
+
+// One AI-parsed draft, still pending a triage decision — pairs with
+// buildDemoSeedCaptureItems()[2] ("Draft the Q2 planning doc outline").
+export function buildDemoSeedTaskDrafts(): Phase2TaskDraft[] {
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}draft-1`,
+      user_id: MOCK_USER_ID,
+      capture_item_id: `${DEMO_SEED_ID_PREFIX}capture-3`,
+      area_id: "area-main-job",
+      title: "Draft the Q2 planning doc outline",
+      description: null,
+      confidence: 0.82,
+      estimated_minutes_low: 20,
+      estimated_minutes_high: 40,
+      first_tiny_step: "Open a blank doc and list the three sections",
+      breakdown: null,
+      person_mentions: [],
+      is_commitment: false,
+      status: "pending",
+      created_at: demoSeedIso(-1 * DAY_MS),
+    },
+  ];
+}
+
+// One planned task with a scheduled (later-today) time block, and one
+// completed win — the task an accepted capture turned into, already done
+// earlier TODAY (not yesterday — see buildDemoSeedCalendarBlocks' completed
+// block below, which is what actually drives Close's "completed today"
+// count and Review's session list).
+export function buildDemoSeedTasks(): Phase2MockTask[] {
+  const wonEarlierToday = demoSeedEarlierTodayDate(180).toISOString();
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}task-1`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      title: "Prep slides for Monday standup",
+      description: null,
+      status: "scheduled",
+      priority_score: 2,
+      priority_confidence: null,
+      task_type: null,
+      energy_type: null,
+      estimated_minutes_low: 30,
+      estimated_minutes_high: 45,
+      due_at: null,
+      definition_of_done: null,
+      first_tiny_step: null,
+      created_at: demoSeedIso(-3 * HOUR_MS),
+      updated_at: demoSeedIso(-3 * HOUR_MS),
+      project_id: null,
+      source_capture_item_id: null,
+    },
+    {
+      id: `${DEMO_SEED_ID_PREFIX}task-2`,
+      user_id: MOCK_USER_ID,
+      // area-main-job — see buildDemoSeedCaptureItems()'s capture-4 comment.
+      area_id: "area-main-job",
+      title: "Confirm the contract redline is signed off",
+      description: null,
+      status: "done",
+      priority_score: 3,
+      priority_confidence: null,
+      task_type: null,
+      energy_type: null,
+      estimated_minutes_low: 15,
+      estimated_minutes_high: 30,
+      due_at: null,
+      definition_of_done: null,
+      first_tiny_step: null,
+      // Completed a few hours ago TODAY (not yesterday) so Close's
+      // "completed today" count and the win-harvest candidates both see it —
+      // independent verifier round 1 finding 5.
+      created_at: demoSeedIso(-2 * DAY_MS),
+      updated_at: wonEarlierToday,
+      // null, not proj-volunteer-1 — that project belongs to area-volunteer;
+      // this task moved to area-main-job (see capture-4's comment above), so
+      // the old cross-area project reference would have been a dangling FK.
+      project_id: null,
+      source_capture_item_id: `${DEMO_SEED_ID_PREFIX}capture-4`,
+    },
+  ];
+}
+
+export function buildDemoSeedTimeBlockProposals(): Phase2MockTimeBlockProposal[] {
+  const window = demoSeedLaterTodayDate(180); // ~3h from now, clamped to stay today
+  const start = window;
+  const end = new Date(window.getTime() + 45 * 60_000);
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}proposal-1`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      task_id: `${DEMO_SEED_ID_PREFIX}task-1`,
+      proposed_start: start.toISOString(),
+      proposed_end: end.toISOString(),
+      rationale: "Block focused time before the Monday standup.",
+      conflict_flag: false,
+      status: "accepted",
+      created_at: demoSeedIso(-3 * HOUR_MS),
+    },
+  ];
+}
+
+export function buildDemoSeedCalendarBlocks(): Phase2MockCalendarBlock[] {
+  const scheduledWindow = demoSeedLaterTodayDate(180);
+  const scheduledStart = scheduledWindow;
+  const scheduledEnd = new Date(scheduledWindow.getTime() + 45 * 60_000);
+  // The win's own block: completed a few hours ago, still TODAY (used by
+  // Close's completedToday count, which reads calendar_blocks —
+  // momentsViewModel/close.ts). `demoSeedEarlierTodayDate`, not a raw
+  // `Date.now() - 2h`: a raw offset lands on YESTERDAY whenever the app is
+  // opened early in the local morning (within 2h of midnight) — found by
+  // this exact seed flaking right after a real midnight rollover.
+  const completedEnd = demoSeedEarlierTodayDate(120);
+  const completedStart = demoSeedEarlierTodayDate(150);
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}block-1`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      task_id: `${DEMO_SEED_ID_PREFIX}task-1`,
+      proposal_id: `${DEMO_SEED_ID_PREFIX}proposal-1`,
+      google_event_id: null,
+      start_at: scheduledStart.toISOString(),
+      end_at: scheduledEnd.toISOString(),
+      status: "scheduled",
+      created_at: demoSeedIso(-3 * HOUR_MS),
+      updated_at: demoSeedIso(-3 * HOUR_MS),
+    },
+    {
+      id: `${DEMO_SEED_ID_PREFIX}block-2`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      task_id: `${DEMO_SEED_ID_PREFIX}task-2`,
+      proposal_id: null,
+      google_event_id: null,
+      start_at: completedStart.toISOString(),
+      end_at: completedEnd.toISOString(),
+      status: "completed",
+      created_at: completedStart.toISOString(),
+      updated_at: completedEnd.toISOString(),
+    },
+  ];
+}
+
+// The focus session behind the completed block above — gives Review's
+// session list (`ReviewSheet.tsx`'s "Focus sessions will appear here"
+// fallback) real content instead of staying inert (independent verifier
+// round 1 finding 5).
+export function buildDemoSeedExecutionSessions(): Phase2MockExecutionSession[] {
+  const completedAt = demoSeedEarlierTodayDate(120);
+  return [
+    {
+      id: `${DEMO_SEED_ID_PREFIX}session-1`,
+      user_id: MOCK_USER_ID,
+      area_id: "area-main-job",
+      task_id: `${DEMO_SEED_ID_PREFIX}task-2`,
+      calendar_block_id: `${DEMO_SEED_ID_PREFIX}block-2`,
+      planned_minutes: 30,
+      actual_minutes: 28,
+      paused_minutes: 0,
+      distraction_minutes: 0,
+      productivity_rating: 4,
+      status: "completed",
+      outcome: "completed",
+      notes: "Redline signed off by the client.",
+      created_at: completedAt.toISOString(),
+    },
+  ];
+}
+
+// One closed daily review, so the Review moment has something on the log
+// besides "nothing yet".
+export function buildDemoSeedReviewLog(): string[] {
+  return [`Review saved: ${demoSeedIso(-1 * DAY_MS)}`];
+}
+
+/** True when any row in `state` came from the demo seed above. */
+export function hasDemoSeedId(id: string | null | undefined): boolean {
+  return typeof id === "string" && id.startsWith(DEMO_SEED_ID_PREFIX);
 }
