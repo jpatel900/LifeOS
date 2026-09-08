@@ -114,40 +114,57 @@ function LoginForm() {
     // #688: if the person arrived from a specific page (?next=), return them
     // there instead — `safeNextPath` already guaranteed it's a same-app path.
     //
-    // #687 (Part of #687): those two rules collided. `useOnboardingRitual`
-    // mounts ONLY inside TodayMoments (the ritual literally cannot render
-    // anywhere else), and its own predicate — areaCount/captureCount from
-    // WorkflowContext — is provably stale the instant `signInWithPassword`
-    // resolves (that context hydrates and syncs persisted areas
-    // asynchronously AFTER first render; see useOnboardingRitual.ts's own
-    // comment). So there is no reliable "is this a brand-new account" signal
-    // available here that matches the CANONICAL predicate's own definition
-    // of "new" — re-deriving it from a fresh Supabase table count would be a
-    // SECOND, drifting definition (raw row counts diverge from
-    // `state.captureItems.length` through the reconcile layer in
-    // captureParse.ts/persistenceSync.ts).
+    // #687 (Part of #687): those two rules collided. At the time this was
+    // written, `useOnboardingRitual` mounted ONLY inside TodayMoments (the
+    // ritual could not render anywhere else yet — C3 below gave it its own
+    // route, `/welcome`), and its own predicate — areaCount/captureCount
+    // from WorkflowContext — is provably stale the instant
+    // `signInWithPassword` resolves (that context hydrates and syncs
+    // persisted areas asynchronously AFTER first render; see
+    // useOnboardingRitual.ts's own comment). So there is no reliable "is
+    // this a brand-new account" signal available here that matches the
+    // CANONICAL predicate's own definition of "new" — re-deriving it from a
+    // fresh Supabase table count would be a SECOND, drifting definition (raw
+    // row counts diverge from `state.captureItems.length` through the
+    // reconcile layer in captureParse.ts/persistenceSync.ts).
     //
     // What IS honest and synchronous here: `hasCompletedOnboarding()` and
     // `isOnboardingRerunRequested()`, the two `shouldShowOnboarding` inputs
     // that are pure device-local localStorage, already exported by the
     // module that owns the predicate (no new definition invented). Honor
     // `?next=` only once this device has an established, completed account
-    // on it; otherwise land on Today and let the canonical predicate decide
-    // whether the ritual fires. Gating on a device signal rather than the
-    // destination path also means this isn't a per-route allowlist that
-    // rots as routes are added — `/health` had the identical bypass shape
-    // via HealthView.tsx's own `?next=/health` link and is covered by the
-    // same conditional.
+    // on it; otherwise route straight to the ritual's own URL and let the
+    // canonical predicate (re-derived there, from live WorkflowContext
+    // state) decide whether it actually fires. Gating on a device signal
+    // rather than the destination path also means this isn't a per-route
+    // allowlist that rots as routes are added — `/health` had the identical
+    // bypass shape via HealthView.tsx's own `?next=/health` link and is
+    // covered by the same conditional.
     //
-    // Honest tradeoff: an EXISTING account signing in on a fresh or cleared
-    // browser (no local completed-onboarding record) also lands on Today
-    // instead of its `?next=` destination — one extra click, recoverable.
-    // The bug this fixes (a brand-new account never seeing onboarding at
-    // all) is not recoverable without knowing about the Settings "run setup
-    // again" affordance. Erring toward the recoverable side is deliberate.
+    // C3 (onboarding own-URL) — Part of #687: this used to route to `/`
+    // regardless, relying on Today to detect eligibility and hand off to
+    // `/welcome` a beat later. That extra hop is what silently swallowed a
+    // Settings-requested rerun signed in through THIS form: the rerun flag
+    // used to be consumed the moment the hook LATCHES active
+    // (useOnboardingRitual.ts, Part of #687 defect 2) — and `TodayMoments.tsx`'s
+    // thin wrapper on `/` ran its OWN hook instance, a DIFFERENT one than the
+    // instance that actually renders the ritual on `/welcome`. By the time
+    // `/welcome` mounted and asked `shouldShowOnboarding`, the flag `/`'s
+    // wrapper had already cleared read `rerunRequested: false`,
+    // `completed: true` — false — and `/welcome` bounced straight back to
+    // `/`, dropping the rerun on the floor. Two independent fixes close
+    // this: routing HERE, straight to `/welcome`, means most journeys never
+    // run the `/` wrapper's hook instance at all before the ritual renders;
+    // `useOnboardingRitual`'s own `consumeRerunOnActivate: false` (see its
+    // file header) means that instance would not clear the flag even if some
+    // OTHER path still routes through `/` first — only the instance that
+    // actually renders the ritual ever consumes it now. Routing straight
+    // here also removes the multi-second stale-Today paint the `/` hop
+    // produced after every sign-in (Target Card 10 criterion 1, "no stale
+    // greeting"), not just the rerun case.
     const isEstablishedDevice =
       hasCompletedOnboarding() && !isOnboardingRerunRequested();
-    router.push(isEstablishedDevice ? nextPath : "/");
+    router.push(isEstablishedDevice ? nextPath : "/welcome");
   }
 
   return (
