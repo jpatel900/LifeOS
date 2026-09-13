@@ -219,6 +219,46 @@ jobs:
                 return;
               }
 
+              // Owner decision (#988): some GraphQL error text here (e.g.
+              // "Can't disable auto-merge for this pull request.") does not
+              // say whether auto-merge was already off or genuinely failed
+              // to disarm. Do not guess from the message. Do one bounded
+              // fresh read of the same PR node instead: only a positively
+              // confirmed `autoMergeRequest: null` counts as already-safe.
+              // Still-enabled, a malformed/unknown node shape, or a failed
+              // read all fall through to the existing failure below.
+              try {
+                const freshRead = await github.graphql(
+                  `
+                    query ConfirmAutoMergeDisabled($pullRequestId: ID!) {
+                      node(id: $pullRequestId) {
+                        ... on PullRequest {
+                          autoMergeRequest {
+                            enabledAt
+                          }
+                        }
+                      }
+                    }
+                  `,
+                  { pullRequestId },
+                );
+
+                const node = freshRead?.node;
+                const hasAutoMergeField =
+                  node && Object.prototype.hasOwnProperty.call(node, 'autoMergeRequest');
+
+                if (hasAutoMergeField && node.autoMergeRequest === null) {
+                  setOutputs(
+                    'not-enabled',
+                    `Pull request is ineligible. Disabling auto-merge returned an ambiguous error (${message}), but a fresh read confirmed GitHub auto-merge was not enabled.`,
+                  );
+                  return;
+                }
+              } catch (readError) {
+                // Swallow: a failed confirmation read must not be treated
+                // as success. Fall through to setFailed below.
+              }
+
               core.setFailed(`Ineligible PR, but disabling auto-merge failed: ${message}`);
             }
 
