@@ -40,11 +40,13 @@ import {
   journalReviewWrite,
 } from "@/lib/durability/durableWrites";
 import {
+  ACCOUNT_NEEDS_APP_UPDATE,
   ACCOUNT_SAVE_FAILED,
   SIGNED_OUT_SAVING_ON_THIS_DEVICE,
 } from "@/lib/statusVocabulary";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
 import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
+import { PersistenceWriteError } from "@/lib/persistenceFailureKind";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/today",
@@ -284,6 +286,9 @@ function Harness() {
       <span data-testid="task-count">{state.tasks.length}</span>
       <span data-testid="pending-save-failed">
         {String(syncStatus.pendingSaveFailed ?? false)}
+      </span>
+      <span data-testid="pending-save-failure-kind">
+        {syncStatus.pendingSaveFailureKind ?? ""}
       </span>
       <span data-testid="notice-tone">{notice?.tone ?? ""}</span>
       <span data-testid="notice-message">{notice?.message ?? ""}</span>
@@ -1690,6 +1695,13 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
         "true",
       );
+      // #967 typed failure category: the same generation guard covers this
+      // field too — the stale, pre-failure snapshot (with no
+      // `last_attempt_failure_kind` at all) must not overwrite the newer
+      // read's own result.
+      expect(screen.getByTestId("pending-save-failure-kind")).toHaveTextContent(
+        "unknown",
+      );
     });
 
     // #967 root/independent review, finding 1 (generation half, mirrored
@@ -1799,12 +1811,25 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
         "false",
       );
+      // #967 provider/journal review, omission 1: the same generation guard
+      // must reject the stale category too — recovery already cleared it to
+      // absent, and the stale (legacy-shaped, no kind field) snapshot must
+      // not resurrect one.
+      expect(screen.getByTestId("pending-save-failure-kind")).toHaveTextContent(
+        "",
+      );
     });
 
     // #967 root/independent review, finding 4 (the "insufficient" half): a
     // failed refresh must preserve a previously ESTABLISHED true value, not
     // just leave an initially-false one alone (already covered above).
-    it("a failed refresh preserves a previously established TRUE failure state, not just an initially false one", async () => {
+    //
+    // #967 provider/journal review, omission 2: also preserve a previously
+    // CONFIRMED VISIBLE typed category — the first mount fails with a
+    // genuine known `PersistenceWriteError` (not a plain `Error`) so both
+    // `pendingSaveFailed` and `pendingSaveFailureKind` have real, non-default
+    // values before the read failure hits.
+    it("a failed refresh preserves a previously established TRUE failure state and its known category, not just an initially false/absent one", async () => {
       const day = "2026-09-15";
 
       await journalReviewWrite({
@@ -1828,9 +1853,13 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         reviewEntries: [],
       });
 
-      // FIRST mount: establishes real, durable `true`.
+      // FIRST mount: establishes real, durable `true` AND a real, durable
+      // known category.
       mockSyncJournaledReviewEntry.mockRejectedValueOnce(
-        new Error("server rejected the review"),
+        new PersistenceWriteError(
+          "Google calendar RPC is not supported.",
+          "server-capability-missing",
+        ),
       );
       const first = render(
         <WorkflowProvider>
@@ -1841,6 +1870,11 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
           "true",
         );
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("pending-save-failure-kind"),
+        ).toHaveTextContent("server-capability-missing");
       });
       first.unmount();
 
@@ -1877,6 +1911,11 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
           "true",
         );
       });
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("pending-save-failure-kind"),
+        ).toHaveTextContent("server-capability-missing");
+      });
 
       // From THIS point on, every further journal read fails —
       // specifically, `refreshPendingSaveFailed`'s own read, which has not
@@ -1892,9 +1931,13 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         const pending = await listPendingWritesActual("review");
         expect(pending).toHaveLength(0);
       });
-      // The failed refresh must not have cleared the previously TRUE state.
+      // The failed refresh must not have cleared the previously TRUE state
+      // or the previously visible known category.
       expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
         "true",
+      );
+      expect(screen.getByTestId("pending-save-failure-kind")).toHaveTextContent(
+        "server-capability-missing",
       );
     });
 
@@ -1999,6 +2042,399 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         "",
       );
     });
+  });
+
+  // #967 typed failure category: `syncStatus.pendingSaveFailureKind` is a
+  // SAFE AGGREGATE across only the CURRENTLY FAILED journal rows (see its
+  // doc in `workflowContext/types.ts` and `WorkflowContext.tsx`'s
+  // `derivePendingSaveFailureAggregate`) — computed by the SAME
+  // `refreshJournalledDurableState`/`refreshPendingSaveFailed` reads proven
+  // above for `pendingSaveFailed`, under the exact same generation/identity
+  // guards, not a new read or watcher.
+  describe("pendingSaveFailureKind (#967 typed failure category)", () => {
+    it("is server-capability-missing, and the shared notice goes calm with the app-update message, when the one failed row is a genuine known PersistenceWriteError", async () => {
+      const day = "2026-09-17";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      mockSyncJournaledReviewEntry.mockRejectedValue(
+        new PersistenceWriteError(
+          "Google calendar RPC is not supported.",
+          "server-capability-missing",
+        ),
+      );
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("pending-save-failure-kind"),
+        ).toHaveTextContent("server-capability-missing");
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("notice-tone")).toHaveTextContent("calm");
+      });
+      expect(screen.getByTestId("notice-message")).toHaveTextContent(
+        ACCOUNT_NEEDS_APP_UPDATE,
+      );
+    });
+
+    it("is unknown, and the shared notice keeps the generic alarm, when the failed rows are mixed (one known, one not)", async () => {
+      const day = "2026-09-18";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+      await journalWinWrite({
+        workflowTaskId: PRESYNCED_TASK_ID,
+        persistedTaskId: PRESYNCED_TASK_ID,
+        persistedAreaId: PERSISTED_AREA.id,
+        title: "Shipped the onboarding flow",
+        detail: null,
+        occurredAt: "2026-09-18T00:00:00.000Z",
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      mockSyncJournaledReviewEntry.mockRejectedValue(
+        new PersistenceWriteError(
+          "Google calendar RPC is not supported.",
+          "server-capability-missing",
+        ),
+      );
+      mockSyncJournaledWin.mockRejectedValue(new Error("network unavailable"));
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(async () => {
+        const pending = await listPendingWrites();
+        expect(
+          pending.filter((write) => write.last_attempt_failed),
+        ).toHaveLength(2);
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("pending-save-failure-kind"),
+        ).toHaveTextContent("unknown");
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("notice-tone")).toHaveTextContent("alarm");
+      });
+      expect(screen.getByTestId("notice-message")).toHaveTextContent(
+        ACCOUNT_SAVE_FAILED,
+      );
+    });
+
+    // Nonfailed rows must never participate in the aggregate. The replay
+    // loop (`replayPendingWritesUnlocked`) is sequential and the provider's
+    // own `refreshPendingSaveFailed`/`refreshJournalledDurableState` only
+    // read the journal again once that whole pass has settled — so a
+    // SUCCESSFUL sibling write (removed from the journal entirely once
+    // synced) is the realistic, non-flaky way to prove a nonfailed row
+    // cannot drag a genuinely known-only aggregate down to "unknown": by
+    // the time the aggregate is read, only the failed row remains at all.
+    it("a successful sibling write does not affect the aggregate from a genuinely known failure", async () => {
+      const failedDay = "2026-09-22";
+      const succeededDay = "2026-09-23";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: failedDay,
+        periodEnd: failedDay,
+        summaryJson: {},
+      });
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: succeededDay,
+        periodEnd: succeededDay,
+        summaryJson: {},
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      // `failedDay`'s attempt genuinely rejects with a known kind;
+      // `succeededDay`'s attempt is an ordinary success — removed from the
+      // journal once synced, never itself failed evidence of any kind.
+      mockSyncJournaledReviewEntry.mockImplementation(
+        (_client: unknown, payload: { period_start?: string }) =>
+          payload.period_start === failedDay
+            ? Promise.reject(
+                new PersistenceWriteError(
+                  "Google calendar RPC is not supported.",
+                  "server-capability-missing",
+                ),
+              )
+            : Promise.resolve({ provider: "supabase" }),
+      );
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(async () => {
+        const pending = await listPendingWrites("review");
+        expect(pending).toHaveLength(1);
+        expect(pending[0]?.payload.period_start).toBe(failedDay);
+        expect(pending[0]?.last_attempt_failed).toBe(true);
+      });
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("pending-save-failure-kind"),
+        ).toHaveTextContent("server-capability-missing");
+      });
+    });
+
+    it("clears back to absent once a known failure is successfully retried", async () => {
+      const day = "2026-09-19";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      mockSyncJournaledReviewEntry.mockRejectedValueOnce(
+        new PersistenceWriteError(
+          "Google calendar RPC is not supported.",
+          "server-capability-missing",
+        ),
+      );
+
+      const { unmount } = render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("pending-save-failure-kind"),
+        ).toHaveTextContent("server-capability-missing");
+      });
+
+      unmount();
+      mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(async () => {
+        const pending = await listPendingWrites("review");
+        expect(pending).toHaveLength(0);
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("pending-save-failure-kind"),
+        ).toHaveTextContent("");
+      });
+    });
+
+    // #967 root/independent review, finding 1 (identity half), applied to
+    // the new field: the same mismatched-identity window that discards a
+    // stale `pendingSaveFailed` result must discard its category too — a
+    // wrong-identity read must never stamp a category derived from someone
+    // else's journal onto this session's status.
+    it("a session change mid-read never applies a stale category, even though the write genuinely failed with a known kind", async () => {
+      const day = "2026-09-21";
+      const userA = PERSISTED_AREA.user_id;
+      const userB = "88888888-8888-4888-8888-888888888888";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      mockSyncJournaledReviewEntry.mockRejectedValue(
+        new PersistenceWriteError(
+          "Google calendar RPC is not supported.",
+          "server-capability-missing",
+        ),
+      );
+
+      mockGetUser
+        .mockReset()
+        .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
+        .mockResolvedValueOnce({ data: { user: { id: userB } }, error: null })
+        .mockResolvedValue({ data: { user: { id: userA } }, error: null });
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(async () => {
+        const pending = await listPendingWrites("review");
+        expect(pending[0]?.last_attempt_failure_kind).toBe(
+          "server-capability-missing",
+        );
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
+      });
+
+      expect(screen.getByTestId("pending-save-failure-kind")).toHaveTextContent(
+        "",
+      );
+    });
+
+    // #967 provider/journal review, omission 3: a raw, already-failed
+    // journal row with no `last_attempt_failure_kind` at all (a legacy row,
+    // predating this field) or an invalid stored value (never something
+    // `markPendingWriteAttemptFailed` itself would write, but the aggregate
+    // must not trust the stored value blindly) must both normalize to
+    // `"unknown"` at the provider aggregate — not merely at the downstream
+    // notice, which is proven separately in `deviceSaveNotice.test.ts`.
+    it.each([
+      ["a legacy row with the field entirely absent", undefined],
+      ["a row with an invalid stored value", "PGRST202"],
+    ])(
+      "normalizes %s to unknown at the aggregate",
+      async (_label, storedKind) => {
+        mockListAreas.mockResolvedValue({
+          provider: "supabase",
+          areas: [PERSISTED_AREA],
+        });
+        mockListExecutionReviewItems.mockResolvedValue({
+          provider: "supabase",
+          tasks: [],
+          blocks: [],
+          sessions: [],
+          reviewEntries: [],
+        });
+
+        // Bypass the real journal-write path entirely — this is a row shape
+        // the current code never itself produces, so it is injected directly
+        // at the read seam, the same technique the generation-race tests
+        // above use for their own synthetic stale snapshots. Scoped to
+        // "review" and the unconditional no-arg call only — every other
+        // entity keeps reading the real (empty) journal, so this synthetic
+        // row never leaks into an unrelated array's own filtering.
+        const legacyOrInvalidRow = {
+          entity: "review",
+          client_write_id: "legacy-or-invalid-kind-row",
+          payload: {
+            review_type: "daily",
+            period_start: "2026-09-24",
+            period_end: "2026-09-24",
+          },
+          created_at: new Date().toISOString(),
+          last_attempt_failed: true,
+          last_attempt_failed_at: new Date().toISOString(),
+          ...(storedKind === undefined
+            ? {}
+            : { last_attempt_failure_kind: storedKind }),
+        } as unknown as Awaited<ReturnType<typeof listPendingWrites>>[number];
+        mockListPendingWrites.mockImplementation((entity) =>
+          entity === undefined || entity === "review"
+            ? Promise.resolve([legacyOrInvalidRow])
+            : listPendingWritesActual(entity),
+        );
+
+        render(
+          <WorkflowProvider>
+            <Harness />
+          </WorkflowProvider>,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+            "true",
+          );
+        });
+        expect(
+          screen.getByTestId("pending-save-failure-kind"),
+        ).toHaveTextContent("unknown");
+      },
+    );
   });
 
   // #967 manual retry: `retryPendingAccountWrites` is a thin wrapper around

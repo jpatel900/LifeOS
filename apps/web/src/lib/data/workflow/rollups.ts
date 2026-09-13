@@ -29,6 +29,7 @@ import {
   parseWinRecord,
   parseWinRecords,
   projectColumns,
+  toPersistenceWriteError,
   requireSupabaseUser,
   rollupSummaryColumns,
   taskColumns,
@@ -278,7 +279,7 @@ export async function syncJournaledWin(
     { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
   );
 
-  if (error) throw new Error(getSupabaseMessage(error));
+  if (error) throw toPersistenceWriteError(error);
   return { provider: "supabase" };
 }
 
@@ -403,7 +404,7 @@ export async function syncJournaledRollup(
     { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
   );
 
-  if (error) throw new Error(getSupabaseMessage(error));
+  if (error) throw toPersistenceWriteError(error);
   return { provider: "supabase" };
 }
 

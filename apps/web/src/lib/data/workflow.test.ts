@@ -21,9 +21,13 @@ import {
   syncJournaledCapture,
   syncJournaledWin,
   syncJournaledReviewEntry,
+  syncJournaledExecutionSession,
+  placeTimeBlock,
+  syncJournaledRollup,
   createExecutionSession,
   createTask,
   deferExecutionSessionWithTask,
+  resolveCaptureItems,
   editTimeBlockProposal,
   findOrCreatePerson,
   listExecutionReviewItems,
@@ -40,6 +44,7 @@ import {
   recordDurationRecalibrationDecision,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
+  syncJournaledTaskDraftAccept,
   listAreas,
   softDeleteArea,
   updateAreaColor,
@@ -48,6 +53,10 @@ import {
   DURATION_RECALIBRATION_POLICY_ID,
   type MinimalSupabaseClient,
 } from "./workflow";
+import {
+  PersistenceWriteError,
+  getPersistenceFailureKind,
+} from "../persistenceFailureKind";
 
 const userId = "550e8400-e29b-41d4-a716-446655440001";
 const areaId = "550e8400-e29b-41d4-a716-446655440101";
@@ -2705,5 +2714,534 @@ describe("workflow data provider", () => {
     expect(result.provider).toBe("supabase");
     expect(result.suggestionRecords).toHaveLength(1);
     expect(result.suggestionRecords[0].suggestion_type).toBe("policy_change");
+  });
+
+  it("classifies a known-capability error as server-capability-missing for syncJournaledWin", async () => {
+    const upsert = vi.fn().mockResolvedValue({
+      error: {
+        code: "42703",
+        message: "column waitlist_id does not exist",
+      },
+    });
+    const from = vi.fn().mockReturnValue({ upsert });
+
+    const promise = syncJournaledWin(authenticatedClient(from), {
+      client_write_id: "journal-win-1",
+      area_id: areaId,
+      source_task_id: taskId,
+      title: "Shipped the onboarding flow",
+      occurred_at: "2026-05-08",
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "column waitlist_id does not exist",
+    });
+    expect(
+      getPersistenceFailureKind(await promise.catch((error) => error)),
+    ).toBe("server-capability-missing");
+    expect(from).toHaveBeenCalledWith("win_records");
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: userId,
+        client_write_id: "journal-win-1",
+      }),
+      { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
+    );
+  });
+
+  it("keeps unknown failures unclassified for syncJournaledWin", async () => {
+    const upsert = vi.fn().mockResolvedValue({
+      error: {
+        code: "404",
+        message: "Not found.",
+      },
+    });
+    const from = vi.fn().mockReturnValue({ upsert });
+
+    const promise = syncJournaledWin(authenticatedClient(from), {
+      client_write_id: "journal-win-unknown",
+      area_id: areaId,
+      source_task_id: taskId,
+      title: "Shipped the onboarding flow",
+      occurred_at: "2026-05-08",
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "unknown",
+      message: "Not found.",
+    });
+  });
+
+  it("maps typed provider failures for syncJournaledReviewEntry and leaves ordinary message intact", async () => {
+    const upsert = vi.fn().mockResolvedValue({
+      error: {
+        message: "unrecognized failure path",
+      },
+    });
+    const from = vi.fn().mockReturnValue({ upsert });
+
+    const promise = syncJournaledReviewEntry(authenticatedClient(from), {
+      client_write_id: "journal-review-unknown",
+      area_id: areaId,
+      review_type: "daily",
+      period_start: "2026-05-08",
+      period_end: "2026-05-08",
+      summary_json: { verdict: "saved" },
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "unknown",
+      message: "unrecognized failure path",
+    });
+  });
+
+  it("wraps known failure for syncJournaledExecutionSession", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      error: {
+        code: "42883",
+        message: "function record_execution_session does not exist",
+      },
+    });
+    const from = vi.fn().mockReturnValue({});
+    const client = {
+      ...authenticatedClient(from),
+      rpc,
+    } as unknown as MinimalSupabaseClient;
+
+    const promise = syncJournaledExecutionSession(client, {
+      client_write_id: "journal-session-1",
+      task_id: taskId,
+      calendar_block_id: blockId,
+      outcome: "completed",
+      actual_minutes: 10,
+      paused_minutes: 0,
+      distraction_minutes: 0,
+      productivity_rating: 4,
+      notes: "good",
+      cap_outcome: null,
+      defer_task: false,
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "function record_execution_session does not exist",
+    });
+  });
+
+  it("wraps known failures for placeTimeBlock replay", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      error: {
+        code: "PGRST202",
+        message: "column block_id does not exist",
+      },
+    });
+    const from = vi.fn().mockReturnValue({});
+    const client = {
+      ...authenticatedClient(from),
+      rpc,
+    } as unknown as MinimalSupabaseClient;
+
+    const promise = placeTimeBlock(client, {
+      client_write_id: "journal-place-1",
+      task_id: taskId,
+      proposal_id: null,
+      proposed_start: start,
+      proposed_end: end,
+      rationale_note: null,
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "column block_id does not exist",
+    });
+  });
+
+  it("preserves typed failure on syncJournaledRollup errors", async () => {
+    const upsert = vi.fn().mockResolvedValue({
+      error: {
+        code: "PGRST202",
+        message: "could not create rollup schema",
+      },
+    });
+    const from = vi.fn().mockReturnValue({ upsert });
+
+    const promise = syncJournaledRollup(authenticatedClient(from), {
+      client_write_id: "journal-rollup-1",
+      area_id: areaId,
+      period_type: "week",
+      period_start: "2026-05-04",
+      period_end: "2026-05-10",
+      summary: { highlights: [], misses: [], counts: {} },
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "could not create rollup schema",
+    });
+  });
+
+  it("preserves typed failure for unplanCalendarBlock", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      error: {
+        code: "42703",
+        message: "function unplan_calendar_block missing",
+      },
+    });
+    const from = vi.fn().mockReturnValue({});
+    const client = {
+      ...authenticatedClient(from),
+      rpc,
+    } as unknown as MinimalSupabaseClient;
+
+    const promise = unplanCalendarBlock(client, blockId);
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "function unplan_calendar_block missing",
+    });
+  });
+
+  it("preserves typed failure for applyTaskReviewTransition", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      error: {
+        code: "42883",
+        message: "apply_task_review_transition not available",
+      },
+    });
+    const from = vi.fn().mockReturnValue({});
+    const client = {
+      ...authenticatedClient(from),
+      rpc,
+    } as unknown as MinimalSupabaseClient;
+
+    const promise = applyTaskReviewTransition(client, taskId, "backlog");
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "apply_task_review_transition not available",
+    });
+  });
+
+  it("preserves typed failure for syncJournaledCapture", async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: "42703",
+        message: "column capture_mode missing",
+      },
+    });
+    const select = vi.fn().mockReturnValue({ single });
+    const upsert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ upsert });
+
+    const promise = syncJournaledCapture(authenticatedClient(from), {
+      client_capture_id: "journal-capture-1",
+      area_id: areaId,
+      raw_text: "Call landlord back",
+      return_hook: null,
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "column capture_mode missing",
+    });
+  });
+
+  it("preserves typed failure for resolveCaptureItems", async () => {
+    const inStatus = vi.fn().mockReturnValue({
+      select: vi.fn().mockResolvedValue({
+        data: [],
+        error: {
+          code: "42703",
+          message: "column status missing",
+        },
+      }),
+    });
+    const inIds = vi.fn().mockReturnValue({ in: inStatus });
+    const update = vi.fn().mockReturnValue({ in: inIds });
+    const from = vi.fn().mockReturnValue({ update });
+
+    const promise = resolveCaptureItems(authenticatedClient(from), [
+      null,
+      "capture-1",
+    ]);
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "column status missing",
+    });
+  });
+
+  it("preserves typed failure for createTask raw insert", async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: "42703",
+        message: "column due_at missing",
+      },
+    });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    const promise = createTask(authenticatedClient(from), {
+      area_id: areaId,
+      source_capture_item_id: null,
+      title: "Finish the draft",
+      description: null,
+      status: "active",
+      priority_score: null,
+      priority_confidence: null,
+      task_type: "task",
+      is_reversible: null,
+      due_at: null,
+      estimated_minutes_low: null,
+      estimated_minutes_high: null,
+      first_tiny_step: null,
+      is_commitment: false,
+      waiting_on_person_id: null,
+      committed_to_person_id: null,
+      waiting_on_since: null,
+      client_write_id: "journal-task-1",
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "column due_at missing",
+    });
+  });
+
+  it("keeps nested task lookup boundary failures typed for syncJournaledTaskDraftAccept", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: "42703",
+        message: "column client_write_id missing",
+      },
+    });
+    const eqClientWrite = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqClientWrite });
+    const selectTasks = vi.fn().mockReturnValue({ eq: eqUser });
+
+    const from = vi.fn((table) => {
+      if (table === "tasks") {
+        return { select: selectTasks };
+      }
+      if (table === "time_block_proposals") {
+        return { select: vi.fn(), upsert: vi.fn() };
+      }
+      return {};
+    });
+
+    const promise = syncJournaledTaskDraftAccept(authenticatedClient(from), {
+      client_write_id: "journal-task-draft-1",
+      area_id: areaId,
+      source_capture_item_id: null,
+      draft_id: "draft-1",
+      title: "Finish this draft",
+      description: null,
+      confidence: null,
+      task_type: "task",
+      is_reversible: null,
+      due_at: null,
+      estimated_minutes_low: null,
+      estimated_minutes_high: null,
+      first_tiny_step: null,
+      is_commitment: false,
+      person_mentions: [],
+      task_status: "active",
+      accepted_at: "2026-05-08T16:00:00.000Z",
+      proposal: null,
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "column client_write_id missing",
+    });
+  });
+
+  it("keeps proposal upsert boundary typed for syncJournaledTaskDraftAccept", async () => {
+    const existingTask = {
+      id: taskId,
+      user_id: userId,
+      area_id: areaId,
+      project_id: null,
+      source_capture_item_id: null,
+      title: "Draft task from local",
+      description: null,
+      status: "backlog",
+      priority_score: null,
+      priority_confidence: null,
+      task_type: "task",
+      energy_type: null,
+      estimated_minutes_low: null,
+      estimated_minutes_high: null,
+      due_at: null,
+      definition_of_done: null,
+      first_tiny_step: null,
+      is_reversible: null,
+      is_commitment: false,
+      waiting_on_person_id: null,
+      waiting_on_since: null,
+      committed_to_person_id: null,
+      created_at: "2026-05-08T15:00:00.000Z",
+      updated_at: "2026-05-08T15:00:00.000Z",
+    };
+    const taskMaybeSingle = vi
+      .fn()
+      .mockResolvedValue({ data: existingTask, error: null });
+    const taskEqClient = vi
+      .fn()
+      .mockReturnValue({ maybeSingle: taskMaybeSingle });
+    const taskEqUser = vi.fn().mockReturnValue({ eq: taskEqClient });
+    const taskSelect = vi.fn().mockReturnValue({ eq: taskEqUser });
+
+    const proposalUpsert = vi.fn().mockResolvedValue({
+      error: {
+        code: "42883",
+        message: "upsert proposal rejected",
+      },
+    });
+    const proposalSelect = vi.fn().mockReturnValue({ eq: vi.fn() });
+
+    const from = vi.fn((table) => {
+      if (table === "tasks") {
+        return { select: taskSelect };
+      }
+      return { upsert: proposalUpsert, select: proposalSelect };
+    });
+
+    const promise = syncJournaledTaskDraftAccept(authenticatedClient(from), {
+      client_write_id: "journal-task-draft-upsert-2",
+      area_id: areaId,
+      source_capture_item_id: null,
+      draft_id: "draft-3",
+      title: "Draft task from local",
+      description: null,
+      confidence: null,
+      task_type: "task",
+      is_reversible: null,
+      due_at: null,
+      estimated_minutes_low: null,
+      estimated_minutes_high: null,
+      first_tiny_step: null,
+      is_commitment: false,
+      person_mentions: [],
+      task_status: "active",
+      accepted_at: "2026-05-08T16:00:00.000Z",
+      proposal: {
+        proposed_start: start,
+        proposed_end: end,
+        rationale: "Do this task.",
+      },
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "upsert proposal rejected",
+    });
+  });
+
+  it("keeps proposal readback boundary typed for syncJournaledTaskDraftAccept", async () => {
+    const existingTask = {
+      id: taskId,
+      user_id: userId,
+      area_id: areaId,
+      project_id: null,
+      source_capture_item_id: null,
+      title: "Draft task from local",
+      description: null,
+      status: "backlog",
+      priority_score: null,
+      priority_confidence: null,
+      task_type: "task",
+      energy_type: null,
+      estimated_minutes_low: null,
+      estimated_minutes_high: null,
+      due_at: null,
+      definition_of_done: null,
+      first_tiny_step: null,
+      is_reversible: null,
+      is_commitment: false,
+      waiting_on_person_id: null,
+      waiting_on_since: null,
+      committed_to_person_id: null,
+      created_at: "2026-05-08T15:00:00.000Z",
+      updated_at: "2026-05-08T15:00:00.000Z",
+    };
+    const taskMaybeSingle = vi
+      .fn()
+      .mockResolvedValue({ data: existingTask, error: null });
+    const taskEqClient = vi
+      .fn()
+      .mockReturnValue({ maybeSingle: taskMaybeSingle });
+    const taskEqUser = vi.fn().mockReturnValue({ eq: taskEqClient });
+    const taskSelect = vi.fn().mockReturnValue({ eq: taskEqUser });
+
+    const proposalMaybeSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: "42883",
+        message: "function place_time_block missing",
+      },
+    });
+    const proposalEqClient = vi
+      .fn()
+      .mockReturnValue({ maybeSingle: proposalMaybeSingle });
+    const proposalEqUser = vi.fn().mockReturnValue({ eq: proposalEqClient });
+    const proposalSelect = vi.fn().mockReturnValue({ eq: proposalEqUser });
+    const proposalUpsert = vi.fn().mockResolvedValue({ error: null });
+
+    const from = vi.fn((table) => {
+      if (table === "tasks") {
+        return { select: taskSelect };
+      }
+      return { upsert: proposalUpsert, select: proposalSelect };
+    });
+
+    const promise = syncJournaledTaskDraftAccept(authenticatedClient(from), {
+      client_write_id: "journal-task-draft-2",
+      area_id: areaId,
+      source_capture_item_id: null,
+      draft_id: "draft-2",
+      title: "Draft task from local",
+      description: null,
+      confidence: null,
+      task_type: "task",
+      is_reversible: null,
+      due_at: null,
+      estimated_minutes_low: null,
+      estimated_minutes_high: null,
+      first_tiny_step: null,
+      is_commitment: false,
+      person_mentions: [],
+      task_status: "active",
+      accepted_at: "2026-05-08T16:00:00.000Z",
+      proposal: {
+        proposed_start: start,
+        proposed_end: end,
+        rationale: "Do this task.",
+      },
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+    await expect(promise).rejects.toMatchObject({
+      failureKind: "server-capability-missing",
+      message: "function place_time_block missing",
+    });
   });
 });

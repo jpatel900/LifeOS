@@ -166,6 +166,19 @@ const APP_UPDATE_PENDING_SAVE_FAILED: WorkflowSyncStatus = {
   pendingSaveFailed: true,
 };
 
+// #967 typed failure category: no pre-set `message` here — the app-update
+// wording must come from `resolveDeviceSaveNotice` reading the NEW
+// `pendingSaveFailureKind` aggregate alone, proving `HealthSheet.tsx` needs
+// no edit of its own: it only ever reads the already-resolved notice.
+const KNOWN_ONLY_KIND_PENDING_SAVE_FAILED: WorkflowSyncStatus = {
+  storage: "available",
+  account: "local-only",
+  message: null,
+  pendingLocalChanges: true,
+  pendingSaveFailed: true,
+  pendingSaveFailureKind: "server-capability-missing",
+};
+
 beforeEach(() => {
   window.sessionStorage.clear();
   vi.clearAllMocks();
@@ -373,6 +386,11 @@ describe("HealthSheet — the ported Health surface", () => {
     [
       "app update needed",
       APP_UPDATE_PENDING_SAVE_FAILED,
+      ACCOUNT_NEEDS_APP_UPDATE,
+    ],
+    [
+      "app update needed, resolved purely from the typed failure category",
+      KNOWN_ONLY_KIND_PENDING_SAVE_FAILED,
       ACCOUNT_NEEDS_APP_UPDATE,
     ],
   ])(
@@ -668,6 +686,23 @@ describe("HealthSheet — manual retry action (#967)", () => {
   it("calls the provider action exactly once per click", async () => {
     const retry = vi.fn().mockResolvedValue(undefined);
     spySyncStatus(FAILED_SYNCED, retry);
+    renderSheet();
+
+    const button = await screen.findByTestId("health-sheet-retry-save");
+    button.click();
+
+    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
+  });
+
+  // #967 typed failure category: a mixed or unknown aggregate must not be
+  // blanket-hidden by the new known-only branch — the retry stays exactly as
+  // available as it was before this field existed.
+  it("stays visible and usable for a mixed/unknown typed failure category, not just for an absent one", async () => {
+    const retry = vi.fn().mockResolvedValue(undefined);
+    spySyncStatus(
+      { ...FAILED_SYNCED, pendingSaveFailureKind: "unknown" },
+      retry,
+    );
     renderSheet();
 
     const button = await screen.findByTestId("health-sheet-retry-save");

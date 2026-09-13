@@ -15,6 +15,7 @@ const INTENTIONALLY_INTERNAL_EXPORTS = new Set<string>([
   "metaLearning:uuidPattern",
   "shared:durationProfileColumns",
   "shared:getSupabaseMessage",
+  "shared:toPersistenceWriteError",
   "shared:logLearningWriteFailure",
   "shared:mockUserId",
   "shared:overrideRecordColumns",

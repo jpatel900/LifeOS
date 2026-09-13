@@ -292,4 +292,154 @@ describe("resolveDeviceSaveNotice (#734)", () => {
       });
     });
   });
+
+  // #967 typed failure category: `pendingSaveFailureKind` is a SAFE AGGREGATE
+  // across only the currently-failed journal rows (see its doc in
+  // `workflowContext/types.ts`). A known-only aggregate gets the same calm,
+  // specific `ACCOUNT_NEEDS_APP_UPDATE` treatment as an already-specific
+  // message; any mix, any unknown row, or a legacy/absent aggregate must
+  // never be blanket-hidden and keeps the generic alarm.
+  describe("pendingSaveFailureKind (#967 typed failure category)", () => {
+    it("shows the specific app-update message, calm, when every failed row is known server-capability-missing (local-only)", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "local-only",
+          message: ACCOUNT_UNREACHABLE_NOW,
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+          pendingSaveFailureKind: "server-capability-missing",
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "calm",
+        message: ACCOUNT_NEEDS_APP_UPDATE,
+        signedOut: false,
+      });
+    });
+
+    it("shows the specific app-update message, calm, when every failed row is known server-capability-missing (synced, pending local changes)", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "synced",
+          message: SOME_WORK_ON_THIS_DEVICE,
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+          pendingSaveFailureKind: "server-capability-missing",
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "calm",
+        message: ACCOUNT_NEEDS_APP_UPDATE,
+        signedOut: false,
+      });
+    });
+
+    it("keeps the generic alarm for a mixed aggregate (some rows known, at least one not)", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "synced",
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+          pendingSaveFailureKind: "unknown",
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "alarm",
+        message: ACCOUNT_SAVE_FAILED,
+        signedOut: false,
+      });
+    });
+
+    it("keeps the generic alarm for an unknown-only aggregate, unchanged from before this field existed", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "local-only",
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+          pendingSaveFailureKind: "unknown",
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "alarm",
+        message: ACCOUNT_SAVE_FAILED,
+        signedOut: false,
+      });
+    });
+
+    it("treats a legacy or absent aggregate as unknown, not as known-only", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "local-only",
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+          pendingSaveFailureKind: undefined,
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "alarm",
+        message: ACCOUNT_SAVE_FAILED,
+        signedOut: false,
+      });
+    });
+
+    it("still lets the one genuinely specific actionable message win over the known-only branch", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "local-only",
+          message: ACCOUNT_NEEDS_APP_UPDATE,
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+          pendingSaveFailureKind: "server-capability-missing",
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "calm",
+        message: ACCOUNT_NEEDS_APP_UPDATE,
+        signedOut: false,
+      });
+    });
+
+    it("preserves signed-out priority over a known-only aggregate", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "local-only",
+          signedOut: true,
+          message: SIGNED_OUT_SAVING_ON_THIS_DEVICE,
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+          pendingSaveFailureKind: "server-capability-missing",
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "calm",
+        message: SIGNED_OUT_SAVING_ON_THIS_DEVICE,
+        signedOut: true,
+      });
+    });
+
+    it("preserves device-storage-blocked priority over a known-only aggregate", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          storage: "blocked",
+          account: "local-only",
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+          pendingSaveFailureKind: "server-capability-missing",
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "alarm",
+        message: DEVICE_STORAGE_BLOCKED,
+        signedOut: false,
+      });
+    });
+  });
 });

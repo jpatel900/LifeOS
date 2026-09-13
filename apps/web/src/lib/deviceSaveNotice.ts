@@ -141,6 +141,19 @@ export function resolveDeviceSaveNotice(
 
   if (status.account === "local-only") {
     if (status.pendingSaveFailed && !hasSpecificActionableMessage) {
+      // #967 typed failure category: a KNOWN-ONLY aggregate (every currently
+      // failed journal row is `"server-capability-missing"`) is the same
+      // actionable, non-retriable cause as `hasSpecificActionableMessage`
+      // above, so it gets the same calm, specific message. Any mix, any
+      // unknown row, or a legacy/absent aggregate must NOT be blanket-hidden
+      // by this — it keeps the generic alarm, unchanged from before.
+      if (status.pendingSaveFailureKind === "server-capability-missing") {
+        return {
+          tone: "calm",
+          message: ACCOUNT_NEEDS_APP_UPDATE,
+          signedOut: false,
+        };
+      }
       return { tone: "alarm", message: ACCOUNT_SAVE_FAILED, signedOut: false };
     }
     return {
@@ -160,6 +173,15 @@ export function resolveDeviceSaveNotice(
 
   if (status.account === "synced" && status.pendingLocalChanges) {
     if (status.pendingSaveFailed && !hasSpecificActionableMessage) {
+      // #967 typed failure category: same known-only exception as the
+      // local-only case above — see its comment.
+      if (status.pendingSaveFailureKind === "server-capability-missing") {
+        return {
+          tone: "calm",
+          message: ACCOUNT_NEEDS_APP_UPDATE,
+          signedOut: false,
+        };
+      }
       return {
         tone: "alarm",
         message: ACCOUNT_SAVE_FAILED,

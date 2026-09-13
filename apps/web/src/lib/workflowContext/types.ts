@@ -31,6 +31,7 @@ import type {
   ParseCaptureParserMode,
 } from "../ai/parseCaptureClient";
 import type { ParsedWorkflowResult } from "../ai/parseCaptureWorkflow";
+import type { PersistenceFailureKind } from "../persistenceFailureKind";
 
 /**
  * UI-facing status of the async capture parse round-trip. The raw capture is
@@ -475,6 +476,19 @@ export interface WorkflowSyncStatus {
   // an attempt — the ordinary case. Carries no permanence or timing claim;
   // it clears the moment the write is delivered or removed from the journal.
   pendingSaveFailed?: boolean;
+  // #967 typed failure category: a SAFE AGGREGATE across only the
+  // CURRENTLY FAILED journal rows (never the whole queue) — computed by
+  // `refreshPendingSaveFailed`/`refreshJournalledDurableState` in
+  // `WorkflowContext.tsx`, under the exact same generation/identity/
+  // read-failure guards as `pendingSaveFailed`, and updated atomically with
+  // it. `"server-capability-missing"` iff at least one row is failed AND
+  // every failed row's own `last_attempt_failure_kind` is that exact
+  // value. Any mix of kinds, any `"unknown"` row, any legacy/invalid
+  // stored value, or no failed rows at all yields `"unknown"` (or this
+  // field stays absent when nothing is failed — both read the same way to
+  // every consumer). Never widen this into a permanence/transience claim:
+  // it is a snapshot of the LATEST attempt per row, nothing more.
+  pendingSaveFailureKind?: PersistenceFailureKind;
 }
 
 export const initialSyncStatus: WorkflowSyncStatus = {

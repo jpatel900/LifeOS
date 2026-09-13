@@ -31,6 +31,7 @@ import {
   parseTask,
   parseTasks,
   requireSupabaseUser,
+  toPersistenceWriteError,
   reviewEntryColumns,
   taskColumns,
 } from "./shared";
@@ -364,7 +365,7 @@ export async function unplanCalendarBlock(
     p_block_id: blockId,
   });
   if (error) {
-    throw new Error(getSupabaseMessage(error));
+    throw toPersistenceWriteError(error);
   }
 
   const result = (data ?? {}) as Record<string, unknown>;
@@ -402,7 +403,7 @@ export async function applyTaskReviewTransition(
     p_target_status: targetStatus,
   });
   if (error) {
-    throw new Error(getSupabaseMessage(error));
+    throw toPersistenceWriteError(error);
   }
 
   const result = (data ?? {}) as Record<string, unknown>;
@@ -476,7 +477,7 @@ export async function syncJournaledExecutionSession(
     p_defer_task: input.defer_task,
   });
   if (error) {
-    throw new Error(getSupabaseMessage(error));
+    throw toPersistenceWriteError(error);
   }
 
   return { provider: "supabase" };
@@ -537,7 +538,7 @@ export async function syncJournaledReviewEntry(
     { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
   );
 
-  if (error) throw new Error(getSupabaseMessage(error));
+  if (error) throw toPersistenceWriteError(error);
   return { provider: "supabase" };
 }
 

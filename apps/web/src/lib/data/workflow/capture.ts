@@ -18,6 +18,7 @@ import {
   parseCapture,
   parseCaptures,
   requireSupabaseUser,
+  toPersistenceWriteError,
 } from "./shared";
 
 export async function createCaptureItem(
@@ -207,7 +208,7 @@ export async function syncJournaledCapture(
     .select(captureColumns)
     .single();
 
-  if (error) throw new Error(getSupabaseMessage(error));
+  if (error) throw toPersistenceWriteError(error);
   return { provider: "supabase", captureId: parseCapture(data).id };
 }
 
@@ -321,7 +322,7 @@ export async function resolveCaptureItems(
     .select(captureColumns);
 
   if (error) {
-    throw new Error(getSupabaseMessage(error));
+    throw toPersistenceWriteError(error);
   }
 
   return {

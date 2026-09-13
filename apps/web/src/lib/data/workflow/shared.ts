@@ -27,6 +27,10 @@ import {
   normalizeSupabaseRows,
 } from "../supabaseRowNormalization";
 import { recordLearningWriteFailure } from "../learningWriteFailures";
+import {
+  PersistenceWriteError,
+  classifyPersistenceFailure,
+} from "../../persistenceFailureKind";
 
 export type DataProvider = "mock" | "supabase";
 
@@ -489,6 +493,13 @@ export function getSupabaseMessage(error: unknown) {
   }
 
   return "Supabase request failed.";
+}
+
+export function toPersistenceWriteError(error: unknown): PersistenceWriteError {
+  return new PersistenceWriteError(
+    getSupabaseMessage(error),
+    classifyPersistenceFailure(error),
+  );
 }
 
 export async function requireSupabaseUser(

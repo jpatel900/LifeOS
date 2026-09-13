@@ -23,6 +23,7 @@ import {
   parseTask,
   parseTimeBlockProposal,
   requireSupabaseUser,
+  toPersistenceWriteError,
   taskColumns,
   timeBlockProposalColumns,
 } from "./shared";
@@ -415,7 +416,7 @@ export async function placeTimeBlock(
     p_client_write_id: clientWriteId,
   });
   if (error) {
-    throw new Error(getSupabaseMessage(error));
+    throw toPersistenceWriteError(error);
   }
 
   const result = (data ?? {}) as Record<string, unknown>;
