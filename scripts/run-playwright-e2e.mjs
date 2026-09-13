@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import process from "node:process";
@@ -9,7 +10,46 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(scriptDir, "..");
 const webDir = path.join(repoRoot, "apps", "web");
+
+// #687 demo-seed round 3 (MUST-FIX) — a `next dev` process started with a
+// non-default `distDir` (the seeded server's `NEXT_DIST_DIR=.next-seeded`,
+// below) REWRITES two TRACKED files on startup to match: `next-env.d.ts`'s
+// `.next/types/routes.d.ts` reference flips to `.next-seeded/...`, and
+// `tsconfig.json` gains a `.next-seeded/types/**/*.ts` include entry (plus
+// Next's own JSON re-formatting of the whole file). Left alone, every local
+// `pnpm test:e2e` run leaves the tree dirty and `pnpm format:check` fails on
+// `tsconfig.json` afterward — and worse, `next-env.d.ts` now points the
+// MAIN build (plain `pnpm dev`, which never populates `.next-seeded/`) at a
+// directory that doesn't exist for it.
+//
+// Snapshot both files before either server starts, restore them on every
+// exit path (normal completion, signal, or a startup failure) — belt and
+// braces rather than only "at the end", since the timing of exactly when
+// Next rewrites them is an implementation detail this script does not
+// control.
+const filesToProtect = [
+  path.join(webDir, "next-env.d.ts"),
+  path.join(webDir, "tsconfig.json"),
+];
+const originalFileContents = new Map(
+  filesToProtect.map((file) => [file, fs.readFileSync(file, "utf8")]),
+);
+
+function restoreProtectedFiles() {
+  for (const [file, original] of originalFileContents) {
+    try {
+      if (fs.readFileSync(file, "utf8") !== original) {
+        fs.writeFileSync(file, original);
+      }
+    } catch (error) {
+      console.error(`[playwright-e2e] failed to restore ${file}:`, error);
+    }
+  }
+}
 const requestedPort = Number(process.env.PLAYWRIGHT_PORT ?? "3100");
+const requestedSeededPort = process.env.PLAYWRIGHT_SEEDED_PORT
+  ? Number(process.env.PLAYWRIGHT_SEEDED_PORT)
+  : undefined;
 const startupTimeoutMs = 180_000;
 const nextCliPath = require.resolve("next/dist/bin/next", {
   paths: [webDir, repoRoot],
@@ -39,7 +79,12 @@ const warmRoutes = [
   "/login",
   "/api/parse-capture",
 ];
-const serverLogBuffer = [];
+// #687 demo-seed round 2: the seeded server only ever serves `/` (through
+// `demo-seed-pin.seeded.spec.ts`'s moment-surface list) — warming the whole
+// `warmRoutes` set on it would just slow startup for routes that spec never
+// visits.
+const seededWarmRoutes = ["/"];
+const serverLogBuffers = new Map();
 const maxBufferedLogLines = 200;
 let shuttingDown = false;
 
@@ -48,10 +93,16 @@ function appendLogLine(source, line) {
     return;
   }
 
-  serverLogBuffer.push(`[${source}] ${line}`);
-  if (serverLogBuffer.length > maxBufferedLogLines) {
-    serverLogBuffer.shift();
+  const buffer = serverLogBuffers.get(source) ?? [];
+  buffer.push(line);
+  if (buffer.length > maxBufferedLogLines) {
+    buffer.shift();
   }
+  serverLogBuffers.set(source, buffer);
+}
+
+function recentLog(source) {
+  return (serverLogBuffers.get(source) ?? []).join("\n");
 }
 
 function forwardStream(stream, writer, source) {
@@ -104,25 +155,22 @@ async function reservePort(port) {
   });
 }
 
-async function resolvePort() {
-  if (process.env.PLAYWRIGHT_PORT) {
-    return requestedPort;
+async function resolvePort(explicit, requested) {
+  if (explicit) {
+    return requested;
   }
 
   const fallbackPort = await reservePort(0);
-  console.warn(
-    `[playwright-e2e] Using isolated port ${fallbackPort} for this run.`,
-  );
   return fallbackPort;
 }
 
-async function waitForServer(baseURL, serverProcess) {
+async function waitForServer(baseURL, serverProcess, source) {
   const deadline = Date.now() + startupTimeoutMs;
 
   while (Date.now() < deadline) {
     if (serverProcess.exitCode !== null) {
       throw new Error(
-        `Next dev server exited before ${baseURL} was ready. Recent server output:\n${serverLogBuffer.join("\n")}`,
+        `Next dev server (${source}) exited before ${baseURL} was ready. Recent server output:\n${recentLog(source)}`,
       );
     }
 
@@ -142,18 +190,18 @@ async function waitForServer(baseURL, serverProcess) {
   }
 
   throw new Error(
-    `Timed out waiting for ${baseURL}. Recent server output:\n${serverLogBuffer.join("\n")}`,
+    `Timed out waiting for ${baseURL}. Recent server output:\n${recentLog(source)}`,
   );
 }
 
-async function waitForRoute(baseURL, route, serverProcess) {
+async function waitForRoute(baseURL, route, serverProcess, source) {
   const deadline = Date.now() + startupTimeoutMs;
   const target = new URL(route, `${baseURL}/`).toString();
 
   while (Date.now() < deadline) {
     if (serverProcess.exitCode !== null) {
       throw new Error(
-        `Next dev server exited before ${target} was ready. Recent server output:\n${serverLogBuffer.join("\n")}`,
+        `Next dev server (${source}) exited before ${target} was ready. Recent server output:\n${recentLog(source)}`,
       );
     }
 
@@ -173,13 +221,13 @@ async function waitForRoute(baseURL, route, serverProcess) {
   }
 
   throw new Error(
-    `Timed out warming ${target}. Recent server output:\n${serverLogBuffer.join("\n")}`,
+    `Timed out warming ${target}. Recent server output:\n${recentLog(source)}`,
   );
 }
 
-async function warmCoreRoutes(baseURL, serverProcess) {
-  for (const route of warmRoutes) {
-    await waitForRoute(baseURL, route, serverProcess);
+async function warmCoreRoutes(baseURL, serverProcess, source, routes) {
+  for (const route of routes) {
+    await waitForRoute(baseURL, route, serverProcess, source);
   }
 }
 
@@ -192,8 +240,6 @@ function cleanupServer(serverProcess) {
   ) {
     return;
   }
-
-  shuttingDown = true;
 
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/PID", String(serverProcess.pid), "/T", "/F"], {
@@ -209,13 +255,31 @@ function cleanupServer(serverProcess) {
   }
 }
 
-function exitWithSignal(serverProcess, code) {
-  cleanupServer(serverProcess);
+function cleanupServers(serverProcesses) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  for (const serverProcess of serverProcesses) {
+    cleanupServer(serverProcess);
+  }
+  // Every exit path (normal completion, SIGINT/SIGTERM, an uncaught error,
+  // a server that failed to start) routes through here — the one place
+  // that must always restore the two tracked files a seeded `next dev`
+  // rewrites (see the header comment).
+  restoreProtectedFiles();
+}
+
+function exitWithSignal(serverProcesses, code) {
+  cleanupServers(serverProcesses);
   process.exit(code);
 }
 
-async function main() {
-  const port = await resolvePort();
+/**
+ * Spawns one `next dev` server, waits for it to answer, and warms its core
+ * routes. `env` is layered on top of `process.env` — callers set exactly the
+ * flags that make this server different from any other (moments-home flag,
+ * demo-seed flag, port).
+ */
+async function startServer(port, env, source, routes) {
   const baseURL = `http://127.0.0.1:${port}`;
   const serverArgs = [
     nextCliPath,
@@ -225,41 +289,128 @@ async function main() {
     "-p",
     String(port),
   ];
-  const testArgs = [playwrightCliPath, "test", ...process.argv.slice(2)];
   const serverProcess = spawn(process.execPath, serverArgs, {
     cwd: webDir,
     env: {
       ...process.env,
       PORT: port,
-      // Moments pass P7b: the E2E lane serves the go-live config where `/` is
-      // the moments home. This is the CI server-start path (Playwright's own
-      // webServer is disabled here), so the flag must be set on THIS spawn;
-      // an explicit outer NEXT_PUBLIC_MOMENTS_HOME still wins if provided.
-      NEXT_PUBLIC_MOMENTS_HOME: process.env.NEXT_PUBLIC_MOMENTS_HOME ?? "true",
+      ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
   });
 
-  forwardStream(serverProcess.stdout, process.stdout, "next:stdout");
-  forwardStream(serverProcess.stderr, process.stderr, "next:stderr");
+  forwardStream(serverProcess.stdout, process.stdout, `${source}:stdout`);
+  forwardStream(serverProcess.stderr, process.stderr, `${source}:stderr`);
 
-  process.on("SIGINT", () => exitWithSignal(serverProcess, 130));
-  process.on("SIGTERM", () => exitWithSignal(serverProcess, 143));
+  try {
+    await waitForServer(baseURL, serverProcess, source);
+    await warmCoreRoutes(baseURL, serverProcess, source, routes);
+  } catch (error) {
+    cleanupServer(serverProcess);
+    throw error;
+  }
+
+  return { serverProcess, baseURL };
+}
+
+async function main() {
+  const port = await resolvePort(
+    Boolean(process.env.PLAYWRIGHT_PORT),
+    requestedPort,
+  );
+  const seededPort = await resolvePort(
+    Boolean(requestedSeededPort),
+    requestedSeededPort ?? port + 1,
+  );
+  if (!process.env.PLAYWRIGHT_PORT || !requestedSeededPort) {
+    console.warn(
+      `[playwright-e2e] main server ${port}, seeded server ${seededPort}.`,
+    );
+  }
+
+  const testArgs = [playwrightCliPath, "test", ...process.argv.slice(2)];
+
+  const baseEnv = {
+    // Moments pass P7b: the E2E lane serves the go-live config where `/` is
+    // the moments home. This is the CI server-start path (Playwright's own
+    // webServer is disabled here), so the flag must be set on THIS spawn;
+    // an explicit outer NEXT_PUBLIC_MOMENTS_HOME still wins if provided.
+    NEXT_PUBLIC_MOMENTS_HOME: process.env.NEXT_PUBLIC_MOMENTS_HOME ?? "true",
+  };
+
+  let mainServer;
+  let seededServer;
+  const started = [];
+
+  process.on("SIGINT", () =>
+    exitWithSignal(
+      started.map((s) => s.serverProcess),
+      130,
+    ),
+  );
+  process.on("SIGTERM", () =>
+    exitWithSignal(
+      started.map((s) => s.serverProcess),
+      143,
+    ),
+  );
   process.on("uncaughtException", (error) => {
     console.error(error);
-    exitWithSignal(serverProcess, 1);
+    exitWithSignal(
+      started.map((s) => s.serverProcess),
+      1,
+    );
   });
   process.on("unhandledRejection", (error) => {
     console.error(error);
-    exitWithSignal(serverProcess, 1);
+    exitWithSignal(
+      started.map((s) => s.serverProcess),
+      1,
+    );
   });
 
   try {
-    await waitForServer(baseURL, serverProcess);
-    await warmCoreRoutes(baseURL, serverProcess);
+    mainServer = await startServer(
+      port,
+      {
+        ...baseEnv,
+        // #687 demo-seed, independent verifier round 1 — THIS is the server
+        // CI actually runs the whole (non-seeded) e2e suite against
+        // (playwright.config.ts's own `webServer` block is disabled below
+        // via PLAYWRIGHT_DISABLE_WEBSERVER, so setting the flag there alone
+        // never reached CI). Every spec in this lane navigates `/` in
+        // unconfigured mode; only three specs were ever re-targeted for the
+        // seed's existence — the default here stays OFF, same reasoning as
+        // the MOMENTS_HOME line above, an explicit outer
+        // NEXT_PUBLIC_DEMO_SEED still wins if one is ever set.
+        NEXT_PUBLIC_DEMO_SEED: process.env.NEXT_PUBLIC_DEMO_SEED ?? "false",
+      },
+      "next-main",
+      warmRoutes,
+    );
+    started.push(mainServer);
+
+    // #687 demo-seed round 2 (independent verifier finding 4) — the second
+    // server `demo-seed-pin.seeded.spec.ts` runs against, with the seed
+    // genuinely ON. Harmony-extended alongside the main server spawn above
+    // rather than a second script or workflow.
+    seededServer = await startServer(
+      seededPort,
+      {
+        ...baseEnv,
+        NEXT_PUBLIC_DEMO_SEED: "true",
+        // Separate build cache from the main server (next.config.ts) —
+        // two `next dev` processes from the same webDir must not share
+        // `.next/`.
+        NEXT_DIST_DIR: ".next-seeded",
+      },
+      "next-seeded",
+      seededWarmRoutes,
+    );
+    started.push(seededServer);
   } catch (error) {
-    cleanupServer(serverProcess);
+    cleanupServers(started.map((s) => s.serverProcess));
     throw error;
   }
 
@@ -268,6 +419,7 @@ async function main() {
     env: {
       ...process.env,
       PLAYWRIGHT_PORT: port,
+      PLAYWRIGHT_SEEDED_PORT: seededPort,
       PLAYWRIGHT_DISABLE_WEBSERVER: "1",
     },
     stdio: "inherit",
@@ -278,7 +430,7 @@ async function main() {
     playwrightProcess.on("exit", (code) => resolve(code ?? 1));
   });
 
-  cleanupServer(serverProcess);
+  cleanupServers(started.map((s) => s.serverProcess));
   process.exit(exitCode);
 }
 
