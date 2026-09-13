@@ -1107,7 +1107,7 @@ export async function getHealthDashboard(
           "auth session",
           "healthy",
           100,
-          "You're signed in. Your work is saving to your account.",
+          "You're signed in.",
           { authenticated: true, repair_steps: [] },
         ),
       );
