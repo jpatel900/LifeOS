@@ -30,6 +30,21 @@ import {
  * re-admit the ritual forever: `shouldShowOnboarding` checks the rerun flag
  * first, so clearing it late (only in `complete()`) left it "true" across
  * every reload between the rerun click and an eventual completion.
+ *
+ * C3 (onboarding own-URL) — a verifier-found regression this hook must not
+ * regrow: TWO components now call this hook against the SAME live
+ * WorkflowContext state for two DIFFERENT reasons — `TodayMoments.tsx`'s
+ * thin wrapper on `/` (which only ever needs to DETECT eligibility, to hand
+ * off to `/welcome`) and `/welcome`'s own page (which actually RENDERS the
+ * ritual). Both are separate hook instances with their own `latchedRef`; if
+ * BOTH consumed the rerun flag independently, whichever one's `candidate`
+ * turned true FIRST (previously always the `/` wrapper, since its effect
+ * registers and fires before its own redirect effect does, in the same
+ * commit) cleared the one-shot flag before the OTHER instance — the one
+ * that actually shows the ritual — ever got a chance to read it, silently
+ * swallowing a Settings-requested rerun. `consumeRerunOnActivate` (default
+ * true) lets a detect-only caller opt OUT of consuming, so exactly one
+ * instance — the one that renders — ever clears the flag.
  */
 
 export type OnboardingRitualStatus = "idle" | "active" | "done";
@@ -37,6 +52,15 @@ export type OnboardingRitualStatus = "idle" | "active" | "done";
 export interface UseOnboardingRitualInput {
   state: WorkflowState;
   enabled?: boolean;
+  /**
+   * Whether THIS hook instance's activation clears the Settings rerun
+   * request (see the file header above). Default true — the common case is
+   * one hook instance per mount that both detects eligibility and renders
+   * the ritual. Pass `false` for a detect-only instance (one that only
+   * redirects elsewhere on eligibility, never renders the ritual itself) so
+   * the instance that actually renders is guaranteed to still see the flag.
+   */
+  consumeRerunOnActivate?: boolean;
 }
 
 export interface UseOnboardingRitualResult {
@@ -56,7 +80,7 @@ export interface UseOnboardingRitualResult {
 export function useOnboardingRitual(
   input: UseOnboardingRitualInput,
 ): UseOnboardingRitualResult {
-  const { state, enabled = true } = input;
+  const { state, enabled = true, consumeRerunOnActivate = true } = input;
 
   const [status, setStatus] = useState<OnboardingRitualStatus>("idle");
   const latchedRef = useRef(false);
@@ -79,10 +103,14 @@ export function useOnboardingRitual(
     // complete() — so an abandoned rerun (reload before any step finishes)
     // cannot re-admit the ritual on every subsequent visit. A no-op when
     // this activation was the ordinary zero-state trigger (nothing to
-    // clear).
-    clearOnboardingRerunRequest();
+    // clear). C3: gated on `consumeRerunOnActivate` — see the file header's
+    // "TWO components" comment for why a detect-only caller must not do
+    // this.
+    if (consumeRerunOnActivate) {
+      clearOnboardingRerunRequest();
+    }
     setStatus("active");
-  }, [candidate]);
+  }, [candidate, consumeRerunOnActivate]);
 
   const complete = useCallback(() => {
     markOnboardingCompleted();

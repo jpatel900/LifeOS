@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import HomePage from "../app/page";
@@ -13,22 +13,52 @@ import AreasOverviewPage from "../app/areas/page";
 import TriagePage from "../app/triage/page";
 import LoginPage from "../app/login/page";
 import NotFoundPage from "../app/not-found";
+import WelcomePage from "../app/welcome/page";
 import { AppShell } from "../app/components/AppShell";
 import RootLayout from "../app/layout";
 
 const navigationMock = vi.hoisted(() => ({
   pathname: "/capture",
   push: vi.fn(),
+  // C3 (onboarding own-URL): `/welcome`'s own page and `TodayMoments.tsx`'s
+  // wrapper both call `router.replace` — needed here so mounting either
+  // through this file's `renderThroughAppShell` doesn't throw on a missing
+  // mock method. No test in this file asserts on it.
+  replace: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => navigationMock.pathname,
-  useRouter: () => ({ push: navigationMock.push }),
+  useRouter: () => ({
+    push: navigationMock.push,
+    replace: navigationMock.replace,
+  }),
   // #687: /login's own form reads ?next= via useSearchParams (wrapped in its
   // own Suspense boundary) — no test here exercises that param, so an empty
   // string is enough to satisfy the hook.
   useSearchParams: () => new URLSearchParams(),
 }));
+
+// C3 (onboarding own-URL): the same zero-state sessionStorage seed
+// `tests/e2e/onboarding-ritual.spec.ts` and `app/welcome/page.test.tsx`
+// already use, so `/welcome`'s shell-contract test below renders the
+// ritual for real rather than bouncing straight back to `/`.
+const ZERO_WORKFLOW_STATE = {
+  areas: [],
+  captureItems: [],
+  taskDrafts: [],
+  projectDrafts: [],
+  ambiguityAssessments: [],
+  timeBlockProposalDrafts: [],
+  projects: [],
+  tasks: [],
+  timeBlockProposals: [],
+  calendarBlocks: [],
+  executionSessions: [],
+  healthChecks: [],
+  reviewLog: [],
+  wipRefusal: null,
+};
 
 // C2-S14 (#687 round-8, defect 1): `page.tsx` now reads `next/headers`
 // `cookies()`, a real Next.js request-scoped API this vitest environment
@@ -461,5 +491,87 @@ describe("handoff cockpit route provider wiring", () => {
         'a[href="#stage-content"],button,input,select,textarea,[tabindex]:not([tabindex="-1"])',
       ),
     ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
+  });
+
+  // C3 (onboarding own-URL, Part of #687): `/welcome` reuses the same
+  // `MomentsThemeShell` `/` does — this pins that the reuse actually holds
+  // the same shell contract (one h1, a working skip link whose target
+  // excludes the shell's own chrome), the same way every other route in
+  // this file is pinned, rather than trusting "it shares a component" as
+  // proof on its own.
+  it("gives /welcome the same shell contract as home: one h1 and a working skip link (C3)", async () => {
+    window.sessionStorage.setItem(
+      "lifeos.phase2.workflow",
+      JSON.stringify(ZERO_WORKFLOW_STATE),
+    );
+
+    const { container } = renderThroughAppShell(<WelcomePage />, "/welcome");
+
+    expect(await screen.findByTestId("welcome-screen")).toBeDefined();
+    expect(await screen.findByTestId("onboarding-ritual")).toBeDefined();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(
+      container.querySelector(
+        'a[href="#stage-content"],button,input,select,textarea,[tabindex]:not([tabindex="-1"])',
+      ),
+    ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
+
+    window.sessionStorage.clear();
+  });
+});
+
+/**
+ * #687 demo-seed, independent verifier round 1 finding 6 — a genuine
+ * opt-in, in THIS file (not only `demoSeed.test.tsx`), that the moments
+ * home route actually renders the seeded sample on a first visit. The rest
+ * of this file inherits the suite-wide `NEXT_PUBLIC_DEMO_SEED=false`
+ * default and is unaffected by the seed's existence.
+ */
+describe("moments home first visit in demo mode (#687 demo-seed)", () => {
+  const ORIGINAL_DEMO_SEED = process.env.NEXT_PUBLIC_DEMO_SEED;
+  const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_DEMO_SEED = "true";
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    window.sessionStorage.clear();
+    window.localStorage.clear();
+  });
+
+  afterAll(() => {
+    if (ORIGINAL_DEMO_SEED === undefined) {
+      delete process.env.NEXT_PUBLIC_DEMO_SEED;
+    } else {
+      process.env.NEXT_PUBLIC_DEMO_SEED = ORIGINAL_DEMO_SEED;
+    }
+    if (ORIGINAL_MOMENTS_HOME === undefined) {
+      delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    } else {
+      process.env.NEXT_PUBLIC_MOMENTS_HOME = ORIGINAL_MOMENTS_HOME;
+    }
+  });
+
+  it("renders / with the seeded sample content, not an empty shell", async () => {
+    render(
+      <AppShell>
+        {await HomePage({ searchParams: Promise.resolve({}) })}
+      </AppShell>,
+    );
+
+    await screen.findByTestId("today-moments");
+
+    // The default moment depends on time of day — the Pipeline rail (where
+    // the seeded captures/draft show up as non-zero counts) lives on Start.
+    fireEvent.click(await screen.findByTestId("moment-switcher-start"));
+
+    // Both testids only render at all once at least one Pipeline stage is
+    // non-zero (PipelineOverview.tsx) — their mere presence already proves
+    // this is not an empty shell. #974 (merged underneath this branch) gave
+    // the demo banner a hard, measured zero-added-height constraint (its own
+    // doc comment), so the seed is proven here, not through banner copy —
+    // see demoSeed.test.tsx's dedicated test for why that copy was dropped.
+    expect(
+      await screen.findByTestId("pipeline-overview-count-capture"),
+    ).toBeInTheDocument();
   });
 });

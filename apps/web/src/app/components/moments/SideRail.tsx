@@ -94,14 +94,14 @@ export function SideRail({
   onOpenAreas,
 }: SideRailProps) {
   return (
-    <div className="grid gap-4" data-testid="side-rail">
+    <div className="grid gap-3" data-testid="side-rail">
       <Card className="workflow-support-card moments-card">
-        <CardHeader className="pb-2">
+        <CardHeader className="pt-3 pb-2">
           <CardTitle className="moments-label text-sm tracking-tight">
             Waiting on
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className="pt-0 pb-3">
           {waitingOn.length === 0 ? (
             <p
               className="text-sm text-muted-foreground"
@@ -118,7 +118,7 @@ export function SideRail({
               {waitingOn.map((entry) => (
                 <li
                   key={entry.taskId}
-                  className="flex items-center gap-3 py-2 text-sm first:pt-0 last:pb-0"
+                  className="flex items-center gap-3 py-1.5 text-sm first:pt-0 last:pb-0"
                   data-testid={`side-rail-waiting-row-${entry.taskId}`}
                 >
                   <span className="min-w-0 flex-1 truncate">{entry.title}</span>
@@ -153,7 +153,7 @@ export function SideRail({
         className="workflow-support-card moments-card"
         data-testid="side-rail-areas-card"
       >
-        <CardHeader className="pb-2">
+        <CardHeader className="pt-3 pb-2">
           <CardTitle className="moments-label text-sm tracking-tight">
             Areas
             {areas.length > 0 ? (
@@ -166,7 +166,7 @@ export function SideRail({
             ) : null}
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-2 pt-0 pb-4">
+        <CardContent className="grid gap-1.5 pt-0 pb-3">
           <AreaHealthDots areas={areas} />
           {/* C2-S5: two different questions — "what is actually in my areas"
               (the ported All-areas surface) and "how are they doing" (health)

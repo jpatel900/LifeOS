@@ -7,9 +7,14 @@ import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
  * C3 (Part of #687, C3 card 10) — the ritual now lives at its own route,
  * `/welcome`, instead of rendering inline on top of `/`. A zero-state
  * session landing on `/` hands off there via a client-side `replace` (no
- * reload — Target Card 10 criterion 1); reloading `/welcome` directly
- * re-derives the same eligibility and shows the ritual again; completing or
- * skipping through it hands back to `/` (Today), where the #551 state-truth
+ * reload — Target Card 10 criterion 1); reloading `/welcome` BEFORE any
+ * step has persisted anything re-derives the same eligibility and shows the
+ * ritual again, at step 1. A reload AFTER step 1 (areas already persisted)
+ * does NOT resume the ritual — the live areaCount/captureCount predicate
+ * (unchanged by this slice) is no longer zero, so it bounces to Today; this
+ * is pre-existing `shouldShowOnboarding` behavior, not new here, and is
+ * pinned explicitly below rather than left implied. Completing or skipping
+ * through the ritual hands back to `/` (Today), where the #551 state-truth
  * surfaces are the payoff.
  *
  * Trigger truth (design note): first session with zero areas AND zero
@@ -66,10 +71,11 @@ test.describe("onboarding ritual on a zero-state session (#581)", () => {
   // C3 own-URL, criteria 1 + the reload contract: a brand-new (zero-state)
   // session hands off from `/` to `/welcome` with no full reload — a single
   // `page.goto("/")` is the only navigation this test ever issues; the URL
-  // change to `/welcome` happens on its own, client-side. Reloading once
-  // there re-derives the same eligibility and keeps the ritual showing at
-  // that same URL.
-  test("a zero-state session hands off from / to /welcome with no reload, and a reload there keeps the ritual", async ({
+  // change to `/welcome` happens on its own, client-side. Reloading BEFORE
+  // any step has persisted anything keeps the ritual showing at that same
+  // URL, at step 1 (the honest scope of this claim — see the next test for
+  // what a reload AFTER step 1 actually does, which is different).
+  test("a zero-state session hands off from / to /welcome with no reload, and a reload there (before any step completes) keeps the ritual", async ({
     page,
   }) => {
     await page.goto("/");
@@ -80,6 +86,35 @@ test.describe("onboarding ritual on a zero-state session (#581)", () => {
     await page.reload();
     await expect(page).toHaveURL(/\/welcome$/);
     await expect(page.getByTestId("onboarding-ritual")).toBeVisible();
+  });
+
+  // C3 verifier correction (MEDIUM): an earlier version of this PR's own
+  // commit message overclaimed "a reload there keeps the ritual at the same
+  // step" — true only for step 1 (pinned above), false from step 2 onward.
+  // The zero-state trigger (`shouldShowOnboarding`, unchanged by this slice)
+  // reads LIVE `areaCount`/`captureCount` — once step 1 persists real areas,
+  // a reload re-derives eligibility from that now-non-zero count and finds
+  // it false, same as it always would have on the pre-C3 inline ritual (a
+  // full reload of `/` there re-mounted the SAME hook fresh, with the SAME
+  // predicate). This is not a regression this slice introduced; it is
+  // pre-existing behavior of the shared predicate, now simply visible as an
+  // address-bar change (`/welcome` -> `/`) instead of an in-place swap.
+  // Recoverable via Settings' "Run setup again", which the rerun flag makes
+  // unconditional regardless of area/capture count.
+  test("a reload at /welcome AFTER step 1 persists areas does NOT resume the ritual — it bounces to Today (pre-existing predicate behavior, not a C3 regression)", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/welcome$/);
+    await page.getByTestId("onboarding-areas-continue").click();
+    await expect(page.getByTestId("onboarding-step-day")).toBeVisible();
+
+    await page.reload();
+    // Root + optional query — same lenient "back on Today" shape used
+    // throughout this file.
+    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/);
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await expect(page.getByTestId("onboarding-ritual")).toHaveCount(0);
   });
 
   test("runs areas -> day -> first capture to a truthful home, and never re-shows", async ({
@@ -235,5 +270,44 @@ test.describe("onboarding ritual stays out of the way (#581)", () => {
     await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/);
     await expect(page.getByTestId("today-moments")).toBeVisible();
     await expect(page.getByTestId("onboarding-ritual")).toHaveCount(0);
+  });
+
+  // Verifier-found regression (HIGH): a rerun request that reaches `/`
+  // BEFORE it ever reaches `/welcome` — the exact trail a sign-in used to
+  // produce before `login/page.tsx` was fixed to route straight to
+  // `/welcome` — used to be silently swallowed. `useOnboardingRitual`'s own
+  // mount effect used to consume the one-shot rerun flag the moment ANY
+  // hook instance latched active, and `TodayMoments.tsx`'s thin wrapper on
+  // `/` ran its own separate instance that latched (to redirect) BEFORE
+  // `/welcome`'s instance — the one that actually renders — ever got a
+  // chance to see the flag: `shouldShowOnboarding({ rerunRequested: false,
+  // completed: true })` is false, so `/welcome` bounced straight back to
+  // `/`. Fixed by `consumeRerunOnActivate: false` on the detect-only `/`
+  // instance (useOnboardingRitual.ts) — only the instance that renders the
+  // ritual ever consumes the flag now.
+  //
+  // The rerun flag is set directly (localStorage), not via the Settings
+  // button — the button (OnboardingRerunPanel.tsx) already navigates
+  // straight to `/welcome`, so clicking it and THEN going to `/` would only
+  // prove the flag survives being consumed once already (it does, trivially
+  // — `/welcome`'s own instance consumed it on that first landing, and nothing
+  // is left for a later `/` visit to lose). The bug this pins is about a
+  // rerun request that reaches `/` FIRST, never having touched `/welcome`
+  // yet — exactly what a sign-in produced before login/page.tsx's own fix,
+  // and the only real gap `consumeRerunOnActivate: false` needed to close.
+  // `src/__tests__/login.test.tsx`'s own rerun tests separately pin that
+  // `/login` now routes straight to `/welcome`, so a real sign-in no longer
+  // takes this path at all — this test guards the mechanism itself, for any
+  // OTHER path that might still land on `/` first.
+  test("a rerun request reaching / first (before /welcome ever sees it) still lands on the ritual, not a bounce", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("lifeos.onboarding.rerun", "true");
+    });
+
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/welcome$/);
+    await expect(page.getByTestId("onboarding-ritual")).toBeVisible();
   });
 });
