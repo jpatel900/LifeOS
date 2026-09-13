@@ -90,6 +90,16 @@ export interface WorkflowContextValue {
   syncStatus: WorkflowSyncStatus;
   syncPersistedAreas: (areas: Area[]) => void;
   refreshPersistedWorkflow: () => Promise<void>;
+  // #967 manual retry: a thin, public wrapper around the EXISTING
+  // `runAccountSync({ replayAfter: true })` pass — the same ordered
+  // area/account hydration, serialized journal drain, identity recheck, and
+  // closed-day handoff every automatic trigger (mount, sign-in, reconnect)
+  // already uses. It does not drain anything itself and is not a second
+  // replay mechanism. `runAccountSync`'s own in-flight guard means this can
+  // resolve having done nothing (a pass was already running) — callers must
+  // read `syncStatus` afterward, never treat promise settlement as proof of
+  // delivery.
+  retryPendingAccountWrites: () => Promise<void>;
   addArea: (name: string, color: string) => void;
   updateAreaColor: (areaId: string, color: string) => void;
   // #703: the one capture path. Persists the thought verbatim and never

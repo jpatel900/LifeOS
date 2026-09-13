@@ -2864,6 +2864,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     refreshPersistedWorkflow: async () => {
       await syncPersistedWorkflowRows(createSupabaseBrowserClient());
     },
+    // #967 manual retry: reuses `runAccountSync` end to end — the same
+    // ordered hydration, serialized drain, identity recheck, and closed-day
+    // handoff every automatic trigger already runs. No new drain, no direct
+    // `replayJournaledWrites` call, no change to `refreshPersistedWorkflow`
+    // above (still read-only). `runAccountSync`'s own in-flight guard makes
+    // this a safe no-op if a pass is already running; callers must judge
+    // the result from `syncStatus`, not from this promise resolving.
+    retryPendingAccountWrites: async () => {
+      await runAccountSync({ replayAfter: true });
+    },
     addArea: (name, color) => dispatch({ type: "addArea", name, color }),
     updateAreaColor: (areaId, color) =>
       dispatch({ type: "updateAreaColor", areaId, color }),
