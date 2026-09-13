@@ -83,7 +83,10 @@ function StateProbe() {
   );
 }
 
-function renderSheet(open = true) {
+function renderSheet(
+  open = true,
+  options: { onToast?: (message: string) => void } = {},
+) {
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(SEED));
   return render(
     <WorkflowProvider>
@@ -95,6 +98,7 @@ function renderSheet(open = true) {
         blocks={[]}
         timeDisplay="clock"
         now={new Date("2026-08-03T09:30:00")}
+        onToast={options.onToast}
       />
     </WorkflowProvider>,
   );
@@ -350,6 +354,228 @@ describe("PlanSheet — the ported Plan surface", () => {
           screen.queryByTestId(`plan-sheet-task-${BACKLOG_TASK.id}`),
         ).toBeInTheDocument(),
       );
+    });
+  });
+
+  describe("edit details (#984)", () => {
+    it("opens the form pre-filled, saves title/description/area, and toasts the new area", async () => {
+      const onToast = vi.fn();
+      renderSheet(true, { onToast });
+
+      fireEvent.click(screen.getByTestId(`plan-sheet-edit-${BACKLOG_TASK.id}`));
+
+      const titleInput = screen.getByTestId(
+        `plan-sheet-edit-title-input-${BACKLOG_TASK.id}`,
+      ) as HTMLInputElement;
+      expect(titleInput.value).toBe(BACKLOG_TASK.title);
+
+      fireEvent.change(titleInput, {
+        target: { value: "Sketch next quarter's volunteer rota" },
+      });
+      fireEvent.change(
+        screen.getByTestId(
+          `plan-sheet-edit-description-input-${BACKLOG_TASK.id}`,
+        ),
+        { target: { value: "Include the weekend shifts" } },
+      );
+      fireEvent.change(
+        screen.getByTestId(`plan-sheet-edit-area-input-${BACKLOG_TASK.id}`),
+        { target: { value: "area-personal" } },
+      );
+      fireEvent.click(
+        screen.getByTestId(`plan-sheet-edit-save-${BACKLOG_TASK.id}`),
+      );
+
+      await waitFor(() => {
+        expect(onToast).toHaveBeenCalledWith("Saved to this tab: Personal");
+      });
+      // Moving the task to a different area than the one selected here
+      // filters it off this list — the toast above is what still names the
+      // area it landed in, per the #984 contract.
+      expect(
+        screen.queryByTestId(`plan-sheet-edit-form-${BACKLOG_TASK.id}`),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId(`plan-sheet-promote-${BACKLOG_TASK.id}`),
+      ).not.toBeInTheDocument();
+    });
+
+    it("rejects a blank title, keeps the form open, and writes nothing", async () => {
+      renderSheet();
+
+      fireEvent.click(screen.getByTestId(`plan-sheet-edit-${BACKLOG_TASK.id}`));
+      fireEvent.change(
+        screen.getByTestId(`plan-sheet-edit-title-input-${BACKLOG_TASK.id}`),
+        { target: { value: "   " } },
+      );
+      fireEvent.click(
+        screen.getByTestId(`plan-sheet-edit-save-${BACKLOG_TASK.id}`),
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId(`plan-sheet-edit-title-input-${BACKLOG_TASK.id}`),
+        ).toBeInTheDocument();
+      });
+      expect(
+        screen.getByText(`Move to today: ${BACKLOG_TASK.title}`),
+      ).toBeInTheDocument();
+    });
+
+    it("cancel closes the form and writes nothing", () => {
+      renderSheet();
+
+      fireEvent.click(screen.getByTestId(`plan-sheet-edit-${BACKLOG_TASK.id}`));
+      fireEvent.change(
+        screen.getByTestId(`plan-sheet-edit-title-input-${BACKLOG_TASK.id}`),
+        { target: { value: "Should never be saved" } },
+      );
+      fireEvent.click(
+        screen.getByTestId(`plan-sheet-edit-cancel-${BACKLOG_TASK.id}`),
+      );
+
+      expect(
+        screen.queryByTestId(`plan-sheet-edit-form-${BACKLOG_TASK.id}`),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByText(`Move to today: ${BACKLOG_TASK.title}`),
+      ).toBeInTheDocument();
+    });
+
+    // Root review finding 1 (task984-first-review.md): `expected_updated_at`
+    // must be the version the editor OPENED with, frozen at that moment —
+    // not re-read from the live task at Save time, which would silently hand
+    // a stale draft the task's NEWER token and overwrite whatever changed it
+    // in between.
+    it("freezes expected_updated_at at open: a background change while the editor is open is rejected as a conflict, and the typed draft survives", async () => {
+      renderSheet();
+
+      fireEvent.click(screen.getByTestId(`plan-sheet-edit-${BACKLOG_TASK.id}`));
+      const titleInput = screen.getByTestId(
+        `plan-sheet-edit-title-input-${BACKLOG_TASK.id}`,
+      );
+      fireEvent.change(titleInput, {
+        target: { value: "My in-progress edit" },
+      });
+
+      // A real write to the SAME task while the editor is still open, via a
+      // completely different control (the first-move card) — bumps
+      // `updated_at` and keeps `status: "backlog"`, exactly the shape a
+      // background sync or another tab's edit would produce.
+      fireEvent.change(
+        screen.getByTestId(`plan-sheet-first-move-input-${BACKLOG_TASK.id}`),
+        { target: { value: "open last year's rota" } },
+      );
+      fireEvent.click(
+        screen.getByTestId(`plan-sheet-first-move-save-${BACKLOG_TASK.id}`),
+      );
+
+      fireEvent.click(
+        screen.getByTestId(`plan-sheet-edit-save-${BACKLOG_TASK.id}`),
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId(`plan-sheet-edit-error-${BACKLOG_TASK.id}`),
+        ).toBeInTheDocument();
+      });
+      // The account never received "My in-progress edit" as a title —
+      // the row still shows the original title unqualified by the conflict.
+      expect(
+        screen.getByText(`Move to today: ${BACKLOG_TASK.title}`),
+      ).toBeInTheDocument();
+      // The draft itself was never discarded by the rejected save.
+      expect(
+        screen.getByTestId(`plan-sheet-edit-title-input-${BACKLOG_TASK.id}`),
+      ).toHaveValue("My in-progress edit");
+    });
+
+    // Root review finding 4 (task984-first-review.md): typing while a save is
+    // in flight must not be silently lost by a delete-the-draft-on-success
+    // that races a same-tick keystroke.
+    it("disables the editable inputs while a save is pending", () => {
+      renderSheet();
+
+      fireEvent.click(screen.getByTestId(`plan-sheet-edit-${BACKLOG_TASK.id}`));
+      fireEvent.click(
+        screen.getByTestId(`plan-sheet-edit-save-${BACKLOG_TASK.id}`),
+      );
+
+      // Checked synchronously, before the pending microtask resolves:
+      // `setEditPending(true)` runs before the awaited `editBacklogTask`
+      // call settles, so the inputs are disabled for the whole in-flight
+      // window regardless of how quickly demo mode's own write resolves.
+      expect(
+        screen.getByTestId(`plan-sheet-edit-title-input-${BACKLOG_TASK.id}`),
+      ).toBeDisabled();
+      expect(
+        screen.getByTestId(
+          `plan-sheet-edit-description-input-${BACKLOG_TASK.id}`,
+        ),
+      ).toBeDisabled();
+      expect(
+        screen.getByTestId(`plan-sheet-edit-area-input-${BACKLOG_TASK.id}`),
+      ).toBeDisabled();
+    });
+
+    // Root review finding 3 (task984-first-review.md): a blocked area move
+    // must say so using the actual saved area (the task's OWN, unchanged
+    // area), never the area that was requested and refused.
+    it("names the task's own area (not the refused destination) when a project-linked area move is blocked", async () => {
+      const project = {
+        id: "project-984",
+        user_id: SEED.tasks[0].user_id,
+        area_id: AREA,
+        title: "A project",
+        description: null,
+        status: "active" as const,
+        created_at: "2026-07-04T09:00:00.000Z",
+        updated_at: "2026-07-04T09:00:00.000Z",
+      };
+      const linkedTask = {
+        ...BACKLOG_TASK,
+        id: "task-project-linked-984",
+        project_id: project.id,
+        area_id: AREA,
+      };
+      window.sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          ...SEED,
+          projects: [...SEED.projects, project],
+          tasks: [...SEED.tasks, linkedTask],
+        }),
+      );
+      const onToast = vi.fn();
+      render(
+        <WorkflowProvider>
+          <StateProbe />
+          <PlanSheet
+            open
+            onClose={vi.fn()}
+            selectedAreaId={AREA}
+            blocks={[]}
+            timeDisplay="clock"
+            now={new Date("2026-08-03T09:30:00")}
+            onToast={onToast}
+          />
+        </WorkflowProvider>,
+      );
+
+      fireEvent.click(screen.getByTestId(`plan-sheet-edit-${linkedTask.id}`));
+      fireEvent.change(
+        screen.getByTestId(`plan-sheet-edit-area-input-${linkedTask.id}`),
+        { target: { value: "area-personal" } },
+      );
+      fireEvent.click(
+        screen.getByTestId(`plan-sheet-edit-save-${linkedTask.id}`),
+      );
+
+      await waitFor(() => {
+        expect(onToast).toHaveBeenCalledWith(
+          "Saved to this tab. Area kept as Main Job — its project lives there.",
+        );
+      });
     });
   });
 

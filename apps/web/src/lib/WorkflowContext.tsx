@@ -151,11 +151,19 @@ import {
   type DeferTaskWithSessionResult,
   type GoogleCalendarBridgeResult,
   type ReviewSaveResult,
+  type TaskEditResult,
   type TaskMapDraftState,
   type WinConfirmResult,
   type WorkflowContextValue,
   type WorkflowSyncStatus,
 } from "./workflowContext/types";
+// Issue #984: a direct submodule import, not an addition to the frozen
+// `workflow.ts` barrel imported above.
+import {
+  editBacklogTaskInState,
+  validateTaskEditInput,
+  type TaskEditFormInput,
+} from "./workflow/taskEditing";
 // #737-A slice 2: wins and reviews are journalled to the device before any
 // network call, then replayed to the account idempotently.
 import {
@@ -2309,6 +2317,155 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  /**
+   * Issue #984 — the accepted-backlog task editor.
+   *
+   * Unlike every fire-and-forget action above, this one validates AND (for a
+   * configured account) confirms the server write BEFORE touching
+   * `state.tasks` at all: the contract requires canonical values to stay
+   * unchanged on any validation/auth/network failure, never a local
+   * optimistic write papered over by a later rollback. The pure patch
+   * (`editBacklogTaskInState`) is computed once up front so the SAME
+   * project-area-blocked, id/status/scheduling-preserving values are what
+   * both the demo snapshot and the account row end up holding.
+   *
+   * Demo (`!client`): the pure patch is the commit — confirmed by actually
+   * writing the per-tab sessionStorage snapshot synchronously here (not left
+   * to the debounced state-mirror effect) before `applyWorkflowState` runs,
+   * so "success" is never returned ahead of a write that could still fail.
+   *
+   * Account (`client`): `persistenceOps.persistBacklogTaskEdit` both performs
+   * the guarded update and folds the confirmed row back into `state.tasks`
+   * via its own `syncPersistedWorkflowRows` call — this function does not
+   * dispatch a second time, so there is exactly one source of truth for what
+   * the account actually holds afterward.
+   */
+  async function editBacklogTaskWithPersistence(
+    taskId: string,
+    changes: TaskEditFormInput & { expected_updated_at: string },
+  ): Promise<TaskEditResult> {
+    const previous = stateRef.current;
+    const task = previous.tasks.find((item) => item.id === taskId);
+    if (!task) {
+      return { status: "not-found" };
+    }
+    if (
+      task.status !== "backlog" ||
+      task.updated_at !== changes.expected_updated_at
+    ) {
+      return { status: "conflict" };
+    }
+
+    const validation = validateTaskEditInput(changes, {
+      availableAreaIds: previous.areas.map((area) => area.id),
+    });
+    if (!validation.ok) {
+      return { status: "invalid", errors: validation.errors };
+    }
+
+    const {
+      state: next,
+      task: editedTask,
+      areaChangeBlocked,
+    } = editBacklogTaskInState(previous, taskId, validation.patch);
+    if (!editedTask) {
+      return { status: "not-found" };
+    }
+
+    const client = createSupabaseBrowserClient();
+
+    if (!client) {
+      try {
+        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        markDeviceStorageBlocked();
+        return { status: "failure" };
+      }
+
+      applyWorkflowState(next);
+      return {
+        status: "success",
+        task: editedTask,
+        areaChangeBlocked,
+        savedAreaId: editedTask.area_id,
+        deliveryTier: "demo",
+      };
+    }
+
+    try {
+      const persisted = await persistenceOps.persistBacklogTaskEdit(
+        taskId,
+        {
+          title: editedTask.title,
+          description: editedTask.description,
+          area_id: editedTask.area_id,
+        },
+        changes.expected_updated_at,
+      );
+
+      if (persisted.status === "conflict") {
+        return { status: "conflict" };
+      }
+      if (persisted.status === "unreachable") {
+        return { status: "failure" };
+      }
+
+      // Root review clarification (task984-review-clarification.md point 1):
+      // a confirmed write whose follow-up read failed must not silently
+      // pass for an ordinary, fully-synced success. When it is SAFE to do
+      // so (the session held AND nothing else touched this task locally in
+      // the meantime — the same guard the initial conflict check used, run
+      // again now), the confirmed fields are reflected into local state
+      // here, since the resync that would normally do it did not land.
+      // Either way `refreshPending` is set so the caller says so explicitly
+      // rather than claiming the ordinary "Saved to your account" copy.
+      let refreshPending = false;
+      if (persisted.status === "persisted-refresh-pending") {
+        refreshPending = true;
+        const stillUnchangedLocally = stateRef.current.tasks.some(
+          (item) => item.id === taskId && item.updated_at === task.updated_at,
+        );
+        if (persisted.sameSession && stillUnchangedLocally) {
+          const reflected = editBacklogTaskInState(
+            stateRef.current,
+            taskId,
+            validation.patch,
+          );
+          if (reflected.task) {
+            applyWorkflowState(reflected.state);
+          }
+        }
+      }
+
+      // Root review clarification (task984-review-clarification.md point 3):
+      // ground `savedAreaId` in the SERVER'S OWN returned row
+      // (`persisted.task.area_id`), mapped back through the same
+      // persisted-area alias table `syncPersistedWorkflowRows` itself uses
+      // (`workflowAreaIdForPersistedAreaId`) — not in `editedTask.area_id`,
+      // which is only what THIS tab asked for. The two agree for the plain
+      // column update this issue authorizes (no server-side rule redirects
+      // area_id), but a caller naming the destination should read the
+      // account's own confirmation, not this tab's request, on principle.
+      const confirmedWorkflowAreaId =
+        workflowAreaIdForPersistedAreaId(
+          persisted.task.area_id,
+          persistedAreasRef.current,
+        ) ?? editedTask.area_id;
+
+      return {
+        status: "success",
+        task: persisted.task,
+        areaChangeBlocked,
+        savedAreaId: confirmedWorkflowAreaId,
+        deliveryTier: "account",
+        refreshPending,
+      };
+    } catch (error) {
+      markPersistedSaveFailure(error);
+      return { status: "failure" };
+    }
+  }
+
   const value: WorkflowContextValue = {
     state,
     selectedAreaId,
@@ -2360,6 +2517,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           });
       }
     },
+    editBacklogTask: editBacklogTaskWithPersistence,
     acceptProjectDraft: (draftId) =>
       dispatch({ type: "acceptProjectDraft", draftId }),
     rejectTaskDraft: (draftId) => {

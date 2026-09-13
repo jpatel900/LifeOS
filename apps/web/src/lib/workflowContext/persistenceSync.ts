@@ -24,6 +24,14 @@ import {
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "../data/workflow";
+// Issue #984: a direct submodule import, not an addition to the frozen
+// `data/workflow.ts` barrel above — see that file's own comment.
+import { editBacklogTaskAccountRow } from "../data/workflow/taskEditing";
+// `requireSupabaseUser` is deliberately NOT re-exported by the barrel
+// (`INTENTIONALLY_INTERNAL_EXPORTS` in workflowBarrel.test.ts), so this reads
+// the leaf module directly rather than widening that barrel's surface.
+import { requireSupabaseUser } from "../data/workflow/shared";
+import type { Task } from "@lifeos/schemas";
 import {
   findQueuedWriteToSupersede,
   hasPendingWrite,
@@ -683,6 +691,109 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     await syncPersistedWorkflowRows(client);
   }
 
+  /**
+   * Issue #984 — the account half of the accepted-backlog task editor.
+   *
+   * Deliberately NOT modeled on the journal-backed persist* functions above:
+   * the contract for this operation explicitly rules out promising offline
+   * account replay for an edit, so there is no journal entry to write and no
+   * replay to drain. This confirms the write against the account BEFORE
+   * returning, so the caller only ever reports "success" for an edit the
+   * account actually holds — never a queued one.
+   *
+   * Local/account id and area aliases are resolved here, same as
+   * `persistTaskReviewTransition` above: the caller only ever knows the
+   * WORKFLOW-space task id and area id.
+   *
+   * Root review finding 2 (task984-first-review.md): the follow-up
+   * `syncPersistedWorkflowRows` read used to run outside its own try/catch,
+   * so a network blip DURING THAT READ — after the write had already
+   * succeeded — threw out of this function and the caller's catch reported
+   * "failure" for an edit the account genuinely holds. `"persisted"` and
+   * `"persisted-refresh-pending"` both mean the write is confirmed; only the
+   * SECOND says the local read-back that would normally reflect it did not
+   * land, so a caller that cares can retry the read without re-sending the
+   * edit (re-sending would be a no-op anyway: `expectedUpdatedAt` is spent).
+   *
+   * Root review clarification (task984-review-clarification.md, point 1):
+   * `sameSession` on the pending-refresh branch tells the caller whether it
+   * is SAFE to reflect `task` into local state itself — checked with a fresh
+   * `requireSupabaseUser` call AFTER the failed read, not reused from before
+   * the write. A sign-out (or a switch to a different account) in the gap
+   * between the write succeeding and the read failing must never graft that
+   * account's confirmed row onto a tab that is no longer that session.
+   */
+  async function persistBacklogTaskEdit(
+    localTaskId: string,
+    patch: { title: string; description: string | null; area_id: string },
+    expectedUpdatedAt: string,
+  ): Promise<
+    | { status: "persisted"; task: Task }
+    | { status: "persisted-refresh-pending"; task: Task; sameSession: boolean }
+    | { status: "conflict" }
+    | { status: "unreachable" }
+  > {
+    const client = createSupabaseBrowserClient();
+    if (!client) {
+      throw new Error("Demo backlog task edits use local workflow state.");
+    }
+
+    const persistedTaskId = persistedIdForLocalId(
+      localTaskId,
+      persistedTaskIdByLocalIdRef.current,
+    );
+    const persistedAreaId = persistedAreaIdForWorkflowId(
+      patch.area_id,
+      persistedAreasRef.current,
+    );
+
+    // Nothing to guard the write against yet (task never synced) or the
+    // chosen area has no account row (never synced or since removed). Either
+    // way there is no account row this edit could safely reach, and #984
+    // rules out an offline promise for this operation — so this is reported
+    // as unreachable rather than silently degrading to a local-only save.
+    if (!persistedTaskId || !persistedAreaId) {
+      return { status: "unreachable" };
+    }
+
+    const result = await editBacklogTaskAccountRow(
+      client,
+      persistedTaskId,
+      {
+        title: patch.title,
+        description: patch.description,
+        area_id: persistedAreaId,
+      },
+      expectedUpdatedAt,
+    );
+
+    if (result.status === "conflict") {
+      return { status: "conflict" };
+    }
+
+    try {
+      await syncPersistedWorkflowRows(client);
+    } catch {
+      // The write is confirmed (the row above is real) — only the follow-up
+      // read failed. Reporting "persisted" here would hide that the screen
+      // may still show stale fields until the next successful sync; reporting
+      // "failure" would be worse, claiming the account lost an edit it holds.
+      let sameSession = false;
+      try {
+        await requireSupabaseUser(client, "Sign in before saving task edits.");
+        sameSession = true;
+      } catch {
+        sameSession = false;
+      }
+      return {
+        status: "persisted-refresh-pending",
+        task: result.task,
+        sameSession,
+      };
+    }
+    return { status: "persisted", task: result.task };
+  }
+
   // #588: surfaces the real outcome so callers can gate "day closed" copy on
   // it. #737-A slice 2 made the outcomes TRUE rather than changing them:
   //
@@ -969,6 +1080,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     persistStartedSession,
     persistMarkedSession,
     persistDeferredTaskWithSession,
+    persistBacklogTaskEdit,
   };
 }
 
