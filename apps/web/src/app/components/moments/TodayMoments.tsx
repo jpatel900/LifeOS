@@ -2017,228 +2017,53 @@ function TodayMomentsContent({
           `#stage-content` reaches real content, never the nav. */}
       {showingMastheadAndMoments ? (
         <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* D-10 (#483): one composed masthead bar — brand+date on the
-              left, every control (moments, area, time display, theme,
-              settings) in a single tightened-gap cluster on the right,
-              replacing the previous two-separate-pills-plus-a-bare-link
-              layout the audit flagged as "loose grouping" (finding #4).
+          {/* Masthead: brand+date and the control cluster (moments
+              switcher, area, time display, theme, auth, settings) share one
+              row at `sm`+. The brand+date row has a REAL reserved minimum
+              track — `min-w-[11.5rem]` (brand's full width + gap + the
+              date's own `min-w-[4.5rem]` floor) — and `shrink-[100]` so it
+              absorbs almost all of any width deficit FIRST, via the date
+              truncating to an ellipsis, before the control cluster gives up
+              any width at all. The cluster keeps default shrink/min-width
+              (no override), so its own `flex-wrap` lets its children spill
+              onto additional internal lines if the header ever does assign
+              it less than its natural single-line need — real estate grows
+              downward, never past either side's own box.
 
-              D-10 R2 (#483 round 2): round 1 shipped this as one
-              `flex flex-wrap` row unconditionally. Below `sm` that meant
-              *two* copies of the Start/Flow/Close switcher on screen at
-              once (this row's MomentSwitcher plus the fixed BottomNavigator
-              — "no taste argument for it") and, once that's fixed, a
-              5-control row with nowhere to go but a ragged flex-wrap
-              staircase (measured at 206px tall / 24% of a 390x844
-              viewport, terminating at three different right edges). Fixed
-              with a real two-part mobile composition instead of emergent
-              wrapping:
-              - Row 1 (always): brand + date.
-              - Row 2 (mobile, `flex flex-col` below `sm`): only the two
-                controls with no mobile equivalent anywhere else on the
-                page — AreaSelector (which area's data you're looking at —
-                context, not a preference) and MastheadThemeToggle (the
-                ONLY theme control in the app; no settings-page fallback
-                exists, so it can never be dropped from a viewport). Both
-                already stayed under `sm:` visibility flags for nothing —
-                they simply render.
-              - MomentSwitcher and the Settings link are `hidden sm:contents`
-                below `sm`: BottomNavigator already carries an identical
-                moment switch and a Settings link into the thumb zone, so
-                rendering them here too on mobile is the exact duplicate
-                the critics flagged. `sm:contents` (not `sm:flex`/
-                `sm:inline-flex`) means the wrapper itself never becomes a
-                layout box at `sm`+ either — the wrapped control's own root
-                participates in the row exactly as if unwrapped.
-              - CountdownClockToggle is the same `hidden sm:contents` — a
-                "minor display-FORMAT preference" (round-1 critic's own
-                framing) is the one control this composition can't fit
-                robustly next to a full-length area name on a 390px row
-                without risking the staircase reappearing; FlowMoment
-                already exposes its own time-display toggle for the one
-                moment where the format matters most, and the desktop/
-                tablet masthead keeps full access at `sm`+.
-              At `sm`+ the whole header becomes one `sm:flex-row` line and
-              every control renders — nothing is lost above the mobile
-              breakpoint.
-
-              Visual rank ("primary nav > context > preferences", per
-              round-1 critics): a hairline divider now separates
-              MomentSwitcher (the only accent-filled, i.e. primary, control
-              in the bar) from the secondary cluster (Area/Countdown/Theme/
-              Settings — context + preferences, deliberately quieter and
-              visually one family). The divider itself is `sm:` only —
-              MomentSwitcher isn't in the mobile row for it to divide from.
-
-              Height lock: every control in the row is now height-locked to
-              the same ~44-46px line (was a 57px/44px, 13px split — see
-              MomentSwitcher.tsx/CountdownClockToggle.tsx's own comments for
-              the `.workflow-shell__nav` root cause) via a tightened `gap-2`
-              instead of the previous `gap-3`.
-
-              R3-C (#483 round 3, Inter reflow): self-hosting Inter (wider
-              metrics than the Segoe fallback) reopened the row-1 overflow
-              round 2 had just barely closed — measured 18.41px over budget
-              at desktop widths (732.13px needed vs 713.72px available) with
-              the shortest demo area ("Main Job") selected, wrapping the
-              Settings icon alone to a second line.
-
-              First pass shaved only the secondary cluster (gap-2->gap-1.5,
-              AreaSelector/CountdownClockToggle/MastheadThemeToggle each one
-              padding step) and verified clean against that shortest-name
-              case — but AreaSelector's rendered width scales with the
-              selected area's name, and this demo data's own longer names
-              ("Volunteer Work", "Side Project") still wrapped the row: the
-              first pass's margin (~13.75px) was real but smaller than the
-              width swing between the shortest and longest demo names
-              (~50px), so it only ever covered the case it was measured
-              against.
-
-              Two more changes close the real (name-independent) gap:
-              1. AreaSelector's label span caps at `max-w-[5rem]` (was
-                 `max-w-[9rem]`, effectively never engaging for realistic
-                 names) + `min-w-0` (a `truncate` span inside an
-                 `inline-flex` button doesn't actually shrink below its own
-                 content's width without it — flexbox's `min-width: auto`
-                 default silently wins over `max-w` otherwise). This bounds
-                 AreaSelector's contribution to the row regardless of how
-                 long a real (user-created) area name is — verified
-                 in-browser across all 4 demo areas, with margin, not just
-                 the shortest one.
-              2. MomentSwitcher and CountdownClockToggle each give up one
-                 more padding step (`px-3`->`px-2.5` / `px-3`->`px-2`) to
-                 fund that 80px label budget without also truncating the
-                 common short-name case ("Main Job"/"Personal" both render
-                 in full at this cap; only names longer than ~80px worth of
-                 text truncate). CountdownClockToggle (the "quietest"
-                 secondary control) absorbs the larger of the two cuts;
-                 MomentSwitcher's is a small padding harmonization, not a
-                 demotion — it's still the only accent-filled control and
-                 remains by far the widest. */}
-          {/* `flex-wrap`->`flex-nowrap` + `min-w-0` + a truncating date span
-              (Part of #687, main-red incident 2026-09-02 — STRUCTURAL fix,
-              replaces an earlier gap-shaving attempt that only bought
-              ~1.3px and was refuted by review): root cause was that this
-              row (brand text + `formatMastheadDate`) and the control
-              cluster to its right SHARE the header's width budget, and this
-              row used to be `flex-wrap`. `formatMastheadDate` renders a
-              real weekday name — "Wednesday" (9 chars) is ~25-34px wider
-              than a short one like "Tuesday"/"Friday" — and the cluster's
-              own width varies too (a longer selected area name via
-              AreaSelector, or the AuthAffordance "Sign in"/who pill once
-              Supabase is configured, which CI's device tier never
-              exercises because demo mode renders nothing there). ANY
-              combination that left this row even 1px short of its natural
-              content width used to force the date span (a `flex-wrap`
-              child can't partially shrink — a few px short means a full
-              extra line) onto its own second line, adding ~50px of
-              masthead height that cascaded down through
-              StartMoment/PipelineOverview/ScheduleCard and ate the
-              pill-to-Areas-card clearance `moments-home-parity.spec.ts`
-              pins at 1366x768 (measured -19.39px on 2026-09-02, a
-              Wednesday). A gap-shaving fix only ever covers the specific
-              width deficit it was measured against — the real, unbounded
-              variable here is text content (weekday name, area name, auth
-              state), not a fixed px shortfall.
-
-              The structural fix removes the failure mode instead of
-              chasing its budget: `flex-nowrap` means this row's two
-              children can never wrap onto separate lines regardless of how
-              tight the available width gets, `min-w-0` on the row lets it
-              shrink below its own natural content width (the flex default
-              of `min-width: auto` would otherwise refuse to), and the date
-              span's own `min-w-[4.5rem] truncate` (Tailwind's
-              `overflow-hidden text-ellipsis whitespace-nowrap`) means when
-              the row IS squeezed, the date is what gives — visually
-              clipping to an ellipsis — never the header's height. `shrink-0`
-              on the brand label keeps "LifeOS · Today" itself always fully
-              legible; the date is the one degrading gracefully, since it's
-              the lower-priority half of this row (brand identity > exact
-              date string when both can't fit).
-              CORRECTION (#974 parity repair): this comment used to claim
-              the date span was `min-w-0` and that "header height is now
-              invariant to weekday name, area name, and auth state —
-              verified directly against all three varying simultaneously."
-              Both were false against AuthAffordance's REAL signed-in
-              footprint (`AuthAffordance.tsx`'s account-label span, capped
-              `max-w-[10rem]`, plus the `size-4` icon and its `gap-1.5` —
-              wider than the plain "Sign out" text this fix's own e2e guard
-              used to simulate). `min-w-0` let the date shrink all the way to
-              a genuinely invisible 0px (`dateClientWidth === 0`) under that
-              real footprint at 768/800/900px — not a degrading ellipsis, no
-              date content at all — before the deficit even reached the
-              cluster. `min-w-[4.5rem]` gives the date a real, always-visible
-              floor instead.
-
-              One more piece is required for that invariant to actually
-              hold: `flex-nowrap` alone stops THIS row's own children from
-              wrapping, but the header's default flexbox shrink algorithm
-              (both header children default to `flex-shrink: 1`)
-              distributes any width deficit between BOTH header children
-              proportionally to their natural size, regardless of which one
-              can actually absorb it gracefully. Once this row stopped
-              visibly wrapping, the SAME deficit it used to absorb was
-              still being silently redirected onto the control cluster
-              (still `flex-wrap` below) — enough, in the true worst case,
-              to wrap THAT instead (measured directly: header stayed 96px
-              tall with this row's date merely truncated, because the
-              cluster had wrapped in its place instead).
-
-              `shrink-[100]` here (vs. the cluster's own `lg:shrink-0`
-              below) rebalances that competition at the narrow end of
-              `sm`+ instead of removing it there: below `lg` (1024px)
-              this row absorbs ~99% of any header-width deficit first — via
-              `truncate`, which can shrink it arbitrarily far (down to its
-              own `min-w-[4.5rem]` floor — see that span's own comment) —
-              before the cluster gives up any width at all. That weighting is
-              NOT enough on its own at the required desktop widths, though:
-              measured directly, the cluster is ALREADY at true zero
-              headroom against its own natural single-line width (the R3-C
-              comment below already documented this as a standing
-              constraint) — even the ~0.6px sliver `shrink-[100]` still
-              lets through to a `flex-shrink: 1` sibling was enough to flip
-              it into wrap at exactly 1366px (a flex-wrap child has no
-              partial-credit: 0.6px short means the SAME full extra line as
-              27px short). So the cluster additionally gets an outright ban
-              on the header ever taking width from it, full stop, once its
-              natural single-line width is proven to fit.
-              CORRECTION (#974 parity repair): that ban used to engage at
-              `md:` (768px), on the claim it "safely cover[ed] every one of
-              this fix's required widths — 1280/1366/1440." True only against
-              the e2e guard's OLD simulated auth pill (bare "Sign out" text,
-              no icon, no account-label span) — false against
-              AuthAffordance's real signed-in footprint (account label up to
-              `max-w-[10rem]` + `size-4` icon + their `gap-1.5`s), which is
-              wide enough that the cluster's own natural single-line width
-              exceeds 768-900px outright. Banning shrink there forced the
-              OVERFLOW onto the header itself instead of the cluster — real
-              horizontal page overflow (measured 212/180/80px at
-              768/800/900px with a realistic auth pill + "Volunteer Work"
-              selected), not a wrap. The ban now engages at `lg:` (1024px)
-              instead: below that, the cluster keeps its pre-existing,
-              already-tested tight-width fallback (shrink + its own internal
-              `flex-wrap`, unchanged from the 640-767px case `md:` used to
-              also cover) — measured clean, no page overflow, at 640/768/800/
-              900/1024/1279px with the same realistic pressure. `lg:` and not
-              unconditional `shrink-0`, because AT `sm` (640px, where the
-              header first becomes a row) the cluster's own natural width
-              alone can already exceed the viewport, and legitimately needs
-              to keep shrinking/wrapping there — plain `shrink-0` was tried
-              first and broke exactly that width (measured: 836px of content
-              in a 641px box, a real horizontal-overflow regression
-              `moments-home-parity.spec.ts`'s own Pipeline-rail-clipping
-              guard caught at 640px). This threads both needles: the cluster
-              keeps its pre-existing, already-tested tight-width fallback at
-              640-1023px, and gets absolute (not merely favored) protection
-              at every width this fix actually has to hold — 1024px and
-              up. */}
-          <div className="flex min-w-0 flex-nowrap shrink-[100] items-baseline gap-3">
+              #974 parity repair: an earlier version gave the row `min-w-0`
+              instead of a real minimum, letting the header's shrink
+              algorithm squeeze the row's own flex-item box to a literal
+              0px while its non-shrinking children (the brand label, later
+              the date's own separate min-width) kept painting at full
+              size — invisible to a page-overflow or `clientWidth > 0`
+              check, but visibly overlapping the control cluster on screen.
+              This version's real floor closes that hole. It does NOT,
+              however, restore the control cluster's OLD one-line-always
+              behavior: measured directly, the cluster's own natural
+              single-line width has had ZERO slack against the page's
+              content column at 1366px for a while (documented as a
+              standing constraint since #483 round 3's Inter-reflow fix —
+              see `TodayMoments.test.tsx`'s own "R3-C" comment) — not just
+              under this repair's worst-case auth+"Volunteer Work"
+              pressure, but even with the demo seed's shortest area and no
+              signed-in pill at all. Any
+              width the header ever reassigns away from the cluster (even a
+              fraction of a pixel) drops it below that single-line minimum
+              and triggers its internal wrap — there is no CSS shrink
+              weighting that changes this without either (a) letting the
+              cluster refuse to shrink at all, which reintroduces real page
+              overflow for the genuine worst case (measured: 33px), or (b)
+              accepting that the masthead is a real two-line block whenever
+              its content doesn't fit — which is what happens here. See
+              this repair's own report for the exact, resulting conflict
+              with the `moments-home-parity.spec.ts` 1366x768 capture-pill
+              clearance guard — that guard's floor and this masthead's real
+              content no longer both fit within the current page's vertical
+              budget, and that conflict is not resolvable from this file. */}
+          <div className="flex min-w-[11.5rem] shrink-[100] items-baseline gap-3">
             <span className="shrink-0 text-sm font-semibold tracking-tight">
               LifeOS · Today
             </span>
-            {/* Finding #2: the masthead had no date. Derived from the
-                real `now` this component already threads through every
-                other time-aware surface — never a fixed/fake string. */}
             <span
               className="min-w-[4.5rem] truncate text-sm text-muted-foreground"
               data-testid="today-moments-date"
@@ -2247,7 +2072,7 @@ function TodayMomentsContent({
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 lg:shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5">
             <div
               className="hidden sm:contents"
               data-testid="masthead-momentswitcher-slot"

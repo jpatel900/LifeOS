@@ -57,15 +57,21 @@ const AUTH_HIT_TARGET_MIN =
 // its own `max-w-[10rem]` cap, then the icon+text sign-out button) in place
 // of the old bare-text stand-in — still a deliberate simulation, not proof
 // against the real component.
+//
+// #974 parity repair round 2 (independent verification finding #2): this
+// used to `cluster.appendChild(wrap)`, placing the stand-in AFTER Settings —
+// the real `AuthAffordance` in `TodayMoments.tsx`'s source renders BEFORE
+// the Settings slot. `insertBefore` now matches that source order exactly.
 async function injectRealisticSignedInAuthPill(
   page: import("@playwright/test").Page,
 ) {
   await page.evaluate(
     ({ AUTH_PILL_CLASS, AUTH_HIT_TARGET_MIN }) => {
-      const cluster = document.querySelector(
+      const settings = document.querySelector(
         '[data-testid="masthead-settingslink-slot"]',
-      )?.parentElement;
-      if (!cluster) {
+      );
+      const cluster = settings?.parentElement;
+      if (!cluster || !settings) {
         throw new Error(
           "masthead-settingslink-slot not found — cluster DOM shape changed, update this simulated-pill injection",
         );
@@ -78,9 +84,10 @@ async function injectRealisticSignedInAuthPill(
       label.className =
         "hidden max-w-[10rem] truncate text-xs font-semibold text-muted-foreground sm:inline";
       // Long enough (>10rem of "Wednesday 30 September"-font-metrics text)
-      // to actually engage the cap, matching AuthAffordance's own worst
-      // case rather than a short handle that never would.
-      label.textContent = "volunteer.coordinator";
+      // to fully engage the cap at its max rendered width, matching
+      // AuthAffordance's own worst case rather than a handle that might
+      // render under the cap.
+      label.textContent = "averylongsignedinaccountlabel";
       wrap.appendChild(label);
 
       const button = document.createElement("button");
@@ -100,13 +107,61 @@ async function injectRealisticSignedInAuthPill(
       button.appendChild(text);
 
       wrap.appendChild(button);
-      cluster.appendChild(wrap);
+      cluster.insertBefore(wrap, settings);
     },
     { AUTH_PILL_CLASS, AUTH_HIT_TARGET_MIN },
   );
   await expect(
     page.getByTestId("simulated-auth-affordance-pill"),
   ).toBeVisible();
+}
+
+// #974 parity repair round 2 (independent verification findings #3/#4): a
+// nonzero `dateClientWidth` proved nothing when the date's own PARENT row
+// had been squeezed to a 0px box and both brand and date were painting
+// outside it, on top of the control cluster — `getBoundingClientRect`
+// pairwise intersection is the only check that catches that. Returns the
+// three rectangles plus whether any pair collides.
+async function measureMastheadCollision(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    const dateEl = document.querySelector('[data-testid="today-moments-date"]');
+    const settings = document.querySelector(
+      '[data-testid="masthead-settingslink-slot"]',
+    );
+    if (!dateEl || !settings) {
+      throw new Error(
+        "today-moments-date or masthead-settingslink-slot not found",
+      );
+    }
+    const brandEl = dateEl.previousElementSibling;
+    const clusterEl = settings.parentElement;
+    if (!brandEl || !clusterEl) {
+      throw new Error("brand label or control cluster not found");
+    }
+    const rect = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    const overlap = (
+      a: { x: number; y: number; width: number; height: number },
+      b: { x: number; y: number; width: number; height: number },
+    ) =>
+      Math.max(a.x, b.x) < Math.min(a.x + a.width, b.x + b.width) &&
+      Math.max(a.y, b.y) < Math.min(a.y + a.height, b.y + b.height);
+    const brand = rect(brandEl);
+    const date = rect(dateEl);
+    const cluster = rect(clusterEl);
+    return {
+      brand,
+      date,
+      cluster,
+      brandDateOverlap: overlap(brand, date),
+      brandClusterOverlap: overlap(brand, cluster),
+      dateClusterOverlap: overlap(date, cluster),
+      dateClientWidth: (dateEl as HTMLElement).clientWidth,
+      dateText: dateEl.textContent ?? "",
+    };
+  });
 }
 
 // #974 parity repair: a signed distance (`pill.top - areas.bottom`) is only
@@ -869,206 +924,46 @@ test.describe("moments home capture pill keeps a real clearance margin under the
   }
 });
 
-// #687 structural-fix verification (fixes main red at a629d608, part of the
-// masthead-date-wrap incident): the R4-A/R5 guards above pin the masthead
-// DATE string's own worst case, but the masthead's width budget is also
-// squeezed by the CONTROL CLUSTER on the same row — a longer selected-area
-// name (AreaSelector) or the AuthAffordance "Sign in"/who pill (rendered
-// only once Supabase is configured; CI's device tier runs in demo mode,
-// where AuthAffordance renders nothing, so this pressure is otherwise
-// invisible to this whole suite). An earlier version of this fix reclaimed
-// a fixed number of px via tighter gaps — that only ever covers the
-// specific width deficit it was measured against, and review found real
-// combinations (worst-case date + "Volunteer Work" selected; worst-case
-// date + a simulated auth pill) that still re-wrapped the header and drove
-// clearance negative even with that fix applied. The STRUCTURAL fix
-// (TodayMoments.tsx's brand+date row: `flex-nowrap` + `min-w-0` + a
-// truncating date span) has no such budget to exhaust — the date span
-// degrades to an ellipsis under ANY amount of width pressure instead of
-// wrapping the header, so clearance should hold regardless of what else is
-// squeezing the row. This proves that directly, stacking the worst-case
-// date with each width-pressure source individually.
-test.describe("moments home masthead never wraps under combined width pressure (#687 structural fix verification)", () => {
+// #974 parity repair round 2 (independent verification rejected f4fa47ce):
+// the masthead's brand+date row and control cluster used to fight over ONE
+// shared line via `flex-nowrap` + a `shrink-[100]`/`shrink-0` tug-of-war —
+// that let the header's flex-shrink algorithm squeeze the brand+date row's
+// own flex-item box to a literal 0px while its non-shrinking children (the
+// brand label, the date's own min-width floor) kept painting at full size,
+// invisibly overlapping the control cluster (a page-overflow check and a
+// bare `dateClientWidth > 0` check both missed this — pairwise geometry is
+// the only thing that catches it). TodayMoments.tsx now gives the header
+// real `sm:flex-wrap`: brand+date and the control cluster each get their
+// own natural width, sharing one line only when both actually fit, and the
+// cluster's own internal `flex-wrap` still lets ITS children wrap onto
+// multiple lines when even a full line to itself isn't enough. This proves
+// that directly with real pairwise rectangle geometry (not a CSS class
+// string) at every required width, stacking the worst-case date with
+// "Volunteer Work" (longest demo area) and a source-faithful realistic
+// signed-in auth pill (inserted BEFORE Settings, matching AuthAffordance's
+// real render order).
+test.describe("moments home masthead has a real, non-overlapping layout under combined width pressure (#974 parity repair round 2)", () => {
   test.use({ timezoneId: MASTHEAD_DATE_WORST_CASE_TIMEZONE });
 
-  const DESKTOP_VIEWPORTS = [
+  // #574/#593: AreaSelector's rendered width scales with the selected
+  // area's name. "Volunteer Work" is the demo seed's longest area name
+  // (tied with "Side Project" by word count but wider glyphs).
+  const VOLUNTEER_WORK_AREA_ID = "area-volunteer";
+
+  const REQUIRED_VIEWPORTS = [
+    { width: 640, height: 900 },
+    { width: 768, height: 900 },
+    { width: 800, height: 900 },
+    { width: 900, height: 900 },
+    { width: 1024, height: 900 },
+    { width: 1279, height: 900 },
     { width: 1280, height: 900 },
     { width: 1366, height: 768 },
     { width: 1440, height: 900 },
   ];
 
-  // #574/#593: AreaSelector's rendered width scales with the selected
-  // area's name. "Volunteer Work" is the demo seed's longest area name
-  // (tied with "Side Project" by word count but wider glyphs) — see
-  // TodayMoments.tsx's own `<header>` comment history for why this
-  // specific name has reopened the masthead-wrap bug before.
-  const VOLUNTEER_WORK_AREA_ID = "area-volunteer";
-
-  async function measureClearance(page: import("@playwright/test").Page) {
-    const pill = page.getByTestId("capture-affordance");
-    const areasCard = page.getByTestId("side-rail-areas-card");
-    await expect(pill).toBeVisible();
-    await expect(areasCard).toBeVisible();
-
-    const results: Record<string, number> = {};
-    for (const position of ["zero", "end"] as const) {
-      await page.evaluate((pos) => {
-        window.scrollTo(
-          0,
-          pos === "zero" ? 0 : document.documentElement.scrollHeight,
-        );
-      }, position);
-      const pillBox = await pill.boundingBox();
-      const areasBox = await areasCard.boundingBox();
-      expect(pillBox, `pill box at scroll ${position}`).not.toBeNull();
-      expect(areasBox, `areas box at scroll ${position}`).not.toBeNull();
-      results[position] = pillBox!.y - (areasBox!.y + areasBox!.height);
-    }
-    return results;
-  }
-
-  for (const viewport of DESKTOP_VIEWPORTS) {
-    test(`worst-case date + "Volunteer Work" selected clears the Areas card by a real margin at ${viewport.width}x${viewport.height}`, async ({
-      page,
-    }) => {
-      await pinMastheadWorstCaseDate(page);
-      await page.setViewportSize(viewport);
-      await page.goto(`/?area=${VOLUNTEER_WORK_AREA_ID}`);
-      await expect(page.getByTestId("today-moments")).toBeVisible();
-      await page.keyboard.press("1");
-      await expect(page.getByTestId("start-moment")).toBeVisible();
-      await expect(
-        page.getByTestId("today-moments-area-switcher"),
-      ).toContainText("Volunteer Work");
-
-      const clearance = await measureClearance(page);
-      for (const [position, value] of Object.entries(clearance)) {
-        expect(
-          value,
-          `pill-to-areas-card clearance at scroll ${position}, area=Volunteer Work, ${viewport.width}x${viewport.height} was ${value}px`,
-        ).toBeGreaterThan(20);
-      }
-    });
-  }
-
-  // HONEST LIMITATION: AuthAffordance only renders a pill once
-  // `isSupabaseConfigured()` is true, which is a build-time env check the
-  // E2E dev server never satisfies (no Supabase env is wired into the
-  // device-tier webServer — see HIT-1 at the top of this file) — a real
-  // signed-in run of this exact scenario is not feasible in this suite as
-  // configured. `injectRealisticSignedInAuthPill` (above) simulates the
-  // pill's real width contribution instead of exercising the real
-  // component, then this proves the structural fix holds with it present,
-  // stacked with the worst-case date AND "Volunteer Work" (the combination
-  // that actually broke — a real user signed in, with their longest area
-  // selected, on a Wednesday in September). Still a deliberate stand-in,
-  // not proof against the real component — see the report's UNVERIFIED
-  // list for the proving command that would replace it.
-  for (const viewport of DESKTOP_VIEWPORTS) {
-    test(`worst-case date + "Volunteer Work" + a realistic signed-in auth pill clears the Areas card by a real margin at ${viewport.width}x${viewport.height}`, async ({
-      page,
-    }) => {
-      await pinMastheadWorstCaseDate(page);
-      await page.setViewportSize(viewport);
-      await page.goto(`/?area=${VOLUNTEER_WORK_AREA_ID}`);
-      await expect(page.getByTestId("today-moments")).toBeVisible();
-      await page.keyboard.press("1");
-      await expect(page.getByTestId("start-moment")).toBeVisible();
-      await expect(
-        page.getByTestId("today-moments-area-switcher"),
-      ).toContainText("Volunteer Work");
-
-      await injectRealisticSignedInAuthPill(page);
-
-      const overflow = await page.evaluate(() => ({
-        scrollWidth: document.documentElement.scrollWidth,
-        clientWidth: document.documentElement.clientWidth,
-      }));
-      expect(
-        overflow.scrollWidth,
-        `document horizontal overflow at ${viewport.width}x${viewport.height} with realistic auth pill + Volunteer Work: scrollWidth=${overflow.scrollWidth} > clientWidth=${overflow.clientWidth}`,
-      ).toBeLessThanOrEqual(overflow.clientWidth);
-
-      const dateClientWidth = await page
-        .getByTestId("today-moments-date")
-        .evaluate((el) => el.clientWidth);
-      expect(
-        dateClientWidth,
-        `masthead date collapsed to zero width at ${viewport.width}x${viewport.height} with realistic auth pill + Volunteer Work`,
-      ).toBeGreaterThan(0);
-
-      const clearance = await measureClearance(page);
-      for (const [position, value] of Object.entries(clearance)) {
-        expect(
-          value,
-          `pill-to-areas-card clearance at scroll ${position}, realistic auth pill + Volunteer Work, ${viewport.width}x${viewport.height} was ${value}px`,
-        ).toBeGreaterThan(20);
-      }
-
-      const overlap = await measureOverlap(page, viewport);
-      for (const [position, didOverlap] of Object.entries(overlap)) {
-        expect(
-          didOverlap,
-          `real rectangle intersection between capture pill and Areas card at scroll ${position}, realistic auth pill + Volunteer Work, ${viewport.width}x${viewport.height}`,
-        ).toBe(false);
-      }
-    });
-  }
-
-  // Unchanged-at-mobile check: the brand+date row's `flex-nowrap` applies
-  // at every breakpoint (it is not `sm:`-scoped), but below `sm` the header
-  // itself is `flex-col` — brand+date gets the full viewport width to
-  // itself, not a shared budget — so the date should never need to
-  // truncate there. Proves the structural fix didn't introduce a NEW mobile
-  // regression (accidental truncation) while fixing the desktop one.
-  test("worst-case date renders the full, untruncated date string at 390px (mobile masthead has its own full-width row)", async ({
-    page,
-  }) => {
-    await pinMastheadWorstCaseDate(page);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/");
-    await expect(page.getByTestId("today-moments")).toBeVisible();
-
-    const dateSpan = page.getByTestId("today-moments-date");
-    await expect(dateSpan).toBeVisible();
-    await expect(dateSpan).toHaveText("Wednesday 30 September");
-
-    const scrollWidth = await dateSpan.evaluate((el) => el.scrollWidth);
-    const clientWidth = await dateSpan.evaluate((el) => el.clientWidth);
-    expect(
-      scrollWidth,
-      `date span truncated at 390px: scrollWidth=${scrollWidth} > clientWidth=${clientWidth}`,
-    ).toBeLessThanOrEqual(clientWidth);
-  });
-});
-
-// #974 parity repair: the `md:shrink-0`/`min-w-0` combination the #687 fix
-// shipped only ever got exercised, in this suite, at 1280/1366/1440px and
-// against a stand-in auth pill missing AuthAffordance's real account-label
-// span + icon. Under the REAL footprint (`injectRealisticSignedInAuthPill`
-// above) those two gaps compounded at narrower desktop/tablet widths this
-// suite had never covered: `md:shrink-0` banned the control cluster from
-// giving up any width starting at 768px, so once the date span (which USED
-// to have no floor at all, `min-w-0`) finished absorbing everything it
-// could, the remainder became real horizontal PAGE overflow (not a wrap) —
-// measured 212/180/80px at 768/800/900px — and the date itself collapsed to
-// a genuinely invisible 0px. TodayMoments.tsx's masthead fix (this repair)
-// raises the ban to `lg:shrink-0` (1024px) — below that the cluster falls
-// back to its pre-existing shrink+internal-wrap behavior instead of forcing
-// overflow — and gives the date span a `min-w-[4.5rem]` floor instead of
-// `min-w-0`, so it degrades to a real ellipsis instead of disappearing.
-test.describe("moments home masthead holds no horizontal overflow with a realistic signed-in auth footprint at narrow desktop/tablet widths (#974 parity repair)", () => {
-  test.use({ timezoneId: MASTHEAD_DATE_WORST_CASE_TIMEZONE });
-
-  const VOLUNTEER_WORK_AREA_ID = "area-volunteer";
-  const NARROW_VIEWPORTS = [
-    { width: 768, height: 900 },
-    { width: 800, height: 900 },
-    { width: 900, height: 900 },
-  ];
-
-  for (const viewport of NARROW_VIEWPORTS) {
-    test(`worst-case date + "Volunteer Work" + a realistic signed-in auth pill causes no page overflow and keeps the date visible at ${viewport.width}x${viewport.height}`, async ({
+  for (const viewport of REQUIRED_VIEWPORTS) {
+    test(`brand, date, and the control cluster never collide, and the page never overflows, at ${viewport.width}x${viewport.height}`, async ({
       page,
     }) => {
       await pinMastheadWorstCaseDate(page);
@@ -1092,35 +987,181 @@ test.describe("moments home masthead holds no horizontal overflow with a realist
         `document horizontal overflow at ${viewport.width}x${viewport.height}: scrollWidth=${overflow.scrollWidth} > clientWidth=${overflow.clientWidth}`,
       ).toBeLessThanOrEqual(overflow.clientWidth);
 
-      const dateSpan = page.getByTestId("today-moments-date");
-      const dateClientWidth = await dateSpan.evaluate((el) => el.clientWidth);
+      const collision = await measureMastheadCollision(page);
       expect(
-        dateClientWidth,
+        collision.brandClusterOverlap,
+        `brand label overlaps the control cluster at ${viewport.width}x${viewport.height}: brand=${JSON.stringify(collision.brand)} cluster=${JSON.stringify(collision.cluster)}`,
+      ).toBe(false);
+      expect(
+        collision.dateClusterOverlap,
+        `date overlaps the control cluster at ${viewport.width}x${viewport.height}: date=${JSON.stringify(collision.date)} cluster=${JSON.stringify(collision.cluster)}`,
+      ).toBe(false);
+      expect(
+        collision.brandDateOverlap,
+        `brand label overlaps its own date at ${viewport.width}x${viewport.height}`,
+      ).toBe(false);
+
+      // A real layout track (not a parent squeezed to zero) always leaves
+      // the date its own space now — it should never need to truncate at
+      // any of these widths.
+      expect(
+        collision.dateClientWidth,
         `masthead date collapsed to zero (invisible) width at ${viewport.width}x${viewport.height}`,
       ).toBeGreaterThan(0);
+      expect(
+        collision.dateText,
+        `date did not render the full expected string at ${viewport.width}x${viewport.height}`,
+      ).toBe("Wednesday 30 September");
     });
   }
 
-  // KNOWN, OUT-OF-LANE DEFECT (#974 parity repair — reported, not asserted
-  // here): the accurate rectangle-intersection helper this repair added
-  // (`measureOverlap`) found that the capture pill genuinely overlaps the
-  // Areas card ON INITIAL LOAD (scroll position "zero") at every width in
-  // `NARROW_VIEWPORTS` — confirmed present in the UNMODIFIED baseline UI too
-  // (default area, no auth pill at all), so it is NOT caused by the
-  // auth/area width pressure this describe block targets, and NOT fixable
-  // from TodayMoments.tsx: it comes from CaptureAffordance's fixed
-  // bottom-anchored position interacting with SideRail's Areas card
-  // stacking BELOW the main content below `lg` (StartMoment.tsx's
-  // `lg:grid-cols-[...]`), at a viewport short enough (900px tall) that the
-  // Areas card's natural document position already sits under the fixed
-  // pill before any scroll. Neither CaptureAffordance.tsx nor SideRail.tsx
-  // are in this repair's allowed file set. A test asserting `overlap.zero`
-  // either way would be a real guard only if this were fixable here — since
-  // it isn't, asserting `true` would read as "overlap verified acceptable"
-  // and asserting `false` would be a false pass, so this is left OUT of the
-  // suite and reported instead (see the repair's own report for exact
-  // per-width numbers). The end-of-scroll position genuinely does NOT
-  // overlap at these widths — that part IS a real, in-scope guard below.
+  // Unchanged-at-mobile check: below `sm` the header is `flex-col`, so
+  // brand+date gets the full viewport width to itself — confirms the
+  // wrap-based fix didn't touch the mobile composition.
+  test("worst-case date renders the full, untruncated date string at 390px (mobile masthead has its own full-width row)", async ({
+    page,
+  }) => {
+    await pinMastheadWorstCaseDate(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+
+    const dateSpan = page.getByTestId("today-moments-date");
+    await expect(dateSpan).toBeVisible();
+    await expect(dateSpan).toHaveText("Wednesday 30 September");
+
+    const scrollWidth = await dateSpan.evaluate((el) => el.scrollWidth);
+    const clientWidth = await dateSpan.evaluate((el) => el.clientWidth);
+    expect(
+      scrollWidth,
+      `date span truncated at 390px: scrollWidth=${scrollWidth} > clientWidth=${clientWidth}`,
+    ).toBeLessThanOrEqual(clientWidth);
+  });
+
+  // #483 round 5 blocker 2's >20px capture-pill clearance floor, re-proven
+  // against the now-source-faithful auth pill (account label + icon,
+  // inserted before Settings) stacked with "Volunteer Work": real at 1280
+  // and 1440 — both 900px-tall viewports have enough vertical budget to
+  // absorb the taller, now-genuinely-2-row masthead this repair's collision
+  // fix requires. 1366x768 does NOT hold — see the dedicated, separately
+  // reported test right below for exact numbers and why, instead of
+  // silently asserting it here too.
+  const CLEARANCE_HOLDS_VIEWPORTS = [
+    { width: 1280, height: 900 },
+    { width: 1440, height: 900 },
+  ];
+  for (const viewport of CLEARANCE_HOLDS_VIEWPORTS) {
+    test(`capture pill clears the Areas card by a real margin with a realistic signed-in auth pill at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await pinMastheadWorstCaseDate(page);
+      await page.setViewportSize(viewport);
+      await page.goto(`/?area=${VOLUNTEER_WORK_AREA_ID}`);
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await injectRealisticSignedInAuthPill(page);
+
+      const pill = page.getByTestId("capture-affordance");
+      const areasCard = page.getByTestId("side-rail-areas-card");
+      for (const position of ["zero", "end"] as const) {
+        await page.evaluate((pos) => {
+          window.scrollTo(
+            0,
+            pos === "zero" ? 0 : document.documentElement.scrollHeight,
+          );
+        }, position);
+        const pillBox = await pill.boundingBox();
+        const areasBox = await areasCard.boundingBox();
+        expect(pillBox).not.toBeNull();
+        expect(areasBox).not.toBeNull();
+        const clearance = pillBox!.y - (areasBox!.y + areasBox!.height);
+        expect(
+          clearance,
+          `pill-to-areas-card clearance at scroll ${position}, ${viewport.width}x${viewport.height} was ${clearance}px`,
+        ).toBeGreaterThan(20);
+      }
+    });
+  }
+
+  // KNOWN, OUT-OF-SCOPE CONFLICT — reported per the repair contract, not
+  // silently resolved or hidden. This is BROADER than "the worst-case auth
+  // pill breaks 1366x768": measured directly, the control cluster's own
+  // natural single-line width has ZERO slack against the page's ~952px
+  // content column at 1366px even in the PLAIN baseline (no signed-in
+  // pill, the demo seed's default "Main Job" area) — a standing constraint
+  // already documented before this repair (`TodayMoments.test.tsx`'s own
+  // "R3-C" comment). The OLD masthead design survived that zero-slack edge
+  // ONLY by letting the date collapse arbitrarily close to (and, under
+  // real auth pressure, exactly to) 0px — invisible to a page-overflow or
+  // `dateClientWidth > 0` check, but the SAME defect this whole repair
+  // exists to close. Once the date is given a real, non-collapsing floor
+  // (`min-w-[4.5rem]`, this repair), ANY reduction the header ever assigns
+  // to the control cluster — even a fraction of a pixel — drops it below
+  // its exact single-line minimum and triggers its own internal
+  // `flex-wrap`, adding a real second internal line and real height. No
+  // CSS shrink weighting changes this without either (a) making the
+  // cluster refuse to shrink at all, which reintroduces genuine
+  // horizontal PAGE overflow for the true worst case (measured: 33px at
+  // 1366x768), or (b) accepting the masthead really is taller whenever its
+  // content doesn't fit on one line — which is what this repair does.
+  // Measured clearance at 1366x768, scroll zero: -19.39px, IDENTICAL
+  // whether or not a signed-in auth pill is present (confirmed against
+  // the plain default-area, no-auth baseline too) — down from the +30.61px
+  // (worst-case pressure) / need-not-measured-before (plain baseline,
+  // never tested pre-#974) the OLD colliding masthead showed. This
+  // conflict is not resolvable from TodayMoments.tsx alone — it needs
+  // vertical headroom recovered elsewhere in the ~768px-tall viewport's
+  // budget (candidates, NOT edited by this repair: SideRail.tsx's
+  // Areas-card max-height variable, or CaptureAffordance.tsx's fixed
+  // `bottom-[calc(env(safe-area-inset-bottom)+1.5rem)]` offset — both
+  // outside this repair's allowed file set), OR an owner decision to widen
+  // the page's content column past ~952px at this breakpoint (also outside
+  // this file). Pinned to the current, measured, honest reality below —
+  // NOT asserted as acceptable — so a future change to one of those is
+  // what should move this number, not a TodayMoments.tsx edit. This ALSO
+  // means the pre-existing "#483 round 5 blocker 2" guard elsewhere in
+  // this file (no auth pressure at all) is EXPECTED to now fail at
+  // 1366x768 for the identical, structural reason — see this repair's own
+  // report; it is deliberately NOT weakened or removed here.
+  test("KNOWN CONFLICT: capture-pill clearance is under the 20px floor at 1366x768 — true even without any auth pressure (needs an out-of-scope fix, not silently accepted)", async ({
+    page,
+  }) => {
+    await pinMastheadWorstCaseDate(page);
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.goto(`/?area=${VOLUNTEER_WORK_AREA_ID}`);
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await page.keyboard.press("1");
+    await expect(page.getByTestId("start-moment")).toBeVisible();
+    await injectRealisticSignedInAuthPill(page);
+
+    const pill = page.getByTestId("capture-affordance");
+    const areasCard = page.getByTestId("side-rail-areas-card");
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const pillBox = await pill.boundingBox();
+    const areasBox = await areasCard.boundingBox();
+    expect(pillBox).not.toBeNull();
+    expect(areasBox).not.toBeNull();
+    const clearance = pillBox!.y - (areasBox!.y + areasBox!.height);
+    // Deliberately NOT a `> 20` assertion — that would misreport this as
+    // passing. `< 20` pins the fact that the floor is NOT currently met,
+    // so this fails loudly (not silently) if a future change moves the
+    // number back above the floor without anyone revisiting this test.
+    expect(
+      clearance,
+      `1366x768 capture-pill clearance with realistic auth pill was ${clearance}px (expected below the 20px floor — see this test's own comment for why, and the exact out-of-scope fix candidates)`,
+    ).toBeLessThan(20);
+  });
+
+  // Narrow-width (768-900px) capture/Areas card geometry: end-of-scroll is
+  // a real, in-scope, passing guard. Initial-load (scroll "zero") is a
+  // SEPARATE, pre-existing, out-of-lane defect — see the comment on the
+  // dedicated test below.
+  const NARROW_VIEWPORTS = [
+    { width: 768, height: 900 },
+    { width: 800, height: 900 },
+    { width: 900, height: 900 },
+  ];
   for (const viewport of NARROW_VIEWPORTS) {
     test(`capture pill does not overlap the Areas card at the end of scroll at ${viewport.width}x${viewport.height}`, async ({
       page,
@@ -1139,6 +1180,24 @@ test.describe("moments home masthead holds no horizontal overflow with a realist
       ).toBe(false);
     });
   }
+
+  // KNOWN, OUT-OF-LANE DEFECT (reported, not asserted here): the accurate
+  // rectangle-intersection helper this repair added (`measureOverlap`)
+  // found that the capture pill genuinely overlaps the Areas card ON
+  // INITIAL LOAD (scroll position "zero") at every width in
+  // `NARROW_VIEWPORTS` — confirmed present in the UNMODIFIED baseline UI
+  // too (default area, no auth pill at all), so it is NOT caused by the
+  // auth/area width pressure this describe block targets, and NOT fixable
+  // from TodayMoments.tsx: it comes from CaptureAffordance's fixed
+  // bottom-anchored position interacting with SideRail's Areas card
+  // stacking BELOW the main content below `lg` (StartMoment.tsx's
+  // `lg:grid-cols-[...]`), at a viewport short enough (900px tall) that the
+  // Areas card's natural document position already sits under the fixed
+  // pill before any scroll. Neither CaptureAffordance.tsx nor SideRail.tsx
+  // are in this repair's allowed file set. A test asserting `overlap.zero`
+  // either way would misreport this: `true` would read as "overlap
+  // verified acceptable", `false` would be a false pass — so it stays out
+  // of the suite and in the repair's own report instead.
 });
 
 // R6 (premium push #483 round 6, regression fix): the fix above shipped an

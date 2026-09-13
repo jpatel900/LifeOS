@@ -35,6 +35,7 @@ import {
   resetTodayMomentsMountTracking,
 } from "@/__tests__/helpers/todayMomentsHarness";
 import { writeOnboardingOutcomeToast } from "@/lib/onboarding/onboarding";
+import { formatMastheadDate } from "./formatMastheadDate";
 
 // C2-S13 (#687): FILE-LEVEL, applies to every `describe` below regardless of
 // nesting. `resetTodayMomentsMountTracking` (harness) resets both
@@ -291,37 +292,25 @@ describe("TodayMoments", () => {
     });
   });
 
-  // #687 main-red incident (2026-09-02): the masthead's brand+date row used
-  // to be `flex-wrap`, so a wide enough `formatMastheadDate` string (a long
-  // weekday name, colliding with a wide selected-area name or the
-  // AuthAffordance pill in the cluster to its right) could force the date
-  // onto its own second line, adding ~50px of masthead height that ate the
-  // capture pill's clearance over the Areas card at 1366x768. The
-  // structural fix makes that impossible: `flex-nowrap` + `min-w-0` on the
-  // row, `truncate` (`overflow-hidden text-ellipsis whitespace-nowrap`) +
-  // `min-w-0` on the date span itself, so the date degrades to an ellipsis
-  // under width pressure instead of wrapping. Regression: removing
-  // `flex-nowrap`/`min-w-0`/`truncate` here reopens the wrap.
-  describe("masthead brand+date row (#687, structural date-wrap fix)", () => {
-    it("is flex-nowrap with min-w-0, and the date span truncates instead of wrapping", () => {
-      renderToday({ initialMoment: "start" });
+  // #974 parity repair: jsdom does not run a real layout engine, so a class
+  // string here (`flex-nowrap`, `min-w-0`, and similar) can never prove the
+  // brand+date row won't visually collapse or overlap the control cluster —
+  // a prior version of this test asserted exactly those classes while the
+  // real browser rendered the row's box at 0px width with its children
+  // painting on top of the controls anyway. The actual non-overlap proof
+  // (real `getBoundingClientRect` geometry, pairwise, at every required
+  // viewport) lives in `moments-home-parity.spec.ts`'s masthead describe
+  // block. This unit test only checks what jsdom CAN honestly verify: the
+  // brand label and the formatted date both render as real visible text.
+  describe("masthead brand+date row (#974 parity repair)", () => {
+    it("renders the brand label and the formatted date as visible text", () => {
+      const now = new Date("2026-09-30T09:00:00");
+      renderToday({ initialMoment: "start", now });
 
-      const dateSpan = screen.getByTestId("today-moments-date");
-      const brandRow = dateSpan.parentElement!;
-
-      expect(brandRow).toHaveClass("flex-nowrap");
-      expect(brandRow).toHaveClass("min-w-0");
-      expect(brandRow.className).not.toMatch(/\bflex-wrap\b/);
-
-      expect(dateSpan).toHaveClass("truncate");
-      // #974 parity repair: `min-w-0` let the date shrink all the way to an
-      // invisible 0px under AuthAffordance's real signed-in footprint
-      // (account label + icon + gaps, wider than the e2e guard's old bare
-      // "Sign out" text stand-in) — see TodayMoments.tsx's own date-span
-      // comment. A real floor replaces it so the date always shows some
-      // content instead of disappearing.
-      expect(dateSpan).toHaveClass("min-w-[4.5rem]");
-      expect(dateSpan.className).not.toMatch(/\bmin-w-0\b/);
+      expect(screen.getByText("LifeOS · Today")).toBeInTheDocument();
+      expect(screen.getByTestId("today-moments-date")).toHaveTextContent(
+        formatMastheadDate(now),
+      );
     });
   });
 
