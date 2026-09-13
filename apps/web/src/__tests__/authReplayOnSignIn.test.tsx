@@ -773,6 +773,69 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     });
     mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
 
+    // #967 CI repair (PR993, 34759295095): the ORIGINAL version of this test
+    // asserted `journalled-closed-days` had ALREADY cleared the instant
+    // `account-closed-days` first showed `day`. That assumed an atomic
+    // handoff the runtime never promises — `runAccountSync` AWAITS
+    // `readbackAccountReviewClosedDays` (which sets `accountClosedDays`
+    // directly) and only THEN, in a SEPARATE step, calls
+    // `refreshJournalledDurableState()` — its OWN new `listPendingWrites()`
+    // read is what actually clears `journalledClosedDays`. Between those two
+    // steps both tiers legitimately report the day closed at once; that
+    // overlap is SAFE (`resolveDayClose`'s union still reads "closed" either
+    // way) and is exactly what #967 intends — the only unsafe window it
+    // forbids is BOTH tiers being empty, never both being populated. Locally
+    // this gap was too narrow to ever observe; PR993's hosted CI ran the
+    // same assertion slow enough to land inside it (`pr993-monorepo-failed.log`,
+    // exact failure at the old line 803: `journalled-closed-days` still
+    // truthfully showed `day` when the test demanded it not to).
+    //
+    // Fixed by making the overlap an OBSERVED, asserted fact instead of a
+    // race the test happened to win: `refreshJournalledDurableState`'s own
+    // post-confirmation `listPendingWrites()` call (the ONLY such call left
+    // once `account-closed-days` has confirmed — replay's own internal read,
+    // the unconditional mount effect's read, and `refreshPendingSaveFailed`'s
+    // read have all necessarily already resolved by then, each on a much
+    // shorter async chain than the one reaching this point) is deferred via
+    // the SAME named `mockListPendingWrites` seam the stale-read/ordering
+    // tests above use — no new mock, no sleep, no production hook.
+    let noArgReadCount = 0;
+    let releaseJournalRead!: (
+      value: Awaited<ReturnType<typeof listPendingWrites>>,
+    ) => void;
+    let journalReadIntercepted = false;
+    mockListPendingWrites.mockImplementation((entity) => {
+      if (entity === undefined) {
+        noArgReadCount += 1;
+      }
+      // Five no-arg `listPendingWrites()` calls happen in this exact pass
+      // (confirmed by capturing each call's own stack during development —
+      // not guessed): (1) the unconditional "sync on mount" effect's own
+      // `refreshJournalledDurableState()`; (2) `replayJournaledWrites`'s own
+      // `resolveSupersededWrites` pre-step; (3) `resolveSupersededWrites`
+      // again, called a second time from inside `replayDurableWrites`
+      // itself; (4) `refreshPendingSaveFailed`'s own read; and (5) finally
+      // `refreshJournalledDurableState`'s post-confirmation call — the ONE
+      // this test needs to hold open. Calls 1-4 all resolve (or, in call 4's
+      // case, MUST be allowed to resolve — holding it would block
+      // `runAccountSync` from ever reaching the readback that sets
+      // `accountClosedDays` at all) well before call 5 even starts, since
+      // each of the first four is either independent and short, or an
+      // earlier step in the SAME sequential chain that call 5 is the last
+      // link of.
+      if (
+        entity === undefined &&
+        noArgReadCount === 5 &&
+        !journalReadIntercepted
+      ) {
+        journalReadIntercepted = true;
+        return new Promise((resolve) => {
+          releaseJournalRead = resolve;
+        });
+      }
+      return listPendingWritesActual(entity);
+    });
+
     render(
       <WorkflowProvider>
         <Harness />
@@ -782,7 +845,7 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     // The journalled review drains — the replay succeeded and reached the
     // account (the part that already worked before this fix).
     await waitFor(async () => {
-      const pending = await listPendingWrites("review");
+      const pending = await listPendingWritesActual("review");
       expect(pending).toHaveLength(0);
     });
     expect(mockSyncJournaledReviewEntry).toHaveBeenCalledWith(
@@ -797,12 +860,31 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     await waitFor(() => {
       expect(screen.getByTestId("account-closed-days")).toHaveTextContent(day);
     });
-    // The device tier's own evidence is now safe to have cleared — the
-    // account tier already carries the truth, so there is no window where
-    // NEITHER array has it (the open-Close-button regression).
-    expect(screen.getByTestId("journalled-closed-days")).not.toHaveTextContent(
-      day,
-    );
+    // SAFE OVERLAP, explicitly observed: with that read held open, the
+    // device tier has NOT cleared yet — both tiers report the day closed at
+    // once. This is the exact moment the old assertion (checked
+    // synchronously, with no such hold) could land in and wrongly fail; here
+    // it is the documented, asserted, correct intermediate state, not a race.
+    await waitFor(() => {
+      expect(journalReadIntercepted).toBe(true);
+    });
+    expect(screen.getByTestId("journalled-closed-days")).toHaveTextContent(day);
+    // Concurrent unrelated state preservation holds THROUGH the overlap too.
+    expect(screen.getByTestId("task-count")).toHaveTextContent("1");
+
+    // Release the held read with the REAL current journal contents (the
+    // review entry is already gone — replay drained it above) — the
+    // no-loss handoff invariant completes: the device tier is now safe to
+    // clear because the account tier already, verifiably, carries the day.
+    releaseJournalRead(await listPendingWritesActual());
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("journalled-closed-days"),
+      ).not.toHaveTextContent(day);
+    });
+    // Still there — the account tier is untouched by this release.
+    expect(screen.getByTestId("account-closed-days")).toHaveTextContent(day);
     // Concurrent unrelated state preservation: the presynced task, confirmed
     // by the FIRST account read above, must still be there. This is the
     // #984 failure mode `readbackAccountReviewClosedDays` is deliberately
