@@ -2054,12 +2054,13 @@ function TodayMomentsContent({
               cluster refuse to shrink at all, which reintroduces real page
               overflow for the genuine worst case (measured: 33px), or (b)
               accepting that the masthead is a real two-line block whenever
-              its content doesn't fit — which is what happens here. See
-              this repair's own report for the exact, resulting conflict
-              with the `moments-home-parity.spec.ts` 1366x768 capture-pill
-              clearance guard — that guard's floor and this masthead's real
-              content no longer both fit within the current page's vertical
-              budget, and that conflict is not resolvable from this file. */}
+              its content doesn't fit — which is what happens here. That
+              extra height cost the `moments-home-parity.spec.ts` 1366x768
+              capture-pill clearance guard its margin (round 2 of this
+              repair measured it failing, -19.39px) — recovered not from
+              this file, but from `SideRail.tsx`'s own compaction (tighter
+              Card padding, no content removed), which is the guard's
+              actual, current fix. */}
           <div className="flex min-w-[11.5rem] shrink-[100] items-baseline gap-3">
             <span className="shrink-0 text-sm font-semibold tracking-tight">
               LifeOS · Today

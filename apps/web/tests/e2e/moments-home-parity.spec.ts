@@ -1040,14 +1040,16 @@ test.describe("moments home masthead has a real, non-overlapping layout under co
 
   // #483 round 5 blocker 2's >20px capture-pill clearance floor, re-proven
   // against the now-source-faithful auth pill (account label + icon,
-  // inserted before Settings) stacked with "Volunteer Work": real at 1280
-  // and 1440 — both 900px-tall viewports have enough vertical budget to
-  // absorb the taller, now-genuinely-2-row masthead this repair's collision
-  // fix requires. 1366x768 does NOT hold — see the dedicated, separately
-  // reported test right below for exact numbers and why, instead of
-  // silently asserting it here too.
+  // inserted before Settings) stacked with "Volunteer Work". Round 2 of
+  // this repair (a taller, genuinely non-colliding masthead) cost ~46px of
+  // vertical budget the fixed capture pill needed back — SideRail.tsx's
+  // own compaction (tighter Card header/content padding and waiting-row
+  // spacing, no content removed, no area hidden, no hit target shrunk)
+  // recovers it. Real at every required desktop/tablet viewport, including
+  // 1366x768.
   const CLEARANCE_HOLDS_VIEWPORTS = [
     { width: 1280, height: 900 },
+    { width: 1366, height: 768 },
     { width: 1440, height: 900 },
   ];
   for (const viewport of CLEARANCE_HOLDS_VIEWPORTS) {
@@ -1083,75 +1085,6 @@ test.describe("moments home masthead has a real, non-overlapping layout under co
       }
     });
   }
-
-  // KNOWN, OUT-OF-SCOPE CONFLICT — reported per the repair contract, not
-  // silently resolved or hidden. This is BROADER than "the worst-case auth
-  // pill breaks 1366x768": measured directly, the control cluster's own
-  // natural single-line width has ZERO slack against the page's ~952px
-  // content column at 1366px even in the PLAIN baseline (no signed-in
-  // pill, the demo seed's default "Main Job" area) — a standing constraint
-  // already documented before this repair (`TodayMoments.test.tsx`'s own
-  // "R3-C" comment). The OLD masthead design survived that zero-slack edge
-  // ONLY by letting the date collapse arbitrarily close to (and, under
-  // real auth pressure, exactly to) 0px — invisible to a page-overflow or
-  // `dateClientWidth > 0` check, but the SAME defect this whole repair
-  // exists to close. Once the date is given a real, non-collapsing floor
-  // (`min-w-[4.5rem]`, this repair), ANY reduction the header ever assigns
-  // to the control cluster — even a fraction of a pixel — drops it below
-  // its exact single-line minimum and triggers its own internal
-  // `flex-wrap`, adding a real second internal line and real height. No
-  // CSS shrink weighting changes this without either (a) making the
-  // cluster refuse to shrink at all, which reintroduces genuine
-  // horizontal PAGE overflow for the true worst case (measured: 33px at
-  // 1366x768), or (b) accepting the masthead really is taller whenever its
-  // content doesn't fit on one line — which is what this repair does.
-  // Measured clearance at 1366x768, scroll zero: -19.39px, IDENTICAL
-  // whether or not a signed-in auth pill is present (confirmed against
-  // the plain default-area, no-auth baseline too) — down from the +30.61px
-  // (worst-case pressure) / need-not-measured-before (plain baseline,
-  // never tested pre-#974) the OLD colliding masthead showed. This
-  // conflict is not resolvable from TodayMoments.tsx alone — it needs
-  // vertical headroom recovered elsewhere in the ~768px-tall viewport's
-  // budget (candidates, NOT edited by this repair: SideRail.tsx's
-  // Areas-card max-height variable, or CaptureAffordance.tsx's fixed
-  // `bottom-[calc(env(safe-area-inset-bottom)+1.5rem)]` offset — both
-  // outside this repair's allowed file set), OR an owner decision to widen
-  // the page's content column past ~952px at this breakpoint (also outside
-  // this file). Pinned to the current, measured, honest reality below —
-  // NOT asserted as acceptable — so a future change to one of those is
-  // what should move this number, not a TodayMoments.tsx edit. This ALSO
-  // means the pre-existing "#483 round 5 blocker 2" guard elsewhere in
-  // this file (no auth pressure at all) is EXPECTED to now fail at
-  // 1366x768 for the identical, structural reason — see this repair's own
-  // report; it is deliberately NOT weakened or removed here.
-  test("KNOWN CONFLICT: capture-pill clearance is under the 20px floor at 1366x768 — true even without any auth pressure (needs an out-of-scope fix, not silently accepted)", async ({
-    page,
-  }) => {
-    await pinMastheadWorstCaseDate(page);
-    await page.setViewportSize({ width: 1366, height: 768 });
-    await page.goto(`/?area=${VOLUNTEER_WORK_AREA_ID}`);
-    await expect(page.getByTestId("today-moments")).toBeVisible();
-    await page.keyboard.press("1");
-    await expect(page.getByTestId("start-moment")).toBeVisible();
-    await injectRealisticSignedInAuthPill(page);
-
-    const pill = page.getByTestId("capture-affordance");
-    const areasCard = page.getByTestId("side-rail-areas-card");
-    await page.evaluate(() => window.scrollTo(0, 0));
-    const pillBox = await pill.boundingBox();
-    const areasBox = await areasCard.boundingBox();
-    expect(pillBox).not.toBeNull();
-    expect(areasBox).not.toBeNull();
-    const clearance = pillBox!.y - (areasBox!.y + areasBox!.height);
-    // Deliberately NOT a `> 20` assertion — that would misreport this as
-    // passing. `< 20` pins the fact that the floor is NOT currently met,
-    // so this fails loudly (not silently) if a future change moves the
-    // number back above the floor without anyone revisiting this test.
-    expect(
-      clearance,
-      `1366x768 capture-pill clearance with realistic auth pill was ${clearance}px (expected below the 20px floor — see this test's own comment for why, and the exact out-of-scope fix candidates)`,
-    ).toBeLessThan(20);
-  });
 
   // Narrow-width (768-900px) capture/Areas card geometry: end-of-scroll is
   // a real, in-scope, passing guard. Initial-load (scroll "zero") is a
