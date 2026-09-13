@@ -2017,56 +2017,31 @@ function TodayMomentsContent({
           `#stage-content` reaches real content, never the nav. */}
       {showingMastheadAndMoments ? (
         <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Masthead: brand+date and the control cluster (moments
-              switcher, area, time display, theme, auth, settings) share one
-              row at `sm`+. The brand+date row has a REAL reserved minimum
-              track — `min-w-[11.5rem]` (brand's full width + gap + the
-              date's own `min-w-[4.5rem]` floor) — and `shrink-[100]` so it
-              absorbs almost all of any width deficit FIRST, via the date
-              truncating to an ellipsis, before the control cluster gives up
-              any width at all. The cluster keeps default shrink/min-width
-              (no override), so its own `flex-wrap` lets its children spill
-              onto additional internal lines if the header ever does assign
-              it less than its natural single-line need — real estate grows
-              downward, never past either side's own box.
-
-              #974 parity repair: an earlier version gave the row `min-w-0`
-              instead of a real minimum, letting the header's shrink
-              algorithm squeeze the row's own flex-item box to a literal
-              0px while its non-shrinking children (the brand label, later
-              the date's own separate min-width) kept painting at full
-              size — invisible to a page-overflow or `clientWidth > 0`
-              check, but visibly overlapping the control cluster on screen.
-              This version's real floor closes that hole. It does NOT,
-              however, restore the control cluster's OLD one-line-always
-              behavior: measured directly, the cluster's own natural
-              single-line width has had ZERO slack against the page's
-              content column at 1366px for a while (documented as a
-              standing constraint since #483 round 3's Inter-reflow fix —
-              see `TodayMoments.test.tsx`'s own "R3-C" comment) — not just
-              under this repair's worst-case auth+"Volunteer Work"
-              pressure, but even with the demo seed's shortest area and no
-              signed-in pill at all. Any
-              width the header ever reassigns away from the cluster (even a
-              fraction of a pixel) drops it below that single-line minimum
-              and triggers its internal wrap — there is no CSS shrink
-              weighting that changes this without either (a) letting the
-              cluster refuse to shrink at all, which reintroduces real page
-              overflow for the genuine worst case (measured: 33px), or (b)
-              accepting that the masthead is a real two-line block whenever
-              its content doesn't fit — which is what happens here. That
-              extra height cost the `moments-home-parity.spec.ts` 1366x768
-              capture-pill clearance guard its margin (round 2 of this
-              repair measured it failing, -19.39px) — recovered not from
-              this file, but from `SideRail.tsx`'s own compaction (tighter
-              Card padding, no content removed), which is the guard's
-              actual, current fix. */}
-          <div className="flex min-w-[11.5rem] shrink-[100] items-baseline gap-3">
+          {/* Masthead layout invariant: brand+date and the control cluster
+              share one row at `sm`+, each in its own reserved box, never
+              painting outside it (the collision this file used to have).
+              Below `sm` the brand+date box stays a horizontal line (brand,
+              date side by side) — it already has the full viewport width
+              to itself there, no competition. At `sm`+, sharing the row
+              with the cluster means the box only gets a narrow
+              `min-w-[11.5rem]` (184px) track, too narrow to hold brand
+              (93px) and the full date (176px) side by side without
+              truncating one of them — so at `sm`+ the box stacks them
+              VERTICALLY instead: each line only needs to fit within 184px
+              on its own, which both do with room to spare, so neither
+              ever needs an ellipsis. The stacked box's own height (two
+              text lines) stays shorter than the control cluster's, so it
+              never grows the header — the cluster (via its own
+              `flex-wrap`) is what actually absorbs any width the header
+              can't give it, on additional internal lines. See
+              `SideRail.tsx` for where the resulting taller-cluster cases
+              recover the capture-pill's clearance floor. */}
+          <div className="flex min-w-[11.5rem] shrink-0 items-baseline gap-3 sm:flex-col sm:items-start sm:gap-0">
             <span className="shrink-0 text-sm font-semibold tracking-tight">
               LifeOS · Today
             </span>
             <span
-              className="min-w-[4.5rem] truncate text-sm text-muted-foreground"
+              className="truncate text-sm text-muted-foreground"
               data-testid="today-moments-date"
             >
               {formatMastheadDate(now)}

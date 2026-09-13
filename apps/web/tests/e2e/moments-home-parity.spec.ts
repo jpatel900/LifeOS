@@ -120,8 +120,17 @@ async function injectRealisticSignedInAuthPill(
 // nonzero `dateClientWidth` proved nothing when the date's own PARENT row
 // had been squeezed to a 0px box and both brand and date were painting
 // outside it, on top of the control cluster — `getBoundingClientRect`
-// pairwise intersection is the only check that catches that. Returns the
-// three rectangles plus whether any pair collides.
+// pairwise intersection is the only check that catches that. Round 4
+// (independent verification of round 3, `70fcc819`): a nonzero
+// `dateClientWidth` ALSO proved nothing about whether the full date text
+// was actually PAINTED — the date rendered only "Wednesd…" at every
+// non-mobile width while `dateClientWidth > 0` and a DOM `textContent`
+// equality both passed, because `textContent` returns the full string
+// regardless of CSS `text-overflow: ellipsis` clipping it visually.
+// `dateScrollWidth` (the content's true rendered width) compared against
+// `dateClientWidth` (the visible box) is what actually proves nothing is
+// clipped. Returns the three rectangles, both date widths, plus whether
+// any pair collides.
 async function measureMastheadCollision(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
     const dateEl = document.querySelector('[data-testid="today-moments-date"]');
@@ -135,8 +144,9 @@ async function measureMastheadCollision(page: import("@playwright/test").Page) {
     }
     const brandEl = dateEl.previousElementSibling;
     const clusterEl = settings.parentElement;
-    if (!brandEl || !clusterEl) {
-      throw new Error("brand label or control cluster not found");
+    const rowEl = dateEl.parentElement;
+    if (!brandEl || !clusterEl || !rowEl) {
+      throw new Error("brand label, control cluster, or row not found");
     }
     const rect = (el: Element) => {
       const r = el.getBoundingClientRect();
@@ -148,17 +158,35 @@ async function measureMastheadCollision(page: import("@playwright/test").Page) {
     ) =>
       Math.max(a.x, b.x) < Math.min(a.x + a.width, b.x + b.width) &&
       Math.max(a.y, b.y) < Math.min(a.y + a.height, b.y + b.height);
+    // Round 4: a child painting outside a squeezed parent (the original
+    // defect) would still show as "no pairwise overlap" if the parent
+    // itself happened to be empty/degenerate — real containment (the
+    // child's box fully inside its parent's) is the stronger, direct
+    // proof that nothing escapes its own reserved track.
+    const contains = (
+      parent: { x: number; y: number; width: number; height: number },
+      child: { x: number; y: number; width: number; height: number },
+    ) =>
+      child.x >= parent.x - 0.5 &&
+      child.y >= parent.y - 0.5 &&
+      child.x + child.width <= parent.x + parent.width + 0.5 &&
+      child.y + child.height <= parent.y + parent.height + 0.5;
     const brand = rect(brandEl);
     const date = rect(dateEl);
     const cluster = rect(clusterEl);
+    const row = rect(rowEl);
     return {
       brand,
       date,
       cluster,
+      row,
       brandDateOverlap: overlap(brand, date),
       brandClusterOverlap: overlap(brand, cluster),
       dateClusterOverlap: overlap(date, cluster),
+      brandInRow: contains(row, brand),
+      dateInRow: contains(row, date),
       dateClientWidth: (dateEl as HTMLElement).clientWidth,
+      dateScrollWidth: (dateEl as HTMLElement).scrollWidth,
       dateText: dateEl.textContent ?? "",
     };
   });
@@ -924,24 +952,22 @@ test.describe("moments home capture pill keeps a real clearance margin under the
   }
 });
 
-// #974 parity repair round 2 (independent verification rejected f4fa47ce):
-// the masthead's brand+date row and control cluster used to fight over ONE
-// shared line via `flex-nowrap` + a `shrink-[100]`/`shrink-0` tug-of-war —
-// that let the header's flex-shrink algorithm squeeze the brand+date row's
-// own flex-item box to a literal 0px while its non-shrinking children (the
-// brand label, the date's own min-width floor) kept painting at full size,
-// invisibly overlapping the control cluster (a page-overflow check and a
-// bare `dateClientWidth > 0` check both missed this — pairwise geometry is
-// the only thing that catches it). TodayMoments.tsx now gives the header
-// real `sm:flex-wrap`: brand+date and the control cluster each get their
-// own natural width, sharing one line only when both actually fit, and the
-// cluster's own internal `flex-wrap` still lets ITS children wrap onto
-// multiple lines when even a full line to itself isn't enough. This proves
-// that directly with real pairwise rectangle geometry (not a CSS class
-// string) at every required width, stacking the worst-case date with
-// "Volunteer Work" (longest demo area) and a source-faithful realistic
-// signed-in auth pill (inserted BEFORE Settings, matching AuthAffordance's
-// real render order).
+// #974 parity repair (rounds 2-4): TodayMoments.tsx's masthead reserves a
+// real `min-w-[11.5rem]` track for brand+date, sharing the header's `sm:
+// flex-row` line with the control cluster. Below `sm` that track stays a
+// horizontal line (brand+date have the full viewport to themselves); at
+// `sm`+, where the track competes with the cluster for width, it stacks
+// brand above date instead — each line fits the narrow track on its own,
+// so neither is ever squeezed into an ellipsis. The cluster keeps its own
+// `flex-wrap`, absorbing any width the header can't give it on additional
+// internal lines. Round 4 (independent verification of round 3): a real
+// browser painted only "Wednesd…" at every non-mobile width despite a
+// passing `dateClientWidth > 0` + `textContent` equality — this proves the
+// fix with real pairwise rectangle geometry AND a rendered-width check
+// (`dateScrollWidth` vs `dateClientWidth`, not just DOM text), stacking the
+// worst-case date with "Volunteer Work" (longest demo area) and a
+// source-faithful realistic signed-in auth pill (inserted BEFORE Settings,
+// matching AuthAffordance's real render order).
 test.describe("moments home masthead has a real, non-overlapping layout under combined width pressure (#974 parity repair round 2)", () => {
   test.use({ timezoneId: MASTHEAD_DATE_WORST_CASE_TIMEZONE });
 
@@ -997,17 +1023,28 @@ test.describe("moments home masthead has a real, non-overlapping layout under co
         `date overlaps the control cluster at ${viewport.width}x${viewport.height}: date=${JSON.stringify(collision.date)} cluster=${JSON.stringify(collision.cluster)}`,
       ).toBe(false);
       expect(
+        collision.brandInRow,
+        `brand label escapes its own reserved row track at ${viewport.width}x${viewport.height}: row=${JSON.stringify(collision.row)} brand=${JSON.stringify(collision.brand)}`,
+      ).toBe(true);
+      expect(
+        collision.dateInRow,
+        `date escapes its own reserved row track at ${viewport.width}x${viewport.height}: row=${JSON.stringify(collision.row)} date=${JSON.stringify(collision.date)}`,
+      ).toBe(true);
+      expect(
         collision.brandDateOverlap,
         `brand label overlaps its own date at ${viewport.width}x${viewport.height}`,
       ).toBe(false);
 
-      // A real layout track (not a parent squeezed to zero) always leaves
-      // the date its own space now — it should never need to truncate at
-      // any of these widths.
+      // Round 4: `dateClientWidth > 0` plus a DOM `textContent` equality
+      // both passed while the real browser painted only "Wednesd…" —
+      // `textContent` returns the full string regardless of what
+      // `text-overflow: ellipsis` visually clips. Comparing the content's
+      // true rendered width (`dateScrollWidth`) against its visible box
+      // (`dateClientWidth`) is what actually proves nothing is clipped.
       expect(
-        collision.dateClientWidth,
-        `masthead date collapsed to zero (invisible) width at ${viewport.width}x${viewport.height}`,
-      ).toBeGreaterThan(0);
+        collision.dateScrollWidth,
+        `masthead date is visually truncated at ${viewport.width}x${viewport.height}: scrollWidth=${collision.dateScrollWidth} > clientWidth=${collision.dateClientWidth}`,
+      ).toBeLessThanOrEqual(collision.dateClientWidth + 1);
       expect(
         collision.dateText,
         `date did not render the full expected string at ${viewport.width}x${viewport.height}`,
