@@ -24,6 +24,15 @@ import {
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "../data/workflow";
+// Reads the leaf module directly (the barrel above also re-exports these
+// symbols for other callers, but this call site predates that and has no
+// reason to switch).
+import { editBacklogTaskAccountRow } from "../data/workflow/taskEditing";
+// `requireSupabaseUser` is deliberately NOT re-exported by the barrel
+// (`INTENTIONALLY_INTERNAL_EXPORTS` in workflowBarrel.test.ts), so this reads
+// the leaf module directly rather than widening that barrel's surface.
+import { requireSupabaseUser } from "../data/workflow/shared";
+import type { Task } from "@lifeos/schemas";
 import {
   findQueuedWriteToSupersede,
   hasPendingWrite,
@@ -683,6 +692,112 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     await syncPersistedWorkflowRows(client);
   }
 
+  /**
+   * Issue #984 — the account half of the accepted-backlog task editor.
+   *
+   * Deliberately NOT modeled on the journal-backed persist* functions above:
+   * the contract for this operation explicitly rules out promising offline
+   * account replay for an edit, so there is no journal entry to write and no
+   * replay to drain. This confirms the write against the account BEFORE
+   * returning, so the caller only ever reports "success" for an edit the
+   * account actually holds — never a queued one.
+   *
+   * Local/account id and area aliases are resolved here, same as
+   * `persistTaskReviewTransition` above: the caller only ever knows the
+   * WORKFLOW-space task id and area id.
+   *
+   * Deliberately does NOT call `syncPersistedWorkflowRows` (unlike the
+   * transition helpers above): this write touches exactly the one row it
+   * targeted, with no server-side side effects on any other row, so there is
+   * nothing else for a wholesale account resync to usefully refresh. A
+   * wholesale resync reads a full account snapshot and then REPLACES the
+   * local task list with it (`mergePersistedRows`) — awaited from inside an
+   * edit whose own caller is about to reflect ONE task's confirmed fields,
+   * that snapshot read is a window in which an unrelated concurrent local
+   * action (or an account switch) could be overwritten or misattributed by
+   * the wholesale merge. `editBacklogTaskWithPersistence` (WorkflowContext)
+   * does the only reflection this operation needs: writing the confirmed
+   * `title`/`description`/`area_id`/`updated_at` into the ONE matching local
+   * task, guarded by `isSameSignedInUser` below and a fresh re-check that
+   * the task hasn't changed locally since the edit started.
+   */
+  async function persistBacklogTaskEdit(
+    localTaskId: string,
+    patch: { title: string; description: string | null; area_id: string },
+    expectedUpdatedAt: string,
+  ): Promise<
+    | { status: "persisted"; task: Task; userId: string }
+    | { status: "conflict" }
+    | { status: "unreachable" }
+  > {
+    const client = createSupabaseBrowserClient();
+    if (!client) {
+      throw new Error("Demo backlog task edits use local workflow state.");
+    }
+
+    const persistedTaskId = persistedIdForLocalId(
+      localTaskId,
+      persistedTaskIdByLocalIdRef.current,
+    );
+    const persistedAreaId = persistedAreaIdForWorkflowId(
+      patch.area_id,
+      persistedAreasRef.current,
+    );
+
+    // Nothing to guard the write against yet (task never synced) or the
+    // chosen area has no account row (never synced or since removed). Either
+    // way there is no account row this edit could safely reach, and #984
+    // rules out an offline promise for this operation — so this is reported
+    // as unreachable rather than silently degrading to a local-only save.
+    if (!persistedTaskId || !persistedAreaId) {
+      return { status: "unreachable" };
+    }
+
+    const result = await editBacklogTaskAccountRow(
+      client,
+      persistedTaskId,
+      {
+        title: patch.title,
+        description: patch.description,
+        area_id: persistedAreaId,
+      },
+      expectedUpdatedAt,
+    );
+
+    if (result.status === "conflict") {
+      return { status: "conflict" };
+    }
+
+    return { status: "persisted", task: result.task, userId: result.userId };
+  }
+
+  /**
+   * Issue #984 — an IDENTITY comparison, not merely "is anyone signed in".
+   * `editBacklogTaskAccountRow` returns the id of the user who actually
+   * performed the write; the caller re-checks with a FRESH
+   * `requireSupabaseUser` call — after whatever awaits happened in between —
+   * comparing the two ids before treating the write's row as safe to reflect
+   * into the CURRENT tab's state. A sign-out, or a switch to a genuinely
+   * different account, in that gap must never graft the earlier write onto a
+   * tab that now belongs to someone else — checking only "is anyone signed
+   * in" would pass that case, since the new user IS authenticated.
+   */
+  async function isSameSignedInUser(expectedUserId: string): Promise<boolean> {
+    const client = createSupabaseBrowserClient();
+    if (!client) {
+      return false;
+    }
+    try {
+      const currentUser = await requireSupabaseUser(
+        client,
+        "Sign in before saving task edits.",
+      );
+      return currentUser.id === expectedUserId;
+    } catch {
+      return false;
+    }
+  }
+
   // #588: surfaces the real outcome so callers can gate "day closed" copy on
   // it. #737-A slice 2 made the outcomes TRUE rather than changing them:
   //
@@ -969,6 +1084,8 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     persistStartedSession,
     persistMarkedSession,
     persistDeferredTaskWithSession,
+    persistBacklogTaskEdit,
+    isSameSignedInUser,
   };
 }
 
