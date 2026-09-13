@@ -1113,4 +1113,109 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     // survives.
     expect(screen.getByTestId("journalled-closed-days")).toHaveTextContent(day);
   });
+
+  // #967 final-candidate review: a wrong-user row must refuse the WHOLE
+  // readback before `setAccountClosedDays` runs, not just get filtered out
+  // of the array passed to it. An A-to-B-to-A read (identity checks both see
+  // A; a B row rides along in the response body anyway) previously still
+  // called `setAccountClosedDays` with the filtered (A-only, now missing the
+  // stray B row) array — which, for a response containing ONLY a B row,
+  // means an EMPTY array, silently erasing A's real, previously-confirmed
+  // account evidence for no reason visible to the caller.
+  it("a wrong-user row in an otherwise same-identity response does not erase the account's existing closed-day evidence (#967 final-candidate review)", async () => {
+    const markerDay = "1800-01-01";
+    const day = "2026-09-03";
+    const userA = PERSISTED_AREA.user_id;
+    const userB = "99999999-9999-4999-8999-999999999999";
+
+    await journalReviewWrite({
+      workflowAreaId: null,
+      persistedAreaId: null,
+      reviewType: "daily",
+      periodStart: day,
+      periodEnd: day,
+      summaryJson: {},
+    });
+
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    // The FIRST account read (`syncPersistedWorkflowRows`, before replay)
+    // seeds A's real, already-confirmed account evidence for `markerDay` —
+    // the thing this test proves must survive.
+    mockListExecutionReviewItems.mockResolvedValueOnce({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [
+        {
+          id: "88888888-8888-4888-8888-888888888888",
+          user_id: userA,
+          area_id: null,
+          review_type: "daily",
+          period_start: markerDay,
+          period_end: markerDay,
+          summary_json: {},
+          created_at: "1800-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+    // The readback's own (second) read: `getUser()` will answer A both
+    // before and after (the `beforeEach` default, left untouched by this
+    // test), but the response body itself carries a B row — the "mixed/
+    // wrong-user fixture" the review named as unproven by the existing
+    // A-to-B account-switch test, which only changes the mocked identity,
+    // never the row content.
+    mockListExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [
+        {
+          id: "99999999-8888-4888-8888-888888888888",
+          user_id: userB,
+          area_id: null,
+          review_type: "daily",
+          period_start: day,
+          period_end: day,
+          summary_json: {},
+          created_at: "2026-09-03T00:00:00.000Z",
+        },
+      ],
+    });
+    mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
+
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(async () => {
+      const pending = await listPendingWrites("review");
+      expect(pending).toHaveLength(0);
+    });
+    // No positive completion signal names this pass (the readback is
+    // refused, so nothing it does is observable) — wait for the account-sync
+    // posture itself to settle, the last thing `runAccountSync` does.
+    await waitFor(() => {
+      expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
+    });
+
+    // A's real, previously-confirmed marker survives — the wrong-user row
+    // must not have authorized overwriting it, empty or otherwise.
+    expect(screen.getByTestId("account-closed-days")).toHaveTextContent(
+      markerDay,
+    );
+    // B's row must never land on this tab.
+    expect(screen.getByTestId("account-closed-days")).not.toHaveTextContent(
+      day,
+    );
+    // The refused readback must not authorize journal-derived clearance
+    // either — the device tier's evidence for `day` survives.
+    expect(screen.getByTestId("journalled-closed-days")).toHaveTextContent(day);
+  });
 });

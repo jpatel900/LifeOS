@@ -1730,15 +1730,21 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
    * Returns whether the account was CONFIRMED to already hold every
    * expected day, so a caller can decide whether it is safe to let
    * device-tier evidence for a review disappear. `accountClosedDays` is
-   * only ever set from a same-identity, provider-`"supabase"` response —
-   * never from a mismatched identity — and only from rows whose own
-   * `user_id` matches `expectedUserId` (#967 follow-up review: a narrow
-   * per-row guard against a mixed-identity response the before/after
-   * identity check alone would not see, since `listExecutionReviewItems`
-   * authenticates independently of this check). `accountClosedDays` is set
-   * even when an expected period is missing, because the read itself is
-   * still truthful about what the account currently holds; only the
-   * CLEARANCE for the missing day is refused.
+   * only ever set from a same-identity, provider-`"supabase"` response whose
+   * daily reviews ALL belong to `expectedUserId` — never from a mismatched
+   * identity, and never from a response containing even one other user's row
+   * (#967 final-candidate review: a per-row filter that silently DROPPED
+   * wrong-user rows before calling `setAccountClosedDays` was itself a gap —
+   * in an A-to-B-to-A read, the before/after identity check sees A both
+   * times, the wrong-user row gets filtered out of the array passed to the
+   * setter, and that now-`accountClosedDays`-shaped-but-incomplete array
+   * still overwrites whatever A's account previously, correctly, held,
+   * erasing real evidence for no reason the caller can see. The check must
+   * refuse the WHOLE read, before the setter runs, rather than launder a
+   * partial one). `accountClosedDays` is set even when an expected period is
+   * missing, because the read itself is still truthful about what the
+   * account currently holds; only the CLEARANCE for the missing day is
+   * refused.
    */
   const readbackAccountReviewClosedDays = useCallback(
     async (
@@ -1757,13 +1763,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         const afterUserId = after.data.user?.id ?? null;
         if (afterUserId !== expectedUserId) return false;
 
-        const dailyClosedDays = result.reviewEntries
-          .filter(
-            (entry) =>
-              entry.review_type === "daily" &&
-              entry.user_id === expectedUserId,
-          )
-          .map((entry) => entry.period_start);
+        const dailyReviews = result.reviewEntries.filter(
+          (entry) => entry.review_type === "daily",
+        );
+        if (dailyReviews.some((entry) => entry.user_id !== expectedUserId)) {
+          return false;
+        }
+
+        const dailyClosedDays = dailyReviews.map((entry) => entry.period_start);
         setAccountClosedDays(dailyClosedDays);
 
         return expectedDailyPeriods.every((period) =>
