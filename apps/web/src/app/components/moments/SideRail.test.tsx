@@ -204,4 +204,41 @@ describe("SideRail", () => {
       screen.queryByTestId("side-rail-areas-count"),
     ).not.toBeInTheDocument();
   });
+
+  // #974 parity repair round 3: recovers the vertical budget the masthead's
+  // real, non-overlapping layout (TodayMoments.tsx) costs the fixed capture
+  // pill's clearance over this card — see moments-home-parity.spec.ts's
+  // "#483 round 5 blocker 2" guard, now passing at 1366x768 again. jsdom
+  // can't prove the resulting real-browser clearance (that's the e2e
+  // suite's job); this only pins that the compact spacing survives, not
+  // the wider Card defaults, without hiding content or shrinking a hit
+  // target below 44px.
+  it("keeps the compact Card padding both cards rely on for rail clearance", () => {
+    render(
+      <SideRail
+        waitingOn={WAITING}
+        areas={AREAS}
+        onOpenHealth={vi.fn()}
+        onOpenAreas={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("side-rail")).toHaveClass("gap-3");
+
+    const waitingRow = screen.getByTestId("side-rail-waiting-row-t1");
+    expect(waitingRow).toHaveClass("py-1.5");
+
+    const areasContent = screen
+      .getByTestId("side-rail-areas-card")
+      .querySelector('[class*="grid"]');
+    expect(areasContent).toHaveClass("pb-3");
+
+    // The compaction never touches hit-target sizing.
+    expect(screen.getByTestId("side-rail-open-health")).toHaveClass(
+      "min-h-[44px]",
+    );
+    expect(screen.getByTestId("side-rail-open-areas")).toHaveClass(
+      "min-h-[44px]",
+    );
+  });
 });

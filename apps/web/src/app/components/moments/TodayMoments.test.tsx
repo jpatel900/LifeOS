@@ -35,6 +35,7 @@ import {
   resetTodayMomentsMountTracking,
 } from "@/__tests__/helpers/todayMomentsHarness";
 import { writeOnboardingOutcomeToast } from "@/lib/onboarding/onboarding";
+import { formatMastheadDate } from "./formatMastheadDate";
 
 // C2-S13 (#687): FILE-LEVEL, applies to every `describe` below regardless of
 // nesting. `resetTodayMomentsMountTracking` (harness) resets both
@@ -270,6 +271,14 @@ describe("TodayMoments", () => {
   // MastheadThemeToggle — see each file's own regression test). Regression:
   // a future gap bump back to `gap-2` on this row silently reopens the wrap
   // now that Inter is the shipping font.
+  //
+  // Still `gap-1.5` after the #687 main-red incident (2026-09-02): an
+  // earlier attempt at that fix tightened this to `gap-1` (buying only
+  // ~1.3px, refuted by review — see git history), but the actual fix landed
+  // structurally instead (TodayMoments.tsx's brand+date row: `flex-nowrap` +
+  // `min-w-0` + a truncating date span), which makes the masthead's height
+  // invariant to width pressure from ANY row regardless of this cluster's
+  // own gap. This gap stays at its R3-C value.
   describe("masthead right-cluster gap (#483 round 3, Inter reflow)", () => {
     it("uses the tightened gap-1.5, not the pre-Inter-reflow gap-2", () => {
       renderToday({ initialMoment: "start" });
@@ -280,6 +289,28 @@ describe("TodayMoments", () => {
       const rightCluster = momentSwitcherSlot.parentElement!;
       expect(rightCluster).toHaveClass("gap-1.5");
       expect(rightCluster.className).not.toMatch(/\bgap-2\b/);
+    });
+  });
+
+  // #974 parity repair: jsdom does not run a real layout engine, so a class
+  // string here (`flex-nowrap`, `min-w-0`, and similar) can never prove the
+  // brand+date row won't visually collapse or overlap the control cluster —
+  // a prior version of this test asserted exactly those classes while the
+  // real browser rendered the row's box at 0px width with its children
+  // painting on top of the controls anyway. The actual non-overlap proof
+  // (real `getBoundingClientRect` geometry, pairwise, at every required
+  // viewport) lives in `moments-home-parity.spec.ts`'s masthead describe
+  // block. This unit test only checks what jsdom CAN honestly verify: the
+  // brand label and the formatted date both render as real visible text.
+  describe("masthead brand+date row (#974 parity repair)", () => {
+    it("renders the brand label and the formatted date as visible text", () => {
+      const now = new Date("2026-09-30T09:00:00");
+      renderToday({ initialMoment: "start", now });
+
+      expect(screen.getByText("LifeOS · Today")).toBeInTheDocument();
+      expect(screen.getByTestId("today-moments-date")).toHaveTextContent(
+        formatMastheadDate(now),
+      );
     });
   });
 
