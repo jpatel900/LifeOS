@@ -13,6 +13,53 @@ import {
 } from "@/__tests__/helpers/workflowReachability";
 import { PlanSheet } from "./PlanSheet";
 
+// Account-mode seams for the #984 editor feedback tests only. With no
+// override set, both pass straight through to the real modules, and the
+// browser client defaults to `null` (demo mode) — the same mode every
+// other test in this file already runs in.
+const { mockCreateSupabaseBrowserClient } = vi.hoisted(() => ({
+  mockCreateSupabaseBrowserClient: vi.fn(() => null as unknown),
+}));
+
+vi.mock("@/lib/supabase/browser", () => ({
+  createSupabaseBrowserClient: mockCreateSupabaseBrowserClient,
+}));
+
+const editorAccountOverrides = vi.hoisted(() => ({
+  persist: null as (() => Promise<unknown>) | null,
+  sameUser: null as (() => Promise<boolean>) | null,
+}));
+
+vi.mock("@/lib/workflowContext/persistenceSync", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("@/lib/workflowContext/persistenceSync")
+    >();
+  return {
+    ...actual,
+    createPersistenceSync: (
+      ...args: Parameters<typeof actual.createPersistenceSync>
+    ) => {
+      const ops = actual.createPersistenceSync(...args);
+      return {
+        ...ops,
+        persistBacklogTaskEdit: (
+          ...opArgs: Parameters<typeof ops.persistBacklogTaskEdit>
+        ) =>
+          editorAccountOverrides.persist
+            ? (editorAccountOverrides.persist() as ReturnType<
+                typeof ops.persistBacklogTaskEdit
+              >)
+            : ops.persistBacklogTaskEdit(...opArgs),
+        isSameSignedInUser: (expectedUserId: string) =>
+          editorAccountOverrides.sameUser
+            ? editorAccountOverrides.sameUser()
+            : ops.isSameSignedInUser(expectedUserId),
+      };
+    },
+  };
+});
+
 /**
  * C2-S2 (#687) — the ported Plan surface, driven through the REAL
  * `WorkflowProvider` rather than a hand-built view model, so what is proved is
@@ -573,6 +620,77 @@ describe("PlanSheet — the ported Plan surface", () => {
         expect(onToast).toHaveBeenCalledWith(
           "Saved to this tab. Area kept as Main Job — its project lives there.",
         );
+      });
+    });
+
+    describe("configured account feedback", () => {
+      const WRITER_USER_ID = "writer-user-984";
+      const confirmedRow = () => ({
+        ...BACKLOG_TASK,
+        title: "Sketch next quarter's volunteer rota",
+        area_id: "area-personal",
+        updated_at: "2030-01-01T00:00:00.000Z",
+      });
+
+      beforeEach(() => {
+        mockCreateSupabaseBrowserClient.mockReturnValue({ mocked: true });
+        editorAccountOverrides.persist = () =>
+          Promise.resolve({
+            status: "persisted",
+            task: confirmedRow(),
+            userId: WRITER_USER_ID,
+          });
+      });
+
+      afterEach(() => {
+        mockCreateSupabaseBrowserClient.mockReturnValue(null);
+        editorAccountOverrides.persist = null;
+        editorAccountOverrides.sameUser = null;
+      });
+
+      async function saveAreaMoveToPersonal(
+        onToast: (message: string) => void,
+      ) {
+        renderSheet(true, { onToast });
+        fireEvent.click(
+          screen.getByTestId(`plan-sheet-edit-${BACKLOG_TASK.id}`),
+        );
+        fireEvent.change(
+          screen.getByTestId(`plan-sheet-edit-area-input-${BACKLOG_TASK.id}`),
+          { target: { value: "area-personal" } },
+        );
+        fireEvent.click(
+          screen.getByTestId(`plan-sheet-edit-save-${BACKLOG_TASK.id}`),
+        );
+      }
+
+      it("ordinary account save names the current account and the actual saved area", async () => {
+        editorAccountOverrides.sameUser = () => Promise.resolve(true);
+        const onToast = vi.fn<(message: string) => void>();
+        await saveAreaMoveToPersonal(onToast);
+
+        await waitFor(() => {
+          expect(onToast).toHaveBeenCalledWith(
+            "Saved to your account: Personal",
+          );
+        });
+      });
+
+      it("pending reflection after an identity change uses the exact account-neutral message, with no area label", async () => {
+        editorAccountOverrides.sameUser = () => Promise.resolve(false);
+        const onToast = vi.fn<(message: string) => void>();
+        await saveAreaMoveToPersonal(onToast);
+
+        await waitFor(() => {
+          expect(onToast).toHaveBeenCalledWith(
+            "Saved to the account used for this edit. Reload while signed into that account to confirm the latest details.",
+          );
+        });
+        const messages = onToast.mock.calls.map(([message]) => message);
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).not.toContain("your account");
+        expect(messages[0]).not.toContain("Personal");
+        expect(messages[0]).not.toContain("Main Job");
       });
     });
   });

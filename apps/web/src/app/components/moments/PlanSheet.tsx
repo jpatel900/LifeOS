@@ -503,13 +503,16 @@ export function PlanSheet({
             ? " Area kept — its project lives elsewhere."
             : "";
 
-      // A confirmed account write whose own follow-up refresh failed is
-      // never reported as an ordinary, fully-synced save — say so
-      // explicitly, with a real recovery step (reopening re-reads whatever
-      // the account/local state settles on).
+      // `refreshPending`: the account confirmed the write, but this tab could
+      // not safely show it — the signed-in account changed, or this task
+      // changed locally, during the save. The account now signed in may not
+      // be the one that saved, so this copy names neither "your account" nor
+      // an area label read from possibly-changed state. Reopening the editor
+      // would only re-read this tab's local state, so the recovery step is a
+      // reload while signed into the account that made the edit.
       if (result.refreshPending) {
         onToast?.(
-          `Saved to your account. Refresh pending — reopen to confirm the latest.${areaKeptNote}`,
+          "Saved to the account used for this edit. Reload while signed into that account to confirm the latest details.",
         );
       } else if (result.areaChangeBlocked) {
         onToast?.(`Saved to ${destination}.${areaKeptNote}`);
