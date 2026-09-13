@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { MastheadSaveState } from "./MastheadSaveState";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
+  ACCOUNT_SAVE_FAILED,
   ACCOUNT_UNREACHABLE_NOW,
   DEVICE_STORAGE_BLOCKED,
   SIGNED_OUT_SAVING_ON_THIS_DEVICE,
@@ -190,5 +191,122 @@ describe("MastheadSaveState (#737 C1 S5)", () => {
     expect(className).toContain("flex-wrap");
     expect(className).not.toContain("whitespace-nowrap");
     expect(className).not.toContain("truncate");
+  });
+
+  // #967 visibility: a queued write whose last account-save attempt is known
+  // to have failed must read as a real failure here too — the same
+  // `resolveDeviceSaveNotice` reading `StatusBanners`'s `SyncNotice` gets.
+  describe("pendingSaveFailed (#967)", () => {
+    it("raises the alarm for a queued write whose last save attempt failed", () => {
+      render(
+        <MastheadSaveState
+          status={status({
+            account: "synced",
+            pendingLocalChanges: true,
+            pendingSaveFailed: true,
+          })}
+        />,
+      );
+
+      const el = screen.getByTestId("masthead-save-state");
+      expect(el).toHaveAttribute("data-tone", "alarm");
+      expect(el).toHaveAttribute("role", "alert");
+      expect(el).toHaveTextContent(ACCOUNT_SAVE_FAILED);
+      // Signed in, account reached — no sign-in door makes sense here.
+      expect(screen.queryByTestId("masthead-save-state-signin")).toBeNull();
+    });
+
+    it("stays calm for an ordinary queued write with no failed attempt", () => {
+      render(
+        <MastheadSaveState
+          status={status({
+            account: "synced",
+            pendingLocalChanges: true,
+            pendingSaveFailed: false,
+          })}
+        />,
+      );
+
+      expect(screen.getByTestId("masthead-save-state")).toHaveAttribute(
+        "data-tone",
+        "calm",
+      );
+    });
+
+    it("renders nothing once the failed write is no longer pending", () => {
+      const { container } = render(
+        <MastheadSaveState
+          status={status({
+            account: "synced",
+            pendingLocalChanges: false,
+            pendingSaveFailed: true,
+          })}
+        />,
+      );
+
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    // #967 root/independent review: the local-only branch must ALSO raise
+    // the alarm for a real failed attempt — a committed first pass left it
+    // calm because a non-null `message` was wrongly treated as proof of a
+    // specific, actionable reason, which most `markLocalOnly` callers are
+    // not.
+    it("raises the alarm for local-only with the generic account-unreachable message, when a save actually failed", () => {
+      render(
+        <MastheadSaveState
+          status={status({
+            account: "local-only",
+            message: ACCOUNT_UNREACHABLE_NOW,
+            pendingLocalChanges: true,
+            pendingSaveFailed: true,
+          })}
+        />,
+      );
+
+      const el = screen.getByTestId("masthead-save-state");
+      expect(el).toHaveAttribute("data-tone", "alarm");
+      expect(el).toHaveTextContent(ACCOUNT_SAVE_FAILED);
+    });
+
+    it("keeps signed-out priority over a failed attempt", () => {
+      render(
+        <MastheadSaveState
+          status={status({
+            account: "local-only",
+            signedOut: true,
+            message: SIGNED_OUT_SAVING_ON_THIS_DEVICE,
+            pendingLocalChanges: true,
+            pendingSaveFailed: true,
+          })}
+        />,
+      );
+
+      const el = screen.getByTestId("masthead-save-state");
+      expect(el).toHaveAttribute("data-tone", "calm");
+      expect(el).toHaveTextContent(SIGNED_OUT_SAVING_ON_THIS_DEVICE);
+      expect(screen.getByTestId("masthead-save-state-signin")).toHaveAttribute(
+        "href",
+        "/login",
+      );
+    });
+
+    it("keeps device-storage-blocked priority over a failed attempt", () => {
+      render(
+        <MastheadSaveState
+          status={status({
+            storage: "blocked",
+            account: "local-only",
+            message: DEVICE_STORAGE_BLOCKED,
+            pendingLocalChanges: true,
+            pendingSaveFailed: true,
+          })}
+        />,
+      );
+
+      const el = screen.getByTestId("masthead-save-state");
+      expect(el).toHaveAttribute("data-tone", "alarm");
+      expect(el).toHaveTextContent(DEVICE_STORAGE_BLOCKED);
+    });
   });
 });
