@@ -87,7 +87,14 @@ async function openSignedInToday(
   return account;
 }
 
-async function seedBacklogTask(page: Page, text: string): Promise<void> {
+/**
+ * Captures `text`, sorts it, and accepts the task draft into backlog. Returns
+ * the title the accepted task carries: for these short captures the stubbed
+ * parse keeps the task title equal to the text (the same relationship
+ * signed-in-account-truth.spec.ts asserts against the account row), so each
+ * caller hands this straight to `confirmedBacklogTask`.
+ */
+async function seedBacklogTask(page: Page, text: string): Promise<string> {
   await page.getByTestId("capture-affordance").click();
   await page.getByTestId("capture-overlay-textarea").fill(text);
   await page.getByTestId("capture-overlay-save").click();
@@ -115,6 +122,7 @@ async function seedBacklogTask(page: Page, text: string): Promise<void> {
   });
   await page.getByTestId("moment-sheet-close").click();
   await expect(page.getByTestId("moment-sheet")).toHaveCount(0);
+  return text;
 }
 
 async function openPlanSheet(page: Page): Promise<void> {
@@ -142,25 +150,39 @@ const TASK_SELECT = "id,title,description,area_id,status,updated_at";
  * sheet; the account write for that accept lands asynchronously afterwards
  * (CI run 34742776909 read `tasks` before it had, and found none). Poll the
  * account — bounded, the same 30s `expect.poll` shape plan-port-truth.spec.ts
- * uses — until it holds exactly one row and that row is in backlog. No fixed
- * sleep and no test-injected row: if the accept never persists, this fails
- * showing the rows the account actually held.
+ * uses — until exactly one row has BOTH the expected title AND backlog
+ * status, and returns that row. Matching on the title means an unrelated
+ * backlog row can never stand in for the seeded one. No fixed sleep and no
+ * test-injected row: if the accept never persists, this fails showing every
+ * row the account actually held.
  */
-async function confirmedBacklogTask(account: AccountClient): Promise<TaskRow> {
-  let rows: TaskRow[] = [];
+async function confirmedBacklogTask(
+  account: AccountClient,
+  expectedTitle: string,
+): Promise<TaskRow> {
+  let matching: TaskRow[] = [];
   await expect
     .poll(
       async () => {
-        rows = await account.rows<TaskRow>(`tasks?select=${TASK_SELECT}`);
-        return rows.map((row) => ({ title: row.title, status: row.status }));
+        const rows = await account.rows<TaskRow>(`tasks?select=${TASK_SELECT}`);
+        matching = rows.filter(
+          (row) => row.title === expectedTitle && row.status === "backlog",
+        );
+        return {
+          matchingRows: matching.length,
+          accountRows: rows.map((row) => ({
+            title: row.title,
+            status: row.status,
+          })),
+        };
       },
       {
         timeout: 30_000,
-        message: "the accepted backlog task never reached the account",
+        message: `exactly one backlog task titled "${expectedTitle}" never appeared in the account`,
       },
     )
-    .toEqual([expect.objectContaining({ status: "backlog" })]);
-  return rows[0]!;
+    .toMatchObject({ matchingRows: 1 });
+  return matching[0]!;
 }
 
 test.describe("#984 — the accepted-backlog task editor, signed in", () => {
@@ -168,9 +190,12 @@ test.describe("#984 — the accepted-backlog task editor, signed in", () => {
     page,
   }) => {
     const account = await openSignedInToday(page, SEEDED_USERS.a);
-    await seedBacklogTask(page, "Ported edit: reorganize the shelving");
+    const seededTitle = await seedBacklogTask(
+      page,
+      "Ported edit: reorganize the shelving",
+    );
 
-    const before = await confirmedBacklogTask(account);
+    const before = await confirmedBacklogTask(account, seededTitle);
     const areas = await account.rows<AreaRow>("areas?select=id,name");
     const personal = areas.find((area) => area.name === "Personal");
     expect(personal).toBeTruthy();
@@ -309,9 +334,14 @@ test.describe("#984 — the accepted-backlog task editor, signed in", () => {
 
     try {
       const accountA = await openSignedInToday(firstPage, SEEDED_USERS.a);
-      await seedBacklogTask(firstPage, "Isolation proof: user A's own task");
-      const { id: taskId, title: originalTitle } =
-        await confirmedBacklogTask(accountA);
+      const seededTitle = await seedBacklogTask(
+        firstPage,
+        "Isolation proof: user A's own task",
+      );
+      const { id: taskId, title: originalTitle } = await confirmedBacklogTask(
+        accountA,
+        seededTitle,
+      );
 
       const accountB = await openSignedInToday(secondPage, SEEDED_USERS.b);
 
