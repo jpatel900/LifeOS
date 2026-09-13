@@ -153,6 +153,10 @@ export interface PendingWrite<
   entity: PendingWriteEntity;
   payload: TPayload;
   created_at: string;
+  /** Factual replay evidence only; absent until a handler has thrown. */
+  last_attempt_failed?: true;
+  /** ISO time for the failed attempt; never contains a raw handler error. */
+  last_attempt_failed_at?: string;
 }
 
 /** Replays one journalled write. Throwing keeps the record queued. */
@@ -390,6 +394,53 @@ export async function clearPendingWrites(): Promise<void> {
   }
 }
 
+function sameAttempt(current: PendingWrite, attempted: PendingWrite): boolean {
+  return (
+    current.seq === attempted.seq &&
+    current.entity === attempted.entity &&
+    current.created_at === attempted.created_at &&
+    JSON.stringify(current.payload) === JSON.stringify(attempted.payload)
+  );
+}
+
+/**
+ * Record factual, local evidence that a handler was attempted and threw.
+ *
+ * The record may have been re-enqueued while the handler was in flight. In
+ * that case its newer payload is authoritative, so leave it untouched rather
+ * than copying failure metadata from the older snapshot onto it.
+ */
+async function markPendingWriteAttemptFailed(
+  attempted: PendingWrite,
+): Promise<void> {
+  if (!hasIndexedDb()) {
+    return;
+  }
+
+  const db = await openDatabase();
+  try {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const current = await requestToPromise(
+      store
+        .index(CLIENT_WRITE_ID_INDEX)
+        .get(attempted.client_write_id) as IDBRequest<PendingWrite | undefined>,
+    );
+
+    if (current && sameAttempt(current, attempted)) {
+      store.put({
+        ...current,
+        last_attempt_failed: true,
+        last_attempt_failed_at: new Date().toISOString(),
+      });
+    }
+
+    await transactionDone(transaction);
+  } finally {
+    db.close();
+  }
+}
+
 /**
  * Replay the journal through per-entity handlers, oldest write first.
  *
@@ -428,6 +479,15 @@ async function replayPendingWritesUnlocked(
       await markPendingWriteSynced(write.client_write_id);
       summary.synced += 1;
     } catch {
+      // Failure evidence must never replace the original durable record or
+      // turn a handled failure into a rejected replay. If this best-effort
+      // write fails, the next drain still gets its normal retry opportunity.
+      try {
+        await markPendingWriteAttemptFailed(write);
+      } catch {
+        // The original write remains queued even when its local evidence
+        // cannot be stored (for example, a quota or IndexedDB failure).
+      }
       summary.failed += 1;
     }
   }

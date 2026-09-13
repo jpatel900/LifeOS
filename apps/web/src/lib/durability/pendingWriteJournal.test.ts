@@ -286,7 +286,10 @@ describe("replayPendingWrites", () => {
   });
 
   it("keeps a transient handler failure pending and retries it on a later drain", async () => {
-    await enqueuePendingWrite({ entity: "win", payload: { title: "retry" } });
+    const queued = await enqueuePendingWrite({
+      entity: "win",
+      payload: { title: "retry" },
+    });
     const handler = vi
       .fn<() => Promise<void>>()
       .mockRejectedValueOnce(new Error("temporarily unavailable"))
@@ -297,7 +300,17 @@ describe("replayPendingWrites", () => {
       failed: 1,
       skipped: 0,
     });
-    expect(await pendingWriteCount()).toBe(1);
+    const failed = await listPendingWrites();
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toMatchObject({
+      client_write_id: queued.client_write_id,
+      last_attempt_failed: true,
+    });
+    expect(failed[0]?.last_attempt_failed_at).toEqual(expect.any(String));
+    expect(
+      new Date(failed[0]?.last_attempt_failed_at ?? "").toISOString(),
+    ).toBe(failed[0]?.last_attempt_failed_at);
+    expect(JSON.stringify(failed[0])).not.toContain("temporarily unavailable");
 
     await expect(replayPendingWrites({ win: handler })).resolves.toEqual({
       synced: 1,
@@ -306,6 +319,85 @@ describe("replayPendingWrites", () => {
     });
     expect(handler).toHaveBeenCalledTimes(2);
     expect(await pendingWriteCount()).toBe(0);
+  });
+
+  it("does not mark an unattempted write with no registered handler as failed", async () => {
+    await enqueuePendingWrite({ entity: "review", payload: { line: "wait" } });
+
+    await expect(replayPendingWrites({})).resolves.toEqual({
+      synced: 0,
+      failed: 0,
+      skipped: 1,
+    });
+    expect(await listPendingWrites()).toEqual([
+      expect.not.objectContaining({ last_attempt_failed: true }),
+    ]);
+  });
+
+  it("does not overwrite a newer re-enqueued payload with an older failure", async () => {
+    const clientWriteId = generateClientWriteId();
+    await enqueuePendingWrite({
+      entity: "win",
+      payload: { title: "older" },
+      clientWriteId,
+    });
+    const started = deferred();
+    const release = deferred();
+    const drain = replayPendingWrites({
+      win: async () => {
+        started.resolve();
+        await release.promise;
+        throw new Error("older attempt failed");
+      },
+    });
+
+    await started.promise;
+    await enqueuePendingWrite({
+      entity: "win",
+      payload: { title: "newer" },
+      clientWriteId,
+    });
+    release.resolve();
+
+    await expect(drain).resolves.toEqual({
+      synced: 0,
+      failed: 1,
+      skipped: 0,
+    });
+    expect(await listPendingWrites()).toEqual([
+      expect.objectContaining({
+        client_write_id: clientWriteId,
+        payload: { title: "newer" },
+      }),
+    ]);
+    expect((await listPendingWrites())[0]).not.toHaveProperty(
+      "last_attempt_failed",
+    );
+  });
+
+  it("keeps retrying when failure metadata cannot be stored", async () => {
+    await enqueuePendingWrite({ entity: "win", payload: { title: "keep" } });
+    const put = vi
+      .spyOn(IDBObjectStore.prototype, "put")
+      .mockImplementation(() => {
+        throw new Error("metadata store unavailable");
+      });
+
+    await expect(
+      replayPendingWrites({
+        win: async () => {
+          throw new Error("handler failed");
+        },
+      }),
+    ).resolves.toEqual({ synced: 0, failed: 1, skipped: 0 });
+    put.mockRestore();
+
+    expect(await listPendingWrites()).toEqual([
+      expect.not.objectContaining({ last_attempt_failed: true }),
+    ]);
+    await expect(replayPendingWrites({ win: async () => {} })).resolves.toEqual(
+      { synced: 1, failed: 0, skipped: 0 },
+    );
   });
 
   it("continues the drain queue after a replay operation rejects", async () => {
