@@ -549,6 +549,10 @@ test.describe("C2-S4 — the ported Health surface, signed in", () => {
         last_attempt_failed: true,
         last_attempt_failed_at: expect.any(String),
       });
+    const firstFailedAttempt = await readPendingWrite(page, clientWriteId);
+    const firstFailedAt = firstFailedAttempt?.last_attempt_failed_at;
+    expect(firstFailedAt).toEqual(expect.any(String));
+    expect(Number.isNaN(Date.parse(firstFailedAt ?? ""))).toBe(false);
 
     // Existing shipping UI proves the provider derived pendingSaveFailed.
     await expect(page.getByTestId("masthead-save-state-message")).toHaveText(
@@ -581,6 +585,61 @@ test.describe("C2-S4 — the ported Health surface, signed in", () => {
     await testInfo.attach("health-retained-failed-save-copy", {
       // Crop to the one generic concern row. No account identity, user work,
       // probe details, sidebar, or other Health content enters the artifact.
+      body: await genericConcern.screenshot(),
+      contentType: "image/png",
+    });
+
+    // The manual action must cause a NEW real attempt. Visibility alone is not
+    // proof: the automatic reload above already stamped this same retained
+    // entry once. The journal kernel updates its factual attempt timestamp only
+    // after the handler throws, so a strictly newer stamp proves the click
+    // reached the existing replay path and failed again.
+    const retry = genericConcern.getByRole("button", {
+      name: "Try saving again",
+      exact: true,
+    });
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect
+      .poll(
+        async () =>
+          (await readPendingWrite(page, clientWriteId))
+            ?.last_attempt_failed_at ?? null,
+        { timeout: 30_000 },
+      )
+      .not.toBe(firstFailedAt);
+
+    const retried = await readPendingWrite(page, clientWriteId);
+    expect(retried).toMatchObject({
+      client_write_id: clientWriteId,
+      entity: "win",
+      payload: unstamped?.payload,
+      last_attempt_failed: true,
+      last_attempt_failed_at: expect.any(String),
+    });
+    expect(Date.parse(retried?.last_attempt_failed_at ?? "")).toBeGreaterThan(
+      Date.parse(firstFailedAt ?? ""),
+    );
+    expect(await accountRowsForMarker()).toEqual([]);
+
+    // Failure remains factual and actionable; retry settlement alone is never
+    // rendered as account delivery. Health's raw probes and score are still the
+    // same otherwise-healthy baseline because retry is not a health re-check.
+    await expect(genericConcern).toContainText(ACCOUNT_SAVE_FAILED);
+    await expect(retry).toBeVisible();
+    await expect(retry).toBeEnabled();
+    const afterRetry = await healthSummarySnapshot(page);
+    expect(afterRetry.headline).toBe("1 thing needs a look");
+    expect(afterRetry.needsYou).toBe("Needs a look: Saving your work.");
+    expect(afterRetry.work).toContain("Saving your work");
+    expect(afterRetry.work).toContain(ACCOUNT_SAVE_FAILED);
+    expect(afterRetry.work).not.toContain("All good");
+    expect(afterRetry.developerMetrics).toBe(before.developerMetrics);
+    expect(afterRetry.developerCheckCount).toBe(before.developerCheckCount);
+
+    await testInfo.attach("health-manual-retry-retained-failure-copy", {
+      // Same privacy boundary as the pre-retry artifact: one generic concern
+      // row only, after the second factual failure is known durable.
       body: await genericConcern.screenshot(),
       contentType: "image/png",
     });

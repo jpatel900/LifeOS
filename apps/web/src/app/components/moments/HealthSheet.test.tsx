@@ -82,10 +82,19 @@ function seedState() {
   return acceptLatestDraft(state);
 }
 
-function spySyncStatus(syncStatus: WorkflowSyncStatus) {
+function spySyncStatus(
+  syncStatus: WorkflowSyncStatus,
+  // #967 manual retry: defaults to a benign resolved no-op so every
+  // existing test above, which never clicks the retry action, is
+  // unaffected by its presence.
+  retryPendingAccountWrites: () => Promise<void> = vi
+    .fn()
+    .mockResolvedValue(undefined),
+) {
   vi.spyOn(WorkflowContext, "useWorkflow").mockReturnValue({
     state: seedState(),
     syncStatus,
+    retryPendingAccountWrites,
   } as unknown as ReturnType<typeof WorkflowContext.useWorkflow>);
 }
 
@@ -382,6 +391,11 @@ describe("HealthSheet — the ported Health surface", () => {
         message,
       );
       expect(screen.queryByText(ACCOUNT_SAVE_FAILED)).not.toBeInTheDocument();
+      // #967 manual retry: none of these three is an unclassified failed
+      // pending write — a retry fixes none of them, so it must not appear.
+      expect(
+        screen.queryByTestId("health-sheet-retry-save"),
+      ).not.toBeInTheDocument();
     },
   );
 
@@ -632,5 +646,121 @@ describe("HealthSheet — the ported Health surface", () => {
         `user-facing copy must not match ${banned}`,
       ).toBe(false);
     }
+  });
+});
+
+// #967 manual retry: the dedicated `retryPendingAccountWrites` provider
+// action, surfaced as `Try saving again` inside the existing failed-save
+// concern only. The provider action itself is a thin wrapper this file does
+// not re-test (`authReplayOnSignIn.test.tsx` owns `runAccountSync`'s own
+// ordering/identity/failure-retention guarantees) — these tests are about
+// what the BUTTON does: one call per click, a truthful busy/failed/cleared
+// state, and staying hidden everywhere a retry cannot help.
+describe("HealthSheet — manual retry action (#967)", () => {
+  const FAILED_SYNCED: WorkflowSyncStatus = {
+    storage: "available",
+    account: "synced",
+    message: null,
+    pendingLocalChanges: true,
+    pendingSaveFailed: true,
+  };
+
+  it("calls the provider action exactly once per click", async () => {
+    const retry = vi.fn().mockResolvedValue(undefined);
+    spySyncStatus(FAILED_SYNCED, retry);
+    renderSheet();
+
+    const button = await screen.findByTestId("health-sheet-retry-save");
+    button.click();
+
+    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
+  });
+
+  it("disables the button and shows a busy label while the retry is in flight, and a held-open second click starts no second call", async () => {
+    let releaseRetry!: () => void;
+    const retry = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseRetry = resolve;
+        }),
+    );
+    spySyncStatus(FAILED_SYNCED, retry);
+    renderSheet();
+
+    const button = await screen.findByTestId("health-sheet-retry-save");
+    button.click();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("health-sheet-retry-save")).toHaveTextContent(
+        "Trying to save...",
+      ),
+    );
+    expect(screen.getByTestId("health-sheet-retry-save")).toBeDisabled();
+
+    // The native `disabled` attribute is what stops a second click from
+    // starting a second call — dispatched anyway, to prove it holds.
+    screen.getByTestId("health-sheet-retry-save").click();
+    expect(retry).toHaveBeenCalledTimes(1);
+
+    releaseRetry();
+    await waitFor(() =>
+      expect(screen.getByTestId("health-sheet-retry-save")).toHaveTextContent(
+        "Try saving again",
+      ),
+    );
+    expect(screen.getByTestId("health-sheet-retry-save")).not.toBeDisabled();
+  });
+
+  it("keeps the truthful concern and a re-usable button after a rejected retry, with no unhandled rejection", async () => {
+    const retry = vi.fn().mockRejectedValue(new Error("still failing"));
+    spySyncStatus(FAILED_SYNCED, retry);
+    renderSheet();
+
+    const button = await screen.findByTestId("health-sheet-retry-save");
+    button.click();
+
+    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByTestId("health-sheet-retry-save")).not.toBeDisabled(),
+    );
+    expect(screen.getByTestId("health-sheet-retry-save")).toHaveTextContent(
+      "Try saving again",
+    );
+    // The concern's own wording is unchanged — no success was invented.
+    expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+      "Saving your work",
+    );
+  });
+
+  it("disappears once syncStatus itself reports the failure cleared — never from the click's own resolution alone", async () => {
+    // `useWorkflow` is re-read on every render; the retry mock mutates this
+    // shared status the way a REAL successful drain would (via `syncStatus`,
+    // not a return value), and the button's own busy→idle re-render is what
+    // picks up the change — the same mechanism the real component relies on.
+    let currentStatus: WorkflowSyncStatus = FAILED_SYNCED;
+    const retry = vi.fn(async () => {
+      currentStatus = {
+        ...currentStatus,
+        pendingLocalChanges: false,
+        pendingSaveFailed: false,
+      };
+    });
+    vi.spyOn(WorkflowContext, "useWorkflow").mockImplementation(
+      () =>
+        ({
+          state: seedState(),
+          syncStatus: currentStatus,
+          retryPendingAccountWrites: retry,
+        }) as unknown as ReturnType<typeof WorkflowContext.useWorkflow>,
+    );
+    renderSheet();
+
+    const button = await screen.findByTestId("health-sheet-retry-save");
+    button.click();
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("health-sheet-retry-save")).toBeNull(),
+    );
+    expect(screen.queryByText("Saving your work")).not.toBeInTheDocument();
   });
 });

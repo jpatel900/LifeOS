@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
+import { ACCOUNT_NEEDS_APP_UPDATE } from "@/lib/statusVocabulary";
 import {
   getHealthDashboard,
   type HealthDashboardCheck,
@@ -147,6 +148,9 @@ type LocalConcern = {
   id: string;
   label: string;
   details: string;
+  // #967 manual retry: true only for an UNCLASSIFIED failed pending write —
+  // see `canRetryPendingAccountWrite`'s own comment for the exact gate.
+  canRetry?: boolean;
 };
 
 export interface HealthSheetProps {
@@ -171,7 +175,7 @@ function OpenHealthSheet({
   selectedAreaId,
   now,
 }: Omit<HealthSheetProps, "open">) {
-  const { state, syncStatus } = useWorkflow();
+  const { state, syncStatus, retryPendingAccountWrites } = useWorkflow();
 
   // The shipped derivation, not a second one — same reason PlanSheet and
   // ReviewSheet use it. Only `agingSummary` and the demo `healthChecks` are
@@ -189,6 +193,25 @@ function OpenHealthSheet({
   const [purposeSamples, setPurposeSamples] = useState<MirrorPurposeSample[]>(
     [],
   );
+  // #967 manual retry: busy-only local state. Success/failure is never
+  // decided here — `syncStatus.pendingSaveFailed` (read fresh every render)
+  // is the only truth; this just disables the button and swaps its label
+  // while the existing `retryPendingAccountWrites` pass is in flight.
+  const [isRetryingPendingAccountWrites, setIsRetryingPendingAccountWrites] =
+    useState(false);
+
+  async function handleRetryPendingAccountWrites() {
+    setIsRetryingPendingAccountWrites(true);
+    try {
+      await retryPendingAccountWrites();
+    } catch {
+      // Best-effort, same as every other best-effort call in this file: the
+      // concern's own truth (`syncStatus.pendingSaveFailed`) decides whether
+      // this worked, never this promise's settlement.
+    } finally {
+      setIsRetryingPendingAccountWrites(false);
+    }
+  }
 
   async function runSystemCheck() {
     setPulse(true);
@@ -238,12 +261,27 @@ function OpenHealthSheet({
   const saveNotice =
     syncStatus.pendingSaveFailed && resolveDeviceSaveNotice(syncStatus);
 
+  // #967 manual retry: an unclassified failed pending write only. Checked
+  // against `syncStatus`'s own fields, not the resolved notice's tone or
+  // text — `signedOut` and a blocked `storage` are their OWN, higher-
+  // priority reasons `resolveDeviceSaveNotice` already reports, and a retry
+  // fixes neither. `ACCOUNT_NEEDS_APP_UPDATE` (imported, not re-typed) is
+  // the one message that names a capability mismatch a replay cannot repair.
+  const canRetryPendingAccountWrite = Boolean(
+    saveNotice &&
+    syncStatus.pendingSaveFailed &&
+    !syncStatus.signedOut &&
+    syncStatus.storage !== "blocked" &&
+    saveNotice.message !== ACCOUNT_NEEDS_APP_UPDATE,
+  );
+
   const localConcerns: Array<LocalConcern> = saveNotice
     ? [
         {
           id: "health-save-concern",
           label: "Saving your work",
           details: saveNotice.message,
+          canRetry: canRetryPendingAccountWrite,
         },
       ]
     : [];
@@ -408,6 +446,25 @@ function OpenHealthSheet({
                     <p className="mt-0.5 text-sm text-muted-foreground">
                       {concern.details}
                     </p>
+                    {concern.canRetry ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleRetryPendingAccountWrites();
+                        }}
+                        disabled={isRetryingPendingAccountWrites}
+                        className={cn(
+                          HIT_TARGET_MIN,
+                          "mt-2 inline-flex touch-manipulation items-center justify-center gap-2 rounded-full bg-[var(--btn)] px-5 font-bold text-[var(--btn-fg)] disabled:cursor-not-allowed disabled:opacity-50",
+                        )}
+                        data-testid="health-sheet-retry-save"
+                      >
+                        <RefreshCw size={18} aria-hidden />
+                        {isRetryingPendingAccountWrites
+                          ? "Trying to save..."
+                          : "Try saving again"}
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>

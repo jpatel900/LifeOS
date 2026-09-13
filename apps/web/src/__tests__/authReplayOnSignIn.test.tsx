@@ -21,6 +21,7 @@
 // `lib/data/workflow.test.ts` for the literal request shape) is invoked with
 // the resolved account area id once the sign-in listener fires.
 import "fake-indexeddb/auto";
+import { useState } from "react";
 import {
   act,
   fireEvent,
@@ -241,6 +242,8 @@ function Harness() {
     journalledLoggedWins,
     journalledCompletedSessionDays,
     journalledRollupKeys,
+    retryPendingAccountWrites,
+    areasReadbackSettled,
   } = useWorkflow();
   const unsortedCapture = state.captureItems[0];
   // #967 root/independent review: assert the ACTUAL composed notice
@@ -248,6 +251,12 @@ function Harness() {
   // the flag alone does not prove the shared notice both real consumers
   // read actually changes.
   const notice = resolveDeviceSaveNotice(syncStatus);
+  // #967 manual retry, root review: an explicit boundary for the WRAPPER
+  // call's OWN settlement — `retryPendingAccountWrites()`'s in-flight guard
+  // makes it resolve near-instantly when a pass is already running, so a
+  // fixed sleep cannot reliably distinguish "the guard returned early" from
+  // "a real pass ran". Tests wait on this count instead of a timer.
+  const [retrySettledCount, setRetrySettledCount] = useState(0);
 
   return (
     <div>
@@ -278,6 +287,10 @@ function Harness() {
       </span>
       <span data-testid="notice-tone">{notice?.tone ?? ""}</span>
       <span data-testid="notice-message">{notice?.message ?? ""}</span>
+      <span data-testid="retry-settled-count">{retrySettledCount}</span>
+      <span data-testid="areas-readback-settled">
+        {String(areasReadbackSettled)}
+      </span>
       <button
         type="button"
         onClick={() =>
@@ -296,6 +309,16 @@ function Harness() {
         }}
       >
         Confirm win
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          void retryPendingAccountWrites().then(() => {
+            setRetrySettledCount((count) => count + 1);
+          });
+        }}
+      >
+        Retry pending writes
       </button>
     </div>
   );
@@ -1975,6 +1998,363 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       expect(screen.getByTestId("journalled-rollup-keys")).toHaveTextContent(
         "",
       );
+    });
+  });
+
+  // #967 manual retry: `retryPendingAccountWrites` is a thin wrapper around
+  // `runAccountSync({ replayAfter: true })` — the SAME ordered area/account
+  // hydration, serialized drain, identity recheck, and closed-day handoff
+  // the mount effect and the sign-in listener already run through (NOT
+  // reconnect, which calls `replayJournaledWrites` directly). These tests
+  // are about the WRAPPER reaching that pass correctly and respecting its
+  // in-flight guard; the ordering/identity/failure-retention guarantees
+  // themselves are already proven above (and are not re-proven here, per
+  // scope).
+  describe("retryPendingAccountWrites (#967 manual retry)", () => {
+    it("drains a real failed pending write and clears its evidence, through the exact same pass a mount uses", async () => {
+      const day = "2026-09-20";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      // The mount's own first attempt fails — real, durable evidence.
+      mockSyncJournaledReviewEntry.mockRejectedValueOnce(
+        new Error("server rejected the review"),
+      );
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+          "true",
+        );
+      });
+      await waitFor(async () => {
+        const pending = await listPendingWrites("review");
+        expect(pending).toHaveLength(1);
+      });
+
+      // A later attempt succeeds — clicking the retry action, not a remount.
+      mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
+      fireEvent.click(screen.getByText("Retry pending writes"));
+
+      await waitFor(async () => {
+        const pending = await listPendingWrites("review");
+        expect(pending).toHaveLength(0);
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+          "false",
+        );
+      });
+    });
+
+    it("retains the entry and the visible failure when the retried attempt rejects again, proving a genuine second handler attempt", async () => {
+      const day = "2026-09-21";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      // Every attempt this test makes rejects — the mount's, and the retry's.
+      mockSyncJournaledReviewEntry.mockRejectedValue(
+        new Error("server rejected the review"),
+      );
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      // The initial pass sets this flag in its finally block. A handler
+      // call or an already-synced posture alone can precede completion.
+      await waitFor(() => {
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        );
+      });
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+      const pendingAfterMount = await listPendingWrites("review");
+      expect(pendingAfterMount).toHaveLength(1);
+      expect(pendingAfterMount[0]?.last_attempt_failed).toBe(true);
+
+      fireEvent.click(screen.getByText("Retry pending writes"));
+
+      // The actual proof this test exists for: a SECOND, genuine handler
+      // attempt — not a no-op that would leave the call count at 1.
+      await waitFor(() => {
+        expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(2);
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "1",
+        );
+      });
+
+      // The retried attempt failed again — the entry and its failure
+      // evidence are retained, not invented from an early return.
+      const pendingAfterRetry = await listPendingWrites("review");
+      expect(pendingAfterRetry).toHaveLength(1);
+      expect(pendingAfterRetry[0]?.last_attempt_failed).toBe(true);
+      expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+        "true",
+      );
+    });
+
+    it("is a no-op while an account sync is already in flight — no duplicate account hydration and no duplicate handler run", async () => {
+      const day = "2026-09-22";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      // Hold the mount pass's OWN handler call open — the pass is
+      // genuinely in flight, blocked on this exact promise.
+      let releaseMountAttempt!: (value: { provider: "supabase" }) => void;
+      mockSyncJournaledReviewEntry.mockReturnValueOnce(
+        new Promise((resolve) => {
+          releaseMountAttempt = resolve;
+        }),
+      );
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      // Confirm the mount pass has actually started the handler call before
+      // clicking retry — the in-flight guard is what this test is about,
+      // not a race against the mount effect itself starting.
+      await waitFor(() => {
+        expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+      });
+      const listAreasCallsBeforeRetry = mockListAreas.mock.calls.length;
+      const listExecutionReviewItemsCallsBeforeRetry =
+        mockListExecutionReviewItems.mock.calls.length;
+
+      fireEvent.click(screen.getByText("Retry pending writes"));
+
+      // #967 root review: an explicit boundary for the MANUAL WRAPPER's own
+      // settlement, not a fixed sleep — `runAccountSync`'s in-flight guard
+      // makes the retry's own call resolve near-instantly (an early
+      // return), so waiting for THAT specific call to settle is
+      // deterministic where a timer is not.
+      await waitFor(() => {
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "1",
+        );
+      });
+
+      // While the ORIGINAL pass is still held open: no duplicate account
+      // hydration (a second `runAccountSync` pass getting past its own
+      // guard would call `listAreas`/`listExecutionReviewItems` again,
+      // regardless of whether the journal's own serialization also happens
+      // to keep a second HANDLER call from running) and no duplicate
+      // handler call either.
+      expect(mockListAreas.mock.calls.length).toBe(listAreasCallsBeforeRetry);
+      expect(mockListExecutionReviewItems.mock.calls.length).toBe(
+        listExecutionReviewItemsCallsBeforeRetry,
+      );
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+
+      // The mount pass's own attempt still completes normally afterward.
+      releaseMountAttempt({ provider: "supabase" });
+      await waitFor(async () => {
+        const pending = await listPendingWrites("review");
+        expect(pending).toHaveLength(0);
+      });
+    });
+
+    it("a successful retry preserves the closed-day handoff — the account tier confirms before the device tier is allowed to clear", async () => {
+      const day = "2026-09-23";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+
+      seedSessionStorageWithPresyncedTask();
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValueOnce({
+        provider: "supabase",
+        tasks: [
+          {
+            id: PRESYNCED_TASK_ID,
+            user_id: PERSISTED_AREA.user_id,
+            area_id: PERSISTED_AREA.id,
+            project_id: null,
+            source_capture_item_id: null,
+            title: "Shipped the onboarding flow",
+            description: null,
+            status: "active",
+            priority_score: null,
+            priority_confidence: null,
+            task_type: null,
+            is_reversible: null,
+            energy_type: null,
+            estimated_minutes_low: null,
+            estimated_minutes_high: null,
+            due_at: null,
+            definition_of_done: null,
+            first_tiny_step: null,
+            created_at: "2026-08-01T00:00:00.000Z",
+            updated_at: "2026-08-01T00:00:00.000Z",
+          },
+        ],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      // The mount's own first attempt fails — real, durable evidence.
+      mockSyncJournaledReviewEntry.mockRejectedValueOnce(
+        new Error("server rejected the review"),
+      );
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+          "true",
+        );
+      });
+
+      // The retry starts a SECOND full pass — its own `syncPersistedWorkflowRows`
+      // read needs the presynced task again (its own `mockResolvedValueOnce`,
+      // exactly like the mount's first pass above), or the account's own
+      // (unrelated, always-dispatched) whole-workflow merge would retire it
+      // before the readback ever runs. The readback's own read (the default,
+      // consumed after that) confirms the day by name.
+      mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
+      mockListExecutionReviewItems.mockResolvedValueOnce({
+        provider: "supabase",
+        tasks: [
+          {
+            id: PRESYNCED_TASK_ID,
+            user_id: PERSISTED_AREA.user_id,
+            area_id: PERSISTED_AREA.id,
+            project_id: null,
+            source_capture_item_id: null,
+            title: "Shipped the onboarding flow",
+            description: null,
+            status: "active",
+            priority_score: null,
+            priority_confidence: null,
+            task_type: null,
+            is_reversible: null,
+            energy_type: null,
+            estimated_minutes_low: null,
+            estimated_minutes_high: null,
+            due_at: null,
+            definition_of_done: null,
+            first_tiny_step: null,
+            created_at: "2026-08-01T00:00:00.000Z",
+            updated_at: "2026-08-01T00:00:00.000Z",
+          },
+        ],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [
+          {
+            id: "55555555-5555-4555-8555-555555555555",
+            user_id: PERSISTED_AREA.user_id,
+            area_id: null,
+            review_type: "daily",
+            period_start: day,
+            period_end: day,
+            summary_json: {},
+            created_at: "2026-09-23T00:00:00.000Z",
+          },
+        ],
+      });
+      fireEvent.click(screen.getByText("Retry pending writes"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("account-closed-days")).toHaveTextContent(
+          day,
+        );
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("journalled-closed-days"),
+        ).not.toHaveTextContent(day);
+      });
+      // Unrelated task state, confirmed by the FIRST account read, survives
+      // the whole retry pass.
+      expect(screen.getByTestId("task-count")).toHaveTextContent("1");
     });
   });
 });
