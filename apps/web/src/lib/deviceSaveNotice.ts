@@ -1,4 +1,5 @@
 import {
+  ACCOUNT_NEEDS_APP_UPDATE,
   ACCOUNT_SAVE_FAILED,
   ACCOUNT_UNREACHABLE_NOW,
   DEVICE_STORAGE_BLOCKED,
@@ -60,16 +61,33 @@ import type { WorkflowSyncStatus } from "./workflowContext/types";
  * gets the SAME alarm treatment already used for `sync-error`, reusing the
  * same `ACCOUNT_SAVE_FAILED` sentence — no new vocabulary.
  *
- * This is deliberately checked ONLY inside the "account reached, some work
- * stayed here" case (5 below), not hoisted above the other branches: the
- * `local-only` branch's message is always a specific, call-site-chosen
- * sentence (e.g. "Your win is saved on this device…", or
- * `serverCapabilityMissingMessage`) that already says something more useful
- * than the generic failed-save sentence would, and the signed-out/
- * storage-blocked branches are about WHERE the work physically is, not
- * whether a send was attempted and rejected. Only case 5's calm default
- * (`SOME_WORK_ON_THIS_DEVICE` or silence-bound null) had nothing more
- * specific to say, which is exactly the gap this closes.
+ * #967 root/independent review of the first pass here: checking this ONLY
+ * inside the "synced, some work stayed here" case was too narrow, and the
+ * guard that kept it out of `local-only` was wrong. A committed candidate
+ * checked `!status.message` to decide whether a branch already had
+ * something "more specific" to say — but `markLocalOnly`'s callers never
+ * leave `message` null; they always pass a real sentence, and MOST of those
+ * sentences (`ACCOUNT_UNREACHABLE_NOW`, `SOME_WORK_ON_THIS_DEVICE`, every
+ * `savedOnThisDeviceBanner`/`savedOnThisDeviceAndSendingBanner(subject)`
+ * output) are exactly as generic as the default they replace — some of them
+ * even carry the "LifeOS will add it to your account as soon as it can"
+ * promise, which is the precise lie this whole feature exists to end once a
+ * real attempt has actually failed. A non-null message is not the same
+ * claim as a SPECIFIC, actionable one, and treating it that way silently
+ * re-hid the failure `verify967-notice-state.mjs` reproduced for both
+ * `local-only` shapes.
+ *
+ * The fix: `hasSpecificActionableMessage` below allowlists the ONE message
+ * in this codebase that actually names a distinct, non-retriable cause a
+ * person can act on — `ACCOUNT_NEEDS_APP_UPDATE` (the same string
+ * `workflowContext/reducerCore.ts`'s `serverCapabilityMissingMessage`
+ * aliases). Everything else — the generic defaults, every
+ * `savedOnThisDeviceBanner`/`savedOnThisDeviceAndSendingBanner` output, and
+ * any other caller-supplied sentence — yields to the failed-save alarm when
+ * `pendingSaveFailed` is true. Signed-out and storage-blocked still come
+ * first, unconditionally (checked before this is ever consulted): those are
+ * about WHERE the work physically is, not whether a send was attempted and
+ * rejected, and the CLAIM is explicit that their priority must not move.
  */
 export type DeviceSaveTone = "calm" | "alarm";
 
@@ -87,14 +105,17 @@ export interface DeviceSaveNotice {
 /**
  * What to tell the person about where their work is, or `null` for nothing.
  *
- * Priority, unchanged from the pre-#734 `SyncNotice`, with one #967
- * refinement inside case 5 (see the module comment above):
+ * Priority, unchanged from the pre-#734 `SyncNotice`, with the #967
+ * refinement described in the module comment above applied to BOTH cases 3
+ * and 5:
  *   1. signed out (and storage is fine) — calm, with the door
  *   2. device storage blocked — alarm
- *   3. account unreachable — calm
- *   4. saving to the account failed — alarm
- *   5. account reached, but some work stayed here — calm, UNLESS that work's
- *      last save attempt is known to have failed, in which case alarm
+ *   3. account unreachable — calm, UNLESS a queued write's last save attempt
+ *      is known to have failed and the current message is not a genuinely
+ *      specific actionable one, in which case alarm
+ *   4. saving to the account failed — alarm (already)
+ *   5. account reached, but some work stayed here — calm, with the same
+ *      #967 exception as case 3
  */
 export function resolveDeviceSaveNotice(
   status: WorkflowSyncStatus,
@@ -111,7 +132,17 @@ export function resolveDeviceSaveNotice(
     return { tone: "alarm", message: DEVICE_STORAGE_BLOCKED, signedOut: false };
   }
 
+  // #967 root/independent review: the ONE message in this codebase that
+  // names a distinct, non-retriable, actionable cause — every other caller
+  // of `markLocalOnly` (and the synced+pending case's own default) is
+  // exactly as generic as "we don't know why yet", even when non-null.
+  const hasSpecificActionableMessage =
+    status.message === ACCOUNT_NEEDS_APP_UPDATE;
+
   if (status.account === "local-only") {
+    if (status.pendingSaveFailed && !hasSpecificActionableMessage) {
+      return { tone: "alarm", message: ACCOUNT_SAVE_FAILED, signedOut: false };
+    }
     return {
       tone: "calm",
       message: status.message ?? ACCOUNT_UNREACHABLE_NOW,
@@ -128,7 +159,7 @@ export function resolveDeviceSaveNotice(
   }
 
   if (status.account === "synced" && status.pendingLocalChanges) {
-    if (status.pendingSaveFailed) {
+    if (status.pendingSaveFailed && !hasSpecificActionableMessage) {
       return {
         tone: "alarm",
         message: ACCOUNT_SAVE_FAILED,

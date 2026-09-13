@@ -38,8 +38,12 @@ import {
   journalWinWrite,
   journalReviewWrite,
 } from "@/lib/durability/durableWrites";
-import { SIGNED_OUT_SAVING_ON_THIS_DEVICE } from "@/lib/statusVocabulary";
+import {
+  ACCOUNT_SAVE_FAILED,
+  SIGNED_OUT_SAVING_ON_THIS_DEVICE,
+} from "@/lib/statusVocabulary";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/today",
@@ -234,8 +238,16 @@ function Harness() {
     syncStatus,
     accountClosedDays,
     journalledClosedDays,
+    journalledLoggedWins,
+    journalledCompletedSessionDays,
+    journalledRollupKeys,
   } = useWorkflow();
   const unsortedCapture = state.captureItems[0];
+  // #967 root/independent review: assert the ACTUAL composed notice
+  // (`resolveDeviceSaveNotice`), not only the raw `pendingSaveFailed` flag —
+  // the flag alone does not prove the shared notice both real consumers
+  // read actually changes.
+  const notice = resolveDeviceSaveNotice(syncStatus);
 
   return (
     <div>
@@ -251,10 +263,21 @@ function Harness() {
       <span data-testid="journalled-closed-days">
         {journalledClosedDays.join(",")}
       </span>
+      <span data-testid="journalled-logged-wins">
+        {journalledLoggedWins.map((win) => win.taskId).join(",")}
+      </span>
+      <span data-testid="journalled-completed-session-days">
+        {journalledCompletedSessionDays.join(",")}
+      </span>
+      <span data-testid="journalled-rollup-keys">
+        {journalledRollupKeys.join(",")}
+      </span>
       <span data-testid="task-count">{state.tasks.length}</span>
       <span data-testid="pending-save-failed">
         {String(syncStatus.pendingSaveFailed ?? false)}
       </span>
+      <span data-testid="notice-tone">{notice?.tone ?? ""}</span>
+      <span data-testid="notice-message">{notice?.message ?? ""}</span>
       <button
         type="button"
         onClick={() =>
@@ -1229,7 +1252,7 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
   // `syncStatus.pendingSaveFailed`, derived on `refreshJournalledDurableState`'s
   // existing `listPendingWrites()` read — no new watcher or read loop.
   describe("pendingSaveFailed (#967 visibility)", () => {
-    it("becomes visible after a failed replay attempt, survives a provider remount, and clears once a later attempt actually succeeds", async () => {
+    it("becomes visible after a failed replay attempt, is STILL visible (actual notice, not just the flag) after a provider remount whose own recovery attempt has not resolved yet, then clears once that attempt actually succeeds", async () => {
       const day = "2026-09-10";
 
       await journalReviewWrite({
@@ -1276,6 +1299,12 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
           "true",
         );
       });
+      // The ACTUAL composed notice, not just the raw flag — its own
+      // `waitFor`, since `pendingLocalChanges` and `pendingSaveFailed` are
+      // set by separate calls and can land on different renders.
+      await waitFor(() => {
+        expect(screen.getByTestId("notice-tone")).toHaveTextContent("alarm");
+      });
       // Visible through the NEW field, not by way of the account posture —
       // one rejected write must not be reported as the whole account
       // erroring, which would be a false, broader claim.
@@ -1283,9 +1312,16 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
 
       first.unmount();
 
-      // A later attempt (a fresh mount, exactly like a reload) succeeds this
-      // time — replay drains the entry for good.
-      mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
+      // #967 root/independent review: hold the SECOND mount's own recovery
+      // attempt open (a real pending promise, never resolved until this
+      // test says so) so the assertion below cannot pass merely because the
+      // mock happened to resolve before any check ran.
+      let resolveSecondAttempt!: (value: { provider: "supabase" }) => void;
+      mockSyncJournaledReviewEntry.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecondAttempt = resolve;
+        }),
+      );
 
       render(
         <WorkflowProvider>
@@ -1294,9 +1330,30 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       );
 
       // The durable evidence SURVIVED the remount (fake-indexeddb persists
-      // across the unmount, exactly like a real reload would) — this is the
-      // fresh provider's own first read confirming it, not a stale DOM node
-      // held over from the unmounted one.
+      // across the unmount, exactly like a real reload would) — the fresh
+      // provider's own mount-time journal read (independent of, and faster
+      // than, its OWN still-in-flight replay attempt above) confirms this
+      // BEFORE recovery has had any chance to complete.
+      await waitFor(() => {
+        expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+          "true",
+        );
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("notice-tone")).toHaveTextContent("alarm");
+      });
+      expect(screen.getByTestId("notice-message")).toHaveTextContent(
+        ACCOUNT_SAVE_FAILED,
+      );
+      // The write is STILL held open above — not yet actually resent.
+      await waitFor(async () => {
+        const pending = await listPendingWrites("review");
+        expect(pending).toHaveLength(1);
+      });
+
+      // NOW release recovery.
+      resolveSecondAttempt({ provider: "supabase" });
+
       await waitFor(async () => {
         const pending = await listPendingWrites("review");
         expect(pending).toHaveLength(0);
@@ -1306,6 +1363,7 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
           "false",
         );
       });
+      expect(screen.getByTestId("notice-tone")).not.toHaveTextContent("alarm");
     });
 
     it("stays calm for an ordinary queued write whose first attempt simply hasn't landed yet", async () => {
@@ -1386,6 +1444,472 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
 
       expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
         "false",
+      );
+    });
+
+    // #967 root/independent review, finding 1 (identity half): the
+    // post-replay call to `refreshPendingSaveFailed` rechecks the identity
+    // `runAccountSync` captured before replay against a fresh `getUser()`
+    // after its own journal read resolves — a session change spanning
+    // exactly that window must not let the result apply.
+    it("a session change mid-read for the failure-flag pass does not apply its result, even though the write genuinely failed", async () => {
+      const day = "2026-09-12";
+      const userA = PERSISTED_AREA.user_id;
+      const userB = "99999999-9999-4999-8999-999999999999";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      // The write genuinely, durably fails this pass — ground truth for
+      // the journal itself, independent of what the identity check does.
+      mockSyncJournaledReviewEntry.mockRejectedValue(
+        new Error("server rejected the review"),
+      );
+
+      // getUser sequence: call 1 = `expectedUserId` capture (A, before
+      // replay); call 2 = `refreshPendingSaveFailed`'s own post-read
+      // recheck (B — the narrowest possible window, a session change
+      // spanning exactly this one read); call 3+ = the later review
+      // readback's own recheck (A again — out of scope for this test).
+      mockGetUser
+        .mockReset()
+        .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
+        .mockResolvedValueOnce({ data: { user: { id: userB } }, error: null })
+        .mockResolvedValue({ data: { user: { id: userA } }, error: null });
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(async () => {
+        const pending = await listPendingWrites("review");
+        expect(pending[0]?.last_attempt_failed).toBe(true);
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
+      });
+
+      // The mismatched pass's own result must never have applied.
+      expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+        "false",
+      );
+    });
+
+    // #967 root/independent review, finding 1 (generation half): a newer
+    // read starting anywhere invalidates an older one's eventual
+    // completion, even when the older one started FIRST but resolves LAST.
+    it("a newer failed-write read wins over an older, slower pre-failure read that resolves after it", async () => {
+      const day = "2026-09-13";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      // This pass's own replay attempt genuinely fails the write.
+      mockSyncJournaledReviewEntry.mockRejectedValue(
+        new Error("server rejected the review"),
+      );
+
+      // Intercept ONLY the very first no-arg `listPendingWrites()` call —
+      // structurally, that is the unconditional "sync on mount" effect's
+      // own `refreshJournalledDurableState()` call, which starts almost
+      // immediately and does not depend on replay; `refreshPendingSaveFailed`
+      // (the NEWER read, by construction — it only starts once replay has
+      // resolved) reaches its own `listPendingWrites()` call several awaits
+      // later. Held open here, so it is the one that resolves LAST.
+      let releaseOlderRead!: (
+        value: Awaited<ReturnType<typeof listPendingWrites>>,
+      ) => void;
+      let olderReadIntercepted = false;
+      mockListPendingWrites.mockImplementation((entity) => {
+        if (entity === undefined && !olderReadIntercepted) {
+          olderReadIntercepted = true;
+          return new Promise((resolve) => {
+            releaseOlderRead = resolve;
+          });
+        }
+        return listPendingWritesActual(entity);
+      });
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      // The newer read (`refreshPendingSaveFailed`, gated behind replay)
+      // completes normally and applies `true`.
+      await waitFor(() => {
+        expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+          "true",
+        );
+      });
+
+      // NOW resolve the older, slower read — with the STALE snapshot it
+      // actually captured: the write BEFORE this pass's replay failed it.
+      releaseOlderRead([
+        {
+          entity: "review",
+          client_write_id: "stale-pre-failure-snapshot",
+          payload: {
+            review_type: "daily",
+            period_start: day,
+            period_end: day,
+          },
+          created_at: new Date().toISOString(),
+          // deliberately no `last_attempt_failed` — the state as it was
+          // before this pass's replay ran.
+        },
+      ] as unknown as Awaited<ReturnType<typeof listPendingWrites>>);
+
+      // Give the now-resolved older read a tick to (wrongly, if the
+      // generation guard were missing) apply.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+        "true",
+      );
+    });
+
+    // #967 root/independent review, finding 1 (generation half, mirrored
+    // for recovery): the same guard must not let a stale "still failed"
+    // read resurrect the flag after a newer, confirmed successful drain.
+    it("an older, slower failed-write read does not resurrect a stale failure after a newer successful drain resolves first", async () => {
+      const day = "2026-09-14";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+
+      // FIRST mount: the write genuinely fails once — establishes real,
+      // durable `last_attempt_failed: true` ground truth in the journal.
+      mockSyncJournaledReviewEntry.mockRejectedValueOnce(
+        new Error("server rejected the review"),
+      );
+      const first = render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+          "true",
+        );
+      });
+      first.unmount();
+
+      // SECOND mount: this pass's OWN replay attempt succeeds, draining the
+      // write for real. The OLDER read (the unconditional mount effect,
+      // structurally the first no-arg call — see the test above) is held
+      // open so it captures the STILL-true pre-drain snapshot, while the
+      // NEWER read (`refreshPendingSaveFailed`, gated behind replay)
+      // resolves normally, ahead of it, with the correct `false`.
+      mockSyncJournaledReviewEntry.mockResolvedValue({
+        provider: "supabase",
+      });
+
+      let releaseOlderRead!: (
+        value: Awaited<ReturnType<typeof listPendingWrites>>,
+      ) => void;
+      let olderReadIntercepted = false;
+      mockListPendingWrites.mockImplementation((entity) => {
+        if (entity === undefined && !olderReadIntercepted) {
+          olderReadIntercepted = true;
+          return new Promise((resolve) => {
+            releaseOlderRead = resolve;
+          });
+        }
+        return listPendingWritesActual(entity);
+      });
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      // The newer read applies the correct `false` — the successful drain.
+      await waitFor(async () => {
+        const pending = await listPendingWritesActual("review");
+        expect(pending).toHaveLength(0);
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+          "false",
+        );
+      });
+
+      // NOW resolve the older, slower read with the STALE still-failed
+      // snapshot it actually captured on this mount — it started FIRST but
+      // is completing LAST.
+      releaseOlderRead([
+        {
+          entity: "review",
+          client_write_id: "stale-still-failed-snapshot",
+          payload: {
+            review_type: "daily",
+            period_start: day,
+            period_end: day,
+          },
+          created_at: new Date().toISOString(),
+          last_attempt_failed: true,
+          last_attempt_failed_at: new Date().toISOString(),
+        },
+      ] as unknown as Awaited<ReturnType<typeof listPendingWrites>>);
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+        "false",
+      );
+    });
+
+    // #967 root/independent review, finding 4 (the "insufficient" half): a
+    // failed refresh must preserve a previously ESTABLISHED true value, not
+    // just leave an initially-false one alone (already covered above).
+    it("a failed refresh preserves a previously established TRUE failure state, not just an initially false one", async () => {
+      const day = "2026-09-15";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+
+      // FIRST mount: establishes real, durable `true`.
+      mockSyncJournaledReviewEntry.mockRejectedValueOnce(
+        new Error("server rejected the review"),
+      );
+      const first = render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+          "true",
+        );
+      });
+      first.unmount();
+
+      // SECOND mount: hold ITS OWN recovery attempt open so
+      // `refreshPendingSaveFailed` (the later read) has not run yet when
+      // every SUBSEQUENT journal read is switched to fail.
+      let resolveSecondAttempt!: (value: { provider: "supabase" }) => void;
+      mockSyncJournaledReviewEntry.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecondAttempt = resolve;
+        }),
+      );
+
+      let rejectSubsequentReads = false;
+      mockListPendingWrites.mockImplementation((entity) => {
+        if (rejectSubsequentReads) {
+          return Promise.reject(new Error("indexeddb read failed"));
+        }
+        return listPendingWritesActual(entity);
+      });
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      // The mount's own unconditional (identity-free) read confirms the
+      // still-genuinely-failed journal BEFORE this pass's own recovery
+      // attempt has resolved — the same checkpoint the remount test above
+      // uses.
+      await waitFor(() => {
+        expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+          "true",
+        );
+      });
+
+      // From THIS point on, every further journal read fails —
+      // specifically, `refreshPendingSaveFailed`'s own read, which has not
+      // run yet: it is still gated behind the held-open replay attempt.
+      rejectSubsequentReads = true;
+
+      // Release recovery — replay succeeds and removes the entry for real,
+      // but `refreshPendingSaveFailed`'s own re-read of the (now genuinely
+      // empty) journal fails, so it cannot apply the new, correct `false`.
+      resolveSecondAttempt({ provider: "supabase" });
+
+      await waitFor(async () => {
+        const pending = await listPendingWritesActual("review");
+        expect(pending).toHaveLength(0);
+      });
+      // The failed refresh must not have cleared the previously TRUE state.
+      expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+        "true",
+      );
+    });
+
+    // #967 root/independent review, finding 2's own required test: the
+    // failure-only refresh must not touch any of the four legacy journal
+    // arrays, even as some of their own entries actually drain this pass.
+    it("the failure-only post-replay refresh preserves all four legacy journal arrays, even as some of their own entries actually drain", async () => {
+      const closedDay = "2026-09-16";
+      const failedDay = "2026-09-17";
+
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: closedDay,
+        periodEnd: closedDay,
+        summaryJson: {},
+      });
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: failedDay,
+        periodEnd: failedDay,
+        summaryJson: {},
+      });
+      await journalWinWrite({
+        workflowTaskId: PRESYNCED_TASK_ID,
+        persistedTaskId: PRESYNCED_TASK_ID,
+        persistedAreaId: PERSISTED_AREA.id,
+        title: "Shipped the onboarding flow",
+        detail: null,
+        occurredAt: "2026-09-16T00:00:00.000Z",
+      });
+
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      // closedDay's review, and the win, both succeed and drain this pass;
+      // failedDay's review rejects, marking IT (and only it) failed.
+      mockSyncJournaledReviewEntry.mockImplementation(
+        (_client: unknown, payload: { period_start?: string }) =>
+          payload.period_start === failedDay
+            ? Promise.reject(new Error("server rejected the review"))
+            : Promise.resolve({ provider: "supabase" }),
+      );
+      mockSyncJournaledWin.mockResolvedValue({ provider: "supabase" });
+
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+
+      // Wait for the whole pass to settle: closedDay's review and the win
+      // both actually drained; failedDay's review is the only one left.
+      await waitFor(async () => {
+        const reviews = await listPendingWrites("review");
+        expect(reviews).toHaveLength(1);
+        expect(reviews[0]?.payload).toMatchObject({
+          period_start: failedDay,
+        });
+      });
+      await waitFor(async () => {
+        const wins = await listPendingWrites("win");
+        expect(wins).toHaveLength(0);
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
+      });
+      expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+        "true",
+      );
+
+      // The failure-only refresh must not have touched any of the four
+      // legacy arrays — closedDay's drain (a real, successful send) stays
+      // invisible to them until a confirmed account readback authorizes
+      // the full refresh, exactly as before this slice. `journalled-
+      // completed-session-days` and `journalled-rollup-keys` were never
+      // seeded in this test (no execution-session or rollup write), so
+      // their "unchanged" proof here is necessarily the weaker "still
+      // empty" — the closed-days and wins assertions are the load-bearing
+      // proof that a real drain does not leak into these arrays early.
+      expect(screen.getByTestId("journalled-closed-days")).toHaveTextContent(
+        closedDay,
+      );
+      expect(screen.getByTestId("journalled-logged-wins")).toHaveTextContent(
+        PRESYNCED_TASK_ID,
+      );
+      expect(
+        screen.getByTestId("journalled-completed-session-days"),
+      ).toHaveTextContent("");
+      expect(screen.getByTestId("journalled-rollup-keys")).toHaveTextContent(
+        "",
       );
     });
   });

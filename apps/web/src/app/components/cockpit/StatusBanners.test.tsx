@@ -263,6 +263,26 @@ describe("SyncNotice tone (#734)", () => {
       expect(container).toBeEmptyDOMElement();
     });
 
+    // #967 root/independent review: the local-only branch must ALSO raise
+    // the alarm for a real failed attempt — see `deviceSaveNotice.test.ts`
+    // for the full rationale.
+    it("raises the alarm for local-only with the generic account-unreachable message, when a save actually failed", () => {
+      render(
+        <SyncNotice
+          status={base({
+            account: "local-only",
+            message: ACCOUNT_UNREACHABLE_NOW,
+            pendingLocalChanges: true,
+            pendingSaveFailed: true,
+          })}
+        />,
+      );
+
+      const banner = screen.getByTestId("sync-notice");
+      expect(banner).toHaveAttribute("data-tone", "alarm");
+      expect(banner).toHaveTextContent(ACCOUNT_SAVE_FAILED);
+    });
+
     it("keeps signed-out priority over a failed attempt", () => {
       render(
         <SyncNotice

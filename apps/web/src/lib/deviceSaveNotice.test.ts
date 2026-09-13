@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { resolveDeviceSaveNotice } from "./deviceSaveNotice";
 import {
+  ACCOUNT_NEEDS_APP_UPDATE,
   ACCOUNT_SAVE_FAILED,
   ACCOUNT_UNREACHABLE_NOW,
   DEVICE_STORAGE_BLOCKED,
   SIGNED_OUT_SAVING_ON_THIS_DEVICE,
   SOME_WORK_ON_THIS_DEVICE,
+  savedOnThisDeviceAndSendingBanner,
 } from "./statusVocabulary";
 import type { WorkflowSyncStatus } from "./workflowContext/types";
 
@@ -179,12 +181,53 @@ describe("resolveDeviceSaveNotice (#734)", () => {
       expect(notice).toBeNull();
     });
 
-    it("does not override a more specific local-only message with the generic failed-save sentence", () => {
-      const specificMessage = "Your win is saved on this device and sending.";
+    // #967 root/independent review: `verify967-notice-state.mjs` reproduced
+    // the actual resolver staying calm for these two exact local-only
+    // shapes, both with a real failed attempt on record. A non-null message
+    // is not automatically a specific, actionable one — most of
+    // `markLocalOnly`'s callers pass exactly this generic, "will add it as
+    // soon as it can" language, and one of them (`savedOnThisDeviceAndSendingBanner`)
+    // is the precise misleading promise #967 exists to end.
+    it("raises alarm for local-only with the generic ACCOUNT_UNREACHABLE_NOW default, when a save actually failed", () => {
       const notice = resolveDeviceSaveNotice(
         status({
           account: "local-only",
-          message: specificMessage,
+          message: ACCOUNT_UNREACHABLE_NOW,
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "alarm",
+        message: ACCOUNT_SAVE_FAILED,
+        signedOut: false,
+      });
+    });
+
+    it("raises alarm for local-only with a generic per-write 'saved here and sending' banner, when a save actually failed", () => {
+      const genericBanner = savedOnThisDeviceAndSendingBanner("Your win");
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "local-only",
+          message: genericBanner,
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "alarm",
+        message: ACCOUNT_SAVE_FAILED,
+        signedOut: false,
+      });
+    });
+
+    it("does not override the one genuinely specific actionable message (ACCOUNT_NEEDS_APP_UPDATE) with the generic failed-save sentence", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "local-only",
+          message: ACCOUNT_NEEDS_APP_UPDATE,
           pendingLocalChanges: true,
           pendingSaveFailed: true,
         }),
@@ -192,7 +235,24 @@ describe("resolveDeviceSaveNotice (#734)", () => {
 
       expect(notice).toEqual({
         tone: "calm",
-        message: specificMessage,
+        message: ACCOUNT_NEEDS_APP_UPDATE,
+        signedOut: false,
+      });
+    });
+
+    it("stays calm for local-only with no failed attempt, regardless of message", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "local-only",
+          message: ACCOUNT_UNREACHABLE_NOW,
+          pendingLocalChanges: true,
+          pendingSaveFailed: false,
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "calm",
+        message: ACCOUNT_UNREACHABLE_NOW,
         signedOut: false,
       });
     });

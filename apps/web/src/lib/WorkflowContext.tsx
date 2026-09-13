@@ -344,6 +344,19 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // Without this a second concurrent run could read `persistedAreasRef`
   // mid-write from the first.
   const accountSyncInFlightRef = useRef(false);
+  // #967 follow-up review, finding 1: every read that can set
+  // `syncStatus.pendingSaveFailed` (`refreshJournalledDurableState`'s own
+  // computation, and the narrower `refreshPendingSaveFailed` below) shares
+  // this counter. Each read captures its own id, synchronously, BEFORE its
+  // own `listPendingWrites()` call starts; only the read whose id is still
+  // the latest when it is ready to apply may do so. Incrementing on every
+  // START (not on completion) is load-bearing: an older read finishing
+  // AFTER a newer one starts is stale the instant the newer one starts,
+  // regardless of whether that newer read goes on to succeed, reject, or
+  // get its own result thrown away by an identity mismatch — a completion
+  // no longer being the latest-STARTED one is what disqualifies it, not
+  // whether anything else actually applied a value.
+  const pendingSaveFailedGenerationRef = useRef(0);
   // #960 defect 1/2: the auth listener below fires from a Supabase callback,
   // not a React render, so it cannot close over the latest `syncStatus` —
   // this mirror is what lets it read the CURRENT posture (signed-out vs
@@ -1595,141 +1608,219 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
    * replay drain, `online`, and every individual write-failure path that
    * already calls this in its own `finally`. Best-effort like everything
    * else in this function: a failed read leaves the flag exactly as it was,
-   * never inventing a clear or a new failure.
+   * never inventing a clear or a new failure. Its application is also
+   * generation-gated (see `pendingSaveFailedGenerationRef`'s own comment) —
+   * this function's own reads race the narrower `refreshPendingSaveFailed`
+   * below and each other exactly the same way.
    *
-   * #967 visibility, `includeClosedDays`: `runAccountSync`'s post-replay
-   * call site gates the FULL refresh (this function's default) behind
-   * `readbackAccountReviewClosedDays` confirming the account already holds
-   * whatever this pass just replayed — see that function's own comment for
-   * why (the #967 "both tiers empty" gap). That gate exists ONLY because
-   * `journalledClosedDays` feeds `resolveDayClose`'s two-tier union; none of
-   * the other state this function derives (logged wins, completed session
-   * days, rollup keys, or `pendingSaveFailed`) is read that way — each is a
-   * plain reflection of what the journal currently, actually holds, with no
-   * second tier to race against. Coupling THEIR refresh to the closed-day
-   * gate too was a pre-existing, already-named gap (the prior review's own
-   * "avoid making an unrelated failed review read gate the refresh of win,
-   * rollup, and session journal state" note) — `includeClosedDays: false`
-   * lets `runAccountSync` refresh everything else unconditionally right
-   * after replay, then call this again with the default (closed days
-   * included) only once confirmation actually lands.
+   * #967 follow-up review, finding 2: the other three arrays this function
+   * derives (logged wins, completed session days, rollup keys) are NOT
+   * account-tier-free the way the original #967 visibility comment here
+   * claimed — `momentsViewModel/close.ts` unions `journalledLoggedWins` with
+   * `accountLoggedWins`, and `journalledCompletedSessionDays` with the
+   * account-loaded execution state; `useCloseMomentRollups.ts` unions
+   * `journalledRollupKeys` with `allRollupSummaries`. Each has exactly the
+   * same "both tiers momentarily empty" shape `journalledClosedDays` has —
+   * this function has always updated all four unconditionally here (its
+   * pre-#967-visibility shape), and `runAccountSync`'s OWN post-replay call
+   * site is what stays responsible for not calling this whole function
+   * until the matching account-tier read has actually happened; see that
+   * call site's own comment. This function does not, and must not, try to
+   * partially skip its own four arrays — `refreshPendingSaveFailed` exists
+   * as a SEPARATE, narrower function precisely so the new flag can update
+   * without that risk, rather than growing an option here that could be
+   * mis-used to skip fewer of the four than a caller intended.
    */
-  const refreshJournalledDurableState = useCallback(
-    async (options?: { includeClosedDays?: boolean }) => {
+  const refreshJournalledDurableState = useCallback(async () => {
+    // #967 follow-up review, finding 1: captured before this read starts —
+    // see `pendingSaveFailedGenerationRef`'s own comment.
+    const myPendingSaveFailedGeneration =
+      ++pendingSaveFailedGenerationRef.current;
+    try {
+      const pending = await listPendingWrites();
+      // See `mountedRef`'s note above the ref/refs block — a provider
+      // unmounted while this read was in flight must not touch state. One
+      // check covers every setter below: none of them awaits between here
+      // and the end of this try block.
+      if (!mountedRef.current) return;
+      setJournalledClosedDays(
+        pending
+          .filter((write) => write.entity === "review")
+          .map(
+            (write) =>
+              (write.payload as { period_start?: unknown }).period_start,
+          )
+          .filter((day): day is string => typeof day === "string"),
+      );
+      // #737 C1 re-score GAP 1. Read out of the SAME `listPendingWrites()`
+      // pass, and therefore on exactly the same lifecycle as the closed days
+      // above (mount, after every replay drain, and on `online`). That is not
+      // tidiness: a win logged offline and then drained must stop being
+      // reported as device-only in the same beat the drain finishes, or the
+      // Close moment shows a stale tier — which is the audit's finding again,
+      // one refresh later.
+      setJournalledLoggedWins(
+        pending
+          .filter((write) => write.entity === "win")
+          .map((write) => write.payload as Record<string, unknown>)
+          .filter(
+            (
+              payload,
+            ): payload is {
+              workflow_task_id: string;
+              persisted_task_id?: unknown;
+              title: string;
+              occurred_at: string;
+            } =>
+              typeof payload.workflow_task_id === "string" &&
+              typeof payload.title === "string" &&
+              typeof payload.occurred_at === "string",
+          )
+          // BOTH id spaces, because the journal deliberately stores both and
+          // the task can cross the sync boundary while its win is queued.
+          // Pre-sync the candidate carries the local id; once the task syncs,
+          // the id-alias merge replaces the row and the candidate carries the
+          // account uuid — while the queued payload still says the local id.
+          // Reporting only one of the two would re-offer the win at exactly
+          // that moment, and confirming would derive a SECOND key
+          // (`deriveWinClientWriteId` prefers the account id) and a second row.
+          .map((payload) => ({
+            taskId: payload.workflow_task_id,
+            taskIdAliases:
+              typeof payload.persisted_task_id === "string"
+                ? [payload.persisted_task_id]
+                : undefined,
+            title: payload.title,
+            occurredAt: payload.occurred_at,
+          })),
+      );
+      // #737 C1 re-score GAP 4: the device tier of "how many blockless
+      // sessions were finished today?". Read out of the SAME
+      // `listPendingWrites()` pass as everything above, so the moment a drain
+      // moves a session to the account it stops being reported here and starts
+      // being reported by the account tier — never both, never neither.
+      //
+      // The day comes from the JOURNAL ENTRY's own `created_at` (the instant
+      // the user saved the end sheet), resolved to their LOCAL day. Deriving
+      // it at read time from `new Date()` would re-date a session finished at
+      // 23:50 to the following morning.
+      setJournalledCompletedSessionDays(
+        pending
+          .filter((write) => write.entity === "execution_session")
+          .filter((write) => {
+            const payload = write.payload as {
+              outcome?: unknown;
+              workflow_block_id?: unknown;
+            };
+            return (
+              payload.outcome === "completed" &&
+              payload.workflow_block_id === null
+            );
+          })
+          .map((write) => localIsoDate(new Date(write.created_at)))
+          .filter((day) => !Number.isNaN(Date.parse(day))),
+      );
+      // #737 C1 re-score GAP 2: the device tier of "is this period already
+      // rolled up?", keyed the same way the hook keys its account tier.
+      setJournalledRollupKeys(
+        pending
+          .filter((write) => write.entity === "rollup")
+          .map((write) => write.payload as Record<string, unknown>)
+          .filter(
+            (
+              payload,
+            ): payload is {
+              workflow_area_id: string;
+              period_type: string;
+              period_start: string;
+            } =>
+              typeof payload.workflow_area_id === "string" &&
+              typeof payload.period_type === "string" &&
+              typeof payload.period_start === "string",
+          )
+          .map(
+            (payload) =>
+              `${payload.workflow_area_id}|${payload.period_type}|${payload.period_start}`,
+          ),
+      );
+      // #967 visibility: true when at least one currently-queued write's
+      // last account-save attempt is known to have failed. Deliberately
+      // NOT scoped to one entity — any queued write's failure is equally
+      // factual evidence that "saving didn't work" for this device right
+      // now.
+      //
+      // #967 follow-up review, finding 1: only applied if no NEWER read
+      // (this function's own, or `refreshPendingSaveFailed`'s) has
+      // started since this one did.
+      if (
+        pendingSaveFailedGenerationRef.current === myPendingSaveFailedGeneration
+      ) {
+        const pendingSaveFailed = pending.some(
+          (write) => write.last_attempt_failed === true,
+        );
+        setSyncStatus((current) =>
+          current.pendingSaveFailed === pendingSaveFailed
+            ? current
+            : { ...current, pendingSaveFailed },
+        );
+      }
+    } catch {
+      // best-effort signal; a journal read failure must not break the shell
+    }
+  }, []);
+
+  /**
+   * #967 follow-up review, finding 1 and 2: a NARROWER sibling of
+   * `refreshJournalledDurableState` that updates ONLY
+   * `syncStatus.pendingSaveFailed` — never `journalledClosedDays`,
+   * `journalledLoggedWins`, `journalledCompletedSessionDays`, or
+   * `journalledRollupKeys`. `runAccountSync`'s post-replay pass needs this
+   * flag to update unconditionally (a write that just failed to reach the
+   * account, by definition, cannot have its day confirmed by the very next
+   * review readback, so gating it behind that confirmation would mean it
+   * never updates on the pass that most needs it) — but, per finding 2, the
+   * other four arrays each have their own real account tier and must keep
+   * waiting for their own confirmed transfer; this function exists so the
+   * one flag that is safe to update unconditionally can do so without
+   * dragging the other four along with it.
+   *
+   * Two guards, both scoped LOCALLY to this one flag (no general auth or
+   * journal redesign):
+   *  - The SAME generation counter `refreshJournalledDurableState` uses —
+   *    see `pendingSaveFailedGenerationRef`'s own comment. A newer read
+   *    starting anywhere invalidates an older one's completion, even if the
+   *    newer one itself goes on to fail or get its own result discarded.
+   *  - `expectedUserId`, the identity `runAccountSync` already captured
+   *    before this pass's replay — rechecked against a fresh
+   *    `client.auth.getUser()` after this read resolves. A session that
+   *    changed underneath this pass must never let the wrong identity's
+   *    journal reading (or a stale one's) land.
+   */
+  const refreshPendingSaveFailed = useCallback(
+    async (
+      client: MinimalSupabaseClient | null,
+      expectedUserId: string | null,
+    ) => {
+      const myGeneration = ++pendingSaveFailedGenerationRef.current;
       try {
         const pending = await listPendingWrites();
-        // See `mountedRef`'s note above the ref/refs block — a provider
-        // unmounted while this read was in flight must not touch state. One
-        // check covers every setter below: none of them awaits between here
-        // and the end of this try block.
         if (!mountedRef.current) return;
-        if (options?.includeClosedDays !== false) {
-          setJournalledClosedDays(
-            pending
-              .filter((write) => write.entity === "review")
-              .map(
-                (write) =>
-                  (write.payload as { period_start?: unknown }).period_start,
-              )
-              .filter((day): day is string => typeof day === "string"),
-          );
+        if (pendingSaveFailedGenerationRef.current !== myGeneration) return;
+
+        if (expectedUserId) {
+          if (!client?.auth) return;
+          let afterUserId: string | null;
+          try {
+            const after = await client.auth.getUser();
+            afterUserId = after.data.user?.id ?? null;
+          } catch {
+            return;
+          }
+          if (!mountedRef.current) return;
+          if (pendingSaveFailedGenerationRef.current !== myGeneration) return;
+          if (afterUserId !== expectedUserId) return;
         }
-        // #737 C1 re-score GAP 1. Read out of the SAME `listPendingWrites()`
-        // pass, and therefore on exactly the same lifecycle as the closed days
-        // above (mount, after every replay drain, and on `online`). That is not
-        // tidiness: a win logged offline and then drained must stop being
-        // reported as device-only in the same beat the drain finishes, or the
-        // Close moment shows a stale tier — which is the audit's finding again,
-        // one refresh later.
-        setJournalledLoggedWins(
-          pending
-            .filter((write) => write.entity === "win")
-            .map((write) => write.payload as Record<string, unknown>)
-            .filter(
-              (
-                payload,
-              ): payload is {
-                workflow_task_id: string;
-                persisted_task_id?: unknown;
-                title: string;
-                occurred_at: string;
-              } =>
-                typeof payload.workflow_task_id === "string" &&
-                typeof payload.title === "string" &&
-                typeof payload.occurred_at === "string",
-            )
-            // BOTH id spaces, because the journal deliberately stores both and
-            // the task can cross the sync boundary while its win is queued.
-            // Pre-sync the candidate carries the local id; once the task syncs,
-            // the id-alias merge replaces the row and the candidate carries the
-            // account uuid — while the queued payload still says the local id.
-            // Reporting only one of the two would re-offer the win at exactly
-            // that moment, and confirming would derive a SECOND key
-            // (`deriveWinClientWriteId` prefers the account id) and a second row.
-            .map((payload) => ({
-              taskId: payload.workflow_task_id,
-              taskIdAliases:
-                typeof payload.persisted_task_id === "string"
-                  ? [payload.persisted_task_id]
-                  : undefined,
-              title: payload.title,
-              occurredAt: payload.occurred_at,
-            })),
-        );
-        // #737 C1 re-score GAP 4: the device tier of "how many blockless
-        // sessions were finished today?". Read out of the SAME
-        // `listPendingWrites()` pass as everything above, so the moment a drain
-        // moves a session to the account it stops being reported here and starts
-        // being reported by the account tier — never both, never neither.
-        //
-        // The day comes from the JOURNAL ENTRY's own `created_at` (the instant
-        // the user saved the end sheet), resolved to their LOCAL day. Deriving
-        // it at read time from `new Date()` would re-date a session finished at
-        // 23:50 to the following morning.
-        setJournalledCompletedSessionDays(
-          pending
-            .filter((write) => write.entity === "execution_session")
-            .filter((write) => {
-              const payload = write.payload as {
-                outcome?: unknown;
-                workflow_block_id?: unknown;
-              };
-              return (
-                payload.outcome === "completed" &&
-                payload.workflow_block_id === null
-              );
-            })
-            .map((write) => localIsoDate(new Date(write.created_at)))
-            .filter((day) => !Number.isNaN(Date.parse(day))),
-        );
-        // #737 C1 re-score GAP 2: the device tier of "is this period already
-        // rolled up?", keyed the same way the hook keys its account tier.
-        setJournalledRollupKeys(
-          pending
-            .filter((write) => write.entity === "rollup")
-            .map((write) => write.payload as Record<string, unknown>)
-            .filter(
-              (
-                payload,
-              ): payload is {
-                workflow_area_id: string;
-                period_type: string;
-                period_start: string;
-              } =>
-                typeof payload.workflow_area_id === "string" &&
-                typeof payload.period_type === "string" &&
-                typeof payload.period_start === "string",
-            )
-            .map(
-              (payload) =>
-                `${payload.workflow_area_id}|${payload.period_type}|${payload.period_start}`,
-            ),
-        );
-        // #967 visibility: true when at least one currently-queued write's
-        // last account-save attempt is known to have failed. Deliberately
-        // NOT scoped to one entity — any queued write's failure is equally
-        // factual evidence that "saving didn't work" for this device right
-        // now.
+
         const pendingSaveFailed = pending.some(
           (write) => write.last_attempt_failed === true,
         );
@@ -1963,18 +2054,20 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             // POST-drain count on this very call, not one refresh cycle late.
             if (!mountedRef.current) return;
             await refreshPendingLocalChanges();
-            // #967 visibility: refresh everything this pass's replay could
-            // have changed EXCEPT closed days, unconditionally — logged
-            // wins, completed session days, rollup keys, and
-            // `pendingSaveFailed` are each a plain reflection of the
-            // journal's current contents with no second (account) tier to
-            // race against, so none of them need to wait for the
-            // review-specific confirmation below. Closed days keep waiting
-            // for it (see `refreshJournalledDurableState`'s own comment on
-            // `includeClosedDays`) — this call deliberately does not
-            // recompute them yet.
+            // #967 follow-up review, finding 2: refresh ONLY
+            // `pendingSaveFailed` unconditionally right after replay — a
+            // write that just failed to reach the account, by definition,
+            // cannot have its day confirmed by the review readback below,
+            // so gating this specific flag behind that confirmation would
+            // mean it never updates on the pass that most needs it. The
+            // other four journalled arrays (closed days, logged wins,
+            // completed session days, rollup keys) each have their own real
+            // account tier — see `refreshJournalledDurableState`'s own
+            // comment — and stay gated behind the confirmation below exactly
+            // as before; `refreshPendingSaveFailed` is a narrower sibling
+            // that touches none of them.
             if (!mountedRef.current) return;
-            await refreshJournalledDurableState({ includeClosedDays: false });
+            await refreshPendingSaveFailed(client, expectedUserId);
             // #967: transfer a successfully replayed daily close to the
             // account tier BEFORE the journal refresh below can clear its
             // device-tier evidence — see `readbackAccountReviewClosedDays`'s
@@ -2027,6 +2120,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       replayJournaledWrites,
       refreshPendingLocalChanges,
       refreshJournalledDurableState,
+      refreshPendingSaveFailed,
       readbackAccountReviewClosedDays,
     ],
   );

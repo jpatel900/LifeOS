@@ -247,6 +247,28 @@ describe("MastheadSaveState (#737 C1 S5)", () => {
       expect(container).toBeEmptyDOMElement();
     });
 
+    // #967 root/independent review: the local-only branch must ALSO raise
+    // the alarm for a real failed attempt — a committed first pass left it
+    // calm because a non-null `message` was wrongly treated as proof of a
+    // specific, actionable reason, which most `markLocalOnly` callers are
+    // not.
+    it("raises the alarm for local-only with the generic account-unreachable message, when a save actually failed", () => {
+      render(
+        <MastheadSaveState
+          status={status({
+            account: "local-only",
+            message: ACCOUNT_UNREACHABLE_NOW,
+            pendingLocalChanges: true,
+            pendingSaveFailed: true,
+          })}
+        />,
+      );
+
+      const el = screen.getByTestId("masthead-save-state");
+      expect(el).toHaveAttribute("data-tone", "alarm");
+      expect(el).toHaveTextContent(ACCOUNT_SAVE_FAILED);
+    });
+
     it("keeps signed-out priority over a failed attempt", () => {
       render(
         <MastheadSaveState
