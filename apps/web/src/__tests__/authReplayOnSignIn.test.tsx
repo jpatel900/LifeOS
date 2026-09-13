@@ -21,6 +21,7 @@
 // `lib/data/workflow.test.ts` for the literal request shape) is invoked with
 // the resolved account area id once the sign-in listener fires.
 import "fake-indexeddb/auto";
+import { useState } from "react";
 import {
   act,
   fireEvent,
@@ -249,6 +250,12 @@ function Harness() {
   // the flag alone does not prove the shared notice both real consumers
   // read actually changes.
   const notice = resolveDeviceSaveNotice(syncStatus);
+  // #967 manual retry, root review: an explicit boundary for the WRAPPER
+  // call's OWN settlement — `retryPendingAccountWrites()`'s in-flight guard
+  // makes it resolve near-instantly when a pass is already running, so a
+  // fixed sleep cannot reliably distinguish "the guard returned early" from
+  // "a real pass ran". Tests wait on this count instead of a timer.
+  const [retrySettledCount, setRetrySettledCount] = useState(0);
 
   return (
     <div>
@@ -279,6 +286,7 @@ function Harness() {
       </span>
       <span data-testid="notice-tone">{notice?.tone ?? ""}</span>
       <span data-testid="notice-message">{notice?.message ?? ""}</span>
+      <span data-testid="retry-settled-count">{retrySettledCount}</span>
       <button
         type="button"
         onClick={() =>
@@ -301,7 +309,9 @@ function Harness() {
       <button
         type="button"
         onClick={() => {
-          void retryPendingAccountWrites();
+          void retryPendingAccountWrites().then(() => {
+            setRetrySettledCount((count) => count + 1);
+          });
         }}
       >
         Retry pending writes
@@ -1990,10 +2000,12 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
   // #967 manual retry: `retryPendingAccountWrites` is a thin wrapper around
   // `runAccountSync({ replayAfter: true })` — the SAME ordered area/account
   // hydration, serialized drain, identity recheck, and closed-day handoff
-  // every automatic trigger already uses. These tests are about the WRAPPER
-  // reaching that pass correctly and respecting its in-flight guard; the
-  // ordering/identity/failure-retention guarantees themselves are already
-  // proven above (and are not re-proven here, per scope).
+  // the mount effect and the sign-in listener already run through (NOT
+  // reconnect, which calls `replayJournaledWrites` directly). These tests
+  // are about the WRAPPER reaching that pass correctly and respecting its
+  // in-flight guard; the ordering/identity/failure-retention guarantees
+  // themselves are already proven above (and are not re-proven here, per
+  // scope).
   describe("retryPendingAccountWrites (#967 manual retry)", () => {
     it("drains a real failed pending write and clears its evidence, through the exact same pass a mount uses", async () => {
       const day = "2026-09-20";
@@ -2054,7 +2066,7 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       });
     });
 
-    it("retains the entry and the visible failure when the retried attempt rejects again", async () => {
+    it("retains the entry and the visible failure when the retried attempt rejects again, proving a genuine second handler attempt", async () => {
       const day = "2026-09-21";
 
       await journalReviewWrite({
@@ -2088,27 +2100,40 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         </WorkflowProvider>,
       );
 
+      // #967 root review: an explicit boundary for the INITIAL pass's own
+      // completion — a call count of 1 (not merely `pending-save-failed`
+      // reaching "true", which this SAME first attempt already satisfies
+      // and therefore proves nothing about a second one) plus the
+      // account-sync posture settling.
       await waitFor(() => {
-        expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
-          "true",
-        );
+        expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
       });
-
-      fireEvent.click(screen.getByText("Retry pending writes"));
-
-      // No positive change to wait for (it fails again) — settle on the
-      // account-sync posture, the last thing the pass sets either way.
       await waitFor(() => {
         expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
       });
+      const pendingAfterMount = await listPendingWrites("review");
+      expect(pendingAfterMount).toHaveLength(1);
+      expect(pendingAfterMount[0]?.last_attempt_failed).toBe(true);
+
+      fireEvent.click(screen.getByText("Retry pending writes"));
+
+      // The actual proof this test exists for: a SECOND, genuine handler
+      // attempt — not a no-op that would leave the call count at 1.
+      await waitFor(() => {
+        expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(2);
+      });
+
+      // The retried attempt failed again — the entry and its failure
+      // evidence are retained, not invented from an early return.
       const pendingAfterRetry = await listPendingWrites("review");
       expect(pendingAfterRetry).toHaveLength(1);
+      expect(pendingAfterRetry[0]?.last_attempt_failed).toBe(true);
       expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
         "true",
       );
     });
 
-    it("is a no-op while an account sync is already in flight — no duplicate handler run", async () => {
+    it("is a no-op while an account sync is already in flight — no duplicate account hydration and no duplicate handler run", async () => {
       const day = "2026-09-22";
 
       await journalReviewWrite({
@@ -2152,13 +2177,33 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       await waitFor(() => {
         expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
       });
+      const listAreasCallsBeforeRetry = mockListAreas.mock.calls.length;
+      const listExecutionReviewItemsCallsBeforeRetry =
+        mockListExecutionReviewItems.mock.calls.length;
 
       fireEvent.click(screen.getByText("Retry pending writes"));
 
-      // `runAccountSync`'s own in-flight guard returns immediately for the
-      // retry's call — give it a moment to (wrongly, if the guard failed)
-      // start a second handler call, then prove it did not.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // #967 root review: an explicit boundary for the MANUAL WRAPPER's own
+      // settlement, not a fixed sleep — `runAccountSync`'s in-flight guard
+      // makes the retry's own call resolve near-instantly (an early
+      // return), so waiting for THAT specific call to settle is
+      // deterministic where a timer is not.
+      await waitFor(() => {
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "1",
+        );
+      });
+
+      // While the ORIGINAL pass is still held open: no duplicate account
+      // hydration (a second `runAccountSync` pass getting past its own
+      // guard would call `listAreas`/`listExecutionReviewItems` again,
+      // regardless of whether the journal's own serialization also happens
+      // to keep a second HANDLER call from running) and no duplicate
+      // handler call either.
+      expect(mockListAreas.mock.calls.length).toBe(listAreasCallsBeforeRetry);
+      expect(mockListExecutionReviewItems.mock.calls.length).toBe(
+        listExecutionReviewItemsCallsBeforeRetry,
+      );
       expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
 
       // The mount pass's own attempt still completes normally afterward.

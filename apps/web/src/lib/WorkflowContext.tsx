@@ -2866,7 +2866,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     // #967 manual retry: reuses `runAccountSync` end to end — the same
     // ordered hydration, serialized drain, identity recheck, and closed-day
-    // handoff every automatic trigger already runs. No new drain, no direct
+    // handoff the mount effect and the sign-in listener already run
+    // through (NOT reconnect — that path calls `replayJournaledWrites`
+    // directly, bypassing this hydration/identity/closed-day handling; see
+    // the `online` handler's own comment). No new drain, no direct
     // `replayJournaledWrites` call, no change to `refreshPersistedWorkflow`
     // above (still read-only). `runAccountSync`'s own in-flight guard makes
     // this a safe no-op if a pass is already running; callers must judge

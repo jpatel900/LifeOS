@@ -93,11 +93,15 @@ export interface WorkflowContextValue {
   // #967 manual retry: a thin, public wrapper around the EXISTING
   // `runAccountSync({ replayAfter: true })` pass — the same ordered
   // area/account hydration, serialized journal drain, identity recheck, and
-  // closed-day handoff every automatic trigger (mount, sign-in, reconnect)
-  // already uses. It does not drain anything itself and is not a second
-  // replay mechanism. `runAccountSync`'s own in-flight guard means this can
-  // resolve having done nothing (a pass was already running) — callers must
-  // read `syncStatus` afterward, never treat promise settlement as proof of
+  // closed-day handoff the mount effect and the sign-in listener already
+  // run through. (Reconnect is a SEPARATE path: it calls
+  // `replayJournaledWrites` directly, without that hydration/identity/
+  // closed-day handling — see the `online` handler's own comment. This
+  // action does not touch or route through that path.) It does not drain
+  // anything itself and is not a second replay mechanism.
+  // `runAccountSync`'s own in-flight guard means this can resolve having
+  // done nothing (a pass was already running) — callers must read
+  // `syncStatus` afterward, never treat promise settlement as proof of
   // delivery.
   retryPendingAccountWrites: () => Promise<void>;
   addArea: (name: string, color: string) => void;
