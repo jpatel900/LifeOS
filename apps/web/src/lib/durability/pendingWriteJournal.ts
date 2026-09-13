@@ -476,8 +476,6 @@ async function replayPendingWritesUnlocked(
 
     try {
       await handler(write);
-      await markPendingWriteSynced(write.client_write_id);
-      summary.synced += 1;
     } catch {
       // Failure evidence must never replace the original durable record or
       // turn a handled failure into a rejected replay. If this best-effort
@@ -488,6 +486,17 @@ async function replayPendingWritesUnlocked(
         // The original write remains queued even when its local evidence
         // cannot be stored (for example, a quota or IndexedDB failure).
       }
+      summary.failed += 1;
+      continue;
+    }
+
+    try {
+      await markPendingWriteSynced(write.client_write_id);
+      summary.synced += 1;
+    } catch {
+      // The account handler already resolved, but the device still holds the
+      // record. Keep the existing retry semantics without inventing evidence
+      // that the handler itself threw.
       summary.failed += 1;
     }
   }

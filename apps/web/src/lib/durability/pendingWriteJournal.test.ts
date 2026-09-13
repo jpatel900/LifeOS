@@ -400,6 +400,33 @@ describe("replayPendingWrites", () => {
     );
   });
 
+  it("does not mark a successful handler as failed when journal deletion fails", async () => {
+    const queued = await enqueuePendingWrite({
+      entity: "win",
+      payload: { title: "account accepted" },
+    });
+    const remove = vi
+      .spyOn(IDBObjectStore.prototype, "delete")
+      .mockImplementation(() => {
+        throw new Error("journal deletion unavailable");
+      });
+
+    await expect(replayPendingWrites({ win: async () => {} })).resolves.toEqual(
+      { synced: 0, failed: 1, skipped: 0 },
+    );
+    remove.mockRestore();
+
+    expect(await listPendingWrites()).toEqual([
+      expect.objectContaining({ client_write_id: queued.client_write_id }),
+    ]);
+    expect((await listPendingWrites())[0]).not.toHaveProperty(
+      "last_attempt_failed",
+    );
+    await expect(replayPendingWrites({ win: async () => {} })).resolves.toEqual(
+      { synced: 1, failed: 0, skipped: 0 },
+    );
+  });
+
   it("continues the drain queue after a replay operation rejects", async () => {
     await enqueuePendingWrite({ entity: "win", payload: { title: "recover" } });
     const open = vi.spyOn(indexedDB, "open").mockImplementation(() => {
