@@ -189,11 +189,35 @@ async function taskIdsByTitle(
   return ids;
 }
 
-/** The number the headline prints, parsed out of it. */
-async function headlineCount(page: Page): Promise<number | null> {
-  const text = (await page.getByTestId("review-sheet-headline").textContent())!;
-  const match = text.match(/\d+/);
-  return match ? Number(match[0]) : null;
+/**
+ * The headline's number and the decision list's own length, read from the
+ * SAME `review-sheet` root in one DOM snapshot (#967-adjacent CI repair,
+ * PR993 signed-in job 103729134599, `review-port-truth.spec.ts:259`).
+ *
+ * `ReviewSheet.tsx` derives both from the identical `needsDecision`/
+ * `needsDecisionCount` in one render — there is no code path where they
+ * genuinely disagree. The CI failure (`headlineCount` read 2 right after a
+ * separate, already-settled `toHaveCount(1)` on the list) was two Playwright
+ * calls landing on two different commits during the surface's own
+ * fire-and-forget transition readbacks, not a real inconsistent render. A
+ * single `evaluate()` call reads both numbers from one commit, so wrapping
+ * it in `expect.poll` retries the WHOLE pair together until they agree,
+ * instead of trusting two separately-timed reads to land on the same one.
+ */
+async function reviewSheetCounts(
+  page: Page,
+): Promise<{ headline: number | null; cards: number }> {
+  return page.getByTestId("review-sheet").evaluate((root) => {
+    const headlineText =
+      root.querySelector('[data-testid="review-sheet-headline"]')
+        ?.textContent ?? "";
+    const match = headlineText.match(/\d+/);
+    return {
+      headline: match ? Number(match[0]) : null,
+      cards: root.querySelectorAll('[data-testid^="review-sheet-decision-"]')
+        .length,
+    };
+  });
 }
 
 test.describe("C2-S3 — the ported Review surface, signed in", () => {
@@ -216,11 +240,10 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
     await openReviewSheet(page);
 
     // FINDING 5: the number the headline prints IS the length of the list it
-    // heads. Both are read off the live screen, not off a fixture.
-    await expect(page.getByTestId(/^review-sheet-decision-/)).toHaveCount(2, {
-      timeout: 20_000,
-    });
-    expect(await headlineCount(page)).toBe(2);
+    // heads. Read together, from one commit — see `reviewSheetCounts`.
+    await expect
+      .poll(async () => reviewSheetCounts(page), { timeout: 20_000 })
+      .toEqual({ headline: 2, cards: 2 });
     await expect(page.getByTestId("review-sheet-headline")).not.toContainText(
       "carry over",
     );
@@ -252,11 +275,10 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
       .toBe("dropped");
     await expect(page.getByTestId("review-sheet")).toBeVisible();
 
-    // The count follows its list down.
-    await expect(page.getByTestId(/^review-sheet-decision-/)).toHaveCount(1, {
-      timeout: 20_000,
-    });
-    expect(await headlineCount(page)).toBe(1);
+    // The count follows its list down — read together, from one commit.
+    await expect
+      .poll(async () => reviewSheetCounts(page), { timeout: 20_000 })
+      .toEqual({ headline: 1, cards: 1 });
 
     // CLOSE THE DAY — C1's single path, reached from this surface.
     const day = await localDay(page);

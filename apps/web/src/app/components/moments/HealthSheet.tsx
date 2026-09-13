@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
+import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
 import {
   getHealthDashboard,
   type HealthDashboardCheck,
@@ -142,6 +143,12 @@ function formatDetailValue(value: unknown) {
   return String(value);
 }
 
+type LocalConcern = {
+  id: string;
+  label: string;
+  details: string;
+};
+
 export interface HealthSheetProps {
   open: boolean;
   onClose(): void;
@@ -164,7 +171,7 @@ function OpenHealthSheet({
   selectedAreaId,
   now,
 }: Omit<HealthSheetProps, "open">) {
-  const { state } = useWorkflow();
+  const { state, syncStatus } = useWorkflow();
 
   // The shipped derivation, not a second one — same reason PlanSheet and
   // ReviewSheet use it. Only `agingSummary` and the demo `healthChecks` are
@@ -228,6 +235,19 @@ function OpenHealthSheet({
   }, []);
 
   const viewChecks = checks as ViewCheck[];
+  const saveNotice =
+    syncStatus.pendingSaveFailed && resolveDeviceSaveNotice(syncStatus);
+
+  const localConcerns: Array<LocalConcern> = saveNotice
+    ? [
+        {
+          id: "health-save-concern",
+          label: "Saving your work",
+          details: saveNotice.message,
+        },
+      ]
+    : [];
+
   const critical = viewChecks.filter(
     (check) => check.status === "critical",
   ).length;
@@ -235,7 +255,8 @@ function OpenHealthSheet({
   const healthy = viewChecks.filter(
     (check) => check.status === "healthy",
   ).length;
-  const attention = critical + watch;
+  const localConcernCount = localConcerns.length;
+  const attention = critical + watch + localConcernCount;
   const score = Math.round(
     viewChecks.reduce((sum, check) => sum + check.score, 0) /
       Math.max(viewChecks.length, 1),
@@ -251,24 +272,31 @@ function OpenHealthSheet({
       : attention === 1
         ? "1 thing needs a look"
         : `${attention} things need a look`;
+  const visibleNeedsYou = viewChecks
+    .filter(needsAttention)
+    .map((check) => presentationFor(check.id).label);
   const needsYou =
     attention === 0
       ? "Nothing needs you right now."
-      : `Needs a look: ${viewChecks
-          .filter(needsAttention)
-          .map((check) => presentationFor(check.id).label)
-          .join(", ")}.`;
+      : `Needs a look: ${[
+          ...visibleNeedsYou,
+          ...localConcerns.map((concern) => concern.label),
+        ].join(", ")}.`;
 
   const groups = HEALTH_GROUPS.map((group) => {
     const groupChecks = viewChecks.filter(
       (check) => presentationFor(check.id).group === group.id,
     );
+    const groupConcerns =
+      group.id === "work" ? localConcerns : ([] as Array<LocalConcern>);
     return {
       ...group,
       checks: groupChecks,
-      attention: groupChecks.filter(needsAttention).length,
+      concerns: groupConcerns,
+      attention:
+        groupChecks.filter(needsAttention).length + groupConcerns.length,
     };
-  }).filter((group) => group.checks.length > 0);
+  }).filter((group) => group.checks.length > 0 || group.concerns.length > 0);
 
   const agingAttention =
     vm.agingSummary.agingWaitingOnCount + vm.agingSummary.staleCommitmentCount;
@@ -372,6 +400,14 @@ function OpenHealthSheet({
                         Sign in
                       </Link>
                     ) : null}
+                  </div>
+                ))}
+                {group.concerns.map((concern) => (
+                  <div key={concern.id}>
+                    <p className="text-sm font-semibold">{concern.label}</p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                      {concern.details}
+                    </p>
                   </div>
                 ))}
               </div>
