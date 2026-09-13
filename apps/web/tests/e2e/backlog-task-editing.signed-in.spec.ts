@@ -244,6 +244,34 @@ test.describe("#984 — the accepted-backlog task editor, signed in", () => {
     );
     expect(after.updated_at).not.toBe(before.updated_at);
 
+    // The first edit moved this task to Personal, and Plan lists only the
+    // selected area's backlog (Main Job here), so the row correctly left
+    // this view the moment the confirmed save was reflected. Follow it to
+    // Personal through the same area switcher areas-port-truth.spec.ts
+    // drives. Closing and reopening the sheet and changing the selected area
+    // replace no workflow state, and nothing here reloads or re-reads the
+    // account, so the editor below still opens on the version THIS TAB
+    // reflected from the first save.
+    await page.getByTestId("moment-sheet-close").click();
+    await expect(page.getByTestId("moment-sheet")).toHaveCount(0);
+
+    await page.getByTestId("today-moments-area-switcher").click();
+    await expect(page.getByTestId("area-selector-listbox")).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.getByTestId("area-selector-option-area-personal").click();
+    await expect(page.getByTestId("area-selector-listbox")).toHaveCount(0, {
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+      "Personal",
+    );
+
+    await openPlanSheet(page);
+    await expect(page.getByTestId(`plan-sheet-edit-${before.id}`)).toBeVisible({
+      timeout: 20_000,
+    });
+
     // IMMEDIATE second edit, no reload in between: this is the tier a
     // reload cannot substitute for. Reloading re-hydrates the client's
     // in-memory task from a fresh account read, which would mask a
