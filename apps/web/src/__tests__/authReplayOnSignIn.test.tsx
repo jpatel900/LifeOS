@@ -34,7 +34,10 @@ import {
   clearPendingWrites,
   listPendingWrites,
 } from "@/lib/durability/pendingWriteJournal";
-import { journalWinWrite } from "@/lib/durability/durableWrites";
+import {
+  journalWinWrite,
+  journalReviewWrite,
+} from "@/lib/durability/durableWrites";
 import { SIGNED_OUT_SAVING_ON_THIS_DEVICE } from "@/lib/statusVocabulary";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
 
@@ -131,6 +134,7 @@ const {
   mockListSuggestionRecords,
   mockSyncJournaledCapture,
   mockSyncJournaledWin,
+  mockSyncJournaledReviewEntry,
   mockCreateSupabaseBrowserClient,
   authListener,
 } = vi.hoisted(() => ({
@@ -144,6 +148,7 @@ const {
   mockListSuggestionRecords: vi.fn(),
   mockSyncJournaledCapture: vi.fn(),
   mockSyncJournaledWin: vi.fn(),
+  mockSyncJournaledReviewEntry: vi.fn(),
   mockCreateSupabaseBrowserClient: vi.fn(),
   // Captures the callback `WorkflowProvider`'s auth listener registers, so
   // the test can fire a SIGNED_IN event without a remount — the exact shape
@@ -175,6 +180,7 @@ vi.mock("@/lib/data/workflow", async () => {
     listSuggestionRecords: mockListSuggestionRecords,
     syncJournaledCapture: mockSyncJournaledCapture,
     syncJournaledWin: mockSyncJournaledWin,
+    syncJournaledReviewEntry: mockSyncJournaledReviewEntry,
   };
 });
 
@@ -185,8 +191,15 @@ function SIGNED_OUT_ERROR() {
 }
 
 function Harness() {
-  const { state, selectedAreaId, submitCaptureText, confirmWin, syncStatus } =
-    useWorkflow();
+  const {
+    state,
+    selectedAreaId,
+    submitCaptureText,
+    confirmWin,
+    syncStatus,
+    accountClosedDays,
+    journalledClosedDays,
+  } = useWorkflow();
   const unsortedCapture = state.captureItems[0];
 
   return (
@@ -197,6 +210,13 @@ function Harness() {
       </span>
       <span data-testid="sync-message">{syncStatus.message ?? ""}</span>
       <span data-testid="capture-area">{unsortedCapture?.area_id ?? ""}</span>
+      <span data-testid="account-closed-days">
+        {accountClosedDays.join(",")}
+      </span>
+      <span data-testid="journalled-closed-days">
+        {journalledClosedDays.join(",")}
+      </span>
+      <span data-testid="task-count">{state.tasks.length}</span>
       <button
         type="button"
         onClick={() =>
@@ -271,6 +291,7 @@ beforeEach(async () => {
     .mockResolvedValue({ provider: "supabase", suggestionRecords: [] });
   mockSyncJournaledCapture.mockReset();
   mockSyncJournaledWin.mockReset();
+  mockSyncJournaledReviewEntry.mockReset();
 
   window.sessionStorage.clear();
   await clearPendingWrites();
@@ -581,5 +602,136 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     await waitFor(() => {
       expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
     });
+  });
+
+  // #967: a daily close journalled in an earlier session (device closed the
+  // day while the account was unreachable) must not lose its closed-day
+  // truth once the mount's own replay delivers it. Mirrors the win test
+  // above's shape (a pre-seeded journal entry, a signed-in fresh mount) for
+  // the review lane instead, with one addition wins don't need:
+  // `syncPersistedWorkflowRows` (called BEFORE replay) already reads reviews
+  // once, so the mock must answer that FIRST read with nothing and only a
+  // LATER read with the delivered row — that sequencing is what proves the
+  // transfer this fix adds, not merely that the review eventually reaches
+  // the account.
+  it("a successful daily-review replay transfers closed-day truth to the account before the journal refresh clears it (#967)", async () => {
+    const day = "2026-08-29";
+
+    await journalReviewWrite({
+      workflowAreaId: null,
+      persistedAreaId: null,
+      reviewType: "daily",
+      periodStart: day,
+      periodEnd: day,
+      summaryJson: {},
+    });
+
+    seedSessionStorageWithPresyncedTask();
+
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+
+    // The FIRST account read — inside `syncPersistedWorkflowRows`, which
+    // `runAccountSync` calls BEFORE replay — sees no reviews yet, but DOES
+    // carry the account's own copy of the presynced task, exactly like the
+    // "ordinary signed-in fresh load" test above: without it, THIS read's own
+    // (unrelated, real, always-dispatched) whole-workflow merge would retire
+    // the uuid-id local task row on the spot, before replay even runs, and
+    // the concurrent-state assertion below would prove nothing. This is the
+    // exact "GET [] -> POST 201 -> no further GET" moment from the CI trace
+    // (`pr987-signed-in-diagnosis.md`, finding 1) for reviews specifically.
+    mockListExecutionReviewItems.mockResolvedValueOnce({
+      provider: "supabase",
+      tasks: [
+        {
+          id: PRESYNCED_TASK_ID,
+          user_id: PERSISTED_AREA.user_id,
+          area_id: PERSISTED_AREA.id,
+          project_id: null,
+          source_capture_item_id: null,
+          title: "Shipped the onboarding flow",
+          description: null,
+          status: "active",
+          priority_score: null,
+          priority_confidence: null,
+          task_type: null,
+          is_reversible: null,
+          energy_type: null,
+          estimated_minutes_low: null,
+          estimated_minutes_high: null,
+          due_at: null,
+          definition_of_done: null,
+          first_tiny_step: null,
+          created_at: "2026-08-01T00:00:00.000Z",
+          updated_at: "2026-08-01T00:00:00.000Z",
+        },
+      ],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+    // The SECOND account read is `readbackAccountReviewClosedDays`'s own —
+    // this fix's new seam. Its `tasks` come back EMPTY on purpose: if this
+    // seam ever dispatched what it reads (the #984 failure mode it exists to
+    // avoid), `mergePersistedRows` would retire the presynced task the
+    // moment this response landed, and `task-count` below would drop to 0.
+    mockListExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          user_id: PERSISTED_AREA.user_id,
+          area_id: null,
+          review_type: "daily",
+          period_start: day,
+          period_end: day,
+          summary_json: {},
+          created_at: "2026-08-29T00:00:00.000Z",
+        },
+      ],
+    });
+    mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
+
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+
+    // The journalled review drains — the replay succeeded and reached the
+    // account (the part that already worked before this fix).
+    await waitFor(async () => {
+      const pending = await listPendingWrites("review");
+      expect(pending).toHaveLength(0);
+    });
+    expect(mockSyncJournaledReviewEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ review_type: "daily", period_start: day }),
+    );
+
+    // #967 — the regression this test pins: the day must read closed from
+    // the ACCOUNT tier once the replay delivered it. Before this fix,
+    // `accountClosedDays` stayed at its pre-replay (empty) snapshot forever
+    // within this pass — nothing re-read it after the POST succeeded.
+    await waitFor(() => {
+      expect(screen.getByTestId("account-closed-days")).toHaveTextContent(day);
+    });
+    // The device tier's own evidence is now safe to have cleared — the
+    // account tier already carries the truth, so there is no window where
+    // NEITHER array has it (the open-Close-button regression).
+    expect(screen.getByTestId("journalled-closed-days")).not.toHaveTextContent(
+      day,
+    );
+    // Concurrent unrelated state preservation: the presynced task, confirmed
+    // by the FIRST account read above, must still be there. This is the
+    // #984 failure mode `readbackAccountReviewClosedDays` is deliberately
+    // narrower to avoid — its own (empty-tasks) response must never reach
+    // `mergePersistedRows`.
+    expect(screen.getByTestId("task-count")).toHaveTextContent("1");
   });
 });

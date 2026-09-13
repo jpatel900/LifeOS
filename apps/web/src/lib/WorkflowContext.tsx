@@ -1686,6 +1686,46 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * #967: the account tier of "is today closed", read in isolation.
+   *
+   * `runAccountSync`'s own `syncPersistedWorkflowRows` call reads the
+   * account's reviews and sets `accountClosedDays` — but it runs BEFORE this
+   * same pass's `replayJournaledWrites`, so a daily close that is still
+   * journalled at that moment is invisible to it. If a later step in the same
+   * pass (`refreshJournalledDurableState`) then re-derives `journalledClosedDays`
+   * from the now-drained journal, the day briefly has NO evidence anywhere:
+   * gone from the device tier (delivered), not yet on the account tier (never
+   * re-read since delivery). `resolveDayClose`'s union of both arrays then
+   * reports the day open, and the Close moment offers to close it again.
+   *
+   * This re-reads ONLY the account's review entries — never the tasks/blocks/
+   * sessions the same account response carries, and never calls
+   * `syncPersistedWorkflowRows` again (a #984 review already found that a
+   * whole-workflow resync mid-pass can overwrite concurrent local work). It
+   * reports whether the account was actually re-read, so a caller can decide
+   * whether it is safe to let device-tier evidence for a review disappear.
+   */
+  const readbackAccountReviewClosedDays = useCallback(
+    async (client: MinimalSupabaseClient | null): Promise<boolean> => {
+      if (!client) return false;
+      try {
+        const result = await listExecutionReviewItems(client);
+        if (!mountedRef.current) return false;
+        if (result.provider !== "supabase") return false;
+        setAccountClosedDays(
+          result.reviewEntries
+            .filter((entry) => entry.review_type === "daily")
+            .map((entry) => entry.period_start),
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [],
+  );
+
   // #960 defects 1/2: extracted so both the mount effect below and the
   // auth-state listener effect after it can run the SAME account-sync body.
   // This used to be inline in one effect with an all-`[]` mount trigger;
@@ -1755,7 +1795,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             // POST-drain count on this very call, not one refresh cycle late.
             if (!mountedRef.current) return;
             await refreshPendingLocalChanges();
-            await refreshJournalledDurableState();
+            // #967: transfer a successfully replayed daily close to the
+            // account tier BEFORE the journal refresh below can clear its
+            // device-tier evidence — see `readbackAccountReviewClosedDays`'s
+            // own comment. A failed readback must not invent account
+            // confirmation, so `refreshJournalledDurableState` (the only
+            // thing that can drop `journalledClosedDays`) is skipped this
+            // pass rather than let a review with no account-tier evidence
+            // yet lose its device-tier evidence too; the next mount,
+            // reconnect, or sign-in reconciles it.
+            if (await readbackAccountReviewClosedDays(client)) {
+              await refreshJournalledDurableState();
+            }
           }
           if (!mountedRef.current) return;
           markAccountSynced({ preserveLocalOnlyWhilePending: true });
@@ -1780,6 +1831,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       replayJournaledWrites,
       refreshPendingLocalChanges,
       refreshJournalledDurableState,
+      readbackAccountReviewClosedDays,
     ],
   );
 
