@@ -135,6 +135,34 @@ interface AreaRow {
   name: string;
 }
 
+const TASK_SELECT = "id,title,description,area_id,status,updated_at";
+
+/**
+ * `seedBacklogTask` returns once triage's optimistic local accept closes the
+ * sheet; the account write for that accept lands asynchronously afterwards
+ * (CI run 34742776909 read `tasks` before it had, and found none). Poll the
+ * account — bounded, the same 30s `expect.poll` shape plan-port-truth.spec.ts
+ * uses — until it holds exactly one row and that row is in backlog. No fixed
+ * sleep and no test-injected row: if the accept never persists, this fails
+ * showing the rows the account actually held.
+ */
+async function confirmedBacklogTask(account: AccountClient): Promise<TaskRow> {
+  let rows: TaskRow[] = [];
+  await expect
+    .poll(
+      async () => {
+        rows = await account.rows<TaskRow>(`tasks?select=${TASK_SELECT}`);
+        return rows.map((row) => ({ title: row.title, status: row.status }));
+      },
+      {
+        timeout: 30_000,
+        message: "the accepted backlog task never reached the account",
+      },
+    )
+    .toEqual([expect.objectContaining({ status: "backlog" })]);
+  return rows[0]!;
+}
+
 test.describe("#984 — the accepted-backlog task editor, signed in", () => {
   test(`${SIGNED_IN_TAG} saves title/description/area to the account row under real RLS`, async ({
     page,
@@ -142,15 +170,17 @@ test.describe("#984 — the accepted-backlog task editor, signed in", () => {
     const account = await openSignedInToday(page, SEEDED_USERS.a);
     await seedBacklogTask(page, "Ported edit: reorganize the shelving");
 
-    const [before] = await account.rows<TaskRow>(
-      "tasks?select=id,title,description,area_id,status,updated_at",
-    );
-    expect(before.status).toBe("backlog");
+    const before = await confirmedBacklogTask(account);
     const areas = await account.rows<AreaRow>("areas?select=id,name");
     const personal = areas.find((area) => area.name === "Personal");
     expect(personal).toBeTruthy();
 
     await openPlanSheet(page);
+    // The row's controls carry the ACCOUNT id once the account twin replaces
+    // the local row on this tab; wait for that rather than assume it.
+    await expect(page.getByTestId(`plan-sheet-edit-${before.id}`)).toBeVisible({
+      timeout: 30_000,
+    });
     await page.getByTestId(`plan-sheet-edit-${before.id}`).click();
     await page
       .getByTestId(`plan-sheet-edit-title-input-${before.id}`)
@@ -280,8 +310,8 @@ test.describe("#984 — the accepted-backlog task editor, signed in", () => {
     try {
       const accountA = await openSignedInToday(firstPage, SEEDED_USERS.a);
       await seedBacklogTask(firstPage, "Isolation proof: user A's own task");
-      const [row] = await accountA.rows<TaskRow>("tasks?select=id,title");
-      const { id: taskId, title: originalTitle } = row;
+      const { id: taskId, title: originalTitle } =
+        await confirmedBacklogTask(accountA);
 
       const accountB = await openSignedInToday(secondPage, SEEDED_USERS.b);
 

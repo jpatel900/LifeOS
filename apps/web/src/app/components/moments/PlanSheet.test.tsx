@@ -618,9 +618,84 @@ describe("PlanSheet — the ported Plan surface", () => {
 
       await waitFor(() => {
         expect(onToast).toHaveBeenCalledWith(
-          "Saved to this tab. Area kept as Main Job — its project lives there.",
+          "Saved to this tab. Area kept as Main Job because this task belongs to a project.",
         );
       });
+    });
+
+    // A synced task can name an account project this tab does not hold. Its
+    // project's area is unknown, so the area move is refused — title and
+    // description still save — and the copy never claims where it lives.
+    it("keeps the area of a task whose project details are unavailable, saves the title, and says so without naming a project area", async () => {
+      const linkedTask = {
+        ...BACKLOG_TASK,
+        id: "task-unknown-project-984",
+        project_id: "22222222-2222-4222-8222-222222222222",
+        area_id: AREA,
+      };
+      expect(
+        SEED.projects.some((item) => item.id === linkedTask.project_id),
+      ).toBe(false);
+      window.sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ ...SEED, tasks: [...SEED.tasks, linkedTask] }),
+      );
+      const onToast = vi.fn<(message: string) => void>();
+      render(
+        <WorkflowProvider>
+          <PlanSheet
+            open
+            onClose={vi.fn()}
+            selectedAreaId={AREA}
+            blocks={[]}
+            timeDisplay="clock"
+            now={new Date("2026-08-03T09:30:00")}
+            onToast={onToast}
+          />
+        </WorkflowProvider>,
+      );
+
+      fireEvent.click(screen.getByTestId(`plan-sheet-edit-${linkedTask.id}`));
+      expect(
+        screen.getByText(
+          /If the project's details aren't available, the area stays as it is\./,
+        ),
+      ).toBeInTheDocument();
+      fireEvent.change(
+        screen.getByTestId(`plan-sheet-edit-title-input-${linkedTask.id}`),
+        { target: { value: "Renamed with its project unknown" } },
+      );
+      fireEvent.change(
+        screen.getByTestId(`plan-sheet-edit-area-input-${linkedTask.id}`),
+        { target: { value: "area-personal" } },
+      );
+      fireEvent.click(
+        screen.getByTestId(`plan-sheet-edit-save-${linkedTask.id}`),
+      );
+
+      await waitFor(() => {
+        expect(onToast).toHaveBeenCalledWith(
+          "Saved to this tab. Area kept as Main Job because this task belongs to a project.",
+        );
+      });
+      const stored = JSON.parse(
+        window.sessionStorage.getItem(STORAGE_KEY) ?? "{}",
+      ) as {
+        tasks: Array<{
+          id: string;
+          title: string;
+          area_id: string;
+          project_id: string | null;
+        }>;
+      };
+      const saved = stored.tasks.find((item) => item.id === linkedTask.id);
+      expect(saved).toMatchObject({
+        title: "Renamed with its project unknown",
+        area_id: AREA,
+        project_id: linkedTask.project_id,
+      });
+      const messages = onToast.mock.calls.map(([message]) => message);
+      expect(messages.join(" ")).not.toContain("lives");
     });
 
     describe("configured account feedback", () => {

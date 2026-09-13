@@ -26,6 +26,9 @@ const AREA_MAIN = GOLDEN_AREA_ID;
 const AREA_PERSONAL = "area-personal";
 const AREA_MISSING = "area-does-not-exist";
 const ACCOUNT_TASK_ID = "11111111-1111-4111-8111-111111111111";
+// Account-shaped project id that no local project carries: the realistic
+// shape of a synced task whose project details this state does not hold.
+const ACCOUNT_PROJECT_ID = "22222222-2222-4222-8222-222222222222";
 
 function makeTask(overrides: Partial<Phase2MockTask> & { id: string }): Task {
   return {
@@ -170,7 +173,10 @@ describe("isProjectAreaBlocked", () => {
     );
   });
 
-  it("is false when there is no project area to protect", () => {
+  // A null project area is "nothing known to compare against" for this
+  // comparator; the linked-but-unknown-project rule lives in
+  // `applyTaskEditPatch` (tested below).
+  it("is false when no project area is given to compare against", () => {
     expect(isProjectAreaBlocked(AREA_MAIN, AREA_PERSONAL, null)).toBe(false);
   });
 
@@ -243,6 +249,61 @@ describe("applyTaskEditPatch", () => {
       task,
       { title: "New title", description: null, area_id: AREA_PERSONAL },
       AREA_PERSONAL,
+    );
+
+    expect(areaChangeBlocked).toBe(false);
+    expect(nextTask.area_id).toBe(AREA_PERSONAL);
+  });
+
+  it("keeps the area of a project-linked task whose project's area is unknown, but still saves title and description", () => {
+    const task = makeTask({
+      id: "task-1",
+      project_id: ACCOUNT_PROJECT_ID,
+      source_capture_item_id: "capture-1",
+      area_id: AREA_MAIN,
+    });
+
+    const { task: nextTask, areaChangeBlocked } = applyTaskEditPatch(
+      task,
+      { title: "New title", description: "New notes", area_id: AREA_PERSONAL },
+      null,
+    );
+
+    expect(areaChangeBlocked).toBe(true);
+    expect(nextTask.area_id).toBe(AREA_MAIN);
+    expect(nextTask.title).toBe("New title");
+    expect(nextTask.description).toBe("New notes");
+    expect(nextTask.id).toBe("task-1");
+    expect(nextTask.source_capture_item_id).toBe("capture-1");
+    expect(nextTask.project_id).toBe(ACCOUNT_PROJECT_ID);
+    expect(nextTask.status).toBe("backlog");
+  });
+
+  it("does not report a block for an unknown-project task when the area is unchanged", () => {
+    const task = makeTask({
+      id: "task-1",
+      project_id: ACCOUNT_PROJECT_ID,
+      area_id: AREA_MAIN,
+    });
+
+    const { task: nextTask, areaChangeBlocked } = applyTaskEditPatch(
+      task,
+      { title: "New title", description: null, area_id: AREA_MAIN },
+      null,
+    );
+
+    expect(areaChangeBlocked).toBe(false);
+    expect(nextTask.area_id).toBe(AREA_MAIN);
+    expect(nextTask.title).toBe("New title");
+  });
+
+  it("lets a task with no project link move area freely", () => {
+    const task = makeTask({ id: "task-1", area_id: AREA_MAIN });
+
+    const { task: nextTask, areaChangeBlocked } = applyTaskEditPatch(
+      task,
+      { title: "New title", description: null, area_id: AREA_PERSONAL },
+      null,
     );
 
     expect(areaChangeBlocked).toBe(false);
@@ -323,9 +384,12 @@ describe("editBacklogTaskInState", () => {
     expect(project?.area_id).toBe(AREA_MAIN);
     expect(localTask).toBeDefined();
 
-    // No local transition links a task to a project; a project-linked task
-    // reaches this state only as an account row through the real sync
-    // reducer, so its account twin carries the link.
+    // No local transition links a task to a project, so the link rides in on
+    // a synced row through the real sync reducer. Pointing that row at a
+    // LOCAL project id is a lookup fixture only: it proves the area is read
+    // from `state.projects` when the project is there, not that production
+    // produces this pairing (account project ids are not aliased locally;
+    // the unknown-project tests below cover the shape production produces).
     state = workflowReducer(state, {
       type: "syncPersistedWorkflow",
       payload: syncPayload({
@@ -346,5 +410,116 @@ describe("editBacklogTaskInState", () => {
 
     expect(result.areaChangeBlocked).toBe(true);
     expect(result.task?.area_id).toBe(AREA_MAIN);
+  });
+
+  it("allows a linked task's area move when the known project lives in the requested area", () => {
+    // Same lookup fixture as above, with the project captured in Personal
+    // while the synced task sits in Main Job: the move toward the project's
+    // own area is allowed, which an unknown project would never permit.
+    let state = workflowSeed();
+    state = captureWorkflow(
+      state,
+      "Draft the quarterly roadmap.",
+      AREA_PERSONAL,
+    );
+    const projectDraft = state.projectDrafts.find(
+      (draft) => draft.status === "pending",
+    );
+    expect(projectDraft).toBeDefined();
+    state = acceptProjectDraft(state, projectDraft!.id);
+    state = backlogLatestDraft(state);
+    const project = state.projects[0];
+    const localTask = state.tasks.find((task) => task.status === "backlog");
+    expect(project?.area_id).toBe(AREA_PERSONAL);
+    expect(localTask).toBeDefined();
+
+    state = workflowReducer(state, {
+      type: "syncPersistedWorkflow",
+      payload: syncPayload({
+        tasks: [
+          {
+            ...localTask!,
+            id: ACCOUNT_TASK_ID,
+            area_id: AREA_MAIN,
+            project_id: project!.id,
+          },
+        ],
+      }),
+    });
+
+    const result = editBacklogTaskInState(state, ACCOUNT_TASK_ID, {
+      title: "New title",
+      description: null,
+      area_id: AREA_PERSONAL,
+    });
+
+    expect(result.areaChangeBlocked).toBe(false);
+    expect(result.task?.area_id).toBe(AREA_PERSONAL);
+  });
+
+  // The shape production can actually hold today: a synced account task
+  // whose `project_id` is an account id that no local project carries.
+  function syncedUnknownProjectState() {
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Sort the garage shelves.");
+    state = backlogLatestDraft(state);
+    const localTask = state.tasks.find((task) => task.status === "backlog");
+    expect(localTask).toBeDefined();
+    state = workflowReducer(state, {
+      type: "syncPersistedWorkflow",
+      payload: syncPayload({
+        tasks: [
+          {
+            ...localTask!,
+            id: ACCOUNT_TASK_ID,
+            project_id: ACCOUNT_PROJECT_ID,
+          },
+        ],
+      }),
+    });
+    const synced = state.tasks.find((task) => task.id === ACCOUNT_TASK_ID);
+    expect(synced?.project_id).toBe(ACCOUNT_PROJECT_ID);
+    expect(
+      state.projects.some((project) => project.id === ACCOUNT_PROJECT_ID),
+    ).toBe(false);
+    return { state, synced: synced! };
+  }
+
+  it("keeps a synced task's area when its account project is not in this state, while title and description still save", () => {
+    const { state, synced } = syncedUnknownProjectState();
+    expect(synced.area_id).toBe(AREA_MAIN);
+
+    vi.setSystemTime(new Date(EDITED));
+    const result = editBacklogTaskInState(state, ACCOUNT_TASK_ID, {
+      title: "Sort and label the garage shelves",
+      description: "Top shelf first.",
+      area_id: AREA_PERSONAL,
+    });
+
+    expect(result.areaChangeBlocked).toBe(true);
+    expect(result.task?.area_id).toBe(AREA_MAIN);
+    expect(result.task?.title).toBe("Sort and label the garage shelves");
+    expect(result.task?.description).toBe("Top shelf first.");
+    expect(result.task?.id).toBe(ACCOUNT_TASK_ID);
+    expect(result.task?.source_capture_item_id).toBe(
+      synced.source_capture_item_id,
+    );
+    expect(result.task?.status).toBe("backlog");
+    expect(result.task?.project_id).toBe(ACCOUNT_PROJECT_ID);
+    expect(result.task?.updated_at).toBe(EDITED);
+  });
+
+  it("does not report a block for that synced unknown-project task when its area is left unchanged", () => {
+    const { state } = syncedUnknownProjectState();
+
+    const result = editBacklogTaskInState(state, ACCOUNT_TASK_ID, {
+      title: "Sort and label the garage shelves",
+      description: null,
+      area_id: AREA_MAIN,
+    });
+
+    expect(result.areaChangeBlocked).toBe(false);
+    expect(result.task?.area_id).toBe(AREA_MAIN);
+    expect(result.task?.title).toBe("Sort and label the garage shelves");
   });
 });

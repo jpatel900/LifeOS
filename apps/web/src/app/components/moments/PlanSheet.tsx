@@ -151,7 +151,9 @@ function FirstMoveCard({
  * shown here as editable because they are never touched by the write this
  * form drives (`editBacklogTask`). A project-linked task always shows the
  * "belongs to a project" note (not only after a blocked attempt), so the
- * limitation is visible before the user hits it, not just after.
+ * limitation is visible before the user hits it, not just after. The note
+ * never claims to know where the project lives: when the project's details
+ * are not available here, the area is simply kept.
  */
 function TaskEditForm({
   task,
@@ -241,8 +243,9 @@ function TaskEditForm({
       </label>
       {task.project_id ? (
         <p className="text-xs text-muted-foreground">
-          This task belongs to a project — its area can only move if the new
-          area is where that project lives.
+          This task belongs to a project. Its area can only move to the area
+          where that project lives. If the project&apos;s details aren&apos;t
+          available, the area stays as it is.
         </p>
       ) : null}
       {errors.message ? (
@@ -490,7 +493,9 @@ export function PlanSheet({
       // The tier ("account" vs "demo") is said plainly rather than
       // collapsing both into one generic "saved": the demo tier says "this
       // tab" specifically, since sessionStorage is per-tab and neither
-      // another tab nor a browser restart is proven to have it.
+      // another tab nor a browser restart is proven to have it. A blocked
+      // move names the task's own kept area and the reason only — never
+      // where the project lives, which may be unknown here.
       const areaLabel =
         state.areas.find((area) => area.id === result.savedAreaId)?.name ??
         null;
@@ -498,9 +503,9 @@ export function PlanSheet({
         result.deliveryTier === "account" ? "your account" : "this tab";
       const areaKeptNote =
         result.areaChangeBlocked && areaLabel
-          ? ` Area kept as ${areaLabel} — its project lives there.`
+          ? ` Area kept as ${areaLabel} because this task belongs to a project.`
           : result.areaChangeBlocked
-            ? " Area kept — its project lives elsewhere."
+            ? " Area kept because this task belongs to a project."
             : "";
 
       // `refreshPending`: the account confirmed the write, but this tab could

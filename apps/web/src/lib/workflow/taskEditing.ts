@@ -75,8 +75,11 @@ export function validateTaskEditInput(
 
 /**
  * A project keeps its own area; a task edit is not allowed to silently move
- * it. True only when the edit actually asks for a different area than the
- * task already has AND that area is not the project's area.
+ * it. For a project whose area IS known: true only when the edit actually
+ * asks for a different area than the task already has AND that area is not
+ * the project's area. A `null` project area means "no known area to compare
+ * against" and returns false here — the unknown-project rule (keep the area)
+ * lives in `applyTaskEditPatch`, which knows whether the task is linked.
  */
 export function isProjectAreaBlocked(
   currentAreaId: string,
@@ -101,15 +104,24 @@ export interface TaskEditPatchResult {
  * spread untouched. When the requested area would move a project-linked task
  * away from its project's area, the area edit is dropped (title/description
  * still apply) and `areaChangeBlocked` tells the caller to say so.
+ *
+ * `projectAreaId` is `null` for a linked task when its project's area cannot
+ * be established — e.g. a synced account task whose `project_id` names a
+ * project this state does not hold. The project's area is then unknown, so
+ * any area move is refused rather than risk splitting a task from its
+ * project; an unlinked task (`project_id: null`) is never restricted.
  */
 export function applyTaskEditPatch(
   task: Task,
   patch: TaskEditFormInput,
   projectAreaId: string | null,
 ): TaskEditPatchResult {
+  const areaMoveRequested = patch.area_id !== task.area_id;
   const areaChangeBlocked =
     task.project_id !== null &&
-    isProjectAreaBlocked(task.area_id, patch.area_id, projectAreaId);
+    areaMoveRequested &&
+    (projectAreaId === null ||
+      isProjectAreaBlocked(task.area_id, patch.area_id, projectAreaId));
 
   return {
     task: {
@@ -131,7 +143,9 @@ export interface TaskEditStateResult {
 /**
  * The local-state half of the edit: looks the task up fresh (callers pass the
  * freshest `state` they have so a race with another action is never
- * overwritten), resolves its project's area, applies the patch, and bumps
+ * overwritten), resolves its project's area from `state.projects` (`null`
+ * when the linked project is not there — see `applyTaskEditPatch` for what
+ * that means for an area move), applies the patch, and bumps
  * `updated_at` exactly like the other review transitions in `review.ts`.
  * Returns `task: null` unchanged when the task no longer exists.
  */
