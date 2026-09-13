@@ -1702,23 +1702,73 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
    * This re-reads ONLY the account's review entries — never the tasks/blocks/
    * sessions the same account response carries, and never calls
    * `syncPersistedWorkflowRows` again (a #984 review already found that a
-   * whole-workflow resync mid-pass can overwrite concurrent local work). It
-   * reports whether the account was actually re-read, so a caller can decide
-   * whether it is safe to let device-tier evidence for a review disappear.
+   * whole-workflow resync mid-pass can overwrite concurrent local work).
+   *
+   * #967 review: a successful `provider: "supabase"` response is NOT itself
+   * proof that the day(s) this pass just replayed are actually closed on the
+   * account — a delayed, stale, or wrong-session read can answer
+   * "supabase" and still omit the very day replay just delivered, at which
+   * point the caller clearing journal-derived evidence on this boolean alone
+   * would leave NEITHER tier reporting the day closed. Two guards close
+   * that gap:
+   *  - `expectedDailyPeriods` — the daily-review periods still pending
+   *    immediately BEFORE replay ran (the caller's snapshot) — must ALL
+   *    appear in this read's own daily reviews. A read that succeeds but
+   *    omits one is treated the same as a failed read.
+   *  - `expectedUserId` — the authenticated user id the CALLER captured
+   *    immediately before the pending-period snapshot and replay, not one
+   *    this helper fetches itself. Capturing it that early, rather than
+   *    only just before this helper's own read, is load-bearing (#967
+   *    follow-up review, finding 1): replay can take long enough for the
+   *    session to change before this helper ever runs, and a "before"
+   *    fetched only at the helper's own start would already observe the
+   *    new identity, making the before/after comparison compare a changed
+   *    session against itself and see no change at all. This helper
+   *    fetches the identity exactly ONCE, immediately after its own read,
+   *    and requires it to still match the caller's pre-replay snapshot.
+   *
+   * Returns whether the account was CONFIRMED to already hold every
+   * expected day, so a caller can decide whether it is safe to let
+   * device-tier evidence for a review disappear. `accountClosedDays` is
+   * only ever set from a same-identity, provider-`"supabase"` response —
+   * never from a mismatched identity — and only from rows whose own
+   * `user_id` matches `expectedUserId` (#967 follow-up review: a narrow
+   * per-row guard against a mixed-identity response the before/after
+   * identity check alone would not see, since `listExecutionReviewItems`
+   * authenticates independently of this check). `accountClosedDays` is set
+   * even when an expected period is missing, because the read itself is
+   * still truthful about what the account currently holds; only the
+   * CLEARANCE for the missing day is refused.
    */
   const readbackAccountReviewClosedDays = useCallback(
-    async (client: MinimalSupabaseClient | null): Promise<boolean> => {
-      if (!client) return false;
+    async (
+      client: MinimalSupabaseClient | null,
+      expectedDailyPeriods: string[],
+      expectedUserId: string | null,
+    ): Promise<boolean> => {
+      if (!client?.auth) return false;
+      if (!expectedUserId) return false;
       try {
         const result = await listExecutionReviewItems(client);
         if (!mountedRef.current) return false;
         if (result.provider !== "supabase") return false;
-        setAccountClosedDays(
-          result.reviewEntries
-            .filter((entry) => entry.review_type === "daily")
-            .map((entry) => entry.period_start),
+
+        const after = await client.auth.getUser();
+        const afterUserId = after.data.user?.id ?? null;
+        if (afterUserId !== expectedUserId) return false;
+
+        const dailyClosedDays = result.reviewEntries
+          .filter(
+            (entry) =>
+              entry.review_type === "daily" &&
+              entry.user_id === expectedUserId,
+          )
+          .map((entry) => entry.period_start);
+        setAccountClosedDays(dailyClosedDays);
+
+        return expectedDailyPeriods.every((period) =>
+          dailyClosedDays.includes(period),
         );
-        return true;
       } catch {
         return false;
       }
@@ -1775,6 +1825,58 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           });
           if (!mountedRef.current) return;
           if (options?.replayAfter) {
+            // #967 follow-up review, finding 1: the identity this pass is
+            // accountable to, captured BEFORE the pending-period snapshot and
+            // replay even start — see `readbackAccountReviewClosedDays`'s own
+            // comment for why capturing it any later cannot detect a session
+            // change that happens during replay itself.
+            let expectedUserId: string | null = null;
+            try {
+              const currentUser = await client.auth?.getUser();
+              expectedUserId = currentUser?.data.user?.id ?? null;
+            } catch {
+              expectedUserId = null;
+            }
+
+            // #967 review: the specific daily-review periods this pass is
+            // responsible for confirming, snapshotted IMMEDIATELY BEFORE
+            // replay removes them from the journal — a successful account
+            // read afterward is only trusted to release journal-derived
+            // evidence for periods THIS list names (see
+            // `readbackAccountReviewClosedDays`'s own comment).
+            //
+            // #967 follow-up review, finding 2: a failed snapshot must NOT be
+            // treated as "nothing pending" — `expectedDailyPeriods` staying
+            // `[]` makes the readback's own `every(...)` vacuously true, which
+            // would authorize clearing journal-derived evidence for a day this
+            // pass never actually confirmed. `expectedDailyPeriodsSnapshotFailed`
+            // tracks that distinction separately from an honestly-empty list.
+            let expectedDailyPeriods: string[] = [];
+            let expectedDailyPeriodsSnapshotFailed = false;
+            try {
+              expectedDailyPeriods = (await listPendingWrites("review"))
+                .map(
+                  (write) =>
+                    write.payload as {
+                      review_type?: unknown;
+                      period_start?: unknown;
+                    },
+                )
+                .filter(
+                  (
+                    payload,
+                  ): payload is {
+                    review_type: "daily";
+                    period_start: string;
+                  } =>
+                    payload.review_type === "daily" &&
+                    typeof payload.period_start === "string",
+                )
+                .map((payload) => payload.period_start);
+            } catch {
+              expectedDailyPeriodsSnapshotFailed = true;
+            }
+
             // ORDERING IS LOAD-BEARING (#960 defect 1) — this must run AFTER
             // the two calls above have populated `persistedAreasRef`.
             try {
@@ -1804,7 +1906,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             // pass rather than let a review with no account-tier evidence
             // yet lose its device-tier evidence too; the next mount,
             // reconnect, or sign-in reconciles it.
-            if (await readbackAccountReviewClosedDays(client)) {
+            //
+            // #967 follow-up review, finding 2: the readback still runs even
+            // when the snapshot failed — it is truthful about what the
+            // account currently holds and worth recording — but its boolean
+            // is not enough by itself to authorize the journal refresh when
+            // the snapshot itself is the reason `expectedDailyPeriods` is
+            // empty, rather than there honestly being nothing to confirm.
+            const accountConfirmedExpectedDays =
+              await readbackAccountReviewClosedDays(
+                client,
+                expectedDailyPeriods,
+                expectedUserId,
+              );
+            if (
+              accountConfirmedExpectedDays &&
+              !expectedDailyPeriodsSnapshotFailed
+            ) {
               await refreshJournalledDurableState();
             }
           }
