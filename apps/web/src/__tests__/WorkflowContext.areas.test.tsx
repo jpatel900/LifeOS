@@ -601,6 +601,69 @@ describe("WorkflowProvider persisted area sync", () => {
     });
   });
 
+  // #967: the two tests above rely on incidental promise-microtask ordering
+  // between the capture's own failed replay and the mount's one-time
+  // `runAccountSync` effect landing its `markAccountSynced()` call — real,
+  // but not pinned. This deferred-promise version parks the mount sync mid
+  // flight (inside `syncPersistedWorkflowRows`'s `Promise.all`, strictly
+  // BEFORE its own `markAccountSynced()` call) so the interleaving that
+  // regressed `markAccountSynced` into clobbering an already-`local-only`,
+  // still-pending status is forced deterministically rather than hoped for.
+  it("keeps an already local-only, pending status through a slower mount-sync completion racing behind it (deterministic interleaving)", async () => {
+    mockSyncJournaledCapture.mockRejectedValue(new Error("insert timeout"));
+
+    let releaseCaptureRead: () => void = () => {};
+    const captureReadGate = new Promise<void>((resolve) => {
+      releaseCaptureRead = resolve;
+    });
+    mockListCaptureItems.mockImplementation(async () => {
+      await captureReadGate;
+      return { provider: "supabase", captures: [] };
+    });
+
+    render(
+      <WorkflowProvider>
+        <TriageActionProbe />
+        <SyncStatusProbe />
+      </WorkflowProvider>,
+    );
+
+    // `applyPersistedAreas` already ran (it happens before the gated
+    // `Promise.all`), so the area is selected while the mount sync itself is
+    // still parked awaiting `listCaptureItems`.
+    await waitFor(() => {
+      expect(screen.getByTestId("selected-area-id")).toHaveTextContent(
+        "area-main-job",
+      );
+    });
+
+    // The capture's own journal replay fails and marks local-only while the
+    // mount sync above is still parked mid flight.
+    fireEvent.click(screen.getByRole("button", { name: "Capture" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("sync-account")).toHaveTextContent(
+        "local-only",
+      );
+    });
+
+    // Release the parked mount sync. It resumes into its own
+    // `replayJournaledWrites` (retries the still-queued capture and fails
+    // again against the same rejected mock), `refreshPendingLocalChanges`
+    // (finds the write still queued), and finally its own
+    // `markAccountSynced()` — the exact call the regression let clobber the
+    // status set above.
+    releaseCaptureRead();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("sync-account")).toHaveTextContent(
+        "local-only",
+      );
+      expect(screen.getByTestId("sync-message")).toHaveTextContent(
+        "Your capture is saved on this device",
+      );
+    });
+  });
+
   // C2-S8 (#687 finding 1): `?area=` outranks the stored device preference.
   // C2-S14 (#687 round-8, defect 3): the stored device preference now lives
   // in the `lifeos_moments_prefs` cookie, not `sessionStorage` — these tests

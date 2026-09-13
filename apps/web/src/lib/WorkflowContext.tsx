@@ -368,12 +368,22 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const markAccountSynced = useCallback(() => {
-    setSyncStatus((current) => ({
-      ...current,
-      account: "synced",
-      signedOut: false,
-      message: current.pendingLocalChanges ? SOME_WORK_ON_THIS_DEVICE : null,
-    }));
+    setSyncStatus((current) => {
+      // #967: a mount/reconnect sync that lands after a replay failure has
+      // already marked the write local-only must not paper over it — the
+      // work is still only on this device. A later call with the queue
+      // actually empty (`pendingLocalChanges` false by then) still reaches
+      // the branch below and reports synced normally.
+      if (current.account === "local-only" && current.pendingLocalChanges) {
+        return current;
+      }
+      return {
+        ...current,
+        account: "synced",
+        signedOut: false,
+        message: current.pendingLocalChanges ? SOME_WORK_ON_THIS_DEVICE : null,
+      };
+    });
   }, []);
 
   const markAccountSyncError = useCallback((message: string) => {
