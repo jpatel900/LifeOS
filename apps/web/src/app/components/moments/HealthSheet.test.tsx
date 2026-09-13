@@ -1,8 +1,16 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
+import * as WorkflowContext from "@/lib/WorkflowContext";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
 import type { HealthDashboardCheck } from "@/lib/data/health";
+import type { WorkflowSyncStatus } from "@/lib/workflowContext/types";
+import {
+  ACCOUNT_SAVE_FAILED,
+  ACCOUNT_NEEDS_APP_UPDATE,
+  DEVICE_STORAGE_BLOCKED,
+  SIGNED_OUT_SAVING_ON_THIS_DEVICE,
+} from "@/lib/statusVocabulary";
 import {
   GOLDEN_AREA_ID,
   acceptLatestDraft,
@@ -74,18 +82,25 @@ function seedState() {
   return acceptLatestDraft(state);
 }
 
+function spySyncStatus(syncStatus: WorkflowSyncStatus) {
+  vi.spyOn(WorkflowContext, "useWorkflow").mockReturnValue({
+    state: seedState(),
+    syncStatus,
+  } as unknown as ReturnType<typeof WorkflowContext.useWorkflow>);
+}
+
 function renderSheet(
   options: {
     open?: boolean;
     state?: ReturnType<typeof workflowSeed>;
   } = {},
-): { onClose: ReturnType<typeof vi.fn> } {
+): ReturnType<typeof render> & { onClose: ReturnType<typeof vi.fn> } {
   const onClose = vi.fn();
   window.sessionStorage.setItem(
     STORAGE_KEY,
     JSON.stringify(options.state ?? seedState()),
   );
-  render(
+  const rendered = render(
     <WorkflowProvider>
       <HealthSheet
         open={options.open ?? true}
@@ -95,8 +110,52 @@ function renderSheet(
       />
     </WorkflowProvider>,
   );
-  return { onClose };
+  return { ...rendered, onClose };
 }
+
+function renderSheetWithSyncStatus(
+  syncStatus: WorkflowSyncStatus,
+  checksOverride?: HealthDashboardCheck[],
+  open = true,
+): ReturnType<typeof render> & { onClose: ReturnType<typeof vi.fn> } {
+  spySyncStatus(syncStatus);
+  if (checksOverride) {
+    mocks.getHealthDashboard.mockResolvedValue({
+      provider: "supabase",
+      checkedAt: NOW.toISOString(),
+      checks: checksOverride,
+      persistence: "persisted",
+      persistenceMessage: null,
+    });
+  }
+
+  return renderSheet({ open, state: seedState() });
+}
+
+const SIGNED_OUT_WITH_LOCAL_ONLY_PENDING_SAVE_FAILED: WorkflowSyncStatus = {
+  storage: "available",
+  account: "local-only",
+  message: null,
+  signedOut: true,
+  pendingLocalChanges: true,
+  pendingSaveFailed: true,
+};
+
+const BLOCKED_STORAGE_PENDING_SAVE_FAILED: WorkflowSyncStatus = {
+  storage: "blocked",
+  account: "local-only",
+  message: "blocked",
+  pendingLocalChanges: true,
+  pendingSaveFailed: true,
+};
+
+const APP_UPDATE_PENDING_SAVE_FAILED: WorkflowSyncStatus = {
+  storage: "available",
+  account: "local-only",
+  message: ACCOUNT_NEEDS_APP_UPDATE,
+  pendingLocalChanges: true,
+  pendingSaveFailed: true,
+};
 
 beforeEach(() => {
   window.sessionStorage.clear();
@@ -119,6 +178,241 @@ afterEach(() => {
 });
 
 describe("HealthSheet — the ported Health surface", () => {
+  it("adds retained failed-save concern to the user-facing glance and keeps developer raw metrics check-only", async () => {
+    renderSheetWithSyncStatus(
+      {
+        storage: "available",
+        account: "local-only",
+        message: null,
+        pendingLocalChanges: true,
+        pendingSaveFailed: true,
+      },
+      [
+        check({ id: "health-areas", subsystem: "areas", score: 100 }),
+        check({
+          id: "health-capture-persistence",
+          subsystem: "capture_persistence",
+          status: "critical",
+          score: 0,
+          summary: "Captures could not be saved.",
+        }),
+      ],
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("health-sheet-headline")).toHaveTextContent(
+        "2 things need a look",
+      ),
+    );
+    expect(screen.getByTestId("health-sheet-needs-you")).toHaveTextContent(
+      "Needs a look: Thoughts you capture, Saving your work.",
+    );
+    expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+      "Saving your work",
+    );
+    expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+      ACCOUNT_SAVE_FAILED,
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("health-sheet-developer-details"),
+      ).toHaveTextContent(
+        "overall score 50/100 · 1 healthy · 0 watch · 1 critical",
+      ),
+    );
+  });
+
+  it("acknowledges a retained failed save while all server checks are healthy", async () => {
+    renderSheetWithSyncStatus(
+      {
+        storage: "available",
+        account: "synced",
+        message: "This is ignored for the known failed save concern.",
+        pendingLocalChanges: true,
+        pendingSaveFailed: true,
+      },
+      [
+        check({ id: "health-areas", subsystem: "areas", score: 100 }),
+        check({
+          id: "health-google-calendar",
+          subsystem: "google_calendar",
+          score: 100,
+          status: "healthy",
+          summary: "Google Calendar is healthy.",
+        }),
+        check({
+          id: "health-observability-sentry",
+          subsystem: "sentry",
+          score: 100,
+          status: "healthy",
+          summary: "Sentry is healthy.",
+        }),
+      ],
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("health-sheet-headline")).toHaveTextContent(
+        "1 thing needs a look",
+      ),
+    );
+    expect(screen.getByTestId("health-sheet-needs-you")).toHaveTextContent(
+      "Needs a look: Saving your work.",
+    );
+    expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+      "Saving your work",
+    );
+    expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+      ACCOUNT_SAVE_FAILED,
+    );
+    expect(
+      screen.getByTestId("health-sheet-group-work").querySelector("summary"),
+    ).toHaveTextContent("1 thing needs a look.");
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("health-sheet-developer-details"),
+      ).toHaveTextContent(
+        "overall score 100/100 · 3 healthy · 0 watch · 0 critical",
+      ),
+    );
+  });
+
+  it("does not add local concern without pendingSaveFailed even when sync status stays local-only", async () => {
+    renderSheetWithSyncStatus({
+      storage: "available",
+      account: "local-only",
+      message: "LifeOS can't reach your account RIGHT NOW.",
+      pendingLocalChanges: false,
+      pendingSaveFailed: false,
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("health-sheet-headline")).toHaveTextContent(
+        "Everything is working",
+      ),
+    );
+    expect(screen.queryByText("Saving your work")).not.toBeInTheDocument();
+    expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+      "Your areas",
+    );
+  });
+
+  it("switches cleanly from concern to baseline when pendingSaveFailed clears", async () => {
+    const flagged = renderSheetWithSyncStatus(
+      {
+        storage: "available",
+        account: "local-only",
+        message: "LifeOS can't reach your account RIGHT NOW.",
+        pendingLocalChanges: true,
+        pendingSaveFailed: true,
+      },
+      [
+        check({ id: "health-areas", subsystem: "areas", score: 100 }),
+        check({
+          id: "health-capture-persistence",
+          subsystem: "capture_persistence",
+          status: "critical",
+          score: 0,
+          summary: "Captures could not be saved.",
+        }),
+      ],
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("health-sheet-headline")).toHaveTextContent(
+        "2 things need a look",
+      ),
+    );
+    flagged.unmount();
+    renderSheetWithSyncStatus(
+      {
+        storage: "available",
+        account: "local-only",
+        message: "LifeOS can't reach your account RIGHT NOW.",
+        pendingLocalChanges: false,
+        pendingSaveFailed: false,
+      },
+      [
+        check({ id: "health-areas", subsystem: "areas", score: 100 }),
+        check({
+          id: "health-capture-persistence",
+          subsystem: "capture_persistence",
+          status: "healthy",
+          score: 100,
+          summary: "Capture saves have stabilized.",
+        }),
+      ],
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("health-sheet-headline")).toHaveTextContent(
+        "Everything is working",
+      ),
+    );
+    expect(screen.queryByText("Saving your work")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      "signed out",
+      SIGNED_OUT_WITH_LOCAL_ONLY_PENDING_SAVE_FAILED,
+      SIGNED_OUT_SAVING_ON_THIS_DEVICE,
+    ],
+    [
+      "storage blocked",
+      BLOCKED_STORAGE_PENDING_SAVE_FAILED,
+      DEVICE_STORAGE_BLOCKED,
+    ],
+    [
+      "app update needed",
+      APP_UPDATE_PENDING_SAVE_FAILED,
+      ACCOUNT_NEEDS_APP_UPDATE,
+    ],
+  ])(
+    "uses resolver-priority output for %s without forcing account-save wording",
+    async (_label, status, message) => {
+      renderSheetWithSyncStatus(status, []);
+      await waitFor(() =>
+        expect(screen.getByTestId("health-sheet-headline")).toHaveTextContent(
+          "1 thing needs a look",
+        ),
+      );
+      expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+        "Saving your work",
+      );
+      expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+        message,
+      );
+      expect(screen.queryByText(ACCOUNT_SAVE_FAILED)).not.toBeInTheDocument();
+    },
+  );
+
+  it("keeps the work group visible for a retained save concern even with no work checks", async () => {
+    renderSheetWithSyncStatus(
+      {
+        storage: "available",
+        account: "local-only",
+        message: null,
+        pendingLocalChanges: true,
+        pendingSaveFailed: true,
+      },
+      [
+        check({
+          id: "health-google-calendar",
+          status: "watch",
+          score: 50,
+          summary: "Google Calendar needs attention.",
+          subsystem: "google_calendar",
+        }),
+      ],
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("health-sheet-headline")).toHaveTextContent(
+        "2 things need a look",
+      ),
+    );
+    expect(screen.getByTestId("health-sheet-group-work")).toBeInTheDocument();
+  });
+
   it("renders nothing when closed", () => {
     renderSheet({ open: false });
     expect(screen.queryByTestId("health-sheet")).not.toBeInTheDocument();
