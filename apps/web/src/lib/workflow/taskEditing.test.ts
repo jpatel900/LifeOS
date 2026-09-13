@@ -1,7 +1,16 @@
-import { describe, expect, it } from "vitest";
-import type { Task, Project } from "@lifeos/schemas";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Task } from "@lifeos/schemas";
 import type { Phase2MockTask } from "@/lib/types";
-import { createInitialWorkflowState, type WorkflowState } from "./shared";
+import {
+  workflowReducer,
+  type PersistedWorkflowPayload,
+} from "@/lib/workflowContext/reducerCore";
+import {
+  GOLDEN_AREA_ID,
+  backlogLatestDraft,
+  captureWorkflow,
+  workflowSeed,
+} from "@/__tests__/helpers/workflowReachability";
 import {
   applyTaskEditPatch,
   editBacklogTaskInState,
@@ -9,11 +18,14 @@ import {
   normalizeTaskEditInput,
   validateTaskEditInput,
 } from "./taskEditing";
+import { acceptProjectDraft } from "./triage";
 
 const CREATED = "2026-07-04T09:00:00.000Z";
-const AREA_MAIN = "area-main-job";
+const EDITED = "2026-07-04T10:00:00.000Z";
+const AREA_MAIN = GOLDEN_AREA_ID;
 const AREA_PERSONAL = "area-personal";
 const AREA_MISSING = "area-does-not-exist";
+const ACCOUNT_TASK_ID = "11111111-1111-4111-8111-111111111111";
 
 function makeTask(overrides: Partial<Phase2MockTask> & { id: string }): Task {
   return {
@@ -39,22 +51,26 @@ function makeTask(overrides: Partial<Phase2MockTask> & { id: string }): Task {
   } as Task;
 }
 
-function makeProject(
-  overrides: Partial<Project> & { id: string; area_id: string },
-): Project {
+/** An account sync payload, same shape `localRowRetirementGuard.test.ts` uses. */
+function syncPayload(
+  overrides: Partial<PersistedWorkflowPayload> = {},
+): PersistedWorkflowPayload {
   return {
-    user_id: "user-1",
-    title: "A project",
-    description: null,
-    status: "active",
-    created_at: CREATED,
-    updated_at: CREATED,
+    captures: [],
+    tasks: [],
+    proposals: [],
+    blocks: [],
+    sessions: [],
+    reviewLog: [],
+    idAliases: {
+      captures: new Map<string, string>(),
+      tasks: new Map<string, string>(),
+      proposals: new Map<string, string>(),
+      blocks: new Map<string, string>(),
+      sessions: new Map<string, string>(),
+    },
     ...overrides,
-  } as Project;
-}
-
-function stateWith(overrides: Partial<WorkflowState>): WorkflowState {
-  return { ...createInitialWorkflowState(), ...overrides };
+  };
 }
 
 describe("normalizeTaskEditInput", () => {
@@ -234,9 +250,23 @@ describe("applyTaskEditPatch", () => {
   });
 });
 
+// Every state below is built through `workflowSeed()` and real transitions
+// (capture -> backlog, project-draft accept, account sync), never a
+// hand-assembled `WorkflowState`. `Date` is pinned so the fixtures' own
+// timestamps are CREATED and the edit's are EDITED, deterministically.
 describe("editBacklogTaskInState", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(CREATED));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns the state unchanged (task: null) when the task does not exist", () => {
-    const state = stateWith({ tasks: [] });
+    const state = workflowSeed();
+    expect(state.tasks).toEqual([]);
 
     const result = editBacklogTaskInState(state, "missing-task", {
       title: "New title",
@@ -249,11 +279,21 @@ describe("editBacklogTaskInState", () => {
   });
 
   it("edits the task, bumps updated_at, and leaves other tasks untouched", () => {
-    const other = makeTask({ id: "task-2", title: "Other task" });
-    const target = makeTask({ id: "task-1", title: "Old title" });
-    const state = stateWith({ tasks: [target, other] });
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Sort the garage shelves.");
+    state = backlogLatestDraft(state);
+    const target = state.tasks.find((task) => task.status === "backlog");
+    state = captureWorkflow(state, "Label the storage bins.");
+    state = backlogLatestDraft(state);
+    const other = state.tasks.find(
+      (task) => task.status === "backlog" && task.id !== target?.id,
+    );
+    expect(target).toBeDefined();
+    expect(other).toBeDefined();
+    expect(target!.updated_at).toBe(CREATED);
 
-    const result = editBacklogTaskInState(state, "task-1", {
+    vi.setSystemTime(new Date(EDITED));
+    const result = editBacklogTaskInState(state, target!.id, {
       title: "New title",
       description: "Notes",
       area_id: AREA_MAIN,
@@ -262,19 +302,43 @@ describe("editBacklogTaskInState", () => {
     expect(result.task?.title).toBe("New title");
     expect(result.task?.description).toBe("Notes");
     expect(result.task?.updated_at).not.toBe(CREATED);
-    expect(result.state.tasks.find((t) => t.id === "task-2")).toEqual(other);
+    expect(result.task?.updated_at).toBe(EDITED);
+    expect(result.state.tasks.find((t) => t.id === other!.id)).toEqual(other);
   });
 
   it("resolves the project's area from state.projects before blocking an area change", () => {
-    const project = makeProject({ id: "project-1", area_id: AREA_MAIN });
-    const target = makeTask({
-      id: "task-1",
-      project_id: "project-1",
-      area_id: AREA_MAIN,
-    });
-    const state = stateWith({ tasks: [target], projects: [project] });
+    // One capture yields both a project draft (the text says "roadmap") and a
+    // task draft; accepting the project and backlogging the task are the real
+    // local transitions for each.
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Draft the quarterly roadmap.", AREA_MAIN);
+    const projectDraft = state.projectDrafts.find(
+      (draft) => draft.status === "pending",
+    );
+    expect(projectDraft).toBeDefined();
+    state = acceptProjectDraft(state, projectDraft!.id);
+    state = backlogLatestDraft(state);
+    const project = state.projects[0];
+    const localTask = state.tasks.find((task) => task.status === "backlog");
+    expect(project?.area_id).toBe(AREA_MAIN);
+    expect(localTask).toBeDefined();
 
-    const result = editBacklogTaskInState(state, "task-1", {
+    // No local transition links a task to a project; a project-linked task
+    // reaches this state only as an account row through the real sync
+    // reducer, so its account twin carries the link.
+    state = workflowReducer(state, {
+      type: "syncPersistedWorkflow",
+      payload: syncPayload({
+        tasks: [
+          { ...localTask!, id: ACCOUNT_TASK_ID, project_id: project!.id },
+        ],
+      }),
+    });
+    const linked = state.tasks.find((task) => task.id === ACCOUNT_TASK_ID);
+    expect(linked?.project_id).toBe(project!.id);
+    expect(linked?.area_id).toBe(AREA_MAIN);
+
+    const result = editBacklogTaskInState(state, ACCOUNT_TASK_ID, {
       title: "New title",
       description: null,
       area_id: AREA_PERSONAL,
