@@ -219,19 +219,21 @@ jobs:
                 return;
               }
 
-              // Owner decision (#988): some GraphQL error text here (e.g.
-              // "Can't disable auto-merge for this pull request.") does not
-              // say whether auto-merge was already off or genuinely failed
-              // to disarm. Do not guess from the message. Do one bounded
-              // fresh read of the same PR node instead: only a positively
-              // confirmed `autoMergeRequest: null` counts as already-safe.
-              // Still-enabled, a malformed/unknown node shape, or a failed
+              // Bug #988: some GraphQL error text here (e.g. "Can't disable
+              // auto-merge for this pull request.") does not say whether
+              // auto-merge was already off or genuinely failed to disarm.
+              // Do not guess from the message. Do one bounded fresh read of
+              // the same node instead: only a positively established
+              // PullRequest (`__typename === 'PullRequest'`) with
+              // `autoMergeRequest` strictly null counts as already-safe.
+              // Still-enabled, a non-PullRequest/unknown node, or a failed
               // read all fall through to the existing failure below.
               try {
                 const freshRead = await github.graphql(
                   `
                     query ConfirmAutoMergeDisabled($pullRequestId: ID!) {
                       node(id: $pullRequestId) {
+                        __typename
                         ... on PullRequest {
                           autoMergeRequest {
                             enabledAt
@@ -244,8 +246,10 @@ jobs:
                 );
 
                 const node = freshRead?.node;
+                const isConfirmedPullRequest = node && node.__typename === 'PullRequest';
                 const hasAutoMergeField =
-                  node && Object.prototype.hasOwnProperty.call(node, 'autoMergeRequest');
+                  isConfirmedPullRequest &&
+                  Object.prototype.hasOwnProperty.call(node, 'autoMergeRequest');
 
                 if (hasAutoMergeField && node.autoMergeRequest === null) {
                   setOutputs(
