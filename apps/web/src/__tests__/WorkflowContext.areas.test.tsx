@@ -161,12 +161,18 @@ function WorkflowRowsProbe() {
 }
 
 function SyncStatusProbe() {
-  const { syncStatus } = useWorkflow();
+  const { syncStatus, areasReadbackSettled } = useWorkflow();
 
   return (
     <div>
       <span data-testid="sync-account">{syncStatus.account}</span>
       <span data-testid="sync-message">{syncStatus.message ?? ""}</span>
+      <span data-testid="sync-pending">
+        {String(syncStatus.pendingLocalChanges)}
+      </span>
+      <span data-testid="areas-readback-settled">
+        {String(areasReadbackSettled)}
+      </span>
     </div>
   );
 }
@@ -599,6 +605,191 @@ describe("WorkflowProvider persisted area sync", () => {
         "LifeOS will add it to your account as soon as it can",
       );
     });
+  });
+
+  // #967: the two tests above rely on incidental promise-microtask ordering
+  // between the capture's own failed replay and the mount's one-time
+  // `runAccountSync` effect landing its `markAccountSynced()` call — real,
+  // but not pinned, and "still shows local-only" alone cannot tell "the
+  // guard held" apart from "the racing call simply hasn't run yet". This
+  // test pins the interleaving with two observable/deferred boundaries
+  // instead of hoping for it:
+  //
+  //   1. `mockListCaptureItems` is gated so the mount's own `runAccountSync`
+  //      is parked strictly BEFORE it reaches its own `replayJournaledWrites`
+  //      call — the capture's OWN failed attempt (call #1 below) is what
+  //      marks local-only first.
+  //   2. `mockSyncJournaledCapture` hands back a call-indexed deferred for
+  //      every call after the first, so the test can see (`syncDeferreds[n]`
+  //      existing) exactly when the mount sync's own retry attempt has been
+  //      REACHED, and control whether it fails or succeeds, before checking
+  //      the status the racing call decides.
+  //
+  // The second half of the contract — a later successful drain still
+  // reaching `synced` — is driven through the existing "second chance"
+  // auth-retry effect (`WorkflowContext.tsx`, the `onAuthStateChange`
+  // listener that re-runs `runAccountSync({ replayAfter: true })` whenever
+  // the account is `local-only`): a real production retry path, not a timer
+  // or a new mock of production behavior.
+  it("keeps an already local-only, pending status through a racing mount-sync completion, then recovers to synced once a later drain empties the queue", async () => {
+    let releaseCaptureRead: () => void = () => {};
+    const captureReadGate = new Promise<void>((resolve) => {
+      releaseCaptureRead = resolve;
+    });
+    mockListCaptureItems.mockImplementation(async () => {
+      await captureReadGate;
+      return { provider: "supabase", captures: [] };
+    });
+
+    let syncCallIndex = 0;
+    const syncDeferreds: Array<{
+      resolve: (value: unknown) => void;
+      reject: (reason?: unknown) => void;
+    }> = [];
+    mockSyncJournaledCapture.mockImplementation(() => {
+      const index = syncCallIndex++;
+      if (index === 0) {
+        // The capture's own first replay attempt: fails immediately, same
+        // as the two tests above.
+        return Promise.reject(new Error("insert timeout"));
+      }
+      return new Promise((resolve, reject) => {
+        syncDeferreds[index] = { resolve, reject };
+      });
+    });
+
+    let authStateCallback:
+      | ((event: string, session: unknown) => void)
+      | undefined;
+    const originalCreateSupabaseBrowserClient =
+      mockCreateSupabaseBrowserClient.getMockImplementation();
+    mockCreateSupabaseBrowserClient.mockImplementation(() => {
+      const maybeSingle = vi.fn(async () => ({ data: null, error: null }));
+      const eqInner = vi.fn(() => ({ maybeSingle }));
+      const eqOuter = vi.fn(() => ({ eq: eqInner }));
+      return {
+        mocked: true,
+        from: vi.fn(() => ({
+          select: vi.fn(() => ({ eq: eqOuter })),
+          upsert: vi.fn(async () => ({ error: null })),
+        })),
+        auth: {
+          getUser: vi.fn(async () => ({
+            data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+            error: null,
+          })),
+          onAuthStateChange: vi.fn((callback: typeof authStateCallback) => {
+            authStateCallback = callback;
+            return { data: { subscription: { unsubscribe: vi.fn() } } };
+          }),
+        },
+      };
+    });
+
+    try {
+      render(
+        <WorkflowProvider>
+          <TriageActionProbe />
+          <SyncStatusProbe />
+        </WorkflowProvider>,
+      );
+
+      // `applyPersistedAreas` already ran (it happens before the gated
+      // `Promise.all`), so the area is selected while the mount sync itself
+      // is still parked awaiting `listCaptureItems`.
+      await waitFor(() => {
+        expect(screen.getByTestId("selected-area-id")).toHaveTextContent(
+          "area-main-job",
+        );
+      });
+
+      // The capture's own journal replay fails (call #0) and marks
+      // local-only while the mount sync above is still parked mid flight.
+      fireEvent.click(screen.getByRole("button", { name: "Capture" }));
+      await waitFor(() => {
+        expect(screen.getByTestId("sync-account")).toHaveTextContent(
+          "local-only",
+        );
+        expect(screen.getByTestId("sync-pending")).toHaveTextContent("true");
+      });
+
+      // Release the parked mount sync. It resumes into its own
+      // `replayJournaledWrites`, which retries the still-queued capture —
+      // call #1. Waiting for `syncDeferreds[1]` to exist is the observable
+      // boundary proving the mount sync reached that call before this test
+      // decides its outcome or checks status.
+      releaseCaptureRead();
+      await waitFor(() => {
+        expect(syncDeferreds[1]).toBeDefined();
+      });
+
+      // The retry still fails: the mount sync's own `markAccountSynced()` —
+      // called moments after this, with nothing left to gate — must not
+      // clobber the still-genuinely-pending local-only status. (Reverting
+      // the `preserveLocalOnlyWhilePending` guard in `WorkflowContext.tsx`
+      // and re-running this test turns this assertion red — "synced" —
+      // proving it exercises the guard rather than a status that was never
+      // going to change.)
+      await act(async () => {
+        syncDeferreds[1].reject(new Error("insert timeout, retry"));
+        await Promise.resolve();
+      });
+      // `areas-readback-settled` flips in the SAME `finally` block that
+      // clears `runAccountSync`'s in-flight guard (`WorkflowContext.tsx`) —
+      // waiting for it, not just for "local-only" (which was already true
+      // before this call even started), is the boundary proving THIS mount
+      // sync's own guarded `markAccountSynced()` call has actually run,
+      // rather than the assertion below happening to already hold from the
+      // capture's own earlier `markLocalOnly`.
+      await waitFor(() => {
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        );
+      });
+      expect(screen.getByTestId("sync-account")).toHaveTextContent(
+        "local-only",
+      );
+      expect(screen.getByTestId("sync-pending")).toHaveTextContent("true");
+      expect(screen.getByTestId("sync-message")).toHaveTextContent(
+        "Your capture is saved on this device",
+      );
+
+      // Drive the account's own "second chance" retry: a real session event
+      // (`TOKEN_REFRESHED`), not a timer. `WorkflowContext`'s listener sees
+      // the account is still `local-only` and re-runs
+      // `runAccountSync({ replayAfter: true })` — call #2 of the mocked
+      // handler follows from that real replay, not from anything this test
+      // invents.
+      await act(async () => {
+        authStateCallback?.("TOKEN_REFRESHED", {
+          user: { id: "22222222-2222-4222-8222-222222222222" },
+        });
+      });
+      await waitFor(() => {
+        expect(syncDeferreds[2]).toBeDefined();
+      });
+
+      // This retry succeeds — the queue actually drains.
+      await act(async () => {
+        syncDeferreds[2].resolve({
+          provider: "supabase",
+          captureId: "44444444-4444-4444-8444-444444444444",
+        });
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
+        expect(screen.getByTestId("sync-pending")).toHaveTextContent("false");
+        expect(screen.getByTestId("sync-message")).toHaveTextContent("");
+      });
+    } finally {
+      if (originalCreateSupabaseBrowserClient) {
+        mockCreateSupabaseBrowserClient.mockImplementation(
+          originalCreateSupabaseBrowserClient,
+        );
+      }
+    }
   });
 
   // C2-S8 (#687 finding 1): `?area=` outranks the stored device preference.

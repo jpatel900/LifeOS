@@ -380,14 +380,39 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  const markAccountSynced = useCallback(() => {
-    setSyncStatus((current) => ({
-      ...current,
-      account: "synced",
-      signedOut: false,
-      message: current.pendingLocalChanges ? SOME_WORK_ON_THIS_DEVICE : null,
-    }));
-  }, []);
+  // #967: `preserveLocalOnlyWhilePending` guards against a genuine race —
+  // `runAccountSync`'s mount/reconnect finalization can land after a replay
+  // failure has already marked a write local-only, and must not paper over
+  // it. It is opt-in, not the default, because `pendingLocalChanges` is only
+  // GUARANTEED fresh at the one call site that awaits
+  // `refreshPendingLocalChanges` immediately beforehand (`runAccountSync`
+  // below). Every other caller (a capture/win/rollup's own success path)
+  // confirms only ITS OWN write cleared and never refreshes the global flag
+  // first, so trusting a possibly-stale `true` there would strand an
+  // already-successful write at `local-only` forever instead of reporting
+  // it. Those callers keep the unconditional, pre-existing behavior.
+  const markAccountSynced = useCallback(
+    (options?: { preserveLocalOnlyWhilePending?: boolean }) => {
+      setSyncStatus((current) => {
+        if (
+          options?.preserveLocalOnlyWhilePending &&
+          current.account === "local-only" &&
+          current.pendingLocalChanges
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          account: "synced",
+          signedOut: false,
+          message: current.pendingLocalChanges
+            ? SOME_WORK_ON_THIS_DEVICE
+            : null,
+        };
+      });
+    },
+    [],
+  );
 
   const markAccountSyncError = useCallback((message: string) => {
     setSyncStatus((current) => ({
@@ -592,6 +617,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     async (
       client: MinimalSupabaseClient | null,
       areas = persistedAreasRef.current,
+      // #967: forwarded to `markAccountSynced` below — see its own comment.
+      // Only the mount/reconnect caller (`runAccountSync`) passes this; an
+      // individual write's own success path (`persistCapture` and friends)
+      // does not, so it keeps promoting to `synced` unconditionally.
+      options?: { preserveLocalOnlyWhilePending?: boolean },
     ) => {
       if (!client) {
         markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
@@ -686,7 +716,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           .filter((entry) => entry.review_type === "daily")
           .map((entry) => entry.period_start),
       );
-      markAccountSynced();
+      markAccountSynced(options);
       // #737 C1 S5: the account has just been re-read and local state
       // reconciled against it, which is the ONLY moment "still queued" and
       // "not in the account" mean the same thing. See
@@ -1669,6 +1699,103 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * #967: the account tier of "is today closed", read in isolation.
+   *
+   * `runAccountSync`'s own `syncPersistedWorkflowRows` call reads the
+   * account's reviews and sets `accountClosedDays` — but it runs BEFORE this
+   * same pass's `replayJournaledWrites`, so a daily close that is still
+   * journalled at that moment is invisible to it. If a later step in the same
+   * pass (`refreshJournalledDurableState`) then re-derives `journalledClosedDays`
+   * from the now-drained journal, the day briefly has NO evidence anywhere:
+   * gone from the device tier (delivered), not yet on the account tier (never
+   * re-read since delivery). `resolveDayClose`'s union of both arrays then
+   * reports the day open, and the Close moment offers to close it again.
+   *
+   * This re-reads ONLY the account's review entries — never the tasks/blocks/
+   * sessions the same account response carries, and never calls
+   * `syncPersistedWorkflowRows` again (a #984 review already found that a
+   * whole-workflow resync mid-pass can overwrite concurrent local work).
+   *
+   * #967 review: a successful `provider: "supabase"` response is NOT itself
+   * proof that the day(s) this pass just replayed are actually closed on the
+   * account — a delayed, stale, or wrong-session read can answer
+   * "supabase" and still omit the very day replay just delivered, at which
+   * point the caller clearing journal-derived evidence on this boolean alone
+   * would leave NEITHER tier reporting the day closed. Two guards close
+   * that gap:
+   *  - `expectedDailyPeriods` — the daily-review periods still pending
+   *    immediately BEFORE replay ran (the caller's snapshot) — must ALL
+   *    appear in this read's own daily reviews. A read that succeeds but
+   *    omits one is treated the same as a failed read.
+   *  - `expectedUserId` — the authenticated user id the CALLER captured
+   *    immediately before the pending-period snapshot and replay, not one
+   *    this helper fetches itself. Capturing it that early, rather than
+   *    only just before this helper's own read, is load-bearing (#967
+   *    follow-up review, finding 1): replay can take long enough for the
+   *    session to change before this helper ever runs, and a "before"
+   *    fetched only at the helper's own start would already observe the
+   *    new identity, making the before/after comparison compare a changed
+   *    session against itself and see no change at all. This helper
+   *    fetches the identity exactly ONCE, immediately after its own read,
+   *    and requires it to still match the caller's pre-replay snapshot.
+   *
+   * Returns whether the account was CONFIRMED to already hold every
+   * expected day, so a caller can decide whether it is safe to let
+   * device-tier evidence for a review disappear. `accountClosedDays` is
+   * only ever set from a same-identity, provider-`"supabase"` response whose
+   * daily reviews ALL belong to `expectedUserId` — never from a mismatched
+   * identity, and never from a response containing even one other user's row
+   * (#967 final-candidate review: a per-row filter that silently DROPPED
+   * wrong-user rows before calling `setAccountClosedDays` was itself a gap —
+   * in an A-to-B-to-A read, the before/after identity check sees A both
+   * times, the wrong-user row gets filtered out of the array passed to the
+   * setter, and that now-`accountClosedDays`-shaped-but-incomplete array
+   * still overwrites whatever A's account previously, correctly, held,
+   * erasing real evidence for no reason the caller can see. The check must
+   * refuse the WHOLE read, before the setter runs, rather than launder a
+   * partial one). `accountClosedDays` is set even when an expected period is
+   * missing, because the read itself is still truthful about what the
+   * account currently holds; only the CLEARANCE for the missing day is
+   * refused.
+   */
+  const readbackAccountReviewClosedDays = useCallback(
+    async (
+      client: MinimalSupabaseClient | null,
+      expectedDailyPeriods: string[],
+      expectedUserId: string | null,
+    ): Promise<boolean> => {
+      if (!client?.auth) return false;
+      if (!expectedUserId) return false;
+      try {
+        const result = await listExecutionReviewItems(client);
+        if (!mountedRef.current) return false;
+        if (result.provider !== "supabase") return false;
+
+        const after = await client.auth.getUser();
+        const afterUserId = after.data.user?.id ?? null;
+        if (afterUserId !== expectedUserId) return false;
+
+        const dailyReviews = result.reviewEntries.filter(
+          (entry) => entry.review_type === "daily",
+        );
+        if (dailyReviews.some((entry) => entry.user_id !== expectedUserId)) {
+          return false;
+        }
+
+        const dailyClosedDays = dailyReviews.map((entry) => entry.period_start);
+        setAccountClosedDays(dailyClosedDays);
+
+        return expectedDailyPeriods.every((period) =>
+          dailyClosedDays.includes(period),
+        );
+      } catch {
+        return false;
+      }
+    },
+    [],
+  );
+
   // #960 defects 1/2: extracted so both the mount effect below and the
   // auth-state listener effect after it can run the SAME account-sync body.
   // This used to be inline in one effect with an all-`[]` mount trigger;
@@ -1713,9 +1840,63 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             return;
           }
           applyPersistedAreas(result.areas);
-          await syncPersistedWorkflowRows(client, result.areas);
+          await syncPersistedWorkflowRows(client, result.areas, {
+            preserveLocalOnlyWhilePending: true,
+          });
           if (!mountedRef.current) return;
           if (options?.replayAfter) {
+            // #967 follow-up review, finding 1: the identity this pass is
+            // accountable to, captured BEFORE the pending-period snapshot and
+            // replay even start — see `readbackAccountReviewClosedDays`'s own
+            // comment for why capturing it any later cannot detect a session
+            // change that happens during replay itself.
+            let expectedUserId: string | null = null;
+            try {
+              const currentUser = await client.auth?.getUser();
+              expectedUserId = currentUser?.data.user?.id ?? null;
+            } catch {
+              expectedUserId = null;
+            }
+
+            // #967 review: the specific daily-review periods this pass is
+            // responsible for confirming, snapshotted IMMEDIATELY BEFORE
+            // replay removes them from the journal — a successful account
+            // read afterward is only trusted to release journal-derived
+            // evidence for periods THIS list names (see
+            // `readbackAccountReviewClosedDays`'s own comment).
+            //
+            // #967 follow-up review, finding 2: a failed snapshot must NOT be
+            // treated as "nothing pending" — `expectedDailyPeriods` staying
+            // `[]` makes the readback's own `every(...)` vacuously true, which
+            // would authorize clearing journal-derived evidence for a day this
+            // pass never actually confirmed. `expectedDailyPeriodsSnapshotFailed`
+            // tracks that distinction separately from an honestly-empty list.
+            let expectedDailyPeriods: string[] = [];
+            let expectedDailyPeriodsSnapshotFailed = false;
+            try {
+              expectedDailyPeriods = (await listPendingWrites("review"))
+                .map(
+                  (write) =>
+                    write.payload as {
+                      review_type?: unknown;
+                      period_start?: unknown;
+                    },
+                )
+                .filter(
+                  (
+                    payload,
+                  ): payload is {
+                    review_type: "daily";
+                    period_start: string;
+                  } =>
+                    payload.review_type === "daily" &&
+                    typeof payload.period_start === "string",
+                )
+                .map((payload) => payload.period_start);
+            } catch {
+              expectedDailyPeriodsSnapshotFailed = true;
+            }
+
             // ORDERING IS LOAD-BEARING (#960 defect 1) — this must run AFTER
             // the two calls above have populated `persistedAreasRef`.
             try {
@@ -1736,10 +1917,37 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             // POST-drain count on this very call, not one refresh cycle late.
             if (!mountedRef.current) return;
             await refreshPendingLocalChanges();
-            await refreshJournalledDurableState();
+            // #967: transfer a successfully replayed daily close to the
+            // account tier BEFORE the journal refresh below can clear its
+            // device-tier evidence — see `readbackAccountReviewClosedDays`'s
+            // own comment. A failed readback must not invent account
+            // confirmation, so `refreshJournalledDurableState` (the only
+            // thing that can drop `journalledClosedDays`) is skipped this
+            // pass rather than let a review with no account-tier evidence
+            // yet lose its device-tier evidence too; the next mount,
+            // reconnect, or sign-in reconciles it.
+            //
+            // #967 follow-up review, finding 2: the readback still runs even
+            // when the snapshot failed — it is truthful about what the
+            // account currently holds and worth recording — but its boolean
+            // is not enough by itself to authorize the journal refresh when
+            // the snapshot itself is the reason `expectedDailyPeriods` is
+            // empty, rather than there honestly being nothing to confirm.
+            const accountConfirmedExpectedDays =
+              await readbackAccountReviewClosedDays(
+                client,
+                expectedDailyPeriods,
+                expectedUserId,
+              );
+            if (
+              accountConfirmedExpectedDays &&
+              !expectedDailyPeriodsSnapshotFailed
+            ) {
+              await refreshJournalledDurableState();
+            }
           }
           if (!mountedRef.current) return;
-          markAccountSynced();
+          markAccountSynced({ preserveLocalOnlyWhilePending: true });
         } catch (error) {
           if (mountedRef.current) markPersistedLoadFailure(error);
         }
@@ -1761,6 +1969,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       replayJournaledWrites,
       refreshPendingLocalChanges,
       refreshJournalledDurableState,
+      readbackAccountReviewClosedDays,
     ],
   );
 

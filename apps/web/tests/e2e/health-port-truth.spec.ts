@@ -297,15 +297,38 @@ test.describe("C2-S4 — the ported Health surface, signed in", () => {
     await openSignedInToday(page, SEEDED_USERS.a);
     await openHealthSheet(page);
 
-    const headline = page.getByTestId("health-sheet-headline");
-    const needsYou = page.getByTestId("health-sheet-needs-you");
-    await expect(headline).not.toHaveText("", { timeout: 30_000 });
+    // #967: `openHealthSheet` only waits for the four probes to have
+    // ANSWERED, not for `getHealthDashboard()` to resolve and React to apply
+    // `setChecks` (`HealthSheet.tsx`) — reading the headline and subline as
+    // two separate Playwright calls afterward can straddle that render, each
+    // call observing a different one. Waiting for the check's own completed
+    // message first is a real, existing settled-state signal (used the same
+    // way by the "Check again" test above), not a fixed sleep.
+    await expect(page.getByTestId("health-sheet-message")).toHaveText(
+      "Checked. A record of this check was saved to your account.",
+      { timeout: 30_000 },
+    );
+
+    // Both strings read from their common root in ONE browser evaluation —
+    // a single DOM snapshot, so the pair can never be torn across two
+    // separate round-trips the way two Playwright `textContent()` calls can.
+    const { headlineText, needsYouText } = await page
+      .getByTestId("health-sheet")
+      .evaluate((root) => ({
+        headlineText:
+          root
+            .querySelector('[data-testid="health-sheet-headline"]')
+            ?.textContent?.trim() ?? "",
+        needsYouText:
+          root
+            .querySelector('[data-testid="health-sheet-needs-you"]')
+            ?.textContent?.trim() ?? "",
+      }));
+    expect(headlineText).not.toBe("");
 
     // C1 criterion 5 (#758), re-pinned on the ported surface: the two lines
     // must agree with each other. "Everything is working" may only appear
     // beside "Nothing needs you right now."
-    const headlineText = (await headline.textContent())?.trim() ?? "";
-    const needsYouText = (await needsYou.textContent())?.trim() ?? "";
     if (headlineText === "Everything is working") {
       expect(needsYouText).toBe("Nothing needs you right now.");
     } else {
