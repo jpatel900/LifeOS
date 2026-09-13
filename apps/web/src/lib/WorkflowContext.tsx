@@ -367,24 +367,39 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  const markAccountSynced = useCallback(() => {
-    setSyncStatus((current) => {
-      // #967: a mount/reconnect sync that lands after a replay failure has
-      // already marked the write local-only must not paper over it — the
-      // work is still only on this device. A later call with the queue
-      // actually empty (`pendingLocalChanges` false by then) still reaches
-      // the branch below and reports synced normally.
-      if (current.account === "local-only" && current.pendingLocalChanges) {
-        return current;
-      }
-      return {
-        ...current,
-        account: "synced",
-        signedOut: false,
-        message: current.pendingLocalChanges ? SOME_WORK_ON_THIS_DEVICE : null,
-      };
-    });
-  }, []);
+  // #967: `preserveLocalOnlyWhilePending` guards against a genuine race —
+  // `runAccountSync`'s mount/reconnect finalization can land after a replay
+  // failure has already marked a write local-only, and must not paper over
+  // it. It is opt-in, not the default, because `pendingLocalChanges` is only
+  // GUARANTEED fresh at the one call site that awaits
+  // `refreshPendingLocalChanges` immediately beforehand (`runAccountSync`
+  // below). Every other caller (a capture/win/rollup's own success path)
+  // confirms only ITS OWN write cleared and never refreshes the global flag
+  // first, so trusting a possibly-stale `true` there would strand an
+  // already-successful write at `local-only` forever instead of reporting
+  // it. Those callers keep the unconditional, pre-existing behavior.
+  const markAccountSynced = useCallback(
+    (options?: { preserveLocalOnlyWhilePending?: boolean }) => {
+      setSyncStatus((current) => {
+        if (
+          options?.preserveLocalOnlyWhilePending &&
+          current.account === "local-only" &&
+          current.pendingLocalChanges
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          account: "synced",
+          signedOut: false,
+          message: current.pendingLocalChanges
+            ? SOME_WORK_ON_THIS_DEVICE
+            : null,
+        };
+      });
+    },
+    [],
+  );
 
   const markAccountSyncError = useCallback((message: string) => {
     setSyncStatus((current) => ({
@@ -589,6 +604,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     async (
       client: MinimalSupabaseClient | null,
       areas = persistedAreasRef.current,
+      // #967: forwarded to `markAccountSynced` below — see its own comment.
+      // Only the mount/reconnect caller (`runAccountSync`) passes this; an
+      // individual write's own success path (`persistCapture` and friends)
+      // does not, so it keeps promoting to `synced` unconditionally.
+      options?: { preserveLocalOnlyWhilePending?: boolean },
     ) => {
       if (!client) {
         markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
@@ -683,7 +703,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           .filter((entry) => entry.review_type === "daily")
           .map((entry) => entry.period_start),
       );
-      markAccountSynced();
+      markAccountSynced(options);
       // #737 C1 S5: the account has just been re-read and local state
       // reconciled against it, which is the ONLY moment "still queued" and
       // "not in the account" mean the same thing. See
@@ -1710,7 +1730,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             return;
           }
           applyPersistedAreas(result.areas);
-          await syncPersistedWorkflowRows(client, result.areas);
+          await syncPersistedWorkflowRows(client, result.areas, {
+            preserveLocalOnlyWhilePending: true,
+          });
           if (!mountedRef.current) return;
           if (options?.replayAfter) {
             // ORDERING IS LOAD-BEARING (#960 defect 1) — this must run AFTER
@@ -1736,7 +1758,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             await refreshJournalledDurableState();
           }
           if (!mountedRef.current) return;
-          markAccountSynced();
+          markAccountSynced({ preserveLocalOnlyWhilePending: true });
         } catch (error) {
           if (mountedRef.current) markPersistedLoadFailure(error);
         }
