@@ -30,6 +30,17 @@ async function freshDatabase(): Promise<void> {
   });
 }
 
+function deferred<T = void>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
 beforeEach(async () => {
   await freshDatabase();
 });
@@ -246,6 +257,74 @@ describe("markPendingWriteSynced / clearPendingWrites", () => {
 });
 
 describe("replayPendingWrites", () => {
+  it("serializes overlapping drains while preserving later handlers and queued writes", async () => {
+    await enqueuePendingWrite({ entity: "win", payload: { title: "first" } });
+    const handlerStarted = deferred();
+    const releaseHandler = deferred();
+    const winHandler = vi.fn(async () => {
+      handlerStarted.resolve();
+      await releaseHandler.promise;
+    });
+    const captureHandler = vi.fn(async () => {});
+
+    const firstDrain = replayPendingWrites({ win: winHandler });
+    await handlerStarted.promise;
+    await enqueuePendingWrite({ entity: "capture", payload: { raw: "later" } });
+    const secondDrain = replayPendingWrites({ capture: captureHandler });
+
+    expect(winHandler).toHaveBeenCalledTimes(1);
+    expect(captureHandler).not.toHaveBeenCalled();
+    releaseHandler.resolve();
+
+    await expect(Promise.all([firstDrain, secondDrain])).resolves.toEqual([
+      { synced: 1, failed: 0, skipped: 0 },
+      { synced: 1, failed: 0, skipped: 0 },
+    ]);
+    expect(winHandler).toHaveBeenCalledTimes(1);
+    expect(captureHandler).toHaveBeenCalledTimes(1);
+    expect(await listPendingWrites()).toEqual([]);
+  });
+
+  it("keeps a transient handler failure pending and retries it on a later drain", async () => {
+    await enqueuePendingWrite({ entity: "win", payload: { title: "retry" } });
+    const handler = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("temporarily unavailable"))
+      .mockResolvedValueOnce();
+
+    await expect(replayPendingWrites({ win: handler })).resolves.toEqual({
+      synced: 0,
+      failed: 1,
+      skipped: 0,
+    });
+    expect(await pendingWriteCount()).toBe(1);
+
+    await expect(replayPendingWrites({ win: handler })).resolves.toEqual({
+      synced: 1,
+      failed: 0,
+      skipped: 0,
+    });
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(await pendingWriteCount()).toBe(0);
+  });
+
+  it("continues the drain queue after a replay operation rejects", async () => {
+    await enqueuePendingWrite({ entity: "win", payload: { title: "recover" } });
+    const open = vi.spyOn(indexedDB, "open").mockImplementation(() => {
+      throw new Error("database temporarily unavailable");
+    });
+
+    await expect(replayPendingWrites({ win: async () => {} })).rejects.toThrow(
+      "database temporarily unavailable",
+    );
+    open.mockRestore();
+
+    await expect(replayPendingWrites({ win: async () => {} })).resolves.toEqual(
+      { synced: 1, failed: 0, skipped: 0 },
+    );
+    expect(await pendingWriteCount()).toBe(0);
+  });
+
   it("dispatches each write to its entity handler in insertion order and clears the synced ones", async () => {
     const seen: string[] = [];
     const first = await enqueuePendingWrite({
