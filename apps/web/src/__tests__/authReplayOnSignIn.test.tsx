@@ -243,6 +243,7 @@ function Harness() {
     journalledCompletedSessionDays,
     journalledRollupKeys,
     retryPendingAccountWrites,
+    areasReadbackSettled,
   } = useWorkflow();
   const unsortedCapture = state.captureItems[0];
   // #967 root/independent review: assert the ACTUAL composed notice
@@ -287,6 +288,9 @@ function Harness() {
       <span data-testid="notice-tone">{notice?.tone ?? ""}</span>
       <span data-testid="notice-message">{notice?.message ?? ""}</span>
       <span data-testid="retry-settled-count">{retrySettledCount}</span>
+      <span data-testid="areas-readback-settled">
+        {String(areasReadbackSettled)}
+      </span>
       <button
         type="button"
         onClick={() =>
@@ -2100,17 +2104,14 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         </WorkflowProvider>,
       );
 
-      // #967 root review: an explicit boundary for the INITIAL pass's own
-      // completion — a call count of 1 (not merely `pending-save-failed`
-      // reaching "true", which this SAME first attempt already satisfies
-      // and therefore proves nothing about a second one) plus the
-      // account-sync posture settling.
+      // The initial pass sets this flag in its finally block. A handler
+      // call or an already-synced posture alone can precede completion.
       await waitFor(() => {
-        expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        );
       });
-      await waitFor(() => {
-        expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
-      });
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
       const pendingAfterMount = await listPendingWrites("review");
       expect(pendingAfterMount).toHaveLength(1);
       expect(pendingAfterMount[0]?.last_attempt_failed).toBe(true);
@@ -2121,6 +2122,11 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       // attempt — not a no-op that would leave the call count at 1.
       await waitFor(() => {
         expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(2);
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "1",
+        );
       });
 
       // The retried attempt failed again — the entry and its failure
