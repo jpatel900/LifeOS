@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { ACCOUNT_SAVE_FAILED } from "../../src/lib/statusVocabulary";
 import { pinMomentPreference } from "./helpers/momentPreference";
 import {
   SEEDED_USERS,
@@ -169,6 +170,145 @@ interface HealthCheckRow {
 }
 
 const HEALTH_SELECT = "health_checks?select=id,subsystem,checked_at";
+const JOURNAL_DB = "lifeos-pending-writes";
+const JOURNAL_STORE = "pending";
+const JOURNAL_CLIENT_ID_INDEX = "by_client_write_id";
+
+interface PendingWriteRow {
+  seq: number;
+  client_write_id: string;
+  entity: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+  last_attempt_failed?: true;
+  last_attempt_failed_at?: string;
+}
+
+/**
+ * Put an ordinary, UNSTAMPED write into the browser journal. The non-UUID task
+ * id is absent from both account rows and the local alias map, so the real win
+ * handler rejects it before `syncWin` can issue an account write. The replay
+ * kernel, not this fixture, must add the two failed-attempt fields.
+ */
+async function seedUnmappableWin(
+  page: Page,
+  clientWriteId: string,
+): Promise<void> {
+  await page.evaluate(
+    ({ clientWriteId, dbName, storeName }) =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open(dbName);
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          if (!db.objectStoreNames.contains(storeName)) {
+            db.close();
+            reject(
+              new Error("The app did not create the pending-write store."),
+            );
+            return;
+          }
+
+          const transaction = db.transaction(storeName, "readwrite");
+          transaction.onerror = () => reject(transaction.error);
+          transaction.onabort = () => reject(transaction.error);
+          transaction.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          transaction.objectStore(storeName).add({
+            client_write_id: clientWriteId,
+            entity: "win",
+            payload: {
+              workflow_task_id: `${clientWriteId}-missing-task`,
+              persisted_task_id: null,
+              persisted_area_id: null,
+              title: "Health failed-save browser proof",
+              detail: null,
+              occurred_at: new Date().toISOString().slice(0, 10),
+            },
+            created_at: new Date().toISOString(),
+          });
+        };
+      }),
+    { clientWriteId, dbName: JOURNAL_DB, storeName: JOURNAL_STORE },
+  );
+}
+
+async function readPendingWrite(
+  page: Page,
+  clientWriteId: string,
+): Promise<PendingWriteRow | null> {
+  return page.evaluate(
+    ({ clientWriteId, dbName, storeName, indexName }) =>
+      new Promise<PendingWriteRow | null>((resolve, reject) => {
+        const open = indexedDB.open(dbName);
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const transaction = db.transaction(storeName, "readonly");
+          const read = transaction
+            .objectStore(storeName)
+            .index(indexName)
+            .get(clientWriteId);
+          read.onerror = () => {
+            db.close();
+            reject(read.error);
+          };
+          read.onsuccess = () => {
+            db.close();
+            resolve((read.result as PendingWriteRow | undefined) ?? null);
+          };
+        };
+      }),
+    {
+      clientWriteId,
+      dbName: JOURNAL_DB,
+      storeName: JOURNAL_STORE,
+      indexName: JOURNAL_CLIENT_ID_INDEX,
+    },
+  );
+}
+
+interface HealthSummarySnapshot {
+  headline: string;
+  needsYou: string;
+  work: string;
+  developerMetrics: string;
+  developerCheckCount: number;
+}
+
+async function healthSummarySnapshot(
+  page: Page,
+): Promise<HealthSummarySnapshot> {
+  return page.getByTestId("health-sheet").evaluate((root) => ({
+    headline:
+      root
+        .querySelector('[data-testid="health-sheet-headline"]')
+        ?.textContent?.trim() ?? "",
+    needsYou:
+      root
+        .querySelector('[data-testid="health-sheet-needs-you"]')
+        ?.textContent?.trim() ?? "",
+    work:
+      root
+        .querySelector('[data-testid="health-sheet-group-work"]')
+        ?.textContent?.replace(/\s+/g, " ")
+        .trim() ?? "",
+    developerMetrics:
+      Array.from(
+        root.querySelectorAll(
+          '[data-testid="health-sheet-developer-details"] > p',
+        ),
+      )
+        .find((node) => node.textContent?.includes("overall score"))
+        ?.textContent?.replace(/\s+/g, " ")
+        .trim() ?? "",
+    developerCheckCount: root.querySelectorAll(
+      '[data-testid="health-sheet-developer-details"] > div > div',
+    ).length,
+  }));
+}
 
 /**
  * `health_checks` is deliberately NOT in the helper's `PURGE_ORDER` — it is an
@@ -348,6 +488,102 @@ test.describe("C2-S4 — the ported Health surface, signed in", () => {
     await expect(page.getByTestId("health-sheet")).toContainText(
       /Observation only/i,
     );
+  });
+
+  test(`${SIGNED_IN_TAG} a retained failed-save attempt prevents every Health all-clear claim without changing raw checks`, async ({
+    page,
+  }, testInfo) => {
+    const account = await openSignedInToday(page, SEEDED_USERS.a);
+
+    // This fixture must be otherwise healthy or the later attention could
+    // come from a server probe instead of the one local failed attempt.
+    await openHealthSheet(page);
+    await expect(page.getByTestId("health-sheet-message")).toHaveText(
+      "Checked. A record of this check was saved to your account.",
+      { timeout: 30_000 },
+    );
+    const before = await healthSummarySnapshot(page);
+    expect(before.headline).toBe("Everything is working");
+    expect(before.needsYou).toBe("Nothing needs you right now.");
+    expect(before.work).toContain("All good");
+    expect(before.developerMetrics).toMatch(
+      /^overall score 100\/100 · \d+ healthy · 0 watch · 0 critical$/,
+    );
+    expect(before.developerCheckCount).toBeGreaterThan(0);
+    await page.getByTestId("moment-sheet-close").click();
+    await expect(page.getByTestId("health-sheet")).toHaveCount(0);
+
+    const clientWriteId = `health-proof-${Date.now()}`;
+    const accountRowsForMarker = () =>
+      account.rows<{ client_write_id: string }>(
+        `win_records?select=client_write_id&client_write_id=eq.${encodeURIComponent(clientWriteId)}`,
+      );
+    expect(await accountRowsForMarker()).toEqual([]);
+
+    await seedUnmappableWin(page, clientWriteId);
+    const unstamped = await readPendingWrite(page, clientWriteId);
+    expect(unstamped).toMatchObject({
+      client_write_id: clientWriteId,
+      entity: "win",
+      payload: {
+        workflow_task_id: `${clientWriteId}-missing-task`,
+        persisted_task_id: null,
+        persisted_area_id: null,
+        title: "Health failed-save browser proof",
+        detail: null,
+      },
+    });
+    expect(unstamped?.seq).toEqual(expect.any(Number));
+    expect(unstamped?.created_at).toEqual(expect.any(String));
+    expect(unstamped).not.toHaveProperty("last_attempt_failed");
+    expect(unstamped).not.toHaveProperty("last_attempt_failed_at");
+
+    // Reload runs the real account sync and replay. The missing non-UUID task
+    // cannot resolve, so winHandler throws before syncWin and the kernel stamps
+    // the retained row.
+    await reloadWithAccountSync(page);
+    await expect
+      .poll(() => readPendingWrite(page, clientWriteId), { timeout: 30_000 })
+      .toMatchObject({
+        client_write_id: clientWriteId,
+        last_attempt_failed: true,
+        last_attempt_failed_at: expect.any(String),
+      });
+
+    // Existing shipping UI proves the provider derived pendingSaveFailed.
+    await expect(page.getByTestId("masthead-save-state-message")).toHaveText(
+      ACCOUNT_SAVE_FAILED,
+      { timeout: 30_000 },
+    );
+    expect(await accountRowsForMarker()).toEqual([]);
+
+    await openHealthSheet(page);
+    await expect(page.getByTestId("health-sheet-message")).toHaveText(
+      "Checked. A record of this check was saved to your account.",
+      { timeout: 30_000 },
+    );
+    const after = await healthSummarySnapshot(page);
+    expect(after.headline).toBe("1 thing needs a look");
+    expect(after.needsYou).toBe("Needs a look: Saving your work.");
+    expect(after.work).toContain("Saving your work");
+    expect(after.work).toContain(ACCOUNT_SAVE_FAILED);
+    expect(after.work).not.toContain("All good");
+    expect(after.developerMetrics).toBe(before.developerMetrics);
+    expect(after.developerCheckCount).toBe(before.developerCheckCount);
+
+    const workGroup = page.getByTestId("health-sheet-group-work");
+    await workGroup.locator("summary").click();
+    await expect(workGroup).toHaveAttribute("open", "");
+    const genericConcern = workGroup
+      .getByText("Saving your work", { exact: true })
+      .locator("..");
+    await expect(genericConcern).toContainText(ACCOUNT_SAVE_FAILED);
+    await testInfo.attach("health-retained-failed-save-copy", {
+      // Crop to the one generic concern row. No account identity, user work,
+      // probe details, sidebar, or other Health content enters the artifact.
+      body: await genericConcern.screenshot(),
+      contentType: "image/png",
+    });
   });
 
   test(`${SIGNED_IN_TAG} C2 Target Card 2: the Health surface is in the URL, and refresh, Back and Forward all agree`, async ({
