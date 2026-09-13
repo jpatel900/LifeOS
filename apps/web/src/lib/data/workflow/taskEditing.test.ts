@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { editBacklogTaskAccountRow } from "./taskEditing";
-import type { MinimalSupabaseClient } from "./shared";
+import { parseTask, parseTasks, type MinimalSupabaseClient } from "./shared";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const TASK_ID = "22222222-2222-4222-8222-222222222222";
 const AREA_ID = "33333333-3333-4333-8333-333333333333";
 const UPDATED_AT = "2026-07-04T09:00:00.000Z";
+// A real `timestamptz` read: offset plus microseconds, and the UTC form it
+// must normalize to with every fraction digit kept.
+const SERVER_UPDATED_AT = "2026-09-13T04:10:17.417675-04:00";
+const SERVER_UPDATED_AT_UTC = "2026-09-13T08:10:17.417675Z";
+const NEXT_SERVER_UPDATED_AT = "2026-09-13T04:10:18.052931-04:00";
+const NEXT_SERVER_UPDATED_AT_UTC = "2026-09-13T08:10:18.052931Z";
 
 function rowFor(overrides: Record<string, unknown> = {}) {
   return {
@@ -187,6 +193,73 @@ describe("editBacklogTaskAccountRow", () => {
     );
 
     expect(result).toEqual({ provider: "supabase", status: "conflict" });
+  });
+
+  // The account's version token has microseconds. Truncating it to
+  // milliseconds anywhere between the read and the next guarded update makes
+  // `.eq("updated_at", …)` match zero rows: a false conflict on a task nobody
+  // else touched.
+  describe("server timestamp precision", () => {
+    it("hydrates a task list with the server's full-precision updated_at", () => {
+      const [task] = parseTasks([rowFor({ updated_at: SERVER_UPDATED_AT })]);
+      expect(task!.updated_at).toBe(SERVER_UPDATED_AT_UTC);
+      expect(
+        parseTask(rowFor({ updated_at: SERVER_UPDATED_AT })).updated_at,
+      ).toBe(SERVER_UPDATED_AT_UTC);
+    });
+
+    it("guards with the hydrated token, returns the server's new token with microseconds, and the next edit guards with exactly that token", async () => {
+      const [hydrated] = parseTasks([
+        rowFor({ updated_at: SERVER_UPDATED_AT }),
+      ]);
+
+      const first = client({
+        data: rowFor({ updated_at: NEXT_SERVER_UPDATED_AT }),
+        error: null,
+      });
+      const firstResult = await editBacklogTaskAccountRow(
+        first.supabase,
+        TASK_ID,
+        { title: "New title", description: null, area_id: AREA_ID },
+        hydrated!.updated_at,
+      );
+
+      expect(first.eq4).toHaveBeenCalledWith(
+        "updated_at",
+        SERVER_UPDATED_AT_UTC,
+      );
+      expect(firstResult.status).toBe("updated");
+      if (firstResult.status !== "updated") return;
+      expect(firstResult.task.updated_at).toBe(NEXT_SERVER_UPDATED_AT_UTC);
+
+      const second = client({
+        data: rowFor({
+          title: "Second title",
+          updated_at: "2026-09-13T04:10:19.600001-04:00",
+        }),
+        error: null,
+      });
+      const secondResult = await editBacklogTaskAccountRow(
+        second.supabase,
+        TASK_ID,
+        { title: "Second title", description: null, area_id: AREA_ID },
+        firstResult.task.updated_at,
+      );
+
+      expect(second.eq4).toHaveBeenCalledWith(
+        "updated_at",
+        NEXT_SERVER_UPDATED_AT_UTC,
+      );
+      expect(secondResult).toEqual({
+        provider: "supabase",
+        status: "updated",
+        task: expect.objectContaining({
+          title: "Second title",
+          updated_at: "2026-09-13T08:10:19.600001Z",
+        }),
+        userId: USER_ID,
+      });
+    });
   });
 
   it("throws the Supabase message on a real error", async () => {
