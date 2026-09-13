@@ -748,84 +748,66 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       sessions: [],
       reviewEntries: [],
     });
+    // #967 CI repair (PR993, 34759295095): `journalled-closed-days` clears
+    // in a SEPARATE, later step than `accountClosedDays` is set —
+    // `runAccountSync` awaits `readbackAccountReviewClosedDays` (which sets
+    // `accountClosedDays` directly) and only THEN, if confirmed, awaits
+    // `refreshJournalledDurableState()`, whose OWN `listPendingWrites()`
+    // read is what clears the device tier. Both tiers legitimately report
+    // the day closed at once in between; that overlap is SAFE
+    // (`resolveDayClose`'s union still reads "closed" either way) and is
+    // exactly what #967 intends — only BOTH tiers empty is forbidden. A
+    // synchronous assertion right after the first tier updates cannot tell
+    // whether the second has run yet, which is what let CI fail here once.
+    //
+    // `accountReadbackResponded` is the named lifecycle gate: true once the
+    // account readback's own `listExecutionReviewItems` call has been asked
+    // to respond with the confirmed review rows — the one signal that
+    // reliably precedes the specific `listPendingWrites()` call this test
+    // needs to hold, regardless of how many other journal reads happen
+    // before it.
+    let accountReadbackResponded = false;
     // The SECOND account read is `readbackAccountReviewClosedDays`'s own —
-    // this fix's new seam. Its `tasks` come back EMPTY on purpose: if this
-    // seam ever dispatched what it reads (the #984 failure mode it exists to
+    // this fix's seam. Its `tasks` come back EMPTY on purpose: if this seam
+    // ever dispatched what it reads (the #984 failure mode it exists to
     // avoid), `mergePersistedRows` would retire the presynced task the
     // moment this response landed, and `task-count` below would drop to 0.
-    mockListExecutionReviewItems.mockResolvedValue({
-      provider: "supabase",
-      tasks: [],
-      blocks: [],
-      sessions: [],
-      reviewEntries: [
-        {
-          id: "44444444-4444-4444-8444-444444444444",
-          user_id: PERSISTED_AREA.user_id,
-          area_id: null,
-          review_type: "daily",
-          period_start: day,
-          period_end: day,
-          summary_json: {},
-          created_at: "2026-08-29T00:00:00.000Z",
-        },
-      ],
+    mockListExecutionReviewItems.mockImplementation(async () => {
+      accountReadbackResponded = true;
+      return {
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            user_id: PERSISTED_AREA.user_id,
+            area_id: null,
+            review_type: "daily",
+            period_start: day,
+            period_end: day,
+            summary_json: {},
+            created_at: "2026-08-29T00:00:00.000Z",
+          },
+        ],
+      };
     });
     mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
 
-    // #967 CI repair (PR993, 34759295095): the ORIGINAL version of this test
-    // asserted `journalled-closed-days` had ALREADY cleared the instant
-    // `account-closed-days` first showed `day`. That assumed an atomic
-    // handoff the runtime never promises — `runAccountSync` AWAITS
-    // `readbackAccountReviewClosedDays` (which sets `accountClosedDays`
-    // directly) and only THEN, in a SEPARATE step, calls
-    // `refreshJournalledDurableState()` — its OWN new `listPendingWrites()`
-    // read is what actually clears `journalledClosedDays`. Between those two
-    // steps both tiers legitimately report the day closed at once; that
-    // overlap is SAFE (`resolveDayClose`'s union still reads "closed" either
-    // way) and is exactly what #967 intends — the only unsafe window it
-    // forbids is BOTH tiers being empty, never both being populated. Locally
-    // this gap was too narrow to ever observe; PR993's hosted CI ran the
-    // same assertion slow enough to land inside it (`pr993-monorepo-failed.log`,
-    // exact failure at the old line 803: `journalled-closed-days` still
-    // truthfully showed `day` when the test demanded it not to).
-    //
-    // Fixed by making the overlap an OBSERVED, asserted fact instead of a
-    // race the test happened to win: `refreshJournalledDurableState`'s own
-    // post-confirmation `listPendingWrites()` call (the ONLY such call left
-    // once `account-closed-days` has confirmed — replay's own internal read,
-    // the unconditional mount effect's read, and `refreshPendingSaveFailed`'s
-    // read have all necessarily already resolved by then, each on a much
-    // shorter async chain than the one reaching this point) is deferred via
-    // the SAME named `mockListPendingWrites` seam the stale-read/ordering
-    // tests above use — no new mock, no sleep, no production hook.
-    let noArgReadCount = 0;
+    // Defer the FIRST journal read that starts once the readback has
+    // responded — the confirmation-gated `refreshJournalledDurableState()`
+    // call, the only thing that can clear `journalledClosedDays`. Same
+    // named `mockListPendingWrites` seam the stale-read/ordering tests
+    // above use — no new mock, no sleep, no production hook.
     let releaseJournalRead!: (
       value: Awaited<ReturnType<typeof listPendingWrites>>,
     ) => void;
     let journalReadIntercepted = false;
     mockListPendingWrites.mockImplementation((entity) => {
-      if (entity === undefined) {
-        noArgReadCount += 1;
-      }
-      // Five no-arg `listPendingWrites()` calls happen in this exact pass
-      // (confirmed by capturing each call's own stack during development —
-      // not guessed): (1) the unconditional "sync on mount" effect's own
-      // `refreshJournalledDurableState()`; (2) `replayJournaledWrites`'s own
-      // `resolveSupersededWrites` pre-step; (3) `resolveSupersededWrites`
-      // again, called a second time from inside `replayDurableWrites`
-      // itself; (4) `refreshPendingSaveFailed`'s own read; and (5) finally
-      // `refreshJournalledDurableState`'s post-confirmation call — the ONE
-      // this test needs to hold open. Calls 1-4 all resolve (or, in call 4's
-      // case, MUST be allowed to resolve — holding it would block
-      // `runAccountSync` from ever reaching the readback that sets
-      // `accountClosedDays` at all) well before call 5 even starts, since
-      // each of the first four is either independent and short, or an
-      // earlier step in the SAME sequential chain that call 5 is the last
-      // link of.
       if (
         entity === undefined &&
-        noArgReadCount === 5 &&
+        accountReadbackResponded &&
         !journalReadIntercepted
       ) {
         journalReadIntercepted = true;
