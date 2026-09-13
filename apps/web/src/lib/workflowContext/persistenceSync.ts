@@ -24,8 +24,9 @@ import {
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "../data/workflow";
-// Issue #984: a direct submodule import, not an addition to the frozen
-// `data/workflow.ts` barrel above — see that file's own comment.
+// Reads the leaf module directly (the barrel above also re-exports these
+// symbols for other callers, but this call site predates that and has no
+// reason to switch).
 import { editBacklogTaskAccountRow } from "../data/workflow/taskEditing";
 // `requireSupabaseUser` is deliberately NOT re-exported by the barrel
 // (`INTENTIONALLY_INTERNAL_EXPORTS` in workflowBarrel.test.ts), so this reads
@@ -705,23 +706,25 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
    * `persistTaskReviewTransition` above: the caller only ever knows the
    * WORKFLOW-space task id and area id.
    *
-   * Root review finding 2 (task984-first-review.md): the follow-up
-   * `syncPersistedWorkflowRows` read used to run outside its own try/catch,
-   * so a network blip DURING THAT READ — after the write had already
-   * succeeded — threw out of this function and the caller's catch reported
-   * "failure" for an edit the account genuinely holds. `"persisted"` and
-   * `"persisted-refresh-pending"` both mean the write is confirmed; only the
-   * SECOND says the local read-back that would normally reflect it did not
-   * land, so a caller that cares can retry the read without re-sending the
-   * edit (re-sending would be a no-op anyway: `expectedUpdatedAt` is spent).
+   * The follow-up `syncPersistedWorkflowRows` read runs in its own
+   * try/catch: a network blip DURING THAT READ — after the write already
+   * succeeded — must not be reported as "failure" for an edit the account
+   * genuinely holds. `"persisted"` and `"persisted-refresh-pending"` both
+   * mean the write is confirmed; only the SECOND says the local read-back
+   * that would normally reflect it did not land, so a caller that cares can
+   * retry the read without re-sending the edit (re-sending would be a no-op
+   * anyway: `expectedUpdatedAt` is spent).
    *
-   * Root review clarification (task984-review-clarification.md, point 1):
    * `sameSession` on the pending-refresh branch tells the caller whether it
-   * is SAFE to reflect `task` into local state itself — checked with a fresh
-   * `requireSupabaseUser` call AFTER the failed read, not reused from before
-   * the write. A sign-out (or a switch to a different account) in the gap
-   * between the write succeeding and the read failing must never graft that
-   * account's confirmed row onto a tab that is no longer that session.
+   * is SAFE to reflect `task` into local state itself — an IDENTITY
+   * comparison, not merely "is anyone signed in": `editBacklogTaskAccountRow`
+   * returns the id of the user who actually performed the write
+   * (`result.userId`), and this re-checks with a FRESH `requireSupabaseUser`
+   * call after the failed read, comparing the two ids. A sign-out, or a
+   * switch to a genuinely different account, in the gap between the write
+   * succeeding and the read failing must never graft that write's row onto
+   * a tab that now belongs to someone else — checking only "is anyone
+   * signed in" would pass that case, since the new user IS authenticated.
    */
   async function persistBacklogTaskEdit(
     localTaskId: string,
@@ -780,8 +783,11 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       // "failure" would be worse, claiming the account lost an edit it holds.
       let sameSession = false;
       try {
-        await requireSupabaseUser(client, "Sign in before saving task edits.");
-        sameSession = true;
+        const currentUser = await requireSupabaseUser(
+          client,
+          "Sign in before saving task edits.",
+        );
+        sameSession = currentUser.id === result.userId;
       } catch {
         sameSession = false;
       }

@@ -72,9 +72,8 @@ describe("normalizeTaskEditInput", () => {
     });
   });
 
-  // Re-anchored by root review finding 5 (task984-first-review.md): the
-  // description is NOT trimmed once it is non-blank — only the whitespace
-  // check that decides null-vs-kept looks at the trimmed form.
+  // The description is NOT trimmed once it is non-blank — only the
+  // whitespace check that decides null-vs-kept looks at the trimmed form.
   it("preserves a non-blank description's own whitespace exactly, untrimmed", () => {
     const result = normalizeTaskEditInput({
       title: "Buy milk",

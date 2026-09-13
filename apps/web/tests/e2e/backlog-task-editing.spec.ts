@@ -1,6 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
 import { pinMomentPreference } from "./helpers/momentPreference";
+import { scanAxeViolationNodes } from "./helpers/axeScan";
 
 /**
  * Issue #984 — the accepted-backlog task editor, at the device tier
@@ -72,9 +73,7 @@ test("edit details: opens pre-filled, saves title/description/area, and toasts t
   const backlogItem = page.getByTestId("plan-sheet-backlog");
   await expect(backlogItem).toContainText(title, { timeout: 20_000 });
 
-  const editButton = page
-    .getByTestId(/^plan-sheet-edit-/)
-    .first();
+  const editButton = page.getByTestId(/^plan-sheet-edit-/).first();
   await editButton.click();
 
   const titleInput = page.getByTestId(/^plan-sheet-edit-title-input-/);
@@ -158,4 +157,146 @@ test("edit details: a blank title disables Save, so nothing can be submitted", a
   await expect(page.getByTestId(/^plan-sheet-edit-save-/)).toBeDisabled();
   await expect(titleInput).toBeVisible();
   await expect(page.getByTestId("plan-sheet-backlog")).toContainText(title);
+});
+
+/** Saves a full-page PNG as a Playwright attachment and returns its path. */
+async function attachScreenshot(
+  page: Page,
+  testInfo: TestInfo,
+  name: string,
+): Promise<string> {
+  const screenshotPath = testInfo.outputPath(`${name}.png`);
+  await page.screenshot({ path: screenshotPath });
+  await testInfo.attach(name, {
+    path: screenshotPath,
+    contentType: "image/png",
+  });
+  return screenshotPath;
+}
+
+test("edit details: desktop — screenshot evidence and a bounded axe (WCAG AA) scan of the open form", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+
+  const title = "Audit the volunteer supply closet";
+  await seedBacklogTask(page, title);
+  await openPlanSheet(page);
+  await page
+    .getByTestId(/^plan-sheet-edit-/)
+    .first()
+    .click();
+
+  const form = page.getByTestId(/^plan-sheet-edit-form-/);
+  await expect(form).toBeVisible();
+
+  const screenshotPath = await attachScreenshot(
+    page,
+    testInfo,
+    "edit-details-desktop",
+  );
+  console.log(`edit-details-desktop screenshot: ${screenshotPath}`);
+
+  // Bounded to the WCAG A/AA rule set (helpers/axeScan.ts) — the same driver
+  // the repo-wide a11y-axe-pin.spec.ts ratchet uses — but scoped to THIS
+  // surface only, not added to that ratchet's pinned-surface table.
+  const violations = await scanAxeViolationNodes(page);
+  expect(violations).toEqual([]);
+});
+
+test("edit details: reachable and legible at a 390px mobile viewport", async ({
+  page,
+}, testInfo) => {
+  // Seed at the default (desktop) viewport — capture's own affordance is
+  // `sm:` desktop-only (mobile reaches it through BottomNavigator instead,
+  // proven separately by nav-truth.spec.ts's matrix pin); this spec only
+  // needs a real backlog task to exist, not to prove capture's OWN mobile
+  // reach a second time. Resize to mobile only for the surface under test.
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  const title = "Label the seasonal storage bins";
+  await seedBacklogTask(page, title);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openPlanSheet(page);
+  await page
+    .getByTestId(/^plan-sheet-edit-/)
+    .first()
+    .click();
+
+  const form = page.getByTestId(/^plan-sheet-edit-form-/);
+  await expect(form).toBeVisible();
+
+  const screenshotPath = await attachScreenshot(
+    page,
+    testInfo,
+    "edit-details-mobile",
+  );
+  console.log(`edit-details-mobile screenshot: ${screenshotPath}`);
+
+  // The 44px hit-target floor (HIT_TARGET_MIN) survives at mobile width.
+  const saveBox = await page
+    .getByTestId(/^plan-sheet-edit-save-/)
+    .boundingBox();
+  expect(saveBox).not.toBeNull();
+  expect(saveBox!.height).toBeGreaterThanOrEqual(44);
+  const cancelBox = await page
+    .getByTestId(/^plan-sheet-edit-cancel-/)
+    .boundingBox();
+  expect(cancelBox).not.toBeNull();
+  expect(cancelBox!.height).toBeGreaterThanOrEqual(44);
+});
+
+test("edit details: reachable and operable with keyboard only, in one Tab order (title -> description -> area -> Save -> Cancel)", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+
+  const title = "File the community garden permits";
+  await seedBacklogTask(page, title);
+  await openPlanSheet(page);
+
+  // Open via keyboard: focus the control, then Enter — never a mouse click.
+  const editButton = page.getByTestId(/^plan-sheet-edit-/).first();
+  await editButton.focus();
+  await page.keyboard.press("Enter");
+
+  const form = page.getByTestId(/^plan-sheet-edit-form-/);
+  await expect(form).toBeVisible();
+
+  // Walk Tab forward from wherever focus landed after opening, collecting
+  // each focused control's testid, until Cancel is reached or the budget
+  // (generous: other Plan sheet controls may sit between Edit details and
+  // the form) runs out — proving the whole form is keyboard-reachable
+  // without asserting a single hand-picked tab count.
+  const seen: string[] = [];
+  for (let i = 0; i < 15; i += 1) {
+    const testId = await page.evaluate(
+      () => document.activeElement?.getAttribute("data-testid") ?? null,
+    );
+    if (testId) seen.push(testId);
+    if (testId?.startsWith("plan-sheet-edit-cancel-")) break;
+    await page.keyboard.press("Tab");
+  }
+
+  const titleTestId = seen.find((id) =>
+    id.startsWith("plan-sheet-edit-title-input-"),
+  );
+  expect(titleTestId, `Tab order reached: ${seen.join(", ")}`).toBeTruthy();
+
+  // Type into the title via keyboard focus alone (no mouse), then keep
+  // tabbing through description/area to Save and activate it with the
+  // keyboard.
+  await page.locator(`[data-testid="${titleTestId}"]`).selectText();
+  await page.keyboard.type("Renewed permits filed");
+
+  const saveTestId = seen.find((id) => id.startsWith("plan-sheet-edit-save-"));
+  expect(saveTestId, `Tab order reached: ${seen.join(", ")}`).toBeTruthy();
+  await page.locator(`[data-testid="${saveTestId}"]`).focus();
+  await page.keyboard.press("Enter");
+
+  await expect(form).toHaveCount(0, { timeout: 20_000 });
 });

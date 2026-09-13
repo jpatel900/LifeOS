@@ -44,8 +44,14 @@ type PersistOverrideResult =
   | { status: "conflict" }
   | { status: "unreachable" };
 
+type PersistBacklogTaskEditArgs = Parameters<
+  import("@/lib/workflowContext/persistenceSync").PersistenceSyncOps["persistBacklogTaskEdit"]
+>;
+
 const persistBacklogTaskEditOverride = vi.hoisted(() => ({
-  current: null as (() => Promise<PersistOverrideResult>) | null,
+  current: null as
+    | ((...args: PersistBacklogTaskEditArgs) => Promise<PersistOverrideResult>)
+    | null,
 }));
 
 vi.mock("@/lib/workflowContext/persistenceSync", async (importOriginal) => {
@@ -65,7 +71,7 @@ vi.mock("@/lib/workflowContext/persistenceSync", async (importOriginal) => {
           ...opArgs: Parameters<typeof ops.persistBacklogTaskEdit>
         ) =>
           persistBacklogTaskEditOverride.current
-            ? persistBacklogTaskEditOverride.current()
+            ? persistBacklogTaskEditOverride.current(...opArgs)
             : ops.persistBacklogTaskEdit(...opArgs),
       };
     },
@@ -132,9 +138,9 @@ function EditProbe({
   areaId: string;
   title?: string;
   /** Populates `persistedAreasRef`/`state.areas` once, as a real account
-   * sign-in would — needed to prove `savedAreaId`'s alias mapping (root
-   * review clarification point 3) against a REAL persisted area row rather
-   * than the empty table every other test in this file leaves untouched. */
+   * sign-in would — needed to prove `savedAreaId`'s alias mapping against a
+   * REAL persisted area row rather than the empty table every other test in
+   * this file leaves untouched. */
   syncAreas?: Area[];
 }) {
   const { state, editBacklogTask, syncPersistedAreas } = useWorkflow();
@@ -153,7 +159,9 @@ function EditProbe({
   return (
     <div>
       <span data-testid="task-title">{task?.title ?? ""}</span>
+      <span data-testid="task-description">{task?.description ?? ""}</span>
       <span data-testid="task-area">{task?.area_id ?? ""}</span>
+      <span data-testid="task-updated-at">{task?.updated_at ?? ""}</span>
       <span data-testid="result-status">{result?.status ?? ""}</span>
       <span data-testid="result-json">
         {result ? JSON.stringify(result) : ""}
@@ -222,9 +230,7 @@ describe("editBacklogTask — demo (no account)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("result-status")).toHaveTextContent(
-        "success",
-      );
+      expect(screen.getByTestId("result-status")).toHaveTextContent("success");
     });
     expect(screen.getByTestId("task-title")).toHaveTextContent("New title");
     expect(screen.getByTestId("task-area")).toHaveTextContent(OTHER_AREA_ID);
@@ -252,9 +258,7 @@ describe("editBacklogTask — demo (no account)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("result-status")).toHaveTextContent(
-        "invalid",
-      );
+      expect(screen.getByTestId("result-status")).toHaveTextContent("invalid");
     });
     expect(screen.getByTestId("task-title")).toHaveTextContent(task.title);
   });
@@ -270,9 +274,7 @@ describe("editBacklogTask — demo (no account)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("result-status")).toHaveTextContent(
-        "conflict",
-      );
+      expect(screen.getByTestId("result-status")).toHaveTextContent("conflict");
     });
     expect(screen.getByTestId("task-title")).toHaveTextContent(task.title);
   });
@@ -284,9 +286,7 @@ describe("editBacklogTask — demo (no account)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("result-status")).toHaveTextContent(
-        "success",
-      );
+      expect(screen.getByTestId("result-status")).toHaveTextContent("success");
     });
     expect(
       JSON.parse(screen.getByTestId("result-json").textContent ?? "{}"),
@@ -339,9 +339,7 @@ describe("editBacklogTask — configured account", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("result-status")).toHaveTextContent(
-        "success",
-      );
+      expect(screen.getByTestId("result-status")).toHaveTextContent("success");
     });
     expect(
       JSON.parse(screen.getByTestId("result-json").textContent ?? "{}").task
@@ -385,9 +383,7 @@ describe("editBacklogTask — configured account", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("result-status")).toHaveTextContent(
-        "success",
-      );
+      expect(screen.getByTestId("result-status")).toHaveTextContent("success");
     });
     const parsed = JSON.parse(
       screen.getByTestId("result-json").textContent ?? "{}",
@@ -410,9 +406,7 @@ describe("editBacklogTask — configured account", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("result-status")).toHaveTextContent(
-        "success",
-      );
+      expect(screen.getByTestId("result-status")).toHaveTextContent("success");
     });
     const parsed = JSON.parse(
       screen.getByTestId("result-json").textContent ?? "{}",
@@ -423,27 +417,59 @@ describe("editBacklogTask — configured account", () => {
     expect(screen.getByTestId("task-title")).toHaveTextContent(task.title);
   });
 
-  it("reflects the confirmed row into local state when the session still checks out (sameSession: true)", async () => {
+  it("reflects the EXACT server-returned fields and updated_at (never a freshly minted local timestamp), and a subsequent edit uses that exact version as its own guard token", async () => {
     const task = seedBacklogTask();
-    const confirmedTask: Task = { ...task, title: "New title" };
-    persistBacklogTaskEditOverride.current = () =>
-      Promise.resolve({
+    // A version clearly distinguishable from anything `Date.now()` could
+    // produce in this test run — proves the reflected value came from the
+    // server's row, not a local `nowIso()`.
+    const SERVER_UPDATED_AT = "2030-01-01T00:00:00.000Z";
+    // Deliberately different from what this tab's own patch would have
+    // produced verbatim, simulating server-side normalization of the
+    // written fields.
+    const confirmedTask: Task = {
+      ...task,
+      title: "Server-normalized Title",
+      description: "Server note",
+      updated_at: SERVER_UPDATED_AT,
+    };
+    const persistCalls: PersistBacklogTaskEditArgs[] = [];
+    persistBacklogTaskEditOverride.current = (...args) => {
+      persistCalls.push(args);
+      return Promise.resolve({
         status: "persisted-refresh-pending",
         task: confirmedTask,
         sameSession: true,
       });
+    };
     renderProbe(task.id, GOLDEN_AREA_ID);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("result-status")).toHaveTextContent("success");
+    });
 
     await waitFor(() => {
-      expect(screen.getByTestId("result-status")).toHaveTextContent(
-        "success",
+      expect(screen.getByTestId("task-title")).toHaveTextContent(
+        "Server-normalized Title",
       );
     });
+    expect(screen.getByTestId("task-description")).toHaveTextContent(
+      "Server note",
+    );
+    expect(screen.getByTestId("task-updated-at")).toHaveTextContent(
+      SERVER_UPDATED_AT,
+    );
+
+    // A second edit reads the CURRENT local task's updated_at as its own
+    // guard token — which must now be the server's exact value, or the
+    // account's own `.eq("updated_at", …)` guard would reject an honest,
+    // immediately-following edit as a false conflict.
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
-      expect(screen.getByTestId("task-title")).toHaveTextContent("New title");
+      expect(persistCalls).toHaveLength(2);
     });
+    const [, , secondExpectedUpdatedAt] = persistCalls[1];
+    expect(secondExpectedUpdatedAt).toBe(SERVER_UPDATED_AT);
   });
 
   it("reports conflict and leaves the canonical task unchanged", async () => {
@@ -455,9 +481,7 @@ describe("editBacklogTask — configured account", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("result-status")).toHaveTextContent(
-        "conflict",
-      );
+      expect(screen.getByTestId("result-status")).toHaveTextContent("conflict");
     });
     expect(screen.getByTestId("task-title")).toHaveTextContent(task.title);
   });
@@ -471,9 +495,7 @@ describe("editBacklogTask — configured account", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("result-status")).toHaveTextContent(
-        "failure",
-      );
+      expect(screen.getByTestId("result-status")).toHaveTextContent("failure");
     });
     expect(screen.getByTestId("task-title")).toHaveTextContent(task.title);
   });
@@ -487,9 +509,7 @@ describe("editBacklogTask — configured account", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("result-status")).toHaveTextContent(
-        "failure",
-      );
+      expect(screen.getByTestId("result-status")).toHaveTextContent("failure");
     });
     expect(screen.getByTestId("task-title")).toHaveTextContent(task.title);
   });

@@ -8,11 +8,10 @@ import {
 } from "./shared";
 
 /**
- * Root review finding 5 (task984-first-review.md): the account boundary
- * validated nothing of its own before this — reuses the existing `TaskSchema`
- * columns rather than adding a new schema file, so `title`'s `min(1)` and
- * `area_id`'s `uuid()` shape are enforced here too, not just trusted from the
- * caller. `description` stays exactly `TaskSchema`'s own `string | null`.
+ * Reuses the existing `TaskSchema` columns rather than adding a new schema
+ * file, so `title`'s `min(1)` and `area_id`'s `uuid()` shape are enforced
+ * here too, not just trusted from the caller. `description` stays exactly
+ * `TaskSchema`'s own `string | null`.
  */
 const TaskEditAccountPatchSchema = TaskSchema.pick({
   title: true,
@@ -27,7 +26,7 @@ export type TaskEditAccountPatch = {
 };
 
 export type TaskEditAccountResult =
-  | { provider: "supabase"; status: "updated"; task: Task }
+  | { provider: "supabase"; status: "updated"; task: Task; userId: string }
   | { provider: "supabase"; status: "conflict" };
 
 /**
@@ -35,13 +34,22 @@ export type TaskEditAccountResult =
  *
  * No RPC, no migration: `tasks` already grants the owning user UPDATE on
  * every column this touches (title/description/area_id), so this is a plain
- * guarded `.update()`. The guard IS the concurrency and status contract —
- * `.eq("status", "backlog")` and `.eq("updated_at", expectedUpdatedAt)` both
- * have to still hold or the update matches zero rows. `.maybeSingle()` turns
- * that "zero rows" case into `data: null, error: null` rather than a
- * PostgREST "no rows" error, so a stale edit or a task that moved off
- * backlog comes back as an ordinary `"conflict"` result instead of a thrown
- * error the caller would have to pattern-match out of a message string.
+ * guarded `.update()`. The guard IS the concurrency, status, AND ownership
+ * contract — `.eq("status", "backlog")`, `.eq("updated_at",
+ * expectedUpdatedAt)`, and `.eq("user_id", user.id)` all have to still hold
+ * or the update matches zero rows. RLS already scopes every row to its
+ * owner; this repeats that same boundary in the query itself so a stale
+ * client-side auth state can never even ATTEMPT to touch another user's row
+ * by id alone. `.maybeSingle()` turns the "zero rows" case into `data: null,
+ * error: null` rather than a PostgREST "no rows" error, so a stale edit, a
+ * task that moved off backlog, or an ownership mismatch all come back as an
+ * ordinary `"conflict"` result instead of a thrown error the caller would
+ * have to pattern-match out of a message string.
+ *
+ * `userId` on the `"updated"` result is the id `requireSupabaseUser` proved
+ * performed THIS write — callers that later re-check "is this still the
+ * same session" must compare identity against this value, not just ask
+ * "is anyone signed in".
  */
 export async function editBacklogTaskAccountRow(
   client: MinimalSupabaseClient | null,
@@ -55,7 +63,10 @@ export async function editBacklogTaskAccountRow(
 
   const parsedPatch = TaskEditAccountPatchSchema.parse(patch);
 
-  await requireSupabaseUser(client, "Sign in before saving task edits.");
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before saving task edits.",
+  );
 
   const query = client.from("tasks") as {
     update: (row: Record<string, unknown>) => {
@@ -71,8 +82,16 @@ export async function editBacklogTaskAccountRow(
             column: string,
             value: string,
           ) => {
-            select: (columns: string) => {
-              maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+            eq: (
+              column: string,
+              value: string,
+            ) => {
+              select: (columns: string) => {
+                maybeSingle: () => Promise<{
+                  data: unknown;
+                  error: unknown;
+                }>;
+              };
             };
           };
         };
@@ -87,6 +106,7 @@ export async function editBacklogTaskAccountRow(
       area_id: parsedPatch.area_id,
     })
     .eq("id", taskId)
+    .eq("user_id", user.id)
     .eq("status", "backlog")
     .eq("updated_at", expectedUpdatedAt)
     .select(taskColumns)
@@ -100,5 +120,10 @@ export async function editBacklogTaskAccountRow(
     return { provider: "supabase", status: "conflict" };
   }
 
-  return { provider: "supabase", status: "updated", task: parseTask(data) };
+  return {
+    provider: "supabase",
+    status: "updated",
+    task: parseTask(data),
+    userId: user.id,
+  };
 }

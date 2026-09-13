@@ -48,8 +48,13 @@ function makeSync(options: {
   hasClient: boolean;
   taskAliased?: boolean;
   syncFails?: boolean;
-  /** Undefined = client has no user still signed in (the safe default). */
-  signedInAfterSyncFailure?: boolean;
+  /**
+   * The id the fresh post-refresh-failure `requireSupabaseUser` call finds
+   * signed in. `null` = signed out; a string = that user (which may or may
+   * not be the same user who performed the write — that comparison is
+   * exactly what `sameSession` exists to prove).
+   */
+  authUserIdAfterSyncFailure?: string | null;
 }) {
   const syncPersistedWorkflowRows = options.syncFails
     ? vi.fn().mockRejectedValue(new Error("network blip"))
@@ -60,8 +65,11 @@ function makeSync(options: {
           rpc: vi.fn(),
           auth: {
             getUser: vi.fn().mockResolvedValue(
-              options.signedInAfterSyncFailure
-                ? { data: { user: { id: "user-1" } }, error: null }
+              options.authUserIdAfterSyncFailure
+                ? {
+                    data: { user: { id: options.authUserIdAfterSyncFailure } },
+                    error: null,
+                  }
                 : { data: { user: null }, error: null },
             ),
           },
@@ -71,9 +79,7 @@ function makeSync(options: {
 
   const persistedTaskIdByLocalIdRef = {
     current: new Map<string, string>(
-      options.taskAliased !== false
-        ? [[LOCAL_TASK_ID, PERSISTED_TASK_ID]]
-        : [],
+      options.taskAliased !== false ? [[LOCAL_TASK_ID, PERSISTED_TASK_ID]] : [],
     ),
   };
 
@@ -113,11 +119,14 @@ describe("persistBacklogTaskEdit (#984)", () => {
     ).rejects.toThrow("Demo backlog task edits use local workflow state.");
   });
 
+  const WRITER_USER_ID = "user-a";
+
   it("resolves persisted with the confirmed row, resolving local ids to persisted ones first", async () => {
     editBacklogTaskAccountRowMock.mockResolvedValue({
       provider: "supabase",
       status: "updated",
       task: { id: PERSISTED_TASK_ID, title: "New title" },
+      userId: WRITER_USER_ID,
     });
     const { ops, syncPersistedWorkflowRows } = makeSync({ hasClient: true });
 
@@ -140,16 +149,17 @@ describe("persistBacklogTaskEdit (#984)", () => {
     expect(syncPersistedWorkflowRows).toHaveBeenCalledOnce();
   });
 
-  it("resolves persisted-refresh-pending with sameSession: false when the session no longer checks out", async () => {
+  it("resolves persisted-refresh-pending with sameSession: false when the writer has since signed out", async () => {
     editBacklogTaskAccountRowMock.mockResolvedValue({
       provider: "supabase",
       status: "updated",
       task: { id: PERSISTED_TASK_ID, title: "New title" },
+      userId: WRITER_USER_ID,
     });
     const { ops } = makeSync({
       hasClient: true,
       syncFails: true,
-      signedInAfterSyncFailure: false,
+      authUserIdAfterSyncFailure: null,
     });
 
     const result = await ops.persistBacklogTaskEdit(
@@ -165,16 +175,43 @@ describe("persistBacklogTaskEdit (#984)", () => {
     });
   });
 
-  it("resolves persisted-refresh-pending with sameSession: true when a fresh auth check still finds the same signed-in user", async () => {
+  it("resolves persisted-refresh-pending with sameSession: false when a DIFFERENT, genuinely valid user is now signed in — being authenticated is not enough", async () => {
     editBacklogTaskAccountRowMock.mockResolvedValue({
       provider: "supabase",
       status: "updated",
       task: { id: PERSISTED_TASK_ID, title: "New title" },
+      userId: WRITER_USER_ID,
     });
     const { ops } = makeSync({
       hasClient: true,
       syncFails: true,
-      signedInAfterSyncFailure: true,
+      authUserIdAfterSyncFailure: "user-b",
+    });
+
+    const result = await ops.persistBacklogTaskEdit(
+      LOCAL_TASK_ID,
+      { title: "New title", description: null, area_id: LOCAL_AREA_ID },
+      UPDATED_AT,
+    );
+
+    expect(result).toEqual({
+      status: "persisted-refresh-pending",
+      task: { id: PERSISTED_TASK_ID, title: "New title" },
+      sameSession: false,
+    });
+  });
+
+  it("resolves persisted-refresh-pending with sameSession: true when a fresh auth check finds the SAME user who performed the write", async () => {
+    editBacklogTaskAccountRowMock.mockResolvedValue({
+      provider: "supabase",
+      status: "updated",
+      task: { id: PERSISTED_TASK_ID, title: "New title" },
+      userId: WRITER_USER_ID,
+    });
+    const { ops } = makeSync({
+      hasClient: true,
+      syncFails: true,
+      authUserIdAfterSyncFailure: WRITER_USER_ID,
     });
 
     const result = await ops.persistBacklogTaskEdit(

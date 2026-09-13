@@ -10,7 +10,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { type Area, type RollupSummaryContent } from "@lifeos/schemas";
+import {
+  type Area,
+  type RollupSummaryContent,
+  type Task,
+} from "@lifeos/schemas";
 import type { ApprovedRollupSummary } from "./review/approvedRollups";
 import {
   acceptDraft,
@@ -2410,35 +2414,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         return { status: "failure" };
       }
 
-      // Root review clarification (task984-review-clarification.md point 1):
-      // a confirmed write whose follow-up read failed must not silently
-      // pass for an ordinary, fully-synced success. When it is SAFE to do
-      // so (the session held AND nothing else touched this task locally in
-      // the meantime — the same guard the initial conflict check used, run
-      // again now), the confirmed fields are reflected into local state
-      // here, since the resync that would normally do it did not land.
-      // Either way `refreshPending` is set so the caller says so explicitly
-      // rather than claiming the ordinary "Saved to your account" copy.
-      let refreshPending = false;
-      if (persisted.status === "persisted-refresh-pending") {
-        refreshPending = true;
-        const stillUnchangedLocally = stateRef.current.tasks.some(
-          (item) => item.id === taskId && item.updated_at === task.updated_at,
-        );
-        if (persisted.sameSession && stillUnchangedLocally) {
-          const reflected = editBacklogTaskInState(
-            stateRef.current,
-            taskId,
-            validation.patch,
-          );
-          if (reflected.task) {
-            applyWorkflowState(reflected.state);
-          }
-        }
-      }
-
-      // Root review clarification (task984-review-clarification.md point 3):
-      // ground `savedAreaId` in the SERVER'S OWN returned row
+      // `savedAreaId` is grounded in the SERVER'S OWN returned row
       // (`persisted.task.area_id`), mapped back through the same
       // persisted-area alias table `syncPersistedWorkflowRows` itself uses
       // (`workflowAreaIdForPersistedAreaId`) — not in `editedTask.area_id`,
@@ -2451,6 +2427,42 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           persisted.task.area_id,
           persistedAreasRef.current,
         ) ?? editedTask.area_id;
+
+      // A confirmed write whose follow-up read failed must not silently pass
+      // for an ordinary, fully-synced success. When it is SAFE to do so (the
+      // session held AND nothing else touched this task locally in the
+      // meantime — the same guard the initial conflict check used, run again
+      // now), the EXACT fields the server returned — including its own
+      // `updated_at`, never a freshly minted local timestamp — are written
+      // into this one matching local task, since the resync that would
+      // normally do it did not land. Reflecting a local `nowIso()` instead
+      // would hand the NEXT edit a version token the account row never had,
+      // so a second, honest edit would fail the server's own guard as a
+      // false conflict. Either way `refreshPending` is set so the caller
+      // says so explicitly rather than claiming the ordinary "Saved to your
+      // account" copy.
+      let refreshPending = false;
+      if (persisted.status === "persisted-refresh-pending") {
+        refreshPending = true;
+        const currentLocalTask = stateRef.current.tasks.find(
+          (item) => item.id === taskId && item.updated_at === task.updated_at,
+        );
+        if (persisted.sameSession && currentLocalTask) {
+          const reflectedTask: Task = {
+            ...currentLocalTask,
+            title: persisted.task.title,
+            description: persisted.task.description,
+            area_id: confirmedWorkflowAreaId,
+            updated_at: persisted.task.updated_at,
+          };
+          applyWorkflowState({
+            ...stateRef.current,
+            tasks: stateRef.current.tasks.map((item) =>
+              item.id === taskId ? reflectedTask : item,
+            ),
+          });
+        }
+      }
 
       return {
         status: "success",

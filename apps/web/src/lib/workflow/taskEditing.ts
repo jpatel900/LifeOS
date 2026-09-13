@@ -31,10 +31,9 @@ export type TaskEditValidation =
  *
  * The blank check is whitespace-only: it decides null-vs-kept, nothing more.
  * A NON-blank description is returned exactly as typed — leading/trailing
- * whitespace, indentation, and internal newlines all survive untouched. Root
- * review finding 5 (task984-first-review.md): the first cut trimmed every
- * description, which silently ate a user's intentional formatting; only the
- * title has a "trim it" rule in the contract.
+ * whitespace, indentation, and internal newlines all survive untouched.
+ * Trimming a non-blank description would silently eat a user's intentional
+ * formatting; only the title has a "trim it" rule.
  */
 export function normalizeTaskEditInput(
   input: TaskEditFormInput,
@@ -161,10 +160,7 @@ export function editBacklogTaskInState(
     state: {
       ...state,
       tasks: state.tasks.map((item) => (item.id === taskId ? nextTask : item)),
-      reviewLog: [
-        `Edited backlog task: ${nextTask.title}`,
-        ...state.reviewLog,
-      ],
+      reviewLog: [`Edited backlog task: ${nextTask.title}`, ...state.reviewLog],
     },
     task: nextTask,
     areaChangeBlocked,

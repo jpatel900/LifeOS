@@ -390,24 +390,22 @@ export type DeferTaskWithSessionResult = "persisted" | "local-only" | "failure";
  *   move was dropped because the task's project lives in a different area
  *   — title/description still saved. `savedAreaId` is always the WORKFLOW-
  *   space id of the area actually saved (the task's own area when blocked,
- *   the requested one otherwise) — root review finding 3
- *   (task984-first-review.md): `task.area_id` on the account branch is the
- *   server's PERSISTED-space uuid, not the id `state.areas` is keyed by, so
- *   a caller naming the destination by area must read this field, not
- *   `task.area_id`.
+ *   the requested one otherwise): `task.area_id` on the account branch is
+ *   the server's PERSISTED-space uuid, not the id `state.areas` is keyed
+ *   by, so a caller naming the destination by area must read this field,
+ *   not `task.area_id`.
  * - "invalid": normalization/field validation failed; nothing was written.
  * - "conflict": the task changed underneath the editor (no longer backlog,
  *   or edited again since the form opened) — a recoverable, not a failure.
  * - "not-found": the task no longer exists in this device's state.
  * - "failure": auth/network/storage refused the write.
  *
- * `refreshPending` (root review clarification, task984-review-clarification.md
- * point 1): true only for a confirmed account write whose follow-up account
- * read failed. The write is genuinely saved — this is still "success", never
- * "failure" — but the caller must say so explicitly (not the plain "Saved to
- * your account" copy) rather than silently closing over fields the read-back
- * never confirmed on screen. Always `false`/absent for demo saves and for a
- * fully-confirmed account save.
+ * `refreshPending`: true only for a confirmed account write whose follow-up
+ * account read failed. The write is genuinely saved — this is still
+ * "success", never "failure" — but the caller must say so explicitly (not
+ * the plain "Saved to your account" copy) rather than silently closing over
+ * fields the read-back never confirmed on screen. Always `false`/absent for
+ * demo saves and for a fully-confirmed account save.
  */
 export type TaskEditResult =
   | {

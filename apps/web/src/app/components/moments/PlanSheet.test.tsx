@@ -442,11 +442,10 @@ describe("PlanSheet — the ported Plan surface", () => {
       ).toBeInTheDocument();
     });
 
-    // Root review finding 1 (task984-first-review.md): `expected_updated_at`
-    // must be the version the editor OPENED with, frozen at that moment —
-    // not re-read from the live task at Save time, which would silently hand
-    // a stale draft the task's NEWER token and overwrite whatever changed it
-    // in between.
+    // `expected_updated_at` must be the version the editor OPENED with,
+    // frozen at that moment — not re-read from the live task at Save time,
+    // which would silently hand a stale draft the task's NEWER token and
+    // overwrite whatever changed it in between.
     it("freezes expected_updated_at at open: a background change while the editor is open is rejected as a conflict, and the typed draft survives", async () => {
       renderSheet();
 
@@ -490,9 +489,8 @@ describe("PlanSheet — the ported Plan surface", () => {
       ).toHaveValue("My in-progress edit");
     });
 
-    // Root review finding 4 (task984-first-review.md): typing while a save is
-    // in flight must not be silently lost by a delete-the-draft-on-success
-    // that races a same-tick keystroke.
+    // Typing while a save is in flight must not be silently lost by a
+    // delete-the-draft-on-success that races a same-tick keystroke.
     it("disables the editable inputs while a save is pending", () => {
       renderSheet();
 
@@ -518,9 +516,9 @@ describe("PlanSheet — the ported Plan surface", () => {
       ).toBeDisabled();
     });
 
-    // Root review finding 3 (task984-first-review.md): a blocked area move
-    // must say so using the actual saved area (the task's OWN, unchanged
-    // area), never the area that was requested and refused.
+    // A blocked area move must say so using the actual saved area (the
+    // task's OWN, unchanged area), never the area that was requested and
+    // refused.
     it("names the task's own area (not the refused destination) when a project-linked area move is blocked", async () => {
       const project = {
         id: "project-984",

@@ -35,7 +35,8 @@ function rowFor(overrides: Record<string, unknown> = {}) {
 function client(maybeSingleResult: { data: unknown; error: unknown }) {
   const maybeSingle = vi.fn().mockResolvedValue(maybeSingleResult);
   const select = vi.fn().mockReturnValue({ maybeSingle });
-  const eq3 = vi.fn().mockReturnValue({ select });
+  const eq4 = vi.fn().mockReturnValue({ select });
+  const eq3 = vi.fn().mockReturnValue({ eq: eq4 });
   const eq2 = vi.fn().mockReturnValue({ eq: eq3 });
   const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
   const update = vi.fn().mockReturnValue({ eq: eq1 });
@@ -53,6 +54,7 @@ function client(maybeSingleResult: { data: unknown; error: unknown }) {
     eq1,
     eq2,
     eq3,
+    eq4,
     select,
   };
 }
@@ -123,8 +125,8 @@ describe("editBacklogTaskAccountRow", () => {
     ).rejects.toThrow("Sign in before saving task edits.");
   });
 
-  it("updates title/description/area_id guarded by id, backlog status, and updated_at", async () => {
-    const { supabase, update, eq1, eq2, eq3, select } = client({
+  it("updates title/description/area_id guarded by id, owning user, backlog status, and updated_at", async () => {
+    const { supabase, update, eq1, eq2, eq3, eq4, select } = client({
       data: rowFor(),
       error: null,
     });
@@ -142,14 +144,36 @@ describe("editBacklogTaskAccountRow", () => {
       area_id: AREA_ID,
     });
     expect(eq1).toHaveBeenCalledWith("id", TASK_ID);
-    expect(eq2).toHaveBeenCalledWith("status", "backlog");
-    expect(eq3).toHaveBeenCalledWith("updated_at", UPDATED_AT);
+    expect(eq2).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(eq3).toHaveBeenCalledWith("status", "backlog");
+    expect(eq4).toHaveBeenCalledWith("updated_at", UPDATED_AT);
     expect(select).toHaveBeenCalled();
     expect(result).toEqual({
       provider: "supabase",
       status: "updated",
       task: expect.objectContaining({ id: TASK_ID, title: "New title" }),
+      userId: USER_ID,
     });
+  });
+
+  it("binds the update to the id of the user requireSupabaseUser just proved is signed in, not a stale caller-supplied id", async () => {
+    const otherUser = "99999999-9999-4999-8999-999999999999";
+    const { supabase, eq2 } = client({ data: rowFor(), error: null });
+    (
+      supabase.auth as unknown as { getUser: ReturnType<typeof vi.fn> }
+    ).getUser.mockResolvedValue({
+      data: { user: { id: otherUser } },
+      error: null,
+    });
+
+    await editBacklogTaskAccountRow(
+      supabase,
+      TASK_ID,
+      { title: "New title", description: null, area_id: AREA_ID },
+      UPDATED_AT,
+    );
+
+    expect(eq2).toHaveBeenCalledWith("user_id", otherUser);
   });
 
   it("returns a conflict (not a throw) when the guard matches zero rows", async () => {

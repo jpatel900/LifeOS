@@ -8,6 +8,7 @@ import {
   expectOnlyKnownAccountFailures,
   gotoWithAccountSync,
   purgeOwnRows,
+  reloadWithAccountSync,
   requireSupabaseEnv,
   signIn,
   watchAccountFailures,
@@ -139,9 +140,7 @@ test.describe("#984 — the accepted-backlog task editor, signed in", () => {
     expect(personal).toBeTruthy();
 
     await openPlanSheet(page);
-    await page
-      .getByTestId(`plan-sheet-edit-${before.id}`)
-      .click();
+    await page.getByTestId(`plan-sheet-edit-${before.id}`).click();
     await page
       .getByTestId(`plan-sheet-edit-title-input-${before.id}`)
       .fill("Sketch next quarter's volunteer rota");
@@ -178,6 +177,44 @@ test.describe("#984 — the accepted-backlog task editor, signed in", () => {
       `tasks?id=eq.${before.id}&select=id,updated_at`,
     );
     expect(after.updated_at).not.toBe(before.updated_at);
+
+    // Reload: the saved fields must survive hydration from the account, not
+    // from anything this tab remembered locally.
+    await reloadWithAccountSync(page);
+    await expect(page.getByTestId("today-moments")).toBeVisible({
+      timeout: 30_000,
+    });
+    await openPlanSheet(page);
+    await expect(page.getByTestId("plan-sheet-backlog")).toContainText(
+      "Sketch next quarter's volunteer rota",
+      { timeout: 20_000 },
+    );
+
+    // A second edit, immediately after reload, must succeed. If the version
+    // this tab reflected after the first save were a locally-fabricated
+    // timestamp rather than the account row's own `updated_at`, this save
+    // would be rejected as a false conflict by the account's own
+    // `.eq("updated_at", …)` guard.
+    await page.getByTestId(`plan-sheet-edit-${before.id}`).click();
+    await page
+      .getByTestId(`plan-sheet-edit-title-input-${before.id}`)
+      .fill("Sketch next quarter's volunteer rota, finalized");
+    await page.getByTestId(`plan-sheet-edit-save-${before.id}`).click();
+
+    await expect(
+      page.getByTestId(`plan-sheet-edit-form-${before.id}`),
+    ).toHaveCount(0, { timeout: 20_000 });
+    await expect
+      .poll(
+        async () => {
+          const [row] = await account.rows<TaskRow>(
+            `tasks?id=eq.${before.id}&select=title`,
+          );
+          return row.title;
+        },
+        { timeout: 30_000 },
+      )
+      .toBe("Sketch next quarter's volunteer rota, finalized");
   });
 
   test(`${SIGNED_IN_TAG} a second user's direct PATCH against the same row changes nothing (RLS write isolation)`, async ({

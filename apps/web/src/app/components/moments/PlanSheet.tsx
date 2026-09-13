@@ -325,12 +325,12 @@ export function PlanSheet({
         title: string;
         description: string;
         area_id: string;
-        // Root review finding 1 (task984-first-review.md): frozen at OPEN
-        // time and never re-read from the live task at save time. Reading it
-        // fresh at save would let a background sync that lands WHILE the
-        // form is open (first move saved, a resync, anything that bumps
-        // `updated_at`) hand a stale draft the newer token — silently
-        // defeating the conflict guard it exists to satisfy.
+        // Frozen at OPEN time and never re-read from the live task at save
+        // time. Reading it fresh at save would let a background sync that
+        // lands WHILE the form is open (first move saved, a resync,
+        // anything that bumps `updated_at`) hand a stale draft the newer
+        // token — silently defeating the conflict guard it exists to
+        // satisfy.
         expectedUpdatedAt: string;
       }
     >
@@ -463,7 +463,7 @@ export function PlanSheet({
 
     setEditPending((current) => ({ ...current, [key]: true }));
     // `draft.expectedUpdatedAt` — frozen at open, never the live task's
-    // current `updated_at` (root review finding 1).
+    // current `updated_at`.
     const result = await editBacklogTask(taskId, {
       title: draft.title,
       description: draft.description,
@@ -484,14 +484,13 @@ export function PlanSheet({
         return next;
       });
       setEditingTaskKey(null);
-      // Root review finding 3: the label names the area ACTUALLY saved
-      // (`result.savedAreaId`, workflow-space) — never `draft.area_id`,
-      // which is what was REQUESTED and can differ when
-      // `areaChangeBlocked` dropped the move. The tier ("account" vs
-      // "demo") is said plainly rather than collapsing both into one
-      // generic "saved" — root review clarification point 2: the demo tier
-      // says "this tab" specifically, since sessionStorage is per-tab and
-      // neither another tab nor a browser restart is proven to have it.
+      // The label names the area ACTUALLY saved (`result.savedAreaId`,
+      // workflow-space) — never `draft.area_id`, which is what was
+      // REQUESTED and can differ when `areaChangeBlocked` dropped the move.
+      // The tier ("account" vs "demo") is said plainly rather than
+      // collapsing both into one generic "saved": the demo tier says "this
+      // tab" specifically, since sessionStorage is per-tab and neither
+      // another tab nor a browser restart is proven to have it.
       const areaLabel =
         state.areas.find((area) => area.id === result.savedAreaId)?.name ??
         null;
@@ -504,10 +503,10 @@ export function PlanSheet({
             ? " Area kept — its project lives elsewhere."
             : "";
 
-      // Root review clarification point 1: a confirmed account write whose
-      // own follow-up refresh failed is never reported as an ordinary,
-      // fully-synced save — say so explicitly, with a real recovery step
-      // (reopening re-reads whatever the account/local state settles on).
+      // A confirmed account write whose own follow-up refresh failed is
+      // never reported as an ordinary, fully-synced save — say so
+      // explicitly, with a real recovery step (reopening re-reads whatever
+      // the account/local state settles on).
       if (result.refreshPending) {
         onToast?.(
           `Saved to your account. Refresh pending — reopen to confirm the latest.${areaKeptNote}`,
