@@ -453,6 +453,14 @@ export interface WorkflowSyncStatus {
   // sign-in door instead of failure language. A true auth *failure* with a
   // live session never sets this.
   signedOut?: boolean;
+  // #967 visibility: true when at least one currently-queued pending write's
+  // last account-save attempt is known to have failed (mirrors the durable
+  // journal's own `last_attempt_failed`, via `refreshJournalledDurableState`
+  // in `WorkflowContext.tsx`). Optional/backward-compatible: absent or
+  // `false` means either nothing is queued or nothing queued has ever failed
+  // an attempt — the ordinary case. Carries no permanence or timing claim;
+  // it clears the moment the write is delivered or removed from the journal.
+  pendingSaveFailed?: boolean;
 }
 
 export const initialSyncStatus: WorkflowSyncStatus = {

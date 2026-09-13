@@ -214,4 +214,94 @@ describe("SyncNotice tone (#734)", () => {
     const { container } = render(<SyncNotice status={base()} />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  // #967 visibility: a queued write whose last account-save attempt is known
+  // to have failed must read as a real failure here too — the same
+  // `resolveDeviceSaveNotice` `MastheadSaveState` gets.
+  describe("pendingSaveFailed (#967)", () => {
+    it("raises the alarm for a queued write whose last save attempt failed", () => {
+      render(
+        <SyncNotice
+          status={base({
+            pendingLocalChanges: true,
+            pendingSaveFailed: true,
+          })}
+        />,
+      );
+
+      const banner = screen.getByTestId("sync-notice");
+      expect(banner).toHaveAttribute("data-tone", "alarm");
+      expect(banner).toHaveTextContent(ACCOUNT_SAVE_FAILED);
+      expect(banner.className).toContain("amb");
+    });
+
+    it("stays calm for an ordinary queued write with no failed attempt", () => {
+      render(
+        <SyncNotice
+          status={base({
+            pendingLocalChanges: true,
+            pendingSaveFailed: false,
+          })}
+        />,
+      );
+
+      const banner = screen.getByTestId("sync-notice");
+      expect(banner).toHaveAttribute("data-tone", "calm");
+      expect(banner.className).not.toContain("amb");
+    });
+
+    it("renders nothing once the failed write is no longer pending", () => {
+      const { container } = render(
+        <SyncNotice
+          status={base({
+            pendingLocalChanges: false,
+            pendingSaveFailed: true,
+          })}
+        />,
+      );
+
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it("keeps signed-out priority over a failed attempt", () => {
+      render(
+        <SyncNotice
+          status={base({
+            account: "local-only",
+            signedOut: true,
+            message:
+              "You're not signed in, so new work is saving on this device only.",
+            pendingLocalChanges: true,
+            pendingSaveFailed: true,
+          })}
+        />,
+      );
+
+      expect(screen.getByTestId("sync-notice-signed-out")).toHaveAttribute(
+        "data-tone",
+        "calm",
+      );
+      expect(screen.getByTestId("sync-notice-signin-link")).toHaveAttribute(
+        "href",
+        "/login?next=%2Fhealth",
+      );
+    });
+
+    it("keeps device-storage-blocked priority over a failed attempt", () => {
+      render(
+        <SyncNotice
+          status={base({
+            storage: "blocked",
+            account: "local-only",
+            pendingLocalChanges: true,
+            pendingSaveFailed: true,
+          })}
+        />,
+      );
+
+      const banner = screen.getByTestId("sync-notice");
+      expect(banner).toHaveAttribute("data-tone", "alarm");
+      expect(banner).toHaveTextContent(DEVICE_STORAGE_BLOCKED);
+    });
+  });
 });

@@ -126,4 +126,110 @@ describe("resolveDeviceSaveNotice (#734)", () => {
       expect(resolveDeviceSaveNotice(state)?.tone).toBe("calm");
     }
   });
+
+  // #967 visibility: a persisted, durable "this write's last attempt failed"
+  // signal must reach the same shared notice both consumers read.
+  describe("pendingSaveFailed (#967)", () => {
+    it("raises alarm when a queued write's last save attempt is known to have failed, even though the account is otherwise reached", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "synced",
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "alarm",
+        message: ACCOUNT_SAVE_FAILED,
+        signedOut: false,
+      });
+    });
+
+    it("stays calm for an ordinary queued write with no failed attempt", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "synced",
+          pendingLocalChanges: true,
+          pendingSaveFailed: false,
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "calm",
+        message: SOME_WORK_ON_THIS_DEVICE,
+        signedOut: false,
+      });
+    });
+
+    it("says nothing once the failed write is no longer pending (successful drain clears it)", () => {
+      // A cleared journal entry means BOTH flags flip together in the real
+      // provider (`refreshPendingLocalChanges`, `refreshJournalledDurableState`)
+      // — this proves the pure function's own silence-on-resolution half of
+      // that: with nothing queued, a stale `pendingSaveFailed: true` alone
+      // cannot manufacture a notice.
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "synced",
+          pendingLocalChanges: false,
+          pendingSaveFailed: true,
+        }),
+      );
+
+      expect(notice).toBeNull();
+    });
+
+    it("does not override a more specific local-only message with the generic failed-save sentence", () => {
+      const specificMessage = "Your win is saved on this device and sending.";
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "local-only",
+          message: specificMessage,
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "calm",
+        message: specificMessage,
+        signedOut: false,
+      });
+    });
+
+    it("preserves signed-out priority even when a failed attempt is also known", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          account: "local-only",
+          signedOut: true,
+          message: SIGNED_OUT_SAVING_ON_THIS_DEVICE,
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "calm",
+        message: SIGNED_OUT_SAVING_ON_THIS_DEVICE,
+        signedOut: true,
+      });
+    });
+
+    it("preserves device-storage-blocked priority even when a failed attempt is also known", () => {
+      const notice = resolveDeviceSaveNotice(
+        status({
+          storage: "blocked",
+          account: "local-only",
+          pendingLocalChanges: true,
+          pendingSaveFailed: true,
+        }),
+      );
+
+      expect(notice).toEqual({
+        tone: "alarm",
+        message: DEVICE_STORAGE_BLOCKED,
+        signedOut: false,
+      });
+    });
+  });
 });
