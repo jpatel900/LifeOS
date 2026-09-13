@@ -2428,40 +2428,55 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           persistedAreasRef.current,
         ) ?? editedTask.area_id;
 
-      // A confirmed write whose follow-up read failed must not silently pass
-      // for an ordinary, fully-synced success. When it is SAFE to do so (the
-      // session held AND nothing else touched this task locally in the
-      // meantime — the same guard the initial conflict check used, run again
-      // now), the EXACT fields the server returned — including its own
-      // `updated_at`, never a freshly minted local timestamp — are written
-      // into this one matching local task, since the resync that would
-      // normally do it did not land. Reflecting a local `nowIso()` instead
-      // would hand the NEXT edit a version token the account row never had,
-      // so a second, honest edit would fail the server's own guard as a
-      // false conflict. Either way `refreshPending` is set so the caller
-      // says so explicitly rather than claiming the ordinary "Saved to your
-      // account" copy.
-      let refreshPending = false;
-      if (persisted.status === "persisted-refresh-pending") {
-        refreshPending = true;
-        const currentLocalTask = stateRef.current.tasks.find(
-          (item) => item.id === taskId && item.updated_at === task.updated_at,
-        );
-        if (persisted.sameSession && currentLocalTask) {
-          const reflectedTask: Task = {
-            ...currentLocalTask,
-            title: persisted.task.title,
-            description: persisted.task.description,
-            area_id: confirmedWorkflowAreaId,
-            updated_at: persisted.task.updated_at,
-          };
-          applyWorkflowState({
-            ...stateRef.current,
-            tasks: stateRef.current.tasks.map((item) =>
-              item.id === taskId ? reflectedTask : item,
-            ),
-          });
-        }
+      // The write is confirmed on the account the instant `persisted`
+      // resolves — this is ALWAYS "success" from here, regardless of what
+      // follows. What follows only decides whether it is SAFE to reflect the
+      // confirmed fields into THIS tab's local state:
+      //
+      //  1. Identity: a FRESH check, not the identity captured at write
+      //     time — an account switch during the write's own await must
+      //     never graft this edit onto whoever is signed in now.
+      //  2. Version: the local task must still be EXACTLY as it was when
+      //     the edit started (re-runs the same guard the initial conflict
+      //     check used) — an unrelated local action on this SAME task
+      //     during the await must not be clobbered by this reflection.
+      //
+      // Both checks run BEFORE any dispatch, and only this ONE task is ever
+      // touched — no wholesale account resync runs from this operation (see
+      // `persistBacklogTaskEdit`'s own comment), so an unrelated task's
+      // local-only state is never at risk from this edit. When either guard
+      // fails, nothing is dispatched and `refreshPending` says so — the
+      // account still holds the edit (still "success"), the screen just
+      // has not caught up to it yet.
+      const sameSession = await persistenceOps.isSameSignedInUser(
+        persisted.userId,
+      );
+      const currentLocalTask = sameSession
+        ? stateRef.current.tasks.find(
+            (item) => item.id === taskId && item.updated_at === task.updated_at,
+          )
+        : undefined;
+
+      if (currentLocalTask) {
+        // The EXACT fields the server returned — including its own
+        // `updated_at`, never a freshly minted local timestamp — are
+        // written into this one matching local task. Reflecting a local
+        // `nowIso()` instead would hand the NEXT edit a version token the
+        // account row never had, so a second, honest edit would fail the
+        // server's own guard as a false conflict.
+        const reflectedTask: Task = {
+          ...currentLocalTask,
+          title: persisted.task.title,
+          description: persisted.task.description,
+          area_id: confirmedWorkflowAreaId,
+          updated_at: persisted.task.updated_at,
+        };
+        applyWorkflowState({
+          ...stateRef.current,
+          tasks: stateRef.current.tasks.map((item) =>
+            item.id === taskId ? reflectedTask : item,
+          ),
+        });
       }
 
       return {
@@ -2470,7 +2485,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         areaChangeBlocked,
         savedAreaId: confirmedWorkflowAreaId,
         deliveryTier: "account",
-        refreshPending,
+        refreshPending: !currentLocalTask,
       };
     } catch (error) {
       markPersistedSaveFailure(error);

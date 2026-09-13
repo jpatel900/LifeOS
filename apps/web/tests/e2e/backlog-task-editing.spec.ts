@@ -206,7 +206,31 @@ test("edit details: desktop — screenshot evidence and a bounded axe (WCAG AA) 
   expect(violations).toEqual([]);
 });
 
-test("edit details: reachable and legible at a 390px mobile viewport", async ({
+const MOBILE_VIEWPORT_WIDTH = 390;
+
+/** Fails with the box's own numbers in the message when it overflows. */
+async function expectWithinViewportWidth(
+  page: Page,
+  locator: ReturnType<Page["getByTestId"]>,
+  label: string,
+): Promise<void> {
+  await locator.scrollIntoViewIfNeeded();
+  const box = await locator.boundingBox();
+  expect(
+    box,
+    `${label}: no bounding box (not rendered/visible)`,
+  ).not.toBeNull();
+  expect(
+    box!.x + box!.width,
+    `${label}: right edge ${box!.x + box!.width}px exceeds the ${MOBILE_VIEWPORT_WIDTH}px viewport (x=${box!.x}, width=${box!.width})`,
+  ).toBeLessThanOrEqual(MOBILE_VIEWPORT_WIDTH);
+  expect(
+    box!.x,
+    `${label}: left edge ${box!.x}px is off-screen`,
+  ).toBeGreaterThanOrEqual(0);
+}
+
+test("edit details: reachable, fully in-view, and usable end to end at a 390px mobile viewport", async ({
   page,
 }, testInfo) => {
   // Seed at the default (desktop) viewport — capture's own affordance is
@@ -219,7 +243,7 @@ test("edit details: reachable and legible at a 390px mobile viewport", async ({
   const title = "Label the seasonal storage bins";
   await seedBacklogTask(page, title);
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_VIEWPORT_WIDTH, height: 844 });
   await openPlanSheet(page);
   await page
     .getByTestId(/^plan-sheet-edit-/)
@@ -229,6 +253,58 @@ test("edit details: reachable and legible at a 390px mobile viewport", async ({
   const form = page.getByTestId(/^plan-sheet-edit-form-/);
   await expect(form).toBeVisible();
 
+  // The capture toast from seeding this task overlaps the sheet at this
+  // viewport for its own natural lifetime — wait it out before capturing or
+  // measuring anything, so neither reflects a transient overlay rather than
+  // the editor's own layout.
+  await expect(page.getByTestId("today-moments-toast")).toHaveText("", {
+    timeout: 8_000,
+  });
+
+  // Hard geometry, not just a visual impression: every one of the editor's
+  // own controls (plus the pre-existing "Move to today" row it shares a
+  // container with) must have its right edge at or inside the viewport —
+  // this is what a screenshot alone cannot prove and what the earlier
+  // capture found violated (title/description/area clipped at the right
+  // edge). Before/after, measured directly: reverting the fix below
+  // (`min-w-0` on the row/flex container, plus overriding the shared Button
+  // primitive's own `whitespace-nowrap` on the long "Move to today" label)
+  // and re-running this exact assertion fails with "Move to today button:
+  // right edge 390.48px exceeds the 390px viewport" — restoring the fix
+  // brings every one of these controls back under the same assertion.
+  await expectWithinViewportWidth(
+    page,
+    page.getByTestId(/^plan-sheet-promote-/),
+    "Move to today button",
+  );
+  await expectWithinViewportWidth(
+    page,
+    page.getByTestId(/^plan-sheet-edit-title-input-/),
+    "Title input",
+  );
+  await expectWithinViewportWidth(
+    page,
+    page.getByTestId(/^plan-sheet-edit-description-input-/),
+    "Description textarea",
+  );
+  await expectWithinViewportWidth(
+    page,
+    page.getByTestId(/^plan-sheet-edit-area-input-/),
+    "Area select",
+  );
+  const saveLocator = page.getByTestId(/^plan-sheet-edit-save-/);
+  const cancelLocator = page.getByTestId(/^plan-sheet-edit-cancel-/);
+  await expectWithinViewportWidth(page, saveLocator, "Save button");
+  await expectWithinViewportWidth(page, cancelLocator, "Cancel button");
+
+  // The 44px hit-target floor (HIT_TARGET_MIN) survives at mobile width —
+  // necessary but (per the earlier finding) not sufficient on its own, which
+  // is why the width assertions above run first.
+  const saveBox = await saveLocator.boundingBox();
+  expect(saveBox!.height).toBeGreaterThanOrEqual(44);
+  const cancelBox = await cancelLocator.boundingBox();
+  expect(cancelBox!.height).toBeGreaterThanOrEqual(44);
+
   const screenshotPath = await attachScreenshot(
     page,
     testInfo,
@@ -236,20 +312,37 @@ test("edit details: reachable and legible at a 390px mobile viewport", async ({
   );
   console.log(`edit-details-mobile screenshot: ${screenshotPath}`);
 
-  // The 44px hit-target floor (HIT_TARGET_MIN) survives at mobile width.
-  const saveBox = await page
-    .getByTestId(/^plan-sheet-edit-save-/)
-    .boundingBox();
-  expect(saveBox).not.toBeNull();
-  expect(saveBox!.height).toBeGreaterThanOrEqual(44);
-  const cancelBox = await page
-    .getByTestId(/^plan-sheet-edit-cancel-/)
-    .boundingBox();
-  expect(cancelBox).not.toBeNull();
-  expect(cancelBox!.height).toBeGreaterThanOrEqual(44);
+  // An actual mobile edit/save, not just a layout check: reached after
+  // `scrollIntoViewIfNeeded` above proved normal vertical scrolling
+  // surfaces every control, then driven exactly like a touch user would.
+  const titleInput = page.getByTestId(/^plan-sheet-edit-title-input-/);
+  await titleInput.fill("Label and date the seasonal storage bins");
+  await page
+    .getByTestId(/^plan-sheet-edit-description-input-/)
+    .fill("Use the waterproof labels.");
+  await page
+    .getByTestId(/^plan-sheet-edit-area-input-/)
+    .selectOption({ label: "Personal" });
+  await saveLocator.click();
+
+  await expect(form).toHaveCount(0, { timeout: 20_000 });
 });
 
-test("edit details: reachable and operable with keyboard only, in one Tab order (title -> description -> area -> Save -> Cancel)", async ({
+/** The five field "kinds" the form's Tab order must visit, in this order. */
+const EDIT_FORM_TAB_KINDS = [
+  "title-input",
+  "description-input",
+  "area-input",
+  "save",
+  "cancel",
+] as const;
+
+function editFormKindOf(testId: string | null): string | undefined {
+  if (!testId) return undefined;
+  return EDIT_FORM_TAB_KINDS.find((kind) => testId.includes(`edit-${kind}-`));
+}
+
+test("edit details: reachable and operable with keyboard only, in the exact Title -> Description -> Area -> Save -> Cancel order", async ({
   page,
 }) => {
   await page.goto("/");
@@ -260,6 +353,10 @@ test("edit details: reachable and operable with keyboard only, in one Tab order 
   await openPlanSheet(page);
 
   // Open via keyboard: focus the control, then Enter — never a mouse click.
+  // This is the one `.focus()` call in this test, standing in for "the user
+  // already has focus somewhere on the page" (exactly as it would after any
+  // prior keyboard interaction) — every step after this is real Tab/Enter
+  // traversal, never a direct focus jump to a specific field.
   const editButton = page.getByTestId(/^plan-sheet-edit-/).first();
   await editButton.focus();
   await page.keyboard.press("Enter");
@@ -267,35 +364,47 @@ test("edit details: reachable and operable with keyboard only, in one Tab order 
   const form = page.getByTestId(/^plan-sheet-edit-form-/);
   await expect(form).toBeVisible();
 
-  // Walk Tab forward from wherever focus landed after opening, collecting
-  // each focused control's testid, until Cancel is reached or the budget
-  // (generous: other Plan sheet controls may sit between Edit details and
-  // the form) runs out — proving the whole form is keyboard-reachable
-  // without asserting a single hand-picked tab count.
-  const seen: string[] = [];
-  for (let i = 0; i < 15; i += 1) {
+  // Walk Tab forward, typing into each field AS it is reached (never moving
+  // focus away to do so), until all five kinds have been observed once —
+  // this is the real, continuous keyboard path a user would take.
+  const observedKinds: string[] = [];
+  for (
+    let i = 0;
+    i < 15 && observedKinds.length < EDIT_FORM_TAB_KINDS.length;
+    i += 1
+  ) {
     const testId = await page.evaluate(
       () => document.activeElement?.getAttribute("data-testid") ?? null,
     );
-    if (testId) seen.push(testId);
-    if (testId?.startsWith("plan-sheet-edit-cancel-")) break;
+    const kind = editFormKindOf(testId);
+    if (kind && observedKinds.at(-1) !== kind) {
+      observedKinds.push(kind);
+      if (kind === "title-input") {
+        await page.keyboard.press("Control+a");
+        await page.keyboard.type("Renewed permits filed");
+      } else if (kind === "description-input") {
+        await page.keyboard.type("Filed with the city office.");
+      }
+    }
     await page.keyboard.press("Tab");
   }
 
-  const titleTestId = seen.find((id) =>
-    id.startsWith("plan-sheet-edit-title-input-"),
-  );
-  expect(titleTestId, `Tab order reached: ${seen.join(", ")}`).toBeTruthy();
+  expect(
+    observedKinds,
+    "the Tab order must visit all five controls, in this exact order",
+  ).toEqual([...EDIT_FORM_TAB_KINDS]);
 
-  // Type into the title via keyboard focus alone (no mouse), then keep
-  // tabbing through description/area to Save and activate it with the
-  // keyboard.
-  await page.locator(`[data-testid="${titleTestId}"]`).selectText();
-  await page.keyboard.type("Renewed permits filed");
-
-  const saveTestId = seen.find((id) => id.startsWith("plan-sheet-edit-save-"));
-  expect(saveTestId, `Tab order reached: ${seen.join(", ")}`).toBeTruthy();
-  await page.locator(`[data-testid="${saveTestId}"]`).focus();
+  // Focus is now past Cancel; Shift+Tab once returns to it, and once more
+  // to Save — both real keyboard navigation, never a focus jump — then
+  // Enter activates Save.
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(async () => {
+    const testId = await page.evaluate(
+      () => document.activeElement?.getAttribute("data-testid") ?? null,
+    );
+    expect(editFormKindOf(testId)).toBe("save");
+  }).toPass({ timeout: 5_000 });
   await page.keyboard.press("Enter");
 
   await expect(form).toHaveCount(0, { timeout: 20_000 });

@@ -32,8 +32,19 @@ import {
  *    and grants — no schema/RLS/RPC change was made, and this is the proof
  *    the existing grant really does cover title/description/area_id;
  *  - the SAME policy rejects a second user's direct attempt at the same row
- *    (synthetic two-user write isolation), which is the acceptance
- *    criterion's own wording, not a stand-in for it.
+ *    (synthetic two-user write isolation) — this proves ROW isolation under
+ *    RLS, not a session switch mid-edit; the identity/version guard that
+ *    handles an account switch DURING an edit's own await is a single-tab,
+ *    single-session concern, proven deterministically (with a controlled
+ *    deferred write and a controlled identity check) at the vitest tier,
+ *    `WorkflowContext.taskEditing.test.tsx` — not re-attempted here.
+ *
+ * The first test below also proves the ONE thing neither the vitest tier
+ * nor a reload can substitute for: an edit performed IMMEDIATELY after a
+ * prior save (no reload in between) succeeds against the real account,
+ * confirming the version this tab reflected in memory is genuinely accepted
+ * by the server's own `.eq("updated_at", …)` guard — a reload would
+ * re-hydrate from a fresh read and could mask a fabricated local version.
  */
 
 let env: SupabaseEnv;
@@ -178,23 +189,21 @@ test.describe("#984 — the accepted-backlog task editor, signed in", () => {
     );
     expect(after.updated_at).not.toBe(before.updated_at);
 
-    // Reload: the saved fields must survive hydration from the account, not
-    // from anything this tab remembered locally.
-    await reloadWithAccountSync(page);
-    await expect(page.getByTestId("today-moments")).toBeVisible({
-      timeout: 30_000,
-    });
-    await openPlanSheet(page);
-    await expect(page.getByTestId("plan-sheet-backlog")).toContainText(
-      "Sketch next quarter's volunteer rota",
-      { timeout: 20_000 },
-    );
-
-    // A second edit, immediately after reload, must succeed. If the version
-    // this tab reflected after the first save were a locally-fabricated
-    // timestamp rather than the account row's own `updated_at`, this save
-    // would be rejected as a false conflict by the account's own
-    // `.eq("updated_at", …)` guard.
+    // IMMEDIATE second edit, no reload in between: this is the tier a
+    // reload cannot substitute for. Reloading re-hydrates the client's
+    // in-memory task from a fresh account read, which would mask a
+    // fabricated local version — this edit instead reuses whatever version
+    // THIS TAB reflected into memory right after the first save's own
+    // response, with no server round trip in between. If that reflected
+    // version were a locally-minted timestamp rather than the account
+    // row's own `updated_at`, this save would be rejected as a false
+    // conflict by the account's own `.eq("updated_at", …)` guard. (The
+    // identity/version guard that decides whether to reflect at all —
+    // including the concurrent-edit and account-switch cases — is proven
+    // deterministically at the vitest tier,
+    // `WorkflowContext.taskEditing.test.tsx`; this is the one thing only a
+    // real account round trip can confirm: the reflected value this tier
+    // produces is genuinely accepted by the server's own guard.)
     await page.getByTestId(`plan-sheet-edit-${before.id}`).click();
     await page
       .getByTestId(`plan-sheet-edit-title-input-${before.id}`)
@@ -215,6 +224,45 @@ test.describe("#984 — the accepted-backlog task editor, signed in", () => {
         { timeout: 30_000 },
       )
       .toBe("Sketch next quarter's volunteer rota, finalized");
+
+    // Reload: the saved fields (from BOTH edits above) must survive
+    // hydration from the account, not from anything this tab remembered
+    // locally — a separate claim from the immediate-second-edit proof
+    // above, since a reload's hydration path is not the in-memory
+    // reflection path that proof exercises.
+    await reloadWithAccountSync(page);
+    await expect(page.getByTestId("today-moments")).toBeVisible({
+      timeout: 30_000,
+    });
+    await openPlanSheet(page);
+    await expect(page.getByTestId("plan-sheet-backlog")).toContainText(
+      "Sketch next quarter's volunteer rota, finalized",
+      { timeout: 20_000 },
+    );
+
+    // A THIRD edit, immediately after reload, must also succeed — the
+    // reload-hydrated version (read fresh from the account, not reflected
+    // in-memory) must be just as usable as an immediate guard token.
+    await page.getByTestId(`plan-sheet-edit-${before.id}`).click();
+    await page
+      .getByTestId(`plan-sheet-edit-title-input-${before.id}`)
+      .fill("Sketch next quarter's volunteer rota, confirmed after reload");
+    await page.getByTestId(`plan-sheet-edit-save-${before.id}`).click();
+
+    await expect(
+      page.getByTestId(`plan-sheet-edit-form-${before.id}`),
+    ).toHaveCount(0, { timeout: 20_000 });
+    await expect
+      .poll(
+        async () => {
+          const [row] = await account.rows<TaskRow>(
+            `tasks?id=eq.${before.id}&select=title`,
+          );
+          return row.title;
+        },
+        { timeout: 30_000 },
+      )
+      .toBe("Sketch next quarter's volunteer rota, confirmed after reload");
   });
 
   test(`${SIGNED_IN_TAG} a second user's direct PATCH against the same row changes nothing (RLS write isolation)`, async ({

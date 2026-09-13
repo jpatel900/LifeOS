@@ -1009,9 +1009,18 @@ export function PlanSheet({
                       state.accountIdByLocalId.tasks,
                       task.id,
                     )}
-                    className="workflow-compact-item moments-row grid gap-2 p-3"
+                    // `min-w-0`: a CSS grid item's default `min-width: auto`
+                    // sizes it to its content's MIN-CONTENT width — for a
+                    // `whitespace-nowrap` button (the shared Button
+                    // primitive's own base class) holding a long task title,
+                    // that min-content width is the whole unwrapped string,
+                    // which forced this row (and the sheet around it) wider
+                    // than a narrow viewport with no way to shrink. `min-w-0`
+                    // lets the row shrink to the grid track's actual width
+                    // instead.
+                    className="workflow-compact-item moments-row grid min-w-0 gap-2 p-3"
                   >
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex min-w-0 flex-wrap gap-2">
                       <Button
                         type="button"
                         size="sm"
@@ -1023,7 +1032,12 @@ export function PlanSheet({
                         }}
                         className={cn(
                           HIT_TARGET_MIN,
-                          "touch-manipulation justify-start text-left",
+                          // Overrides the shared Button primitive's own
+                          // `whitespace-nowrap` (see the `<li>` comment
+                          // above) so a long title wraps onto further lines
+                          // inside this button instead of forcing it wider
+                          // than the available width.
+                          "touch-manipulation min-w-0 max-w-full justify-start whitespace-normal break-words text-left",
                         )}
                         data-testid={`plan-sheet-promote-${task.id}`}
                       >

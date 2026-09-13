@@ -400,12 +400,15 @@ export type DeferTaskWithSessionResult = "persisted" | "local-only" | "failure";
  * - "not-found": the task no longer exists in this device's state.
  * - "failure": auth/network/storage refused the write.
  *
- * `refreshPending`: true only for a confirmed account write whose follow-up
- * account read failed. The write is genuinely saved — this is still
- * "success", never "failure" — but the caller must say so explicitly (not
- * the plain "Saved to your account" copy) rather than silently closing over
- * fields the read-back never confirmed on screen. Always `false`/absent for
- * demo saves and for a fully-confirmed account save.
+ * `refreshPending`: true for a confirmed account write whose exact fields
+ * could NOT be safely reflected into this tab's local state — either the
+ * signed-in identity changed since the write started, or this same task
+ * changed locally in the meantime (both checked fresh, right before any
+ * dispatch). The write is genuinely saved — this is still "success", never
+ * "failure" — but the caller must say so explicitly (not the plain "Saved to
+ * your account" copy) rather than silently closing over fields the screen
+ * never actually received. Always `false`/absent for demo saves and for a
+ * fully-reflected account save.
  */
 export type TaskEditResult =
   | {
