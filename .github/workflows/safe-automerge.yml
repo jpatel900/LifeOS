@@ -43,6 +43,10 @@ jobs:
   sync-safe-automerge:
     name: Sync safe auto-merge state
     runs-on: ubuntu-latest
+    # Bug #991: a body edit delivered after merge/close still fires this
+    # workflow, but refs/pull/<n>/merge no longer exists then, so checkout
+    # fails. Skip the whole job once the PR is no longer open.
+    if: github.event.pull_request.state == 'open'
 
     steps:
       - name: Checkout repository
