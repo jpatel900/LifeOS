@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ACCOUNT_SAVE_FAILED } from "../../src/lib/statusVocabulary";
+import {
+  ACCOUNT_NEEDS_APP_UPDATE,
+  ACCOUNT_SAVE_FAILED,
+} from "../../src/lib/statusVocabulary";
 import { pinMomentPreference } from "./helpers/momentPreference";
 import {
   SEEDED_USERS,
@@ -94,6 +97,7 @@ function matchedProbe(entry: string): string | null {
 }
 
 const watches: AccountFailureWatch[] = [];
+const expectedSyntheticAccountFailures: string[] = [];
 
 function watchPage(page: Page): void {
   watches.push(watchAccountFailures(page));
@@ -117,13 +121,22 @@ function observedProbes(): string[] {
 test.afterEach(() => {
   const seen = [...watches];
   watches.length = 0;
+  const expectedSynthetic = [...expectedSyntheticAccountFailures];
+  expectedSyntheticAccountFailures.length = 0;
 
   const tolerated: string[] = [];
+  const toleratedSynthetic: string[] = [];
   const filtered = seen.map((watch) => ({
     unexpected: watch.unexpected.filter((entry) => {
       const probe = matchedProbe(entry);
       if (probe) {
         tolerated.push(probe);
+        return false;
+      }
+      const syntheticIndex = expectedSynthetic.indexOf(entry);
+      if (syntheticIndex !== -1) {
+        expectedSynthetic.splice(syntheticIndex, 1);
+        toleratedSynthetic.push(entry);
         return false;
       }
       return true;
@@ -141,7 +154,16 @@ test.afterEach(() => {
         .join(", ")}`,
     );
   }
+  if (toleratedSynthetic.length) {
+    console.log(
+      `[health-port] observed ${toleratedSynthetic.length} test-produced win write failure(s)`,
+    );
+  }
 
+  expect(
+    expectedSynthetic,
+    "Every test-produced win write failure must be observed by the account-failure watcher exactly once.",
+  ).toEqual([]);
   expectOnlyKnownAccountFailures(filtered);
 });
 
@@ -182,6 +204,15 @@ interface PendingWriteRow {
   created_at: string;
   last_attempt_failed?: true;
   last_attempt_failed_at?: string;
+  last_attempt_failure_kind?: "server-capability-missing" | "unknown";
+}
+
+interface PendingWinPayload {
+  workflow_task_id: string;
+  persisted_task_id: string | null;
+  persisted_area_id: string | null;
+  title: string;
+  detail: string | null;
 }
 
 /**
@@ -194,8 +225,23 @@ async function seedUnmappableWin(
   page: Page,
   clientWriteId: string,
 ): Promise<void> {
+  await seedPendingWin(page, clientWriteId, {
+    workflow_task_id: `${clientWriteId}-missing-task`,
+    persisted_task_id: null,
+    persisted_area_id: null,
+    title: "Health failed-save browser proof",
+    detail: null,
+  });
+}
+
+/** Add one pending win without pre-stamping any replay result or failure kind. */
+async function seedPendingWin(
+  page: Page,
+  clientWriteId: string,
+  payload: PendingWinPayload,
+): Promise<void> {
   await page.evaluate(
-    ({ clientWriteId, dbName, storeName }) =>
+    ({ clientWriteId, dbName, storeName, payload }) =>
       new Promise<void>((resolve, reject) => {
         const open = indexedDB.open(dbName);
         open.onerror = () => reject(open.error);
@@ -220,18 +266,19 @@ async function seedUnmappableWin(
             client_write_id: clientWriteId,
             entity: "win",
             payload: {
-              workflow_task_id: `${clientWriteId}-missing-task`,
-              persisted_task_id: null,
-              persisted_area_id: null,
-              title: "Health failed-save browser proof",
-              detail: null,
+              ...payload,
               occurred_at: new Date().toISOString().slice(0, 10),
             },
             created_at: new Date().toISOString(),
           });
         };
       }),
-    { clientWriteId, dbName: JOURNAL_DB, storeName: JOURNAL_STORE },
+    {
+      clientWriteId,
+      dbName: JOURNAL_DB,
+      storeName: JOURNAL_STORE,
+      payload,
+    },
   );
 }
 
@@ -643,6 +690,230 @@ test.describe("C2-S4 — the ported Health surface, signed in", () => {
       body: await genericConcern.screenshot(),
       contentType: "image/png",
     });
+  });
+
+  test(`${SIGNED_IN_TAG} typed replay failures distinguish an app-update-only queue from a mixed unknown queue`, async ({
+    page,
+  }) => {
+    // This test deliberately creates and fails account writes. Refuse to run it
+    // unless the signed-in fixture points at an isolated loopback Supabase.
+    expect(["127.0.0.1", "localhost", "[::1]"]).toContain(
+      new URL(env.url).hostname,
+    );
+
+    const account = await openSignedInToday(page, SEEDED_USERS.a);
+    const [area] = await account.rows<{ id: string }>(
+      "areas?select=id&limit=1",
+    );
+    expect(area?.id).toEqual(expect.any(String));
+    const [task] = await account.insert<{ id: string; area_id: string }>(
+      "tasks",
+      [
+        {
+          user_id: SEEDED_USERS.a.id,
+          area_id: area!.id,
+          title: "Synthetic Health failure-kind source task",
+          status: "active",
+        },
+      ],
+    );
+    expect(task).toMatchObject({ id: expect.any(String), area_id: area!.id });
+
+    // Establish that the fixture is otherwise healthy before either failed
+    // write exists. These raw values must remain unchanged through both queue
+    // classifications; only the factual save concern may alter the summaries.
+    await openHealthSheet(page);
+    await expect(page.getByTestId("health-sheet-message")).toHaveText(
+      "Checked. A record of this check was saved to your account.",
+      { timeout: 30_000 },
+    );
+    const before = await healthSummarySnapshot(page);
+    expect(before.headline).toBe("Everything is working");
+    expect(before.needsYou).toBe("Nothing needs you right now.");
+    expect(before.work).toContain("All good");
+    expect(before.developerMetrics).toMatch(
+      /^overall score 100\/100 · \d+ healthy · 0 watch · 0 critical$/,
+    );
+    expect(before.developerCheckCount).toBeGreaterThan(0);
+    await page.getByTestId("moment-sheet-close").click();
+    await expect(page.getByTestId("health-sheet")).toHaveCount(0);
+
+    const knownClientWriteId = `health-known-kind-${Date.now()}`;
+    const unknownClientWriteId = `health-mixed-unknown-${Date.now()}`;
+    const accountRowsForMarker = (clientWriteId: string) =>
+      account.rows<{ client_write_id: string }>(
+        `win_records?select=client_write_id&client_write_id=eq.${encodeURIComponent(clientWriteId)}`,
+      );
+
+    let knownWriteAttempts = 0;
+    await page.route("**/rest/v1/win_records**", async (route) => {
+      const request = route.request();
+      if (request.method() !== "POST") {
+        await route.continue();
+        return;
+      }
+
+      const submitted = request.postDataJSON() as unknown;
+      const submittedRows = Array.isArray(submitted) ? submitted : [submitted];
+      const targetsKnownFixture = submittedRows.some(
+        (row) =>
+          typeof row === "object" &&
+          row !== null &&
+          "client_write_id" in row &&
+          row.client_write_id === knownClientWriteId,
+      );
+      if (!targetsKnownFixture) {
+        await route.continue();
+        return;
+      }
+
+      knownWriteAttempts += 1;
+      const path = request.url().split("?")[0]!;
+      expectedSyntheticAccountFailures.push(`404 POST ${path}`);
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({
+          code: "PGRST202",
+          details: null,
+          hint: null,
+          message: "Synthetic fixture response.",
+        }),
+      });
+    });
+
+    await seedPendingWin(page, knownClientWriteId, {
+      workflow_task_id: task!.id,
+      persisted_task_id: task!.id,
+      persisted_area_id: task!.area_id,
+      title: "Synthetic known failure win",
+      detail: null,
+    });
+    const unstampedKnown = await readPendingWrite(page, knownClientWriteId);
+    expect(unstampedKnown).toMatchObject({
+      client_write_id: knownClientWriteId,
+      entity: "win",
+      payload: {
+        persisted_task_id: task!.id,
+        persisted_area_id: task!.area_id,
+      },
+    });
+    expect(unstampedKnown).not.toHaveProperty("last_attempt_failed");
+    expect(unstampedKnown).not.toHaveProperty("last_attempt_failed_at");
+    expect(unstampedKnown).not.toHaveProperty("last_attempt_failure_kind");
+
+    // The real replay reaches syncJournaledWin; only its synthetic typed
+    // PostgREST response supplies the safe category. The fixture never stamps
+    // final failure metadata into IndexedDB itself.
+    await reloadWithAccountSync(page);
+    await expect
+      .poll(() => readPendingWrite(page, knownClientWriteId), {
+        timeout: 30_000,
+      })
+      .toMatchObject({
+        client_write_id: knownClientWriteId,
+        last_attempt_failed: true,
+        last_attempt_failed_at: expect.any(String),
+        last_attempt_failure_kind: "server-capability-missing",
+      });
+    expect(knownWriteAttempts).toBeGreaterThan(0);
+    expect(await accountRowsForMarker(knownClientWriteId)).toEqual([]);
+    await expect(page.getByTestId("masthead-save-state-message")).toHaveText(
+      ACCOUNT_NEEDS_APP_UPDATE,
+      { timeout: 30_000 },
+    );
+
+    await openHealthSheet(page);
+    await expect(page.getByTestId("health-sheet-message")).toHaveText(
+      "Checked. A record of this check was saved to your account.",
+      { timeout: 30_000 },
+    );
+    const knownOnly = await healthSummarySnapshot(page);
+    expect(knownOnly.headline).toBe("1 thing needs a look");
+    expect(knownOnly.needsYou).toBe("Needs a look: Saving your work.");
+    expect(knownOnly.work).toContain("Saving your work");
+    expect(knownOnly.work).toContain(ACCOUNT_NEEDS_APP_UPDATE);
+    expect(knownOnly.work).not.toContain(ACCOUNT_SAVE_FAILED);
+    expect(knownOnly.work).not.toContain("All good");
+    expect(knownOnly.developerMetrics).toBe(before.developerMetrics);
+    expect(knownOnly.developerCheckCount).toBe(before.developerCheckCount);
+    const knownWorkGroup = page.getByTestId("health-sheet-group-work");
+    await knownWorkGroup.locator("summary").click();
+    const knownConcern = knownWorkGroup
+      .getByText("Saving your work", { exact: true })
+      .locator("..");
+    await expect(knownConcern).toContainText(ACCOUNT_NEEDS_APP_UPDATE);
+    await expect(
+      knownConcern.getByRole("button", {
+        name: "Try saving again",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    expect(await readPendingWrite(page, knownClientWriteId)).not.toBeNull();
+    await page.getByTestId("moment-sheet-close").click();
+
+    // Add a genuinely unmappable legacy-shaped row. Its real handler throws
+    // before any account request, so the kernel must classify it as unknown.
+    // A mixed queue must keep the generic retry path; the known row cannot hide
+    // this second unresolved cause behind app-update guidance.
+    await seedUnmappableWin(page, unknownClientWriteId);
+    const unstampedUnknown = await readPendingWrite(page, unknownClientWriteId);
+    expect(unstampedUnknown).not.toHaveProperty("last_attempt_failure_kind");
+    const attemptsBeforeMixedReplay = knownWriteAttempts;
+
+    await reloadWithAccountSync(page);
+    await expect
+      .poll(() => readPendingWrite(page, unknownClientWriteId), {
+        timeout: 30_000,
+      })
+      .toMatchObject({
+        client_write_id: unknownClientWriteId,
+        last_attempt_failed: true,
+        last_attempt_failed_at: expect.any(String),
+        last_attempt_failure_kind: "unknown",
+      });
+    await expect
+      .poll(() => knownWriteAttempts, { timeout: 30_000 })
+      .toBeGreaterThan(attemptsBeforeMixedReplay);
+    expect(await readPendingWrite(page, knownClientWriteId)).toMatchObject({
+      last_attempt_failed: true,
+      last_attempt_failure_kind: "server-capability-missing",
+    });
+    expect(await accountRowsForMarker(knownClientWriteId)).toEqual([]);
+    expect(await accountRowsForMarker(unknownClientWriteId)).toEqual([]);
+    await expect(page.getByTestId("masthead-save-state-message")).toHaveText(
+      ACCOUNT_SAVE_FAILED,
+      { timeout: 30_000 },
+    );
+
+    await openHealthSheet(page);
+    await expect(page.getByTestId("health-sheet-message")).toHaveText(
+      "Checked. A record of this check was saved to your account.",
+      { timeout: 30_000 },
+    );
+    const mixed = await healthSummarySnapshot(page);
+    expect(mixed.headline).toBe("1 thing needs a look");
+    expect(mixed.needsYou).toBe("Needs a look: Saving your work.");
+    expect(mixed.work).toContain("Saving your work");
+    expect(mixed.work).toContain(ACCOUNT_SAVE_FAILED);
+    expect(mixed.work).not.toContain(ACCOUNT_NEEDS_APP_UPDATE);
+    expect(mixed.work).not.toContain("All good");
+    expect(mixed.developerMetrics).toBe(before.developerMetrics);
+    expect(mixed.developerCheckCount).toBe(before.developerCheckCount);
+    const mixedWorkGroup = page.getByTestId("health-sheet-group-work");
+    await mixedWorkGroup.locator("summary").click();
+    const mixedConcern = mixedWorkGroup
+      .getByText("Saving your work", { exact: true })
+      .locator("..");
+    await expect(mixedConcern).toContainText(ACCOUNT_SAVE_FAILED);
+    await expect(
+      mixedConcern.getByRole("button", {
+        name: "Try saving again",
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(await readPendingWrite(page, knownClientWriteId)).not.toBeNull();
+    expect(await readPendingWrite(page, unknownClientWriteId)).not.toBeNull();
   });
 
   test(`${SIGNED_IN_TAG} C2 Target Card 2: the Health surface is in the URL, and refresh, Back and Forward all agree`, async ({

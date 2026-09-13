@@ -41,12 +41,12 @@ import { resolveCaptureItems } from "./capture";
 import { recordPersonLinkAcceptance, findOrCreatePerson } from "./people";
 import { createTask } from "./planning";
 import {
-  getSupabaseMessage,
   parseTask,
   parseTimeBlockProposal,
   requireSupabaseUser,
   taskColumns,
   timeBlockProposalColumns,
+  toPersistenceWriteError,
   type DataProvider,
   type MinimalSupabaseClient,
 } from "./shared";
@@ -134,7 +134,7 @@ async function findTaskByClientWriteId(
     .eq("client_write_id", clientWriteId)
     .maybeSingle();
   if (error) {
-    throw new Error(getSupabaseMessage(error));
+    throw toPersistenceWriteError(error);
   }
 
   return data ? parseTask(data) : null;
@@ -167,7 +167,7 @@ async function findProposalByClientWriteId(
     .eq("client_write_id", clientWriteId)
     .maybeSingle();
   if (error) {
-    throw new Error(getSupabaseMessage(error));
+    throw toPersistenceWriteError(error);
   }
 
   return data ? parseTimeBlockProposal(data) : null;
@@ -215,7 +215,7 @@ async function upsertJournaledAcceptProposal(
     { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
   );
   if (error) {
-    throw new Error(getSupabaseMessage(error));
+    throw toPersistenceWriteError(error);
   }
 
   return findProposalByClientWriteId(client, userId, input.client_write_id);

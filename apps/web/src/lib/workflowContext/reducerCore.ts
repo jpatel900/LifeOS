@@ -18,6 +18,7 @@ import {
   type Phase2TimeBlockProposal,
   type SuggestionRecord,
 } from "@lifeos/schemas";
+import { classifyPersistenceFailure } from "../persistenceFailureKind";
 import {
   ACCOUNT_NEEDS_APP_UPDATE,
   ACCOUNT_SAVE_FAILED,
@@ -271,8 +272,13 @@ export function hasServerCapabilityMissingSignal(error: unknown): boolean {
     return false;
   }
 
-  const code = error.code;
-  if (code === "PGRST202" || code === "42883" || code === "42703") {
+  // #967 typed failure category: reuse the ONE neutral exact-code check
+  // (`classifyPersistenceFailure`, the frozen `persistenceFailureKind`
+  // export) instead of hand-rolling the same three-code allowlist a second
+  // time — behaviorally identical to the direct `code === "PGRST202" || ...`
+  // comparison this replaces. The 404 and message-substring branches below
+  // are this heuristic's own, broader signal and stay exactly as they were.
+  if (classifyPersistenceFailure(error) === "server-capability-missing") {
     return true;
   }
 

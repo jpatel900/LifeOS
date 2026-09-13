@@ -19,6 +19,7 @@ import {
   parseTimeBlockProposals,
   projectColumns,
   requireSupabaseUser,
+  toPersistenceWriteError,
   taskColumns,
   timeBlockProposalColumns,
 } from "./shared";
@@ -110,7 +111,7 @@ export async function createTask(
     .single();
 
   if (error) {
-    throw new Error(getSupabaseMessage(error));
+    throw toPersistenceWriteError(error);
   }
 
   const task = parseTask(data);

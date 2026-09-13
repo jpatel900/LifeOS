@@ -10,6 +10,7 @@ import {
   replayPendingWrites,
   type PendingWrite,
 } from "./pendingWriteJournal";
+import { PersistenceWriteError } from "../persistenceFailureKind";
 
 /**
  * #737-A slice 1: the device-local pending-writes journal kernel.
@@ -321,6 +322,109 @@ describe("replayPendingWrites", () => {
     expect(await pendingWriteCount()).toBe(0);
   });
 
+  // #967 typed failure category: the journal reads only the safe,
+  // allowlisted kind off a genuine `PersistenceWriteError` — never the raw
+  // thrown value — via `getPersistenceFailureKind`, and stores nothing
+  // beyond that one string.
+  it("records the safe failure category from a genuine PersistenceWriteError, without the raw provider detail", async () => {
+    const queued = await enqueuePendingWrite({
+      entity: "win",
+      payload: { title: "capability gap" },
+    });
+    const rawCode = "PGRST202";
+    const handler = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(
+        new PersistenceWriteError(
+          "Google calendar RPC is not supported.",
+          "server-capability-missing",
+        ),
+      );
+
+    await expect(replayPendingWrites({ win: handler })).resolves.toEqual({
+      synced: 0,
+      failed: 1,
+      skipped: 0,
+    });
+
+    const failed = await listPendingWrites();
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toMatchObject({
+      client_write_id: queued.client_write_id,
+      last_attempt_failed: true,
+      last_attempt_failure_kind: "server-capability-missing",
+    });
+    // Never the raw code, the human message, or any other provider detail —
+    // only the one allowlisted category string.
+    expect(JSON.stringify(failed[0])).not.toContain(rawCode);
+    expect(JSON.stringify(failed[0])).not.toContain(
+      "Google calendar RPC is not supported.",
+    );
+  });
+
+  it("records unknown for an ordinary thrown error", async () => {
+    const queued = await enqueuePendingWrite({
+      entity: "win",
+      payload: { title: "plain failure" },
+    });
+    const handler = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("network unavailable"));
+
+    await replayPendingWrites({ win: handler });
+
+    const failed = await listPendingWrites();
+    expect(failed[0]).toMatchObject({
+      client_write_id: queued.client_write_id,
+      last_attempt_failure_kind: "unknown",
+    });
+  });
+
+  it("replaces an earlier known category with unknown on a later attempt — the field describes the LATEST attempt, not the best one ever seen", async () => {
+    await enqueuePendingWrite({
+      entity: "win",
+      payload: { title: "flip-flopping cause" },
+    });
+    const handler = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(
+        new PersistenceWriteError("missing", "server-capability-missing"),
+      )
+      .mockRejectedValueOnce(new Error("now a different, unclassified cause"));
+
+    await replayPendingWrites({ win: handler });
+    expect((await listPendingWrites())[0]).toMatchObject({
+      last_attempt_failure_kind: "server-capability-missing",
+    });
+
+    await replayPendingWrites({ win: handler });
+    expect((await listPendingWrites())[0]).toMatchObject({
+      last_attempt_failure_kind: "unknown",
+    });
+  });
+
+  it("clears the failure category once a retried attempt succeeds", async () => {
+    await enqueuePendingWrite({
+      entity: "win",
+      payload: { title: "eventually fine" },
+    });
+    const handler = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(
+        new PersistenceWriteError("missing", "server-capability-missing"),
+      )
+      .mockResolvedValueOnce();
+
+    await replayPendingWrites({ win: handler });
+    expect((await listPendingWrites())[0]).toMatchObject({
+      last_attempt_failure_kind: "server-capability-missing",
+    });
+
+    await replayPendingWrites({ win: handler });
+    expect(await pendingWriteCount()).toBe(0);
+    expect(await listPendingWrites()).toEqual([]);
+  });
+
   it("does not mark an unattempted write with no registered handler as failed", async () => {
     await enqueuePendingWrite({ entity: "review", payload: { line: "wait" } });
 
@@ -372,6 +476,12 @@ describe("replayPendingWrites", () => {
     ]);
     expect((await listPendingWrites())[0]).not.toHaveProperty(
       "last_attempt_failed",
+    );
+    // #967 typed failure category: the SAME `sameAttempt` guard that skips
+    // the boolean/timestamp pair must skip this field too — a stale attempt
+    // must never stamp a category onto a write it no longer describes.
+    expect((await listPendingWrites())[0]).not.toHaveProperty(
+      "last_attempt_failure_kind",
     );
   });
 

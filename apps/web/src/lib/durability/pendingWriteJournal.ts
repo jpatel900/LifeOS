@@ -74,6 +74,9 @@
  * `syncOfflineQueue`).
  */
 
+import { getPersistenceFailureKind } from "../persistenceFailureKind";
+import type { PersistenceFailureKind } from "../persistenceFailureKind";
+
 const DB_NAME = "lifeos-pending-writes";
 /**
  * v2 replaced a v1 store keyed by `client_write_id` (see the FIFO note above).
@@ -157,6 +160,17 @@ export interface PendingWrite<
   last_attempt_failed?: true;
   /** ISO time for the failed attempt; never contains a raw handler error. */
   last_attempt_failed_at?: string;
+  /**
+   * #967 typed failure category: the safe classification of the MOST
+   * RECENT failed attempt, from `getPersistenceFailureKind` — never a raw
+   * thrown object, code, message, id, or stack. Absent until a handler has
+   * thrown at least once; every later failed attempt overwrites this with
+   * ITS OWN kind (an `"unknown"` attempt replaces an earlier known one —
+   * this field describes the LATEST attempt, not the best one ever seen).
+   * Any value that is not a recognized `PersistenceFailureKind` (absent,
+   * legacy, or otherwise invalid) reads as `"unknown"` to every consumer.
+   */
+  last_attempt_failure_kind?: PersistenceFailureKind;
 }
 
 /** Replays one journalled write. Throwing keeps the record queued. */
@@ -409,9 +423,17 @@ function sameAttempt(current: PendingWrite, attempted: PendingWrite): boolean {
  * The record may have been re-enqueued while the handler was in flight. In
  * that case its newer payload is authoritative, so leave it untouched rather
  * than copying failure metadata from the older snapshot onto it.
+ *
+ * `failureKind` is the safe classification of THIS attempt only, already
+ * resolved by the caller via `getPersistenceFailureKind` — this function
+ * never inspects the thrown value itself and never stores anything beyond
+ * that one allowlisted string. It always overwrites any earlier kind: a
+ * later `"unknown"` attempt replaces an earlier known one, because this
+ * field is evidence about the LATEST attempt, not a best-ever-seen record.
  */
 async function markPendingWriteAttemptFailed(
   attempted: PendingWrite,
+  failureKind: PersistenceFailureKind,
 ): Promise<void> {
   if (!hasIndexedDb()) {
     return;
@@ -432,6 +454,7 @@ async function markPendingWriteAttemptFailed(
         ...current,
         last_attempt_failed: true,
         last_attempt_failed_at: new Date().toISOString(),
+        last_attempt_failure_kind: failureKind,
       });
     }
 
@@ -476,12 +499,18 @@ async function replayPendingWritesUnlocked(
 
     try {
       await handler(write);
-    } catch {
+    } catch (error) {
       // Failure evidence must never replace the original durable record or
       // turn a handled failure into a rejected replay. If this best-effort
       // write fails, the next drain still gets its normal retry opportunity.
+      //
+      // #967 typed failure category: `getPersistenceFailureKind` reads only
+      // a genuine, allowlisted classification off a `PersistenceWriteError`
+      // — it never inspects raw provider detail, and this call site never
+      // stores anything beyond its return value.
+      const failureKind = getPersistenceFailureKind(error);
       try {
-        await markPendingWriteAttemptFailed(write);
+        await markPendingWriteAttemptFailed(write, failureKind);
       } catch {
         // The original write remains queued even when its local evidence
         // cannot be stored (for example, a quota or IndexedDB failure).

@@ -182,8 +182,10 @@ import {
   clearPendingWrites,
   listPendingWrites,
   pendingWriteCount,
+  type PendingWrite,
   type ReplaySummary,
 } from "./durability/pendingWriteJournal";
+import type { PersistenceFailureKind } from "./persistenceFailureKind";
 // Final UX Loop C1, Target Cards 1+7 (audit P0#4): one definition of which
 // calendar day a close belongs to, and one answer to "is it closed already?".
 import { localIsoDate, resolveDayClose } from "./review/dayClose";
@@ -199,6 +201,38 @@ export type {
   WorkflowSyncStatus,
 };
 export { decidedPolicyKeysFromSuggestionRecords, mergePersistedCalendarBlocks };
+
+/**
+ * #967 typed failure category: a SAFE AGGREGATE derived from only the
+ * CURRENTLY FAILED rows of the pending-write journal — never the whole
+ * queue, never a raw thrown value. `"server-capability-missing"` only when
+ * at least one row is failed AND every failed row's own
+ * `last_attempt_failure_kind` is exactly that value; any mix, any
+ * `"unknown"` row, or any legacy/invalid stored value forces `"unknown"`.
+ * Zero failed rows leaves the category `undefined` (absent), matching how
+ * `pendingSaveFailed` itself reads as false with nothing failed. Shared by
+ * `refreshJournalledDurableState` and `refreshPendingSaveFailed` so both
+ * compute the aggregate identically and update it atomically alongside
+ * `pendingSaveFailed`.
+ */
+function derivePendingSaveFailureAggregate(pending: PendingWrite[]): {
+  pendingSaveFailed: boolean;
+  pendingSaveFailureKind: PersistenceFailureKind | undefined;
+} {
+  const failedRows = pending.filter(
+    (write) => write.last_attempt_failed === true,
+  );
+  const pendingSaveFailed = failedRows.length > 0;
+  const pendingSaveFailureKind = pendingSaveFailed
+    ? failedRows.every(
+        (write) =>
+          write.last_attempt_failure_kind === "server-capability-missing",
+      )
+      ? "server-capability-missing"
+      : "unknown"
+    : undefined;
+  return { pendingSaveFailed, pendingSaveFailureKind };
+}
 
 const WorkflowContext = createContext<WorkflowContextValue | null>(null);
 
@@ -1755,13 +1789,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       if (
         pendingSaveFailedGenerationRef.current === myPendingSaveFailedGeneration
       ) {
-        const pendingSaveFailed = pending.some(
-          (write) => write.last_attempt_failed === true,
-        );
+        const { pendingSaveFailed, pendingSaveFailureKind } =
+          derivePendingSaveFailureAggregate(pending);
         setSyncStatus((current) =>
-          current.pendingSaveFailed === pendingSaveFailed
+          current.pendingSaveFailed === pendingSaveFailed &&
+          current.pendingSaveFailureKind === pendingSaveFailureKind
             ? current
-            : { ...current, pendingSaveFailed },
+            : { ...current, pendingSaveFailed, pendingSaveFailureKind },
         );
       }
     } catch {
@@ -1821,13 +1855,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           if (afterUserId !== expectedUserId) return;
         }
 
-        const pendingSaveFailed = pending.some(
-          (write) => write.last_attempt_failed === true,
-        );
+        const { pendingSaveFailed, pendingSaveFailureKind } =
+          derivePendingSaveFailureAggregate(pending);
         setSyncStatus((current) =>
-          current.pendingSaveFailed === pendingSaveFailed
+          current.pendingSaveFailed === pendingSaveFailed &&
+          current.pendingSaveFailureKind === pendingSaveFailureKind
             ? current
-            : { ...current, pendingSaveFailed },
+            : { ...current, pendingSaveFailed, pendingSaveFailureKind },
         );
       } catch {
         // best-effort signal; a journal read failure must not break the shell
