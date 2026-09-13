@@ -2,11 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, Ref } from "react";
+import type { Task } from "@lifeos/schemas";
+import type { Phase2MockArea } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import { stableWorkflowKey } from "@/lib/workflowContext/reducerCore";
 import { selectTasksToPlace } from "@/lib/workflow/planStatus";
+// Issue #984: a direct submodule import, not an addition to the frozen
+// `workflow.ts` barrel `useWorkflow` itself imports from.
+import type { TaskEditFieldErrors } from "@/lib/workflow/taskEditing";
 import { Button } from "@/components/ui/button";
 import { GoogleCalendarApprovalBridge } from "../GoogleCalendarApprovalBridge";
 // Reused, not re-derived: the same hour label, the same estimate fallback and
@@ -138,6 +143,144 @@ function FirstMoveCard({
   );
 }
 
+/**
+ * Issue #984 — the accepted-backlog task editor's inline form.
+ *
+ * Title/description/area only, matching the exactly-authorized edit surface
+ * — status, scheduling, project link, id, and source capture are never
+ * shown here as editable because they are never touched by the write this
+ * form drives (`editBacklogTask`). A project-linked task always shows the
+ * "belongs to a project" note (not only after a blocked attempt), so the
+ * limitation is visible before the user hits it, not just after.
+ */
+function TaskEditForm({
+  task,
+  draft,
+  errors,
+  pending,
+  areas,
+  onChangeTitle,
+  onChangeDescription,
+  onChangeArea,
+  onSave,
+  onCancel,
+}: {
+  task: Task;
+  draft: { title: string; description: string; area_id: string };
+  errors: TaskEditFieldErrors & { message?: string };
+  pending: boolean;
+  areas: Phase2MockArea[];
+  onChangeTitle(value: string): void;
+  onChangeDescription(value: string): void;
+  onChangeArea(value: string): void;
+  onSave(): void;
+  onCancel(): void;
+}) {
+  const titleId = `plan-sheet-edit-title-${task.id}`;
+  const descriptionId = `plan-sheet-edit-description-${task.id}`;
+  const areaId = `plan-sheet-edit-area-${task.id}`;
+  const canSave = draft.title.trim().length > 0 && !pending;
+
+  return (
+    <div
+      className="workflow-compact-item moments-row grid gap-3 p-3"
+      data-testid={`plan-sheet-edit-form-${task.id}`}
+    >
+      <label htmlFor={titleId} className="grid gap-1 text-sm font-semibold">
+        Title
+        <input
+          id={titleId}
+          value={draft.title}
+          onChange={(event) => onChangeTitle(event.target.value)}
+          disabled={pending}
+          className="min-h-11 rounded-[var(--surface-radius-sm)] border border-border bg-background px-3 outline-none focus:border-primary disabled:opacity-60"
+          data-testid={`plan-sheet-edit-title-input-${task.id}`}
+          aria-invalid={errors.title ? true : undefined}
+        />
+        {errors.title ? (
+          <span className="text-xs text-destructive">{errors.title}</span>
+        ) : null}
+      </label>
+      <label
+        htmlFor={descriptionId}
+        className="grid gap-1 text-sm font-semibold"
+      >
+        Description
+        <textarea
+          id={descriptionId}
+          value={draft.description}
+          onChange={(event) => onChangeDescription(event.target.value)}
+          rows={2}
+          disabled={pending}
+          className="rounded-[var(--surface-radius-sm)] border border-border bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary disabled:opacity-60"
+          data-testid={`plan-sheet-edit-description-input-${task.id}`}
+        />
+      </label>
+      <label htmlFor={areaId} className="grid gap-1 text-sm font-semibold">
+        Area
+        <select
+          id={areaId}
+          value={draft.area_id}
+          onChange={(event) => onChangeArea(event.target.value)}
+          disabled={pending}
+          className={cn(
+            HIT_TARGET_ROW,
+            "rounded-md border border-input bg-background px-3 text-sm font-normal text-foreground disabled:opacity-60",
+          )}
+          data-testid={`plan-sheet-edit-area-input-${task.id}`}
+        >
+          {areas.map((area) => (
+            <option key={area.id} value={area.id}>
+              {area.name}
+            </option>
+          ))}
+        </select>
+        {errors.area_id ? (
+          <span className="text-xs text-destructive">{errors.area_id}</span>
+        ) : null}
+      </label>
+      {task.project_id ? (
+        <p className="text-xs text-muted-foreground">
+          This task belongs to a project — its area can only move if the new
+          area is where that project lives.
+        </p>
+      ) : null}
+      {errors.message ? (
+        <p
+          className="text-xs text-destructive"
+          role="alert"
+          data-testid={`plan-sheet-edit-error-${task.id}`}
+        >
+          {errors.message}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={!canSave}
+          onClick={onSave}
+          className={cn(HIT_TARGET_MIN, "touch-manipulation")}
+          data-testid={`plan-sheet-edit-save-${task.id}`}
+        >
+          {pending ? "Saving…" : "Save"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={pending}
+          onClick={onCancel}
+          className={cn(HIT_TARGET_MIN, "touch-manipulation")}
+          data-testid={`plan-sheet-edit-cancel-${task.id}`}
+        >
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function PlanSheet({
   open,
   onClose,
@@ -160,6 +303,7 @@ export function PlanSheet({
     recalibrationForProposal,
     appliedDurationForArea,
     decideDurationRecalibration,
+    editBacklogTask,
   } = useWorkflow();
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -167,6 +311,34 @@ export function PlanSheet({
     Record<string, string>
   >({});
   const [showEmptyHours, setShowEmptyHours] = useState(false);
+  // Issue #984 — accepted-backlog task editor. `editingTaskKey` is the
+  // STABLE key (survives the local -> account id swap, same as
+  // `firstMoveDrafts` below), so a background sync landing mid-edit never
+  // orphans the open form. `editDrafts`/`editErrors`/`editPending` are all
+  // keyed the same way, one entry per task currently being edited (the UI
+  // only ever opens one at a time, but nothing here assumes that).
+  const [editingTaskKey, setEditingTaskKey] = useState<string | null>(null);
+  const [editDrafts, setEditDrafts] = useState<
+    Record<
+      string,
+      {
+        title: string;
+        description: string;
+        area_id: string;
+        // Frozen at OPEN time and never re-read from the live task at save
+        // time. Reading it fresh at save would let a background sync that
+        // lands WHILE the form is open (first move saved, a resync,
+        // anything that bumps `updated_at`) hand a stale draft the newer
+        // token — silently defeating the conflict guard it exists to
+        // satisfy.
+        expectedUpdatedAt: string;
+      }
+    >
+  >({});
+  const [editErrors, setEditErrors] = useState<
+    Record<string, TaskEditFieldErrors & { message?: string }>
+  >({});
+  const [editPending, setEditPending] = useState<Record<string, boolean>>({});
   // Recalibrations decided in this visit, so an answered card resolves rather
   // than re-asking — same session-scoped set LifeOSCockpit keeps.
   const [decidedRecalIds, setDecidedRecalIds] = useState<Set<string>>(
@@ -180,6 +352,7 @@ export function PlanSheet({
     if (!open) {
       setSelectedTaskId(null);
       setShowEmptyHours(false);
+      setEditingTaskKey(null);
     }
   }, [open]);
 
@@ -238,6 +411,149 @@ export function PlanSheet({
     updateTaskFirstTinyStep(taskId, value);
     setFirstMoveDrafts((current) => ({ ...current, [key]: "" }));
     onToast?.("First move saved");
+  }
+
+  // Issue #984 — accepted-backlog task editor. Same stable-key discipline as
+  // `firstMoveDraftKey` above, for the same reason (a background sync's
+  // local -> account id swap must not orphan an open edit).
+  function editDraftKey(taskId: string): string {
+    return stableWorkflowKey(state.accountIdByLocalId.tasks, taskId);
+  }
+
+  function startEditingTask(task: {
+    id: string;
+    title: string;
+    description: string | null;
+    area_id: string;
+    updated_at: string;
+  }) {
+    const key = editDraftKey(task.id);
+    setEditDrafts((current) => ({
+      ...current,
+      [key]: {
+        title: task.title,
+        description: task.description ?? "",
+        area_id: task.area_id,
+        expectedUpdatedAt: task.updated_at,
+      },
+    }));
+    setEditErrors((current) => ({ ...current, [key]: {} }));
+    setEditingTaskKey(key);
+  }
+
+  function cancelEditingTask(taskId: string) {
+    const key = editDraftKey(taskId);
+    setEditDrafts((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    setEditErrors((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    setEditingTaskKey(null);
+  }
+
+  async function saveTaskEdit(taskId: string) {
+    const key = editDraftKey(taskId);
+    const draft = editDrafts[key];
+    if (!draft) return;
+
+    setEditPending((current) => ({ ...current, [key]: true }));
+    // `draft.expectedUpdatedAt` — frozen at open, never the live task's
+    // current `updated_at`.
+    const result = await editBacklogTask(taskId, {
+      title: draft.title,
+      description: draft.description,
+      area_id: draft.area_id,
+      expected_updated_at: draft.expectedUpdatedAt,
+    });
+    setEditPending((current) => ({ ...current, [key]: false }));
+
+    if (result.status === "success") {
+      setEditDrafts((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      setEditErrors((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      setEditingTaskKey(null);
+      // The label names the area ACTUALLY saved (`result.savedAreaId`,
+      // workflow-space) — never `draft.area_id`, which is what was
+      // REQUESTED and can differ when `areaChangeBlocked` dropped the move.
+      // The tier ("account" vs "demo") is said plainly rather than
+      // collapsing both into one generic "saved": the demo tier says "this
+      // tab" specifically, since sessionStorage is per-tab and neither
+      // another tab nor a browser restart is proven to have it.
+      const areaLabel =
+        state.areas.find((area) => area.id === result.savedAreaId)?.name ??
+        null;
+      const destination =
+        result.deliveryTier === "account" ? "your account" : "this tab";
+      const areaKeptNote =
+        result.areaChangeBlocked && areaLabel
+          ? ` Area kept as ${areaLabel} — its project lives there.`
+          : result.areaChangeBlocked
+            ? " Area kept — its project lives elsewhere."
+            : "";
+
+      // `refreshPending`: the account confirmed the write, but this tab could
+      // not safely show it — the signed-in account changed, or this task
+      // changed locally, during the save. The account now signed in may not
+      // be the one that saved, so this copy names neither "your account" nor
+      // an area label read from possibly-changed state. Reopening the editor
+      // would only re-read this tab's local state, so the recovery step is a
+      // reload while signed into the account that made the edit.
+      if (result.refreshPending) {
+        onToast?.(
+          "Saved to the account used for this edit. Reload while signed into that account to confirm the latest details.",
+        );
+      } else if (result.areaChangeBlocked) {
+        onToast?.(`Saved to ${destination}.${areaKeptNote}`);
+      } else {
+        onToast?.(
+          areaLabel
+            ? `Saved to ${destination}: ${areaLabel}`
+            : `Saved to ${destination}`,
+        );
+      }
+      return;
+    }
+
+    if (result.status === "invalid") {
+      setEditErrors((current) => ({ ...current, [key]: result.errors }));
+      return;
+    }
+
+    if (result.status === "conflict") {
+      setEditErrors((current) => ({
+        ...current,
+        [key]: {
+          message:
+            "This task changed since you opened it. Close and reopen to see the latest, then try again.",
+        },
+      }));
+      return;
+    }
+
+    if (result.status === "not-found") {
+      cancelEditingTask(taskId);
+      onToast?.("That task isn't here anymore.");
+      return;
+    }
+
+    setEditErrors((current) => ({
+      ...current,
+      [key]: {
+        message: "Couldn't save — check your connection and try again.",
+      },
+    }));
   }
 
   // FINDING 1's recovery half: a row that cannot place takes the user to the
@@ -685,49 +1001,113 @@ export function PlanSheet({
           <SectionTitle>Put off for later</SectionTitle>
           {vm.backlog.length ? (
             <ul className="grid gap-2" data-testid="plan-sheet-backlog">
-              {vm.backlog.map((task) => (
-                <li
-                  // #886 — same rendered-identity contract as the proposal
-                  // list above (#844).
-                  key={stableWorkflowKey(
-                    state.accountIdByLocalId.tasks,
-                    task.id,
-                  )}
-                  className="workflow-compact-item moments-row grid gap-2 p-3"
-                >
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={!hasFirstMove(task)}
-                    onClick={() => {
-                      promoteBacklogTask(task.id);
-                      onToast?.("Moved to today");
-                    }}
-                    className={cn(
-                      HIT_TARGET_MIN,
-                      "touch-manipulation justify-start text-left",
+              {vm.backlog.map((task) => {
+                const editKey = editDraftKey(task.id);
+                const draft = editDrafts[editKey];
+                return (
+                  <li
+                    // #886 — same rendered-identity contract as the proposal
+                    // list above (#844).
+                    key={stableWorkflowKey(
+                      state.accountIdByLocalId.tasks,
+                      task.id,
                     )}
-                    data-testid={`plan-sheet-promote-${task.id}`}
+                    // `min-w-0`: a CSS grid item's default `min-width: auto`
+                    // sizes it to its content's MIN-CONTENT width — for a
+                    // `whitespace-nowrap` button (the shared Button
+                    // primitive's own base class) holding a long task title,
+                    // that min-content width is the whole unwrapped string,
+                    // which forced this row (and the sheet around it) wider
+                    // than a narrow viewport with no way to shrink. `min-w-0`
+                    // lets the row shrink to the grid track's actual width
+                    // instead.
+                    className="workflow-compact-item moments-row grid min-w-0 gap-2 p-3"
                   >
-                    Move to today: {task.title}
-                  </Button>
-                  {hasFirstMove(task) ? null : (
-                    <FirstMoveCard
-                      taskId={task.id}
-                      taskTitle={task.title}
-                      value={firstMoveDrafts[firstMoveDraftKey(task.id)] ?? ""}
-                      onChange={(value) =>
-                        setFirstMoveDrafts((current) => ({
-                          ...current,
-                          [firstMoveDraftKey(task.id)]: value,
-                        }))
-                      }
-                      onSave={() => saveFirstMove(task.id)}
-                    />
-                  )}
-                </li>
-              ))}
+                    <div className="flex min-w-0 flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!hasFirstMove(task)}
+                        onClick={() => {
+                          promoteBacklogTask(task.id);
+                          onToast?.("Moved to today");
+                        }}
+                        className={cn(
+                          HIT_TARGET_MIN,
+                          // Overrides the shared Button primitive's own
+                          // `whitespace-nowrap` (see the `<li>` comment
+                          // above) so a long title wraps onto further lines
+                          // inside this button instead of forcing it wider
+                          // than the available width.
+                          "touch-manipulation min-w-0 max-w-full justify-start whitespace-normal break-words text-left",
+                        )}
+                        data-testid={`plan-sheet-promote-${task.id}`}
+                      >
+                        Move to today: {task.title}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => startEditingTask(task)}
+                        className={cn(HIT_TARGET_MIN, "touch-manipulation")}
+                        data-testid={`plan-sheet-edit-${task.id}`}
+                      >
+                        Edit details
+                      </Button>
+                    </div>
+                    {hasFirstMove(task) ? null : (
+                      <FirstMoveCard
+                        taskId={task.id}
+                        taskTitle={task.title}
+                        value={
+                          firstMoveDrafts[firstMoveDraftKey(task.id)] ?? ""
+                        }
+                        onChange={(value) =>
+                          setFirstMoveDrafts((current) => ({
+                            ...current,
+                            [firstMoveDraftKey(task.id)]: value,
+                          }))
+                        }
+                        onSave={() => saveFirstMove(task.id)}
+                      />
+                    )}
+                    {editingTaskKey === editKey && draft ? (
+                      <TaskEditForm
+                        task={task}
+                        draft={draft}
+                        errors={editErrors[editKey] ?? {}}
+                        pending={editPending[editKey] ?? false}
+                        areas={state.areas}
+                        onChangeTitle={(value) =>
+                          setEditDrafts((current) => ({
+                            ...current,
+                            [editKey]: { ...current[editKey], title: value },
+                          }))
+                        }
+                        onChangeDescription={(value) =>
+                          setEditDrafts((current) => ({
+                            ...current,
+                            [editKey]: {
+                              ...current[editKey],
+                              description: value,
+                            },
+                          }))
+                        }
+                        onChangeArea={(value) =>
+                          setEditDrafts((current) => ({
+                            ...current,
+                            [editKey]: { ...current[editKey], area_id: value },
+                          }))
+                        }
+                        onSave={() => saveTaskEdit(task.id)}
+                        onCancel={() => cancelEditingTask(task.id)}
+                      />
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <p

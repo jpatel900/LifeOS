@@ -206,3 +206,10 @@ export type {
   SyncJournaledWinInput,
   SyncJournaledRollupInput,
 } from "./workflow/rollups";
+
+// --- taskEditing (issue #984) ---
+export { editBacklogTaskAccountRow } from "./workflow/taskEditing";
+export type {
+  TaskEditAccountPatch,
+  TaskEditAccountResult,
+} from "./workflow/taskEditing";
