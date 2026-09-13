@@ -31,6 +31,152 @@ async function pinMastheadWorstCaseDate(page: import("@playwright/test").Page) {
   await page.clock.setFixedTime(new Date(MASTHEAD_DATE_WORST_CASE_ISO));
 }
 
+// #974 parity repair: the OLD simulated pill (this file's own prior history
+// — a single `<span>` reading "Sign out") under-modeled AuthAffordance's
+// real signed-in DOM (AuthAffordance.tsx) in two ways — no account-label
+// span (`hidden max-w-[10rem] truncate ... sm:inline`, which can occupy up
+// to 160px once a real handle engages the cap) and no icon (`size-4`,
+// 16px) ahead of the "Sign out" text, each separated by its own `gap-1.5`.
+// That gap between stand-in and source is exactly what let `md:shrink-0`
+// (TodayMoments.tsx's masthead control cluster) ship with a real
+// horizontal-overflow bug this suite never caught: measured 212/180/80px
+// of document overflow at 768/800/900px with the REAL footprint (below),
+// against 0px with the old stand-in. `AUTH_PILL_CLASS`/`AUTH_HIT_TARGET_MIN`
+// are copied verbatim from AuthAffordance.tsx/hitTarget.ts (not re-derived)
+// so this stand-in's rendered box matches the source byte-for-byte.
+const AUTH_PILL_CLASS =
+  "inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 text-xs font-semibold text-muted-foreground outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0";
+const AUTH_HIT_TARGET_MIN =
+  "inline-flex min-h-[44px] min-w-[44px] items-center justify-center touch-manipulation";
+
+// HONEST LIMITATION: AuthAffordance only renders once
+// `isSupabaseConfigured()` is true, a build-time env check this suite's
+// webServer never satisfies — a real signed-in run is not feasible here.
+// This injects a DOM node matching the signed-in branch's exact structure
+// (outer wrapper, account-label span with a handle long enough to engage
+// its own `max-w-[10rem]` cap, then the icon+text sign-out button) in place
+// of the old bare-text stand-in — still a deliberate simulation, not proof
+// against the real component.
+async function injectRealisticSignedInAuthPill(
+  page: import("@playwright/test").Page,
+) {
+  await page.evaluate(
+    ({ AUTH_PILL_CLASS, AUTH_HIT_TARGET_MIN }) => {
+      const cluster = document.querySelector(
+        '[data-testid="masthead-settingslink-slot"]',
+      )?.parentElement;
+      if (!cluster) {
+        throw new Error(
+          "masthead-settingslink-slot not found — cluster DOM shape changed, update this simulated-pill injection",
+        );
+      }
+      const wrap = document.createElement("span");
+      wrap.setAttribute("data-testid", "simulated-auth-affordance-pill");
+      wrap.className = "inline-flex items-center gap-1.5";
+
+      const label = document.createElement("span");
+      label.className =
+        "hidden max-w-[10rem] truncate text-xs font-semibold text-muted-foreground sm:inline";
+      // Long enough (>10rem of "Wednesday 30 September"-font-metrics text)
+      // to actually engage the cap, matching AuthAffordance's own worst
+      // case rather than a short handle that never would.
+      label.textContent = "volunteer.coordinator";
+      wrap.appendChild(label);
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `${AUTH_HIT_TARGET_MIN} ${AUTH_PILL_CLASS}`;
+      button.setAttribute("aria-label", "Sign out");
+
+      const icon = document.createElement("span");
+      icon.className = "size-4";
+      icon.setAttribute("aria-hidden", "true");
+      icon.style.display = "inline-block";
+      button.appendChild(icon);
+
+      const text = document.createElement("span");
+      text.className = "hidden sm:inline";
+      text.textContent = "Sign out";
+      button.appendChild(text);
+
+      wrap.appendChild(button);
+      cluster.appendChild(wrap);
+    },
+    { AUTH_PILL_CLASS, AUTH_HIT_TARGET_MIN },
+  );
+  await expect(
+    page.getByTestId("simulated-auth-affordance-pill"),
+  ).toBeVisible();
+}
+
+// #974 parity repair: a signed distance (`pill.top - areas.bottom`) is only
+// a valid overlap proxy when the Areas card sits ABOVE the pill — true at
+// `lg`+ (SideRail is a right-hand column there), false below `lg` where the
+// grid stacks SideRail under the main content (StartMoment.tsx's
+// `lg:grid-cols-[...]`) — a card positioned well BELOW a bottom-fixed pill
+// can still show a large NEGATIVE signed distance with zero actual overlap.
+// This computes the real 2D rectangle intersection instead, clipped to the
+// current viewport first (a box scrolled fully out of view cannot visually
+// occlude anything).
+function rectsIntersect(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+): boolean {
+  const left = Math.max(a.x, b.x);
+  const top = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const bottom = Math.min(a.y + a.height, b.y + b.height);
+  return right - left > 0 && bottom - top > 0;
+}
+
+async function measureOverlap(
+  page: import("@playwright/test").Page,
+  viewport: { width: number; height: number },
+) {
+  const pill = page.getByTestId("capture-affordance");
+  const areasCard = page.getByTestId("side-rail-areas-card");
+
+  const clipToViewport = (box: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) => {
+    const x = Math.max(box.x, 0);
+    const y = Math.max(box.y, 0);
+    return {
+      x,
+      y,
+      width: Math.min(box.x + box.width, viewport.width) - x,
+      height: Math.min(box.y + box.height, viewport.height) - y,
+    };
+  };
+
+  const results: Record<string, boolean> = {};
+  for (const position of ["zero", "end"] as const) {
+    await page.evaluate((pos) => {
+      window.scrollTo(
+        0,
+        pos === "zero" ? 0 : document.documentElement.scrollHeight,
+      );
+    }, position);
+    const pillBox = await pill.boundingBox();
+    const areasBox = await areasCard.boundingBox();
+    expect(pillBox, `pill box at scroll ${position}`).not.toBeNull();
+    expect(areasBox, `areas box at scroll ${position}`).not.toBeNull();
+    const pillClipped = clipToViewport(pillBox!);
+    const areasClipped = clipToViewport(areasBox!);
+    const bothOnscreen =
+      pillClipped.width > 0 &&
+      pillClipped.height > 0 &&
+      areasClipped.width > 0 &&
+      areasClipped.height > 0;
+    results[position] =
+      bothOnscreen && rectsIntersect(pillClipped, areasClipped);
+  }
+  return results;
+}
+
 /**
  * Moments pass P7 — parity proof (pre-flip).
  *
@@ -810,53 +956,61 @@ test.describe("moments home masthead never wraps under combined width pressure (
   // E2E dev server never satisfies (no Supabase env is wired into the
   // device-tier webServer — see HIT-1 at the top of this file) — a real
   // signed-in run of this exact scenario is not feasible in this suite as
-  // configured. This test SIMULATES the pill's width contribution instead
-  // of exercising the real component: it injects a DOM node matching
-  // AuthAffordance's real rendered footprint (a `PILL_CLASS` pill,
-  // `HIT_TARGET_MIN` sized, holding the longest real copy the component
-  // ever shows — a signed-in short-label pill with "Sign out", wider than
-  // the signed-out "Sign in" pill) into the same masthead cluster slot,
-  // then proves the structural fix holds with it present. This is a
-  // deliberate stand-in, not proof against the real component — flagged
-  // here and in the PR body as residual risk until a signed-in device-tier
-  // (or a dedicated Supabase-configured) run can exercise the real pill.
+  // configured. `injectRealisticSignedInAuthPill` (above) simulates the
+  // pill's real width contribution instead of exercising the real
+  // component, then this proves the structural fix holds with it present,
+  // stacked with the worst-case date AND "Volunteer Work" (the combination
+  // that actually broke — a real user signed in, with their longest area
+  // selected, on a Wednesday in September). Still a deliberate stand-in,
+  // not proof against the real component — see the report's UNVERIFIED
+  // list for the proving command that would replace it.
   for (const viewport of DESKTOP_VIEWPORTS) {
-    test(`worst-case date + a simulated AuthAffordance pill clears the Areas card by a real margin at ${viewport.width}x${viewport.height}`, async ({
+    test(`worst-case date + "Volunteer Work" + a realistic signed-in auth pill clears the Areas card by a real margin at ${viewport.width}x${viewport.height}`, async ({
       page,
     }) => {
       await pinMastheadWorstCaseDate(page);
       await page.setViewportSize(viewport);
-      await page.goto("/");
+      await page.goto(`/?area=${VOLUNTEER_WORK_AREA_ID}`);
       await expect(page.getByTestId("today-moments")).toBeVisible();
       await page.keyboard.press("1");
       await expect(page.getByTestId("start-moment")).toBeVisible();
-
-      await page.evaluate(() => {
-        const cluster = document.querySelector(
-          '[data-testid="masthead-settingslink-slot"]',
-        )?.parentElement;
-        if (!cluster) {
-          throw new Error(
-            "masthead-settingslink-slot not found — cluster DOM shape changed, update this simulated-pill injection",
-          );
-        }
-        const fake = document.createElement("span");
-        fake.setAttribute("data-testid", "simulated-auth-affordance-pill");
-        fake.className =
-          "inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 text-xs font-semibold text-muted-foreground min-h-[44px] min-w-[44px]";
-        fake.textContent = "Sign out";
-        cluster.appendChild(fake);
-      });
       await expect(
-        page.getByTestId("simulated-auth-affordance-pill"),
-      ).toBeVisible();
+        page.getByTestId("today-moments-area-switcher"),
+      ).toContainText("Volunteer Work");
+
+      await injectRealisticSignedInAuthPill(page);
+
+      const overflow = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(
+        overflow.scrollWidth,
+        `document horizontal overflow at ${viewport.width}x${viewport.height} with realistic auth pill + Volunteer Work: scrollWidth=${overflow.scrollWidth} > clientWidth=${overflow.clientWidth}`,
+      ).toBeLessThanOrEqual(overflow.clientWidth);
+
+      const dateClientWidth = await page
+        .getByTestId("today-moments-date")
+        .evaluate((el) => el.clientWidth);
+      expect(
+        dateClientWidth,
+        `masthead date collapsed to zero width at ${viewport.width}x${viewport.height} with realistic auth pill + Volunteer Work`,
+      ).toBeGreaterThan(0);
 
       const clearance = await measureClearance(page);
       for (const [position, value] of Object.entries(clearance)) {
         expect(
           value,
-          `pill-to-areas-card clearance at scroll ${position}, simulated auth pill present, ${viewport.width}x${viewport.height} was ${value}px`,
+          `pill-to-areas-card clearance at scroll ${position}, realistic auth pill + Volunteer Work, ${viewport.width}x${viewport.height} was ${value}px`,
         ).toBeGreaterThan(20);
+      }
+
+      const overlap = await measureOverlap(page, viewport);
+      for (const [position, didOverlap] of Object.entries(overlap)) {
+        expect(
+          didOverlap,
+          `real rectangle intersection between capture pill and Areas card at scroll ${position}, realistic auth pill + Volunteer Work, ${viewport.width}x${viewport.height}`,
+        ).toBe(false);
       }
     });
   }
@@ -886,6 +1040,105 @@ test.describe("moments home masthead never wraps under combined width pressure (
       `date span truncated at 390px: scrollWidth=${scrollWidth} > clientWidth=${clientWidth}`,
     ).toBeLessThanOrEqual(clientWidth);
   });
+});
+
+// #974 parity repair: the `md:shrink-0`/`min-w-0` combination the #687 fix
+// shipped only ever got exercised, in this suite, at 1280/1366/1440px and
+// against a stand-in auth pill missing AuthAffordance's real account-label
+// span + icon. Under the REAL footprint (`injectRealisticSignedInAuthPill`
+// above) those two gaps compounded at narrower desktop/tablet widths this
+// suite had never covered: `md:shrink-0` banned the control cluster from
+// giving up any width starting at 768px, so once the date span (which USED
+// to have no floor at all, `min-w-0`) finished absorbing everything it
+// could, the remainder became real horizontal PAGE overflow (not a wrap) —
+// measured 212/180/80px at 768/800/900px — and the date itself collapsed to
+// a genuinely invisible 0px. TodayMoments.tsx's masthead fix (this repair)
+// raises the ban to `lg:shrink-0` (1024px) — below that the cluster falls
+// back to its pre-existing shrink+internal-wrap behavior instead of forcing
+// overflow — and gives the date span a `min-w-[4.5rem]` floor instead of
+// `min-w-0`, so it degrades to a real ellipsis instead of disappearing.
+test.describe("moments home masthead holds no horizontal overflow with a realistic signed-in auth footprint at narrow desktop/tablet widths (#974 parity repair)", () => {
+  test.use({ timezoneId: MASTHEAD_DATE_WORST_CASE_TIMEZONE });
+
+  const VOLUNTEER_WORK_AREA_ID = "area-volunteer";
+  const NARROW_VIEWPORTS = [
+    { width: 768, height: 900 },
+    { width: 800, height: 900 },
+    { width: 900, height: 900 },
+  ];
+
+  for (const viewport of NARROW_VIEWPORTS) {
+    test(`worst-case date + "Volunteer Work" + a realistic signed-in auth pill causes no page overflow and keeps the date visible at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await pinMastheadWorstCaseDate(page);
+      await page.setViewportSize(viewport);
+      await page.goto(`/?area=${VOLUNTEER_WORK_AREA_ID}`);
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await expect(
+        page.getByTestId("today-moments-area-switcher"),
+      ).toContainText("Volunteer Work");
+
+      await injectRealisticSignedInAuthPill(page);
+
+      const overflow = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(
+        overflow.scrollWidth,
+        `document horizontal overflow at ${viewport.width}x${viewport.height}: scrollWidth=${overflow.scrollWidth} > clientWidth=${overflow.clientWidth}`,
+      ).toBeLessThanOrEqual(overflow.clientWidth);
+
+      const dateSpan = page.getByTestId("today-moments-date");
+      const dateClientWidth = await dateSpan.evaluate((el) => el.clientWidth);
+      expect(
+        dateClientWidth,
+        `masthead date collapsed to zero (invisible) width at ${viewport.width}x${viewport.height}`,
+      ).toBeGreaterThan(0);
+    });
+  }
+
+  // KNOWN, OUT-OF-LANE DEFECT (#974 parity repair — reported, not asserted
+  // here): the accurate rectangle-intersection helper this repair added
+  // (`measureOverlap`) found that the capture pill genuinely overlaps the
+  // Areas card ON INITIAL LOAD (scroll position "zero") at every width in
+  // `NARROW_VIEWPORTS` — confirmed present in the UNMODIFIED baseline UI too
+  // (default area, no auth pill at all), so it is NOT caused by the
+  // auth/area width pressure this describe block targets, and NOT fixable
+  // from TodayMoments.tsx: it comes from CaptureAffordance's fixed
+  // bottom-anchored position interacting with SideRail's Areas card
+  // stacking BELOW the main content below `lg` (StartMoment.tsx's
+  // `lg:grid-cols-[...]`), at a viewport short enough (900px tall) that the
+  // Areas card's natural document position already sits under the fixed
+  // pill before any scroll. Neither CaptureAffordance.tsx nor SideRail.tsx
+  // are in this repair's allowed file set. A test asserting `overlap.zero`
+  // either way would be a real guard only if this were fixable here — since
+  // it isn't, asserting `true` would read as "overlap verified acceptable"
+  // and asserting `false` would be a false pass, so this is left OUT of the
+  // suite and reported instead (see the repair's own report for exact
+  // per-width numbers). The end-of-scroll position genuinely does NOT
+  // overlap at these widths — that part IS a real, in-scope guard below.
+  for (const viewport of NARROW_VIEWPORTS) {
+    test(`capture pill does not overlap the Areas card at the end of scroll at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await pinMastheadWorstCaseDate(page);
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      const overlap = await measureOverlap(page, viewport);
+      expect(
+        overlap.end,
+        `end-of-scroll overlap between capture pill and Areas card at ${viewport.width}x${viewport.height}`,
+      ).toBe(false);
+    });
+  }
 });
 
 // R6 (premium push #483 round 6, regression fix): the fix above shipped an

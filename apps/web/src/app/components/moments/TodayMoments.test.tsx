@@ -314,7 +314,14 @@ describe("TodayMoments", () => {
       expect(brandRow.className).not.toMatch(/\bflex-wrap\b/);
 
       expect(dateSpan).toHaveClass("truncate");
-      expect(dateSpan).toHaveClass("min-w-0");
+      // #974 parity repair: `min-w-0` let the date shrink all the way to an
+      // invisible 0px under AuthAffordance's real signed-in footprint
+      // (account label + icon + gaps, wider than the e2e guard's old bare
+      // "Sign out" text stand-in) — see TodayMoments.tsx's own date-span
+      // comment. A real floor replaces it so the date always shows some
+      // content instead of disappearing.
+      expect(dateSpan).toHaveClass("min-w-[4.5rem]");
+      expect(dateSpan.className).not.toMatch(/\bmin-w-0\b/);
     });
   });
 

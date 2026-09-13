@@ -2147,16 +2147,28 @@ function TodayMomentsContent({
               tight the available width gets, `min-w-0` on the row lets it
               shrink below its own natural content width (the flex default
               of `min-width: auto` would otherwise refuse to), and the date
-              span's own `min-w-0 truncate` (Tailwind's `overflow-hidden
-              text-ellipsis whitespace-nowrap`) means when the row IS
-              squeezed, the date is what gives — visually clipping to an
-              ellipsis — never the header's height. `shrink-0` on the brand
-              label keeps "LifeOS · Today" itself always fully legible; the
-              date is the one degrading gracefully, since it's the lower-
-              priority half of this row (brand identity > exact date
-              string when both can't fit). Header height is now invariant
-              to weekday name, area name, and auth state — verified
-              directly against all three varying simultaneously.
+              span's own `min-w-[4.5rem] truncate` (Tailwind's
+              `overflow-hidden text-ellipsis whitespace-nowrap`) means when
+              the row IS squeezed, the date is what gives — visually
+              clipping to an ellipsis — never the header's height. `shrink-0`
+              on the brand label keeps "LifeOS · Today" itself always fully
+              legible; the date is the one degrading gracefully, since it's
+              the lower-priority half of this row (brand identity > exact
+              date string when both can't fit).
+              CORRECTION (#974 parity repair): this comment used to claim
+              the date span was `min-w-0` and that "header height is now
+              invariant to weekday name, area name, and auth state —
+              verified directly against all three varying simultaneously."
+              Both were false against AuthAffordance's REAL signed-in
+              footprint (`AuthAffordance.tsx`'s account-label span, capped
+              `max-w-[10rem]`, plus the `size-4` icon and its `gap-1.5` —
+              wider than the plain "Sign out" text this fix's own e2e guard
+              used to simulate). `min-w-0` let the date shrink all the way to
+              a genuinely invisible 0px (`dateClientWidth === 0`) under that
+              real footprint at 768/800/900px — not a degrading ellipsis, no
+              date content at all — before the deficit even reached the
+              cluster. `min-w-[4.5rem]` gives the date a real, always-visible
+              floor instead.
 
               One more piece is required for that invariant to actually
               hold: `flex-nowrap` alone stops THIS row's own children from
@@ -2172,13 +2184,14 @@ function TodayMomentsContent({
               tall with this row's date merely truncated, because the
               cluster had wrapped in its place instead).
 
-              `shrink-[100]` here (vs. the cluster's own `md:shrink-0`
+              `shrink-[100]` here (vs. the cluster's own `lg:shrink-0`
               below) rebalances that competition at the narrow end of
-              `sm`+ instead of removing it there: below `md` (640-767px)
+              `sm`+ instead of removing it there: below `lg` (1024px)
               this row absorbs ~99% of any header-width deficit first — via
-              `truncate`, which can shrink it arbitrarily far — before the
-              cluster gives up any width at all. That weighting is NOT
-              enough on its own at the required desktop widths, though:
+              `truncate`, which can shrink it arbitrarily far (down to its
+              own `min-w-[4.5rem]` floor — see that span's own comment) —
+              before the cluster gives up any width at all. That weighting is
+              NOT enough on its own at the required desktop widths, though:
               measured directly, the cluster is ALREADY at true zero
               headroom against its own natural single-line width (the R3-C
               comment below already documented this as a standing
@@ -2186,22 +2199,39 @@ function TodayMomentsContent({
               lets through to a `flex-shrink: 1` sibling was enough to flip
               it into wrap at exactly 1366px (a flex-wrap child has no
               partial-credit: 0.6px short means the SAME full extra line as
-              27px short). So the cluster additionally gets `md:shrink-0`
-              at `md`+ (768px, safely covering every one of this fix's
-              required widths — 1280/1366/1440): an outright ban on the
-              header ever taking width from it there, full stop. `md:` and
-              not unconditional `shrink-0`, because AT `sm` (640px, where
-              the header first becomes a row) the cluster's own natural
-              width alone can already exceed the viewport, and legitimately
-              needs to keep shrinking/wrapping there — plain `shrink-0` was
-              tried first and broke exactly that width (measured: 836px of
-              content in a 641px box, a real horizontal-overflow regression
+              27px short). So the cluster additionally gets an outright ban
+              on the header ever taking width from it, full stop, once its
+              natural single-line width is proven to fit.
+              CORRECTION (#974 parity repair): that ban used to engage at
+              `md:` (768px), on the claim it "safely cover[ed] every one of
+              this fix's required widths — 1280/1366/1440." True only against
+              the e2e guard's OLD simulated auth pill (bare "Sign out" text,
+              no icon, no account-label span) — false against
+              AuthAffordance's real signed-in footprint (account label up to
+              `max-w-[10rem]` + `size-4` icon + their `gap-1.5`s), which is
+              wide enough that the cluster's own natural single-line width
+              exceeds 768-900px outright. Banning shrink there forced the
+              OVERFLOW onto the header itself instead of the cluster — real
+              horizontal page overflow (measured 212/180/80px at
+              768/800/900px with a realistic auth pill + "Volunteer Work"
+              selected), not a wrap. The ban now engages at `lg:` (1024px)
+              instead: below that, the cluster keeps its pre-existing,
+              already-tested tight-width fallback (shrink + its own internal
+              `flex-wrap`, unchanged from the 640-767px case `md:` used to
+              also cover) — measured clean, no page overflow, at 640/768/800/
+              900/1024/1279px with the same realistic pressure. `lg:` and not
+              unconditional `shrink-0`, because AT `sm` (640px, where the
+              header first becomes a row) the cluster's own natural width
+              alone can already exceed the viewport, and legitimately needs
+              to keep shrinking/wrapping there — plain `shrink-0` was tried
+              first and broke exactly that width (measured: 836px of content
+              in a 641px box, a real horizontal-overflow regression
               `moments-home-parity.spec.ts`'s own Pipeline-rail-clipping
-              guard caught at 640px). This threads both needles: the
-              cluster keeps its pre-existing, already-tested tight-width
-              fallback at 640-767px, and gets absolute (not merely
-              favored) protection at every width this fix actually has to
-              hold — 768px and up. */}
+              guard caught at 640px). This threads both needles: the cluster
+              keeps its pre-existing, already-tested tight-width fallback at
+              640-1023px, and gets absolute (not merely favored) protection
+              at every width this fix actually has to hold — 1024px and
+              up. */}
           <div className="flex min-w-0 flex-nowrap shrink-[100] items-baseline gap-3">
             <span className="shrink-0 text-sm font-semibold tracking-tight">
               LifeOS · Today
@@ -2210,14 +2240,14 @@ function TodayMomentsContent({
                 real `now` this component already threads through every
                 other time-aware surface — never a fixed/fake string. */}
             <span
-              className="min-w-0 truncate text-sm text-muted-foreground"
+              className="min-w-[4.5rem] truncate text-sm text-muted-foreground"
               data-testid="today-moments-date"
             >
               {formatMastheadDate(now)}
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 md:shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 lg:shrink-0">
             <div
               className="hidden sm:contents"
               data-testid="masthead-momentswitcher-slot"
