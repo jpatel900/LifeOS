@@ -317,7 +317,17 @@ test.describe("#984 — the accepted-backlog task editor, signed in", () => {
     await expect(page.getByTestId("today-moments")).toBeVisible({
       timeout: 30_000,
     });
-    await openPlanSheet(page);
+    // `reloadWithAccountSync` reloads the current URL, which still carries
+    // `?sheet=plan` and the Personal area chosen above, so Plan comes back
+    // already open over the page (plan-port-truth.spec.ts relies on the same
+    // restore). Wait for that restored sheet; clicking the rail's Plan
+    // button would hit the sheet's scrim instead.
+    await expect(page.getByTestId("plan-sheet")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+      "Personal",
+    );
     await expect(page.getByTestId("plan-sheet-backlog")).toContainText(
       "Sketch next quarter's volunteer rota, finalized",
       { timeout: 20_000 },
