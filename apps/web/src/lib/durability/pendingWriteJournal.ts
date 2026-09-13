@@ -171,6 +171,14 @@ export interface ReplaySummary {
   skipped: number;
 }
 
+// This only coordinates overlapping replays in one JavaScript runtime. It is
+// deliberately not a cross-tab lock: IndexedDB remains the durable shared
+// store, while callers in this module queue fresh replays instead of
+// snapshotting and handling the same records twice. The tail absorbs a
+// rejection only for queue continuity; the individual caller still receives
+// its original result or error.
+let replayTail: Promise<void> = Promise.resolve();
+
 /** True when the browser's IndexedDB global is present and usable. */
 function hasIndexedDb(): boolean {
   return typeof indexedDB !== "undefined";
@@ -391,7 +399,18 @@ export async function clearPendingWrites(): Promise<void> {
  * reported as `skipped` and also stays queued — an unwired entity must never
  * be silently discarded.
  */
-export async function replayPendingWrites(
+export function replayPendingWrites(
+  handlers: PendingWriteHandlers,
+): Promise<ReplaySummary> {
+  const replay = replayTail.then(() => replayPendingWritesUnlocked(handlers));
+  replayTail = replay.then(
+    () => undefined,
+    () => undefined,
+  );
+  return replay;
+}
+
+async function replayPendingWritesUnlocked(
   handlers: PendingWriteHandlers,
 ): Promise<ReplaySummary> {
   const summary: ReplaySummary = { synced: 0, failed: 0, skipped: 0 };
