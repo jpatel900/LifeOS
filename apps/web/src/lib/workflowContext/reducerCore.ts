@@ -32,6 +32,7 @@ import {
   carryForwardTask,
   createLocalProposalFromTask,
   createInitialWorkflowState,
+  createEmptyWorkflowState,
   deferTask,
   dropTask,
   editDraft,
@@ -60,6 +61,7 @@ import {
 // consumed only by the state layer, so they ride the submodule path.
 import {
   createEmptyAccountIdAliases,
+  STORAGE_KEY,
   type AccountIdAliasFamily,
   type AccountIdAliases,
 } from "../workflow/shared";
@@ -76,7 +78,11 @@ import type {
 import { persistedAreaIdForWorkflowAreaId } from "../workflowAreaMapping";
 import type { ParsedWorkflowResult } from "../ai/parseCaptureWorkflow";
 
-export const STORAGE_KEY = "lifeos.phase2.workflow";
+// #687 demo-seed: STORAGE_KEY now lives in workflow/shared.ts (this file's
+// initializer needs it too, and shared.ts cannot import back from here
+// without a cycle) — re-exported unchanged so nothing importing it from
+// this module needs to change.
+export { STORAGE_KEY };
 
 export type WorkflowAction =
   | {
@@ -349,6 +355,18 @@ export function createSyncedInitialState() {
   const initial = createInitialWorkflowState();
   syncWorkflowIdCounterFromState(initial);
   return initial;
+}
+
+/**
+ * #687 demo-seed: "start fresh" always lands on the genuinely-empty shape,
+ * never back on the sample content a first visit shows — see
+ * `createEmptyWorkflowState` (workflow/shared.ts) for why the two must
+ * diverge.
+ */
+export function createSyncedEmptyState() {
+  const empty = createEmptyWorkflowState();
+  syncWorkflowIdCounterFromState(empty);
+  return empty;
 }
 
 export function isUuid(value: string | null | undefined) {
@@ -1072,7 +1090,7 @@ export function workflowReducer(
     case "saveReview":
       return saveReview(state);
     case "reset":
-      return createSyncedInitialState();
+      return createSyncedEmptyState();
     default:
       return state;
   }

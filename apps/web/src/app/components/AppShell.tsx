@@ -6,9 +6,22 @@ import type { ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { urlWithArea } from "@/lib/areaUrlParam";
+import { workflowStateHasDemoSeed } from "@/lib/workflow";
 import { formatMastheadDate } from "./moments/formatMastheadDate";
 import { DemoModeBanner } from "./DemoModeBanner";
 import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
+
+/**
+ * #687 demo-seed round 2: `DemoModeBanner` stays context-free (see its own
+ * header comment — `demoModeBanner.test.tsx` renders it standalone, outside
+ * any provider), so this thin connector reads the live seed flag from
+ * `useWorkflow()` and passes it down. Must live INSIDE `WorkflowProvider`
+ * below, not in `AppShell` itself.
+ */
+function DemoModeBannerConnected() {
+  const { state } = useWorkflow();
+  return <DemoModeBanner hasSeedData={workflowStateHasDemoSeed(state)} />;
+}
 
 /* #660 audit line S2: this was a second, unrelated masthead — a plain
    `border-b` bar with bare text links, no relation to the moments masthead
@@ -222,7 +235,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           Skip to stage content
         </a>
-        <DemoModeBanner />
+        <DemoModeBannerConnected />
         {children}
       </WorkflowProvider>
     </ThemeProvider>
