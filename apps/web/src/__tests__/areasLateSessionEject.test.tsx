@@ -166,6 +166,18 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
 
     // The session resolves a moment later — the auth client's own transition
     // event, the same shape AuthAffordance.tsx already reacts to.
+    // PASSWORD_RECOVERY and USER_UPDATED carry sessions too, but neither
+    // means this page's signed-out load should restart. The recovery path is
+    // deliberately limited to the same three lifecycle events the provider
+    // already treats as account-sync opportunities.
+    for (const event of ["PASSWORD_RECOVERY", "USER_UPDATED"]) {
+      await act(async () => {
+        emitAuthEvent(event, { user: { email: "jay@example.com" } });
+        await Promise.resolve();
+      });
+      expect(mocks.reload).not.toHaveBeenCalled();
+    }
+
     await act(async () => {
       emitAuthEvent("SIGNED_IN", { user: { email: "jay@example.com" } });
       await Promise.resolve();
