@@ -366,6 +366,88 @@ export interface PlaceTimeBlockInput {
 }
 
 /**
+ * Recover the account block created by a journalled placement.
+ *
+ * `calendar_blocks` has no client-write key. The key lives on its proposal, so
+ * recovery follows the same relation the placement RPC returns: owner-scoped
+ * proposal by `client_write_id`, then owner-scoped block by `proposal_id`.
+ */
+export async function findPlacedCalendarBlockIdByClientWriteId(
+  client: MinimalSupabaseClient,
+  clientWriteId: string,
+): Promise<string | null> {
+  const normalizedClientWriteId = clientWriteId.trim();
+  if (!normalizedClientWriteId) {
+    throw new Error("A journalled placement lookup needs a client write id.");
+  }
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before finding saved plans.",
+  );
+  const proposalQuery = client.from("time_block_proposals") as {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => {
+          maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+  const { data: proposalData, error: proposalError } = await proposalQuery
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("client_write_id", normalizedClientWriteId)
+    .maybeSingle();
+  if (proposalError) {
+    throw toPersistenceWriteError(proposalError);
+  }
+  if (!proposalData) return null;
+
+  const proposalId = (proposalData as { id?: unknown }).id;
+  if (typeof proposalId !== "string" || !proposalId) {
+    throw new Error("Saved plan lookup returned no proposal id.");
+  }
+
+  const blockQuery = client.from("calendar_blocks") as {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => {
+          maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+  const { data: blockData, error: blockError } = await blockQuery
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("proposal_id", proposalId)
+    .maybeSingle();
+  if (blockError) {
+    throw toPersistenceWriteError(blockError);
+  }
+  if (!blockData) return null;
+
+  const blockId = (blockData as { id?: unknown }).id;
+  if (typeof blockId !== "string" || !blockId) {
+    throw new Error("Saved plan lookup returned no block id.");
+  }
+  return blockId;
+}
+
+/**
  * Place a time block, idempotently, in ONE transaction.
  *
  * This is the replayable sibling of `acceptTimeBlockProposal`, and the only

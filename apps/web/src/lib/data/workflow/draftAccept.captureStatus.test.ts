@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { syncJournaledTaskDraftAccept } from "./draftAccept";
+import {
+  findJournaledTaskIdByClientWriteId,
+  syncJournaledTaskDraftAccept,
+} from "./draftAccept";
 import type { MinimalSupabaseClient } from "./shared";
 
 /**
@@ -179,5 +182,65 @@ describe("journalled triage accept — capture status truth (C1 card 1)", () => 
     expect(result.provider).toBe("mock");
     expect(createTaskMock).not.toHaveBeenCalled();
     expect(resolveCaptureItemsMock).not.toHaveBeenCalled();
+  });
+
+  it("recovers the accepted task through the owner's original client write id", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: PERSISTED_TASK_ID,
+        user_id: USER_ID,
+        area_id: AREA_ID,
+        project_id: null,
+        source_capture_item_id: CAPTURE_ID,
+        title: "Call the accountant about the quarterly filing",
+        description: null,
+        status: "active",
+        priority_score: null,
+        priority_confidence: 0.8,
+        task_type: null,
+        energy_type: null,
+        estimated_minutes_low: 25,
+        estimated_minutes_high: 40,
+        due_at: null,
+        definition_of_done: null,
+        first_tiny_step: "Find the filing reference",
+        created_at: "2026-07-04T09:00:00.000Z",
+        updated_at: "2026-07-04T09:00:00.000Z",
+      },
+      error: null,
+    });
+    const clientWriteEq = vi.fn().mockReturnValue({ maybeSingle });
+    const userEq = vi.fn().mockReturnValue({ eq: clientWriteEq });
+    const select = vi.fn().mockReturnValue({ eq: userEq });
+    const from = vi.fn().mockReturnValue({ select });
+    const lookupClient = {
+      from,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: USER_ID } },
+          error: null,
+        }),
+      },
+    } as unknown as MinimalSupabaseClient;
+
+    const result = await findJournaledTaskIdByClientWriteId(
+      lookupClient,
+      ` ${CLIENT_WRITE_ID} `,
+    );
+
+    expect(result).toBe(PERSISTED_TASK_ID);
+    expect(userEq).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(clientWriteEq).toHaveBeenCalledWith(
+      "client_write_id",
+      CLIENT_WRITE_ID,
+    );
+  });
+
+  it("returns no accepted task when the owner's client write id has no row", async () => {
+    const lookupClient = client();
+
+    await expect(
+      findJournaledTaskIdByClientWriteId(lookupClient, "missing-task-write"),
+    ).resolves.toBeNull();
   });
 });

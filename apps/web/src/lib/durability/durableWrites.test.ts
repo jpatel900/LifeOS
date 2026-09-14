@@ -2,10 +2,13 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   journalCaptureWrite,
+  journalPlanPlacementWrite,
+  journalPlanUnplacementWrite,
   journalReviewWrite,
   journalWinWrite,
   createDurableWriteHandlers,
   replayDurableWrites,
+  resolveSupersededWrites,
   type DurableWriteServerOps,
 } from "./durableWrites";
 import { listPendingWrites, pendingWriteCount } from "./pendingWriteJournal";
@@ -34,6 +37,14 @@ async function freshDatabase(): Promise<void> {
     request.onerror = () => reject(request.error);
     request.onblocked = () => resolve();
   });
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
 }
 
 beforeEach(async () => {
@@ -792,5 +803,375 @@ describe("journalCaptureWrite / capture replay", () => {
 
     expect(summary).toMatchObject({ synced: 0, failed: 1, skipped: 0 });
     expect(await pendingWriteCount("capture")).toBe(1);
+  });
+});
+
+describe("cross-runtime compensating writes", () => {
+  it("keeps an unplan durable while another runtime's placement is in flight", async () => {
+    // Real tabs have separate module-scoped replay tails but share IndexedDB.
+    // Resetting the module cache between imports recreates that boundary while
+    // retaining fake-indexeddb's one shared database.
+    vi.resetModules();
+    const runtimeA = await import("./durableWrites");
+    vi.resetModules();
+    const runtimeB = await import("./durableWrites");
+
+    const workflowBlockId = "block-local-in-flight";
+    const persistedBlockId = "550e8400-e29b-41d4-a716-446655440301";
+    const placementStarted = deferred();
+    const releasePlacement = deferred();
+    let accountBlockStatus: "absent" | "scheduled" | "cancelled" = "absent";
+    let accountBlockId: string | null = null;
+    const recoveredOriginalIds: string[] = [];
+
+    const placementOps = serverOps({
+      syncPlanPlacement: vi.fn(async () => {
+        placementStarted.resolve();
+        await releasePlacement.promise;
+        accountBlockStatus = "scheduled";
+        accountBlockId = persistedBlockId;
+        return {
+          provider: "supabase" as const,
+          persistedProposalId: "550e8400-e29b-41d4-a716-446655440302",
+          persistedBlockId,
+        };
+      }),
+    });
+    const syncPlanUnplacement = vi.fn(async () => {
+      accountBlockStatus = "cancelled";
+      return { provider: "supabase" as const };
+    });
+    const undoOps = serverOps({
+      syncPlanUnplacement,
+      resolvePlanUnplacementBlockId: async (payload) => {
+        // This models the owner-scoped account lookup by the ORIGINAL journal
+        // id. It is deliberately not an alias shared with runtime A.
+        if (payload.supersedes_client_write_id) {
+          recoveredOriginalIds.push(payload.supersedes_client_write_id);
+        }
+        return accountBlockId;
+      },
+    });
+    let placementDrain:
+      | ReturnType<typeof runtimeA.replayDurableWrites>
+      | undefined;
+
+    try {
+      const placement = await runtimeA.journalPlanPlacementWrite({
+        workflowTaskId: "task-local-in-flight",
+        persistedTaskId: PERSISTED_TASK,
+        workflowProposalId: null,
+        persistedProposalId: null,
+        workflowBlockId,
+        proposedStart: "2026-05-08T14:00:00.000Z",
+        proposedEnd: "2026-05-08T15:00:00.000Z",
+        rationale: null,
+      });
+
+      placementDrain = runtimeA.replayDurableWrites(placementOps);
+      await placementStarted.promise;
+
+      // Runtime B authors the later intent while A still owns the original
+      // account call. The placement is still visible in the shared journal,
+      // so the compensation correctly names its logical write id.
+      const supersedes = await runtimeB.findQueuedWriteToSupersede(
+        "plan_placement",
+        (payload) => payload.workflow_block_id === workflowBlockId,
+      );
+      expect(supersedes).toBe(placement.client_write_id);
+      await runtimeB.journalPlanUnplacementWrite({
+        workflowBlockId,
+        persistedBlockId: null,
+        supersedesClientWriteId: supersedes,
+      });
+
+      // B cannot yet find the block in the account, so both records stay
+      // durable. Once A returns and acknowledges the original, B has only the
+      // undo and must recover the block by the original journal id.
+      await runtimeB.replayDurableWrites(undoOps);
+      releasePlacement.resolve();
+      await placementDrain;
+      await runtimeB.replayDurableWrites(undoOps);
+
+      expect(
+        syncPlanUnplacement,
+        "the later user-authored unplan must survive and reach the account",
+      ).toHaveBeenCalledTimes(1);
+      expect(accountBlockStatus).toBe("cancelled");
+      expect(recoveredOriginalIds).toEqual([
+        placement.client_write_id,
+        placement.client_write_id,
+      ]);
+      expect(await listPendingWrites()).toEqual([]);
+    } finally {
+      releasePlacement.resolve();
+      if (placementDrain) await Promise.allSettled([placementDrain]);
+    }
+  });
+
+  it("keeps an unplan actionable when the placement reached the account before its response was lost", async () => {
+    // The two imports model tabs with independent module state. They share
+    // fake-indexeddb, but runtime B deliberately starts with NO copy of the
+    // account id runtime A would have learned from a successful response.
+    vi.resetModules();
+    const runtimeA = await import("./durableWrites");
+    vi.resetModules();
+    const runtimeB = await import("./durableWrites");
+
+    const workflowBlockId = "block-local-response-lost";
+    const persistedBlockId = "550e8400-e29b-41d4-a716-446655440303";
+    let accountBlockStatus: "absent" | "scheduled" | "cancelled" = "absent";
+    let runtimeBResolvedBlockId: string | null = null;
+
+    try {
+      const placement = await runtimeA.journalPlanPlacementWrite({
+        workflowTaskId: "task-local-response-lost",
+        persistedTaskId: PERSISTED_TASK,
+        workflowProposalId: null,
+        persistedProposalId: null,
+        workflowBlockId,
+        proposedStart: "2026-05-08T16:00:00.000Z",
+        proposedEnd: "2026-05-08T17:00:00.000Z",
+        rationale: null,
+      });
+
+      const firstPlacementAttempt = vi.fn(async () => {
+        // The RPC committed, but its response never reached the caller. This
+        // is the ordinary ambiguous-write boundary: account state changed
+        // while the journal correctly retained the unacknowledged attempt.
+        accountBlockStatus = "scheduled";
+        throw new Error("placement response lost after account commit");
+      });
+      const failedPlacement = await runtimeA.replayDurableWrites(
+        serverOps({ syncPlanPlacement: firstPlacementAttempt }),
+      );
+
+      expect(firstPlacementAttempt).toHaveBeenCalledTimes(1);
+      expect(accountBlockStatus).toBe("scheduled");
+      expect(failedPlacement).toMatchObject({
+        synced: 0,
+        failed: 1,
+        skipped: 0,
+      });
+      expect(await listPendingWrites("plan_placement")).toEqual([
+        expect.objectContaining({
+          client_write_id: placement.client_write_id,
+          last_attempt_failed: true,
+          last_attempt_failure_kind: "unknown",
+        }),
+      ]);
+
+      const supersedes = await runtimeB.findQueuedWriteToSupersede(
+        "plan_placement",
+        (payload) => payload.workflow_block_id === workflowBlockId,
+      );
+      expect(supersedes).toBe(placement.client_write_id);
+      const unplan = await runtimeB.journalPlanUnplacementWrite({
+        workflowBlockId,
+        persistedBlockId: null,
+        supersedesClientWriteId: supersedes,
+      });
+      expect(await listPendingWrites("plan_unplacement")).toEqual([
+        expect.objectContaining({
+          client_write_id: unplan.client_write_id,
+          payload: expect.objectContaining({
+            persisted_block_id: null,
+            supersedes_client_write_id: placement.client_write_id,
+          }),
+        }),
+      ]);
+
+      // Runtime B does not borrow A's in-memory alias. Its only honest path
+      // to the id is to replay the still-queued original idempotently, receive
+      // the account's existing ids, record them locally, then apply the later
+      // undo. Deleting the pair before dispatch makes that recovery impossible.
+      expect(runtimeBResolvedBlockId).toBeNull();
+      const retryPlacement = vi.fn(async () => ({
+        provider: "supabase" as const,
+        persistedProposalId: "550e8400-e29b-41d4-a716-446655440304",
+        persistedBlockId,
+      }));
+      const syncPlanUnplacement = vi.fn(async () => {
+        accountBlockStatus = "cancelled";
+        return { provider: "supabase" as const };
+      });
+
+      await runtimeB.replayDurableWrites(
+        serverOps({
+          syncPlanPlacement: retryPlacement,
+          recordPlanPlacementIds: (_payload, result) => {
+            runtimeBResolvedBlockId = result.persistedBlockId;
+          },
+          syncPlanUnplacement,
+          resolvePlanUnplacementBlockId: () => runtimeBResolvedBlockId,
+        }),
+      );
+
+      expect(
+        syncPlanUnplacement,
+        "the later user-authored unplan must survive response loss and reach the account",
+      ).toHaveBeenCalledTimes(1);
+      expect(retryPlacement).toHaveBeenCalledTimes(1);
+      expect(runtimeBResolvedBlockId).toBe(persistedBlockId);
+      expect(accountBlockStatus).toBe("cancelled");
+      expect(await listPendingWrites()).toEqual([]);
+    } finally {
+      // Keep the expected RED isolated if an assertion throws before the
+      // normal empty-journal endpoint.
+      await freshDatabase();
+    }
+  });
+
+  it("recovers an accepted task by original write id before dropping it in a fresh runtime", async () => {
+    vi.resetModules();
+    const runtimeA = await import("./durableWrites");
+    vi.resetModules();
+    const runtimeB = await import("./durableWrites");
+
+    const workflowTaskId = "task-local-accepted-in-flight";
+    const persistedTaskId = "550e8400-e29b-41d4-a716-446655440305";
+    const acceptStarted = deferred();
+    const releaseAccept = deferred();
+    let accountTaskStatus: "absent" | "active" | "dropped" = "absent";
+    let acceptDrain:
+      | ReturnType<typeof runtimeA.replayDurableWrites>
+      | undefined;
+
+    try {
+      const accept = await runtimeA.journalTaskDraftAcceptWrite({
+        workflowDraftId: "draft-local-in-flight",
+        workflowTaskId,
+        workflowAreaId: "area-local-1",
+        persistedAreaId: PERSISTED_AREA,
+        workflowCaptureId: null,
+        persistedCaptureId: null,
+        title: "Prepare the agenda",
+        description: null,
+        confidence: 0.9,
+        taskType: "task",
+        isReversible: null,
+        dueAt: null,
+        estimatedMinutesLow: 20,
+        estimatedMinutesHigh: 30,
+        firstTinyStep: "List the decisions",
+        isCommitment: false,
+        personMentions: [],
+        taskStatus: "active",
+        acceptedAt: "2026-05-08T13:00:00.000Z",
+        workflowProposalId: null,
+        proposedStart: null,
+        proposedEnd: null,
+        rationale: null,
+      });
+
+      acceptDrain = runtimeA.replayDurableWrites(
+        serverOps({
+          syncTaskDraftAccept: vi.fn(async () => {
+            acceptStarted.resolve();
+            await releaseAccept.promise;
+            accountTaskStatus = "active";
+            return {
+              provider: "supabase" as const,
+              persistedTaskId,
+              persistedProposalId: null,
+            };
+          }),
+        }),
+      );
+      await acceptStarted.promise;
+
+      const supersedes = await runtimeB.findQueuedWriteToSupersede(
+        "task_draft_accept",
+        (payload) => payload.workflow_task_id === workflowTaskId,
+      );
+      expect(supersedes).toBe(accept.client_write_id);
+      await runtimeB.journalTaskDropWrite({
+        workflowTaskId,
+        persistedTaskId: null,
+        supersedesClientWriteId: supersedes,
+      });
+
+      releaseAccept.resolve();
+      await acceptDrain;
+
+      const recoveredOriginalIds: string[] = [];
+      const syncTaskDrop = vi.fn(async () => {
+        accountTaskStatus = "dropped";
+        return { provider: "supabase" as const };
+      });
+      await runtimeB.replayDurableWrites(
+        serverOps({
+          syncTaskDrop,
+          resolveTaskDropTaskId: async (payload) => {
+            if (payload.supersedes_client_write_id) {
+              recoveredOriginalIds.push(payload.supersedes_client_write_id);
+            }
+            return persistedTaskId;
+          },
+        }),
+      );
+
+      expect(recoveredOriginalIds).toEqual([accept.client_write_id]);
+      expect(syncTaskDrop).toHaveBeenCalledWith({ task_id: persistedTaskId });
+      expect(accountTaskStatus).toBe("dropped");
+      expect(await listPendingWrites()).toEqual([]);
+    } finally {
+      releaseAccept.resolve();
+      if (acceptDrain) await Promise.allSettled([acceptDrain]);
+      await freshDatabase();
+    }
+  });
+
+  it.each([
+    ["has no matching account row", async () => null],
+    [
+      "hits an account lookup error",
+      async () => {
+        throw new Error("account lookup failed");
+      },
+    ],
+  ])("keeps an undo queued when its original %s", async (_label, recover) => {
+    const syncPlanUnplacement = vi
+      .fn()
+      .mockResolvedValue({ provider: "supabase" as const });
+    await journalPlanUnplacementWrite({
+      workflowBlockId: "block-local-missing-alias",
+      persistedBlockId: null,
+      supersedesClientWriteId: "original-placement-write",
+    });
+
+    const summary = await replayDurableWrites(
+      serverOps({
+        syncPlanUnplacement,
+        resolvePlanUnplacementBlockId: recover,
+      }),
+    );
+
+    expect(summary).toMatchObject({ synced: 0, failed: 1, skipped: 0 });
+    expect(syncPlanUnplacement).not.toHaveBeenCalled();
+    expect(await listPendingWrites("plan_unplacement")).toHaveLength(1);
+  });
+
+  it("still annuls a queued placement and undo when no account client exists", async () => {
+    const placement = await journalPlanPlacementWrite({
+      workflowTaskId: "task-local-demo-cancel",
+      persistedTaskId: null,
+      workflowProposalId: null,
+      persistedProposalId: null,
+      workflowBlockId: "block-local-demo-cancel",
+      proposedStart: "2026-05-08T18:00:00.000Z",
+      proposedEnd: "2026-05-08T19:00:00.000Z",
+      rationale: null,
+    });
+    await journalPlanUnplacementWrite({
+      workflowBlockId: "block-local-demo-cancel",
+      persistedBlockId: null,
+      supersedesClientWriteId: placement.client_write_id,
+    });
+
+    const summary = await resolveSupersededWrites();
+
+    expect(summary).toEqual({ cancelled: 1 });
+    expect(await listPendingWrites()).toEqual([]);
   });
 });
