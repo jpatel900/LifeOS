@@ -25,9 +25,9 @@ description: Use near the end of substantial LifeOS work to enforce proof-based 
 ## Procedure
 
 1. Update `docs/PROJECT_STATE.md` only when shipped behavior, status, or governance
-   guidance materially changed — replace, don't append (AGENTS.md rule 6). When you
-   do, also triage the oldest undecided `docs/KNOWN_ISSUES.md` row: fix, schedule,
-   or accept with a reason.
+   guidance materially changed — replace, don't append (AGENTS.md rule 6).
+   Triage undecided `docs/KNOWN_ISSUES.md` rows at campaign close or monthly
+   review; do not couple that review to every status update.
 2. Do not claim done without proof. Per AGENTS.md rule 11, a claim that something
    works carries the exact command run and the observed output; "should work" is
    banned. Everything not verified goes in an explicit UNVERIFIED list with the
@@ -62,7 +62,7 @@ description: Use near the end of substantial LifeOS work to enforce proof-based 
 
 ## Done criteria
 
-- `docs/PROJECT_STATE.md` is updated when (and only when) the work materially changed shipped behavior, status, or governance; the oldest undecided KNOWN_ISSUES row was triaged alongside.
+- `docs/PROJECT_STATE.md` is updated when (and only when) the work materially changed shipped behavior, status, or governance. `KNOWN_ISSUES` triage remains part of campaign-close and monthly system reviews.
 - Final handoff includes proof (commands + output), validation results, an UNVERIFIED list, limitations, risks, rollback plan, and docs status.
 - Credible outside-scope observations are labeled and routed; duplicates and
   disproved candidates are not promoted into new work.
