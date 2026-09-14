@@ -4,7 +4,6 @@ import {
   SIGNED_IN_TAG,
   accountClient,
   expectOnlyKnownAccountFailures,
-  gotoWithAccountSync,
   purgeOwnRows,
   reloadWithAccountSync,
   requireSupabaseEnv,
@@ -91,14 +90,18 @@ async function clearSeededUserWorkflow(
     // trigger zero active areas without bypassing the product's data policy.
     areaFixtureHidden = true;
     await account.patch("areas?is_active=eq.true", { is_active: false });
+    expect(
+      await account.rows<AreaFixture>(
+        "areas?select=id,is_active&is_active=eq.true",
+      ),
+    ).toEqual([]);
 
-    // Rebuild the provider from the cleared local account before closing this
-    // profile. The completion marker remains profile-local, so it cannot
-    // suppress the ritual in the fresh profile used by the real login drive.
-    await gotoWithAccountSync(page, "/");
-    await expect(page.getByTestId("today-moments")).toBeVisible({
-      timeout: 30_000,
-    });
+    // Close without navigating again. This preparation has already proven its
+    // postcondition with the authenticated active-area readback above.
+    // `gotoWithAccountSync` is a second account-read gate for a normal Today
+    // drive; the fresh profile below is the actual account/readiness proof.
+    // The completion marker remains profile-local, so it cannot suppress the
+    // ritual in that fresh profile.
     handedOffToFreshProfile = true;
     return originalAreas;
   } finally {
