@@ -78,6 +78,8 @@ import {
   unplanCalendarBlock,
   type MinimalSupabaseClient,
 } from "./data/workflow";
+import { findPlacedCalendarBlockIdByClientWriteId } from "./data/workflow/calendar";
+import { findJournaledTaskIdByClientWriteId } from "./data/workflow/draftAccept";
 import {
   AREA_DURATION_TASK_TYPE,
   applyStoredDuration,
@@ -871,29 +873,20 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // is the failure this program exists to end.
   const replayJournaledWrites =
     useCallback(async (): Promise<ReplaySummary> => {
-      // #737 C1 S5 — BEFORE the client check, deliberately.
-      //
-      // Cancelling a write the user took back is a DEVICE-tier operation: it
-      // involves no account, and it is exactly the signed-out/offline session
-      // where the bug it fixes bites (#778's disclosed resurrection needs the
-      // placement to be queued, which only happens when the account is
-      // unreachable). If this sat after the early return, an undo made in
-      // demo mode or while signed out would leave the placement queued until
-      // the first replay that found a client — i.e. until the moment it was
-      // about to be delivered, which is too late.
-      //
-      // `replayDurableWrites` runs the same pass again below. That is not a
-      // bug: the pass is idempotent (a resolved pair is gone from the
-      // journal), and keeping it inside `replayDurableWrites` is what makes
-      // that function correct for every OTHER caller, including its tests.
-      try {
-        await resolveSupersededWrites();
-      } catch {
-        // Nothing cancelled, nothing lost; both halves stay queued.
-      }
-
+      // #737 C1 S5: preserve the existing unconfigured/demo cancellation
+      // path. An account-capable replay keeps the pair durable and replays it
+      // in FIFO order because response loss makes its delivery ambiguous.
       const client = createSupabaseBrowserClient();
-      if (!client) return { synced: 0, failed: 0, skipped: 0 };
+      if (!client) {
+        // Annul the queued action and its later undo immediately so
+        // unconfigured/demo use keeps its established cancellation behavior.
+        try {
+          await resolveSupersededWrites();
+        } catch {
+          // Nothing cancelled, nothing lost; both halves stay queued.
+        }
+        return { synced: 0, failed: 0, skipped: 0 };
+      }
 
       return replayDurableWrites({
         syncWin: (args) => syncJournaledWin(client, args),
@@ -1056,11 +1049,21 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           const result = await unplanCalendarBlock(client, args.block_id);
           return { provider: result.provider };
         },
-        resolvePlanUnplacementBlockId: (payload) =>
-          persistedIdForLocalId(
+        resolvePlanUnplacementBlockId: async (payload) => {
+          const localAlias = persistedIdForLocalId(
             String(payload.workflow_block_id),
             persistedBlockIdByLocalIdRef.current,
-          ),
+          );
+          if (localAlias) return localAlias;
+
+          const originalClientWriteId = payload.supersedes_client_write_id;
+          return originalClientWriteId
+            ? findPlacedCalendarBlockIdByClientWriteId(
+                client,
+                originalClientWriteId,
+              )
+            : null;
+        },
         syncTaskDrop: async (args) => {
           const result = await applyTaskReviewTransition(
             client,
@@ -1069,11 +1072,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           );
           return { provider: result.provider };
         },
-        resolveTaskDropTaskId: (payload) =>
-          persistedIdForLocalId(
+        resolveTaskDropTaskId: async (payload) => {
+          const localAlias = persistedIdForLocalId(
             String(payload.workflow_task_id),
             persistedTaskIdByLocalIdRef.current,
-          ),
+          );
+          if (localAlias) return localAlias;
+
+          const originalClientWriteId = payload.supersedes_client_write_id;
+          return originalClientWriteId
+            ? findJournaledTaskIdByClientWriteId(client, originalClientWriteId)
+            : null;
+        },
 
         // --- #960 defect 3: raw captures ---------------------------------
         syncCapture: (args) => syncJournaledCapture(client, args),

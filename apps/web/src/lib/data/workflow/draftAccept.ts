@@ -140,6 +140,35 @@ async function findTaskByClientWriteId(
   return data ? parseTask(data) : null;
 }
 
+/**
+ * Recover the account task created by a journalled accept.
+ *
+ * A compensating task drop can run in a different tab from the accept, so its
+ * local id map may be empty even though the task already landed. The original
+ * journal id is stable across tabs and unique inside the authenticated
+ * account; querying it is the durable fallback.
+ */
+export async function findJournaledTaskIdByClientWriteId(
+  client: MinimalSupabaseClient,
+  clientWriteId: string,
+): Promise<string | null> {
+  const normalizedClientWriteId = clientWriteId.trim();
+  if (!normalizedClientWriteId) {
+    throw new Error("A journalled task lookup needs a client write id.");
+  }
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before finding saved tasks.",
+  );
+  const task = await findTaskByClientWriteId(
+    client,
+    user.id,
+    normalizedClientWriteId,
+  );
+  return task?.id ?? null;
+}
+
 async function findProposalByClientWriteId(
   client: MinimalSupabaseClient,
   userId: string,
