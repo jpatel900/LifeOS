@@ -36,6 +36,7 @@ import {
   listPendingWrites,
 } from "@/lib/durability/pendingWriteJournal";
 import {
+  journalPlanUnplacementWrite,
   journalWinWrite,
   journalReviewWrite,
 } from "@/lib/durability/durableWrites";
@@ -404,6 +405,137 @@ beforeEach(async () => {
 afterEach(async () => {
   window.sessionStorage.clear();
   await clearPendingWrites();
+});
+
+describe("#967 cross-runtime compensation replay", () => {
+  it("finds an acknowledged placement by its client write id, unplans it, and acknowledges the queued undo", async () => {
+    const originalClientWriteId = "placement-acknowledged-by-other-runtime";
+    const workflowBlockId = "local-block-with-no-tab-alias";
+    const proposalId = "44444444-4444-4444-8444-444444444444";
+    const blockId = "55555555-5555-4555-8555-555555555555";
+    const taskId = "66666666-6666-4666-8666-666666666666";
+
+    // Model the state left after another runtime acknowledged the original:
+    // this tab sees only its later undo and has no block alias to reuse.
+    await journalPlanUnplacementWrite({
+      workflowBlockId,
+      persistedBlockId: null,
+      supersedesClientWriteId: originalClientWriteId,
+    });
+    const beforeReplay = await listPendingWrites();
+    expect(beforeReplay).toHaveLength(1);
+    expect(beforeReplay[0]?.entity).toBe("plan_unplacement");
+    expect(beforeReplay[0]?.payload.supersedes_client_write_id).toBe(
+      originalClientWriteId,
+    );
+
+    const proposalMaybeSingle = vi.fn().mockResolvedValue({
+      data: { id: proposalId },
+      error: null,
+    });
+    const proposalClientWriteEq = vi.fn().mockReturnValue({
+      maybeSingle: proposalMaybeSingle,
+    });
+    const proposalUserEq = vi.fn().mockReturnValue({
+      eq: proposalClientWriteEq,
+    });
+    const proposalSelect = vi.fn().mockReturnValue({ eq: proposalUserEq });
+
+    const blockMaybeSingle = vi.fn().mockResolvedValue({
+      data: { id: blockId },
+      error: null,
+    });
+    const blockProposalEq = vi.fn().mockReturnValue({
+      maybeSingle: blockMaybeSingle,
+    });
+    const blockUserEq = vi.fn().mockReturnValue({ eq: blockProposalEq });
+    const blockSelect = vi.fn().mockReturnValue({ eq: blockUserEq });
+
+    const from = vi.fn((table: string) => {
+      if (table === "time_block_proposals") {
+        return { select: proposalSelect };
+      }
+      if (table === "calendar_blocks") return { select: blockSelect };
+      throw new Error(`Unexpected account lookup table: ${table}`);
+    });
+
+    let accountBlockStatus = "scheduled";
+    const rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+      if (fn !== "unplan_calendar_block" || args.p_block_id !== blockId) {
+        return { data: null, error: { message: "Unexpected RPC" } };
+      }
+      accountBlockStatus = "cancelled";
+      return {
+        data: {
+          block: {
+            id: blockId,
+            user_id: PERSISTED_AREA.user_id,
+            area_id: PERSISTED_AREA.id,
+            proposal_id: proposalId,
+            task_id: taskId,
+            google_event_id: null,
+            start_at: "2026-09-14T13:00:00.000Z",
+            end_at: "2026-09-14T14:00:00.000Z",
+            status: accountBlockStatus,
+            created_at: "2026-09-14T12:00:00.000Z",
+            updated_at: "2026-09-14T12:05:00.000Z",
+          },
+          task: null,
+        },
+        error: null,
+      };
+    });
+
+    mockCreateSupabaseBrowserClient.mockReturnValue({
+      from,
+      rpc,
+      auth: {
+        onAuthStateChange: (
+          callback: (
+            event: string,
+            session: { user: { id: string } } | null,
+          ) => void,
+        ) => {
+          authListener.callback = callback;
+          return { data: { subscription: { unsubscribe: vi.fn() } } };
+        },
+        getUser: mockGetUser,
+      },
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(async () => {
+      expect(await listPendingWrites("plan_unplacement")).toHaveLength(0);
+    });
+
+    expect(accountBlockStatus).toBe("cancelled");
+    expect(from).toHaveBeenNthCalledWith(1, "time_block_proposals");
+    expect(proposalSelect).toHaveBeenCalledWith("id");
+    expect(proposalUserEq).toHaveBeenCalledWith(
+      "user_id",
+      PERSISTED_AREA.user_id,
+    );
+    expect(proposalClientWriteEq).toHaveBeenCalledWith(
+      "client_write_id",
+      originalClientWriteId,
+    );
+    expect(from).toHaveBeenNthCalledWith(2, "calendar_blocks");
+    expect(blockSelect).toHaveBeenCalledWith("id");
+    expect(blockUserEq).toHaveBeenCalledWith("user_id", PERSISTED_AREA.user_id);
+    expect(blockProposalEq).toHaveBeenCalledWith("proposal_id", proposalId);
+    expect(rpc).toHaveBeenCalledWith("unplan_calendar_block", {
+      p_block_id: blockId,
+    });
+  });
 });
 
 describe("#960 defects 1+2: a session arriving without a remount drains the journal", () => {
