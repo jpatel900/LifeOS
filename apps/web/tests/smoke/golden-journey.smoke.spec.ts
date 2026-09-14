@@ -10,6 +10,7 @@ import {
   readSupabaseAccessToken,
   type SmokeEnv,
 } from "./helpers/smoke";
+import { ONBOARDING_COMPLETED_KEY } from "../../src/lib/onboarding/onboarding";
 
 /**
  * Golden journey production smoke (issue #241, B8).
@@ -92,6 +93,17 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
     },
   );
 
+  // ---- Ensure established-device behavior for smoke ----------------------
+  // This journey covers a returning device. First-use setup is covered by
+  // onboarding-ritual.spec.ts. Mark only this disposable browser profile as
+  // already set up before login; do not seed account or workflow rows.
+  await page.addInitScript((completedKey: string) => {
+    window.localStorage.setItem(
+      completedKey,
+      JSON.stringify({ completedAt: new Date().toISOString() }),
+    );
+  }, ONBOARDING_COMPLETED_KEY);
+
   // ---- Authenticate so the journey exercises the PERSISTED path -----------
   // With creds + Supabase configured, log in first so the cockpit's browser
   // session carries a real Supabase session and rows persist (enabling the
@@ -142,7 +154,16 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
   // page's `capture-page-save`. Selected tolerantly so the #590 rollback
   // surface (`capture-page-save`) still resolves.
   await page.goto("/capture");
-  await page.getByRole("textbox").first().fill(captureText);
+  // Require the capture input, never the first textbox (which can be an
+  // onboarding area name). Preserve the equivalent rollback-page input.
+  const captureInput = page
+    .getByTestId("capture-overlay-textarea")
+    .or(page.getByTestId("capture-page-textarea"));
+  await expect(
+    captureInput,
+    "capture thought text input should be visible in the active capture form",
+  ).toBeVisible();
+  await captureInput.fill(captureText);
   await page.getByTestId(/^capture-(overlay|page)-save$/).click();
   // Saving closes the overlay and the thought lands in the pending-triage
   // card on the home surface — the observable proof the raw save happened
