@@ -1119,6 +1119,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     markLocalOnly,
     markDeviceStorageBlocked,
     replayJournaledWrites,
+    markPersistedLoadFailure,
     syncPersistedWorkflowRows,
   });
 
