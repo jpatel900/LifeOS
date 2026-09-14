@@ -120,7 +120,11 @@ beforeEach(() => {
   mocks.createSupabaseBrowserClient.mockReturnValue(buildClient());
   Object.defineProperty(window, "location", {
     configurable: true,
-    value: { ...originalLocation, reload: mocks.reload },
+    value: {
+      ...originalLocation,
+      pathname: "/settings/areas",
+      reload: mocks.reload,
+    },
   });
 });
 
@@ -162,9 +166,8 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
         await Promise.resolve();
       });
 
-      // A non-null event must recover the latched signed-out frame rather than
-      // letting the queued redirect eject the visitor. jsdom cannot navigate,
-      // so the one reload request is the observable recovery boundary here.
+      // A non-null event must end the latched signed-out frame. jsdom cannot
+      // navigate, so the one reload request is the observable recovery boundary.
       expect(mocks.routerReplace).not.toHaveBeenCalled();
       expect(mocks.reload).toHaveBeenCalledTimes(1);
 
@@ -216,6 +219,38 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
 
     // A genuine signed-out visitor is navigated away, not reloaded in place.
     expect(mocks.reload).not.toHaveBeenCalled();
+  });
+
+  it("does not reload a route committed after its queued sign-in redirect", async () => {
+    renderAreasPage();
+
+    await waitFor(() => {
+      expect(authStateCallbacks.length).toBeGreaterThanOrEqual(2);
+    });
+
+    await act(async () => {
+      emitAuthEvent("INITIAL_SESSION", null);
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(mocks.routerReplace).toHaveBeenCalledWith(
+        "/login?next=%2Fsettings%2Fareas",
+      );
+    });
+
+    // Keep this page's callback live while modeling the App Router having
+    // already committed the login URL.
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, pathname: "/login", reload: mocks.reload },
+    });
+    await act(async () => {
+      emitAuthEvent("SIGNED_IN", { user: { email: "jay@example.com" } });
+      await Promise.resolve();
+    });
+
+    expect(mocks.reload).not.toHaveBeenCalled();
+    expect(mocks.routerReplace).toHaveBeenCalledTimes(1);
   });
 
   it("reloads when another tab restores a session after the sign-in redirect is queued", async () => {
