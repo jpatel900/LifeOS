@@ -181,7 +181,7 @@ export type PendingWriteHandlers = Partial<
 >;
 
 export interface ReplaySummary {
-  /** Handled successfully and removed from the journal. */
+  /** Handler completed; its matching attempt is removed from the journal. */
   synced: number;
   /** Handler threw; the record stays queued for the next replay. */
   failed: number;
@@ -418,6 +418,39 @@ function sameAttempt(current: PendingWrite, attempted: PendingWrite): boolean {
 }
 
 /**
+ * Remove a replayed write only when the journal still holds the exact attempt
+ * the handler acknowledged. Another runtime may have re-enqueued the same
+ * client id with newer content while this handler was in flight; that newer
+ * record must remain for its own replay.
+ */
+async function markPendingWriteAttemptSynced(
+  attempted: PendingWrite,
+): Promise<void> {
+  if (!hasIndexedDb()) {
+    return;
+  }
+
+  const db = await openDatabase();
+  try {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const current = await requestToPromise(
+      store
+        .index(CLIENT_WRITE_ID_INDEX)
+        .get(attempted.client_write_id) as IDBRequest<PendingWrite | undefined>,
+    );
+
+    if (current && sameAttempt(current, attempted)) {
+      store.delete(current.seq);
+    }
+
+    await transactionDone(transaction);
+  } finally {
+    db.close();
+  }
+}
+
+/**
  * Record factual, local evidence that a handler was attempted and threw.
  *
  * The record may have been re-enqueued while the handler was in flight. In
@@ -520,7 +553,7 @@ async function replayPendingWritesUnlocked(
     }
 
     try {
-      await markPendingWriteSynced(write.client_write_id);
+      await markPendingWriteAttemptSynced(write);
       summary.synced += 1;
     } catch {
       // The account handler already resolved, but the device still holds the
