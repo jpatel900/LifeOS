@@ -645,6 +645,161 @@ describe("replayPendingWrites", () => {
       skipped: 0,
     });
   });
+
+  it("keeps a newer same-id write when an older attempt succeeds in another runtime", async () => {
+    // Two tabs load separate copies of this module, so each has its own
+    // module-scoped replayTail while both see the same IndexedDB database.
+    // Resetting the module cache between dynamic imports reproduces that
+    // boundary without adding a server or a second journal implementation.
+    vi.resetModules();
+    const runtimeA = await import("./pendingWriteJournal");
+    vi.resetModules();
+    const runtimeB = await import("./pendingWriteJournal");
+
+    const clientWriteId = "cross-runtime-same-write";
+    await runtimeA.enqueuePendingWrite({
+      entity: "win",
+      payload: { title: "older" },
+      clientWriteId,
+    });
+
+    const releaseOlder = deferred();
+    const releaseNewer = deferred();
+    const olderHandler = vi.fn(async (_write: PendingWrite) => {
+      await releaseOlder.promise;
+    });
+    const newerHandler = vi.fn(async (_write: PendingWrite) => {
+      await releaseNewer.promise;
+    });
+    let olderDrain: ReturnType<typeof runtimeA.replayPendingWrites> | undefined;
+    let newerDrain: ReturnType<typeof runtimeB.replayPendingWrites> | undefined;
+
+    try {
+      olderDrain = runtimeA.replayPendingWrites({ win: olderHandler });
+      await vi.waitFor(() => expect(olderHandler).toHaveBeenCalledTimes(1));
+      expect(olderHandler.mock.calls[0]?.[0]).toMatchObject({
+        client_write_id: clientWriteId,
+        payload: { title: "older" },
+      });
+
+      // The other runtime updates the durable record while runtime A still
+      // owns its older snapshot, then starts a drain that is not coordinated
+      // by runtime A's replayTail.
+      await runtimeB.enqueuePendingWrite({
+        entity: "win",
+        payload: { title: "newer" },
+        clientWriteId,
+      });
+      newerDrain = runtimeB.replayPendingWrites({ win: newerHandler });
+      await vi.waitFor(() => expect(newerHandler).toHaveBeenCalledTimes(1));
+      expect(newerHandler.mock.calls[0]?.[0]).toMatchObject({
+        client_write_id: clientWriteId,
+        payload: { title: "newer" },
+      });
+
+      // Runtime A acknowledged only its older snapshot. Runtime B's newer
+      // record must remain while B's own handler is still blocked.
+      releaseOlder.resolve();
+      await expect(olderDrain).resolves.toEqual({
+        synced: 1,
+        failed: 0,
+        skipped: 0,
+      });
+      expect(await runtimeB.listPendingWrites()).toEqual([
+        expect.objectContaining({
+          client_write_id: clientWriteId,
+          payload: { title: "newer" },
+        }),
+      ]);
+
+      releaseNewer.resolve();
+      await expect(newerDrain).resolves.toEqual({
+        synced: 1,
+        failed: 0,
+        skipped: 0,
+      });
+      expect(await runtimeA.listPendingWrites()).toEqual([]);
+    } finally {
+      // Never leave either synthetic tab blocked if an assertion above fails.
+      releaseOlder.resolve();
+      releaseNewer.resolve();
+      if (olderDrain) await Promise.allSettled([olderDrain]);
+      if (newerDrain) await Promise.allSettled([newerDrain]);
+    }
+  });
+
+  it("keeps a newer same-id write with its own failure evidence when another runtime's older attempt succeeds", async () => {
+    vi.resetModules();
+    const runtimeA = await import("./pendingWriteJournal");
+    vi.resetModules();
+    const runtimeB = await import("./pendingWriteJournal");
+
+    const clientWriteId = "cross-runtime-newer-fails";
+    await runtimeA.enqueuePendingWrite({
+      entity: "win",
+      payload: { title: "older" },
+      clientWriteId,
+    });
+
+    const releaseOlder = deferred();
+    const releaseNewer = deferred();
+    const olderHandler = vi.fn(async (_write: PendingWrite) => {
+      await releaseOlder.promise;
+    });
+    const newerHandler = vi.fn(async (_write: PendingWrite) => {
+      await releaseNewer.promise;
+      throw new Error("newer attempt failed");
+    });
+    let olderDrain: ReturnType<typeof runtimeA.replayPendingWrites> | undefined;
+    let newerDrain: ReturnType<typeof runtimeB.replayPendingWrites> | undefined;
+
+    try {
+      olderDrain = runtimeA.replayPendingWrites({ win: olderHandler });
+      await vi.waitFor(() => expect(olderHandler).toHaveBeenCalledTimes(1));
+
+      await runtimeB.enqueuePendingWrite({
+        entity: "win",
+        payload: { title: "newer" },
+        clientWriteId,
+      });
+      newerDrain = runtimeB.replayPendingWrites({ win: newerHandler });
+      await vi.waitFor(() => expect(newerHandler).toHaveBeenCalledTimes(1));
+
+      releaseOlder.resolve();
+      await expect(olderDrain).resolves.toEqual({
+        synced: 1,
+        failed: 0,
+        skipped: 0,
+      });
+      expect(await runtimeB.listPendingWrites()).toEqual([
+        expect.objectContaining({
+          client_write_id: clientWriteId,
+          payload: { title: "newer" },
+        }),
+      ]);
+
+      releaseNewer.resolve();
+      await expect(newerDrain).resolves.toEqual({
+        synced: 0,
+        failed: 1,
+        skipped: 0,
+      });
+      expect(await runtimeA.listPendingWrites()).toEqual([
+        expect.objectContaining({
+          client_write_id: clientWriteId,
+          payload: { title: "newer" },
+          last_attempt_failed: true,
+          last_attempt_failed_at: expect.any(String),
+          last_attempt_failure_kind: "unknown",
+        }),
+      ]);
+    } finally {
+      releaseOlder.resolve();
+      releaseNewer.resolve();
+      if (olderDrain) await Promise.allSettled([olderDrain]);
+      if (newerDrain) await Promise.allSettled([newerDrain]);
+    }
+  });
 });
 
 describe("no IndexedDB (SSR / unsupported browser)", () => {
