@@ -6,6 +6,7 @@ import {
   expectOnlyKnownAccountFailures,
   gotoWithAccountSync,
   purgeOwnRows,
+  reloadWithAccountSync,
   requireSupabaseEnv,
   signIn,
   watchAccountFailures,
@@ -88,8 +89,8 @@ async function clearSeededUserWorkflow(
     // Areas are deliberately soft-deleted: the schema revoked hard deletes.
     // `listAreas` admits only `is_active=true`, so this gives the canonical
     // trigger zero active areas without bypassing the product's data policy.
-    await account.patch("areas?is_active=eq.true", { is_active: false });
     areaFixtureHidden = true;
+    await account.patch("areas?is_active=eq.true", { is_active: false });
 
     // Rebuild the provider from the cleared local account before closing this
     // profile. The completion marker remains profile-local, so it cannot
@@ -242,7 +243,7 @@ test.describe("C3 onboarding after real sign-in", () => {
       await expect(page.getByTestId("today-moments")).toBeVisible();
       await expect(page.getByTestId("onboarding-ritual")).toHaveCount(0);
 
-      await page.reload();
+      await reloadWithAccountSync(page);
       await expect(page.getByTestId("today-moments")).toBeVisible();
       await expect(page.getByTestId("onboarding-ritual")).toHaveCount(0);
     } finally {
