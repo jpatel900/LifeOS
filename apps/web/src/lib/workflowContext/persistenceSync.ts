@@ -85,6 +85,7 @@ export interface PersistenceSyncDeps {
   markLocalOnly: (message: string) => void;
   /** #737-A slice 2: the device journal refused the write; nothing holds it. */
   markDeviceStorageBlocked: () => void;
+  markPersistedLoadFailure: (error: unknown) => void;
   /** #737-A slice 2: drain the win/review journal to the account. */
   replayJournaledWrites: () => Promise<unknown>;
   syncPersistedWorkflowRows: (
@@ -147,6 +148,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     recordAccountAlias,
     markLocalOnly,
     markDeviceStorageBlocked,
+    markPersistedLoadFailure,
     replayJournaledWrites,
     syncPersistedWorkflowRows,
   } = deps;
@@ -220,7 +222,11 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         });
         if (result.provider === "supabase") {
           recordAccountAlias("captures", localCapture.id, result.capture.id);
-          await syncPersistedWorkflowRows(client);
+          try {
+            await syncPersistedWorkflowRows(client);
+          } catch (error) {
+            markPersistedLoadFailure(error);
+          }
         }
         return;
       }

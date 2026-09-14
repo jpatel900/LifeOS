@@ -73,6 +73,7 @@ function makeSync(overrides: { hasClient: boolean }) {
     recordAccountAlias: vi.fn(),
     markLocalOnly,
     markDeviceStorageBlocked,
+    markPersistedLoadFailure: vi.fn(),
     replayJournaledWrites,
     syncPersistedWorkflowRows,
   });

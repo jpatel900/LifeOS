@@ -79,6 +79,7 @@ function localCapture(
 function makeSync(overrides: { persistedAreaId?: string | null } = {}) {
   const markLocalOnly = vi.fn();
   const markDeviceStorageBlocked = vi.fn();
+  const markPersistedLoadFailure = vi.fn();
   const replayJournaledWrites = vi.fn().mockResolvedValue(undefined);
   const syncPersistedWorkflowRows = vi.fn().mockResolvedValue(undefined);
   const recordAccountAlias = vi.fn();
@@ -109,6 +110,7 @@ function makeSync(overrides: { persistedAreaId?: string | null } = {}) {
     recordAccountAlias,
     markLocalOnly,
     markDeviceStorageBlocked,
+    markPersistedLoadFailure,
     replayJournaledWrites,
     syncPersistedWorkflowRows,
   });
@@ -117,6 +119,7 @@ function makeSync(overrides: { persistedAreaId?: string | null } = {}) {
     ops,
     markLocalOnly,
     markDeviceStorageBlocked,
+    markPersistedLoadFailure,
     replayJournaledWrites,
     syncPersistedWorkflowRows,
     recordAccountAlias,
@@ -141,6 +144,7 @@ describe("persistCapture falls back to a direct POST when the device journal ref
     const {
       ops,
       markDeviceStorageBlocked,
+      markPersistedLoadFailure,
       syncPersistedWorkflowRows,
       recordAccountAlias,
     } = makeSync({ persistedAreaId: AREA_ID });
@@ -163,6 +167,7 @@ describe("persistCapture falls back to a direct POST when the device journal ref
     expect(syncPersistedWorkflowRows).toHaveBeenCalledOnce();
     // Not the "nothing durable" banner — the write actually landed.
     expect(markDeviceStorageBlocked).not.toHaveBeenCalled();
+    expect(markPersistedLoadFailure).not.toHaveBeenCalled();
   });
 
   it("still reaches the account for a capture with no area at all", async () => {
@@ -173,9 +178,10 @@ describe("persistCapture falls back to a direct POST when the device journal ref
       provider: "supabase",
       capture: { id: PERSISTED_CAPTURE_ID },
     });
-    const { ops, markDeviceStorageBlocked } = makeSync({
-      persistedAreaId: null,
-    });
+    const { ops, markDeviceStorageBlocked, markPersistedLoadFailure } =
+      makeSync({
+        persistedAreaId: null,
+      });
 
     await ops.persistCapture(localCapture({ area_id: null }));
 
@@ -184,6 +190,7 @@ describe("persistCapture falls back to a direct POST when the device journal ref
       expect.objectContaining({ area_id: null }),
     );
     expect(markDeviceStorageBlocked).not.toHaveBeenCalled();
+    expect(markPersistedLoadFailure).not.toHaveBeenCalled();
   });
 
   it("keeps the honest device-storage-blocked banner when the capture is ALSO unresolvable (a chosen area has not synced)", async () => {
@@ -192,25 +199,93 @@ describe("persistCapture falls back to a direct POST when the device journal ref
     journalCaptureWriteMock.mockRejectedValue(
       new Error("IndexedDB is unavailable"),
     );
-    const { ops, markDeviceStorageBlocked } = makeSync({
-      persistedAreaId: null,
-    });
+    const { ops, markDeviceStorageBlocked, markPersistedLoadFailure } =
+      makeSync({
+        persistedAreaId: null,
+      });
 
     await ops.persistCapture(localCapture({ area_id: "area-main-job" }));
 
     expect(createCaptureItemMock).not.toHaveBeenCalled();
     expect(markDeviceStorageBlocked).toHaveBeenCalledOnce();
+    expect(markPersistedLoadFailure).not.toHaveBeenCalled();
   });
 
   it("does not fall back when the journal write actually succeeds", async () => {
     journalCaptureWriteMock.mockResolvedValue({
       client_write_id: "client-capture-1",
     });
-    const { ops } = makeSync({ persistedAreaId: AREA_ID });
+    const { ops, markPersistedLoadFailure } = makeSync({
+      persistedAreaId: AREA_ID,
+    });
 
     await ops.persistCapture(localCapture());
 
     // The normal durable path took it; the fallback must never ALSO fire.
     expect(createCaptureItemMock).not.toHaveBeenCalled();
+    expect(markPersistedLoadFailure).not.toHaveBeenCalled();
+  });
+
+  it("forwards a fallback readback failure into persisted-load failure handling after account write success", async () => {
+    journalCaptureWriteMock.mockRejectedValue(
+      new Error("IndexedDB is unavailable"),
+    );
+    const readbackError = new Error("Transient readback outage");
+    createCaptureItemMock.mockResolvedValue({
+      provider: "supabase",
+      capture: { id: PERSISTED_CAPTURE_ID },
+    });
+    const {
+      ops,
+      markPersistedLoadFailure,
+      syncPersistedWorkflowRows,
+      markDeviceStorageBlocked,
+      recordAccountAlias,
+    } = makeSync({
+      persistedAreaId: AREA_ID,
+    });
+    syncPersistedWorkflowRows.mockRejectedValueOnce(readbackError);
+
+    await expect(ops.persistCapture(localCapture())).resolves.toBeUndefined();
+
+    expect(createCaptureItemMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        raw_text: "Call the landlord back",
+        area_id: AREA_ID,
+      }),
+    );
+    expect(recordAccountAlias).toHaveBeenCalledWith(
+      "captures",
+      "capture-local-1",
+      PERSISTED_CAPTURE_ID,
+    );
+    expect(markPersistedLoadFailure).toHaveBeenCalledOnce();
+    expect(markPersistedLoadFailure).toHaveBeenCalledWith(readbackError);
+    expect(syncPersistedWorkflowRows).toHaveBeenCalledOnce();
+    expect(markDeviceStorageBlocked).not.toHaveBeenCalled();
+  });
+
+  it("still rejects when the fallback account write fails and does not forward to persisted-load failure", async () => {
+    journalCaptureWriteMock.mockRejectedValue(
+      new Error("IndexedDB is unavailable"),
+    );
+    createCaptureItemMock.mockRejectedValue(new Error("Provider write failed"));
+    const {
+      ops,
+      markPersistedLoadFailure,
+      markDeviceStorageBlocked,
+      syncPersistedWorkflowRows,
+    } = makeSync({
+      persistedAreaId: AREA_ID,
+    });
+
+    await expect(ops.persistCapture(localCapture())).rejects.toThrow(
+      "Provider write failed",
+    );
+
+    expect(markPersistedLoadFailure).not.toHaveBeenCalled();
+    expect(syncPersistedWorkflowRows).not.toHaveBeenCalled();
+    expect(markDeviceStorageBlocked).not.toHaveBeenCalled();
   });
 });

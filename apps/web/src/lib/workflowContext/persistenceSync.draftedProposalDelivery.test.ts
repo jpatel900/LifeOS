@@ -100,6 +100,7 @@ function makeSync(options: {
     recordAccountAlias,
     markLocalOnly,
     markDeviceStorageBlocked,
+    markPersistedLoadFailure: vi.fn(),
     replayJournaledWrites,
     syncPersistedWorkflowRows,
   });
