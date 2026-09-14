@@ -66,10 +66,21 @@ test(`${SIGNED_IN_TAG} #969: a session restored before a queued Areas redirect u
     await pageB.goto("/login");
     await pageB.getByLabel("Email").fill(SEEDED_USERS.a.email);
     await pageB.getByLabel("Password").fill(SEEDED_USERS.a.password);
-    await pageB.getByRole("button", { name: /^sign in$/i }).click();
-    await expect(pageB.getByTestId("masthead-auth-signed-in")).toContainText(
-      "user_a",
+    const signInResponse = pageB.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().includes("/auth/v1/token") &&
+        response.url().includes("grant_type=password"),
     );
+    await pageB.getByRole("button", { name: /^sign in$/i }).click();
+    expect((await signInResponse).ok()).toBe(true);
+    await expect
+      .poll(async () =>
+        (await context.cookies()).some((cookie) =>
+          /-auth-token(?:\.\d+)?$/.test(cookie.name),
+        ),
+      )
+      .toBe(true);
 
     await areasDocumentAfterSession;
     releaseHeldLogin?.();

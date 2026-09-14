@@ -116,16 +116,9 @@ export default function AreasSettingsPage() {
 
     let active = true;
     const { data: subscription } = client.auth.onAuthStateChange(
-      (event, session) => {
+      (_event, session) => {
         if (!active) return;
         if (session) {
-          if (
-            event !== "INITIAL_SESSION" &&
-            event !== "SIGNED_IN" &&
-            event !== "TOKEN_REFRESHED"
-          ) {
-            return;
-          }
           // A session showed up after all. `state.status` is STILL
           // "signed-out" though — `useAreasLoadState`'s mount effect already
           // burned its one shot and will never re-check on its own (that is

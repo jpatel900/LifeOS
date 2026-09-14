@@ -141,75 +141,43 @@ function renderAreasPage() {
 }
 
 describe("a late-resolving session does not eject /settings/areas (Part of #960)", () => {
-  it("never redirects once the session arrives after the first signed-out-shaped load", async () => {
-    renderAreasPage();
+  it.each([
+    "INITIAL_SESSION",
+    "SIGNED_IN",
+    "TOKEN_REFRESHED",
+    "PASSWORD_RECOVERY",
+    "USER_UPDATED",
+  ])(
+    "reloads once when a non-null %s event restores the session after the signed-out-shaped load",
+    async (event) => {
+      renderAreasPage();
 
-    // The one-shot loadAreas effect's first (and only) call rejects
-    // signed-out-shaped, latching the hook's status. (`getUser` is also
-    // called independently by `WorkflowContext`'s own persisted-areas load,
-    // so this only asserts it happened at least once, not an exact count.)
-    await waitFor(() => {
-      expect(mocks.getUser).toHaveBeenCalled();
-    });
+      await waitFor(() => {
+        expect(mocks.getUser).toHaveBeenCalled();
+        expect(authStateCallbacks.length).toBeGreaterThanOrEqual(2);
+      });
 
-    // The redirect effect must be listening for the auth transition before it
-    // decides anything — give it a tick to subscribe.
-    await waitFor(() => {
-      // Two subscribers since #966: this page's redirect effect AND the
-      // WorkflowProvider's replay listener. Waiting for "called at least
-      // once" would let the provider's earlier subscription satisfy the wait
-      // while the page has not subscribed yet — the emitted event would then
-      // miss the page (the mock, unlike the real GoTrueClient, does not
-      // replay INITIAL_SESSION to late subscribers). Wait for both.
-      expect(authStateCallbacks.length).toBeGreaterThanOrEqual(2);
-    });
-
-    // The session resolves a moment later — the auth client's own transition
-    // event, the same shape AuthAffordance.tsx already reacts to.
-    // PASSWORD_RECOVERY and USER_UPDATED carry sessions too, but neither
-    // means this page's signed-out load should restart. The recovery path is
-    // deliberately limited to the same three lifecycle events the provider
-    // already treats as account-sync opportunities.
-    for (const event of ["PASSWORD_RECOVERY", "USER_UPDATED"]) {
       await act(async () => {
         emitAuthEvent(event, { user: { email: "jay@example.com" } });
         await Promise.resolve();
       });
-      expect(mocks.reload).not.toHaveBeenCalled();
-    }
 
-    await act(async () => {
-      emitAuthEvent("SIGNED_IN", { user: { email: "jay@example.com" } });
-      await Promise.resolve();
-    });
+      // A non-null event must recover the latched signed-out frame rather than
+      // letting the queued redirect eject the visitor. jsdom cannot navigate,
+      // so the one reload request is the observable recovery boundary here.
+      expect(mocks.routerReplace).not.toHaveBeenCalled();
+      expect(mocks.reload).toHaveBeenCalledTimes(1);
 
-    // It must never have redirected — neither before the session arrived nor
-    // after.
-    expect(mocks.routerReplace).not.toHaveBeenCalled();
-
-    // Behavioral pin (finding 2/4 from independent review): cancelling the
-    // redirect is not enough on its own — `useAreasLoadState`'s status is
-    // still latched to "signed-out" and nothing else in this component ever
-    // re-checks it. Without a recovery step the visitor would be stuck
-    // looking at this screen forever. Asserting the reload call is the
-    // proxy for "the stuck frame actually ends" since jsdom cannot perform a
-    // real navigation.
-    expect(mocks.reload).toHaveBeenCalledTimes(1);
-
-    // Second review round: a SECOND session-bearing event arriving before
-    // the scheduled reload actually lands (`reload()` only schedules
-    // navigation — it does not stop this component's JS) must NOT schedule
-    // a second reload. `sessionConfirmedRef` is the guard.
-    await act(async () => {
-      emitAuthEvent("TOKEN_REFRESHED", {
-        user: { email: "jay@example.com" },
+      // `reload()` only schedules a navigation. Before it lands, another copy
+      // of the same session event must not schedule a second reload.
+      await act(async () => {
+        emitAuthEvent(event, { user: { email: "jay@example.com" } });
+        await Promise.resolve();
       });
-      await Promise.resolve();
-    });
-    expect(mocks.reload).toHaveBeenCalledTimes(1);
-    expect(mocks.routerReplace).not.toHaveBeenCalled();
-  });
-
+      expect(mocks.reload).toHaveBeenCalledTimes(1);
+      expect(mocks.routerReplace).not.toHaveBeenCalled();
+    },
+  );
   it("still redirects a genuinely signed-out visitor exactly once", async () => {
     renderAreasPage();
 
