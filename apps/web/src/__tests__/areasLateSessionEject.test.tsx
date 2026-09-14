@@ -237,4 +237,55 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     // A genuine signed-out visitor is navigated away, not reloaded in place.
     expect(mocks.reload).not.toHaveBeenCalled();
   });
+
+  it("reloads when another tab restores a session after the sign-in redirect is queued", async () => {
+    const view = renderAreasPage();
+
+    await waitFor(() => {
+      expect(authStateCallbacks.length).toBeGreaterThanOrEqual(2);
+    });
+
+    // The initial auth result really is signed out, so the page correctly
+    // queues its once-only sign-in redirect. A second tab can still establish
+    // a session before that navigation unmounts this document.
+    await act(async () => {
+      emitAuthEvent("INITIAL_SESSION", null);
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(mocks.routerReplace).toHaveBeenCalledWith(
+        "/login?next=%2Fsettings%2Fareas",
+      );
+    });
+
+    // `router.replace()` does not synchronously unmount this document. A
+    // normal rerender while that transition is pending cleans up the first
+    // subscription; its replacement must still be able to receive the
+    // cross-tab session event.
+    view.rerender(
+      <WorkflowProvider>
+        <AreasSettingsPage />
+      </WorkflowProvider>,
+    );
+
+    await act(async () => {
+      emitAuthEvent("SIGNED_IN", { user: { email: "jay@example.com" } });
+      await Promise.resolve();
+    });
+
+    // The recovery path requests one reload after seeing the valid session.
+    // Browser navigation precedence over the queued route transition is not
+    // modeled by jsdom and remains a browser-tier question.
+    expect(mocks.reload).toHaveBeenCalledTimes(1);
+    expect(mocks.routerReplace).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      emitAuthEvent("TOKEN_REFRESHED", {
+        user: { email: "jay@example.com" },
+      });
+      await Promise.resolve();
+    });
+    expect(mocks.reload).toHaveBeenCalledTimes(1);
+    expect(mocks.routerReplace).toHaveBeenCalledTimes(1);
+  });
 });

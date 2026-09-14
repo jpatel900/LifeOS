@@ -97,7 +97,7 @@ export default function AreasSettingsPage() {
     "unconfirmed",
   );
   useEffect(() => {
-    if (state.status !== "signed-out" || hasRedirectedRef.current) {
+    if (state.status !== "signed-out") {
       return;
     }
 
@@ -106,6 +106,7 @@ export default function AreasSettingsPage() {
       // No auth client at all (Supabase not configured): nothing can ever
       // confirm a session, so there is nothing to wait for — same behavior
       // as before this fix.
+      if (hasRedirectedRef.current) return;
       hasRedirectedRef.current = true;
       router.replace(
         `/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`,
@@ -116,7 +117,7 @@ export default function AreasSettingsPage() {
     let active = true;
     const { data: subscription } = client.auth.onAuthStateChange(
       (_event, session) => {
-        if (!active || hasRedirectedRef.current) return;
+        if (!active) return;
         if (session) {
           // A session showed up after all. `state.status` is STILL
           // "signed-out" though — `useAreasLoadState`'s mount effect already
@@ -147,7 +148,12 @@ export default function AreasSettingsPage() {
           }
           return;
         }
-        if (sessionConfirmedRef.current === "signed-in") return;
+        if (
+          hasRedirectedRef.current ||
+          sessionConfirmedRef.current === "signed-in"
+        ) {
+          return;
+        }
         hasRedirectedRef.current = true;
         router.replace(
           `/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`,
