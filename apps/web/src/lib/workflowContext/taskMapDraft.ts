@@ -77,7 +77,18 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
       taskId: string,
       options?: { revisionSignals?: RevisionSignal[] },
     ) => {
-      const task = stateRef.current.tasks.find((item) => item.id === taskId);
+      const persistedTaskId = persistedIdForLocalId(
+        taskId,
+        persistedTaskIdByLocalIdRef.current,
+      );
+      const stateTaskId = stateRef.current.tasks.some(
+        (item) => item.id === persistedTaskId,
+      )
+        ? persistedTaskId!
+        : taskId;
+      const task = stateRef.current.tasks.find(
+        (item) => item.id === stateTaskId,
+      );
       if (!task) return;
 
       // FR-031 slice F5 (#679): a tapped evidence offer becomes a revision
@@ -150,7 +161,7 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
       }
 
       const result = await fetchTaskMapDraft({
-        taskId,
+        taskId: persistedTaskId ?? taskId,
         areaId: persistedAreaId,
         title: task.title,
         description: task.description ?? null,
@@ -253,26 +264,34 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
           ? priorDraft
           : null;
 
+      const persistedTaskId = persistedIdForLocalId(
+        taskId,
+        persistedTaskIdByLocalIdRef.current,
+      );
+      const stateTaskId = stateRef.current.tasks.some(
+        (item) => item.id === persistedTaskId,
+      )
+        ? persistedTaskId!
+        : taskId;
+
       dispatch({
         type: "approveTaskMapLocal",
-        taskId,
+        taskId: stateTaskId,
         graph: validatedGraph,
       });
       taskMapDraftRef.current = { phase: "idle" };
       setTaskMapDraft({ phase: "idle" });
 
       const client = createSupabaseBrowserClient();
-      const persistedTaskId = persistedIdForLocalId(
-        taskId,
-        persistedTaskIdByLocalIdRef.current,
-      );
 
       if (!client || !persistedTaskId) {
         markLocalOnly(savedOnThisDeviceBanner("Your approved map"));
         return;
       }
 
-      const task = stateRef.current.tasks.find((item) => item.id === taskId);
+      const task = stateRef.current.tasks.find(
+        (item) => item.id === stateTaskId,
+      );
       const persistedAreaId = task?.area_id
         ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
         : null;
