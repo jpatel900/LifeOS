@@ -1,157 +1,112 @@
 # LifeOS
 
-Area-scoped personal workflow cockpit. V1 is the shipped baseline, not the product ceiling. The current surface includes Today/Home Cockpit v1, Supabase-backed areas and workflow slices, AI parse-capture routing, Google Calendar connection/free-busy/approval-gated event creation, observability wrappers, and broad UX hardening, while the Phase 2 mock vertical slice remains available for local triage. Reviewed evolution follows [ADR 0005](docs/adr/0005-staged-evolution-after-v1.md).
+LifeOS helps one person turn scattered thoughts into a next action and a realistic day. It is a private, single-user workflow cockpit: capture something quickly, decide what it means, plan deliberately, work the plan, and close the day without turning every thought into an automatic commitment.
 
-Project documentation lives in `docs/`. For bounded agent/developer orientation, search first, use `pnpm agent:context <area>` when helpful, then read `docs/PROJECT_STATE.md` and the relevant authority docs only as needed. These helpers do not replace authority docs.
+Try the hosted app at [life-os-web-azure.vercel.app](https://life-os-web-azure.vercel.app/), or run it locally. LifeOS supports optional account persistence, demo sorting when AI is not configured, and Google Calendar integration. Calendar writes always require explicit approval.
 
-## Documentation authority order
+## A day in LifeOS
 
-Authority decreases down the list. Higher entries override lower ones when they conflict.
+Imagine Avery notices, “Send the revised budget before Friday,” while working.
 
-1. **AGENTS.md** — Agent operating rules; highest authority for Cursor/Codex behavior.
-2. **REQUIREMENTS.md** — Product requirements, permanent boundaries, and approved evolution scope.
-3. **ARCHITECTURE.md** — Technical architecture and boundaries.
-4. **DATA_MODEL.md** — Canonical domain and data model.
-5. **ENGINEERING_INVARIANTS.md** — System-level engineering guarantees and their enforcement.
-6. **UX_FLOWS.md** — User journeys and screen behavior.
-7. **SECURITY_PRIVACY.md** — Security, privacy, auth, and external-write rules.
-8. **TEST_PLAN.md** — Acceptance tests and validation requirements.
-   The implementation authority docs are `REQUIREMENTS.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `ENGINEERING_INVARIANTS.md`, `UX_FLOWS.md`, `SECURITY_PRIVACY.md`, and `TEST_PLAN.md`. `AGENTS.md` governs agent behavior above all of them.
+1. Avery opens **Capture** from any moment, writes the thought, and saves it. The raw capture is kept as written.
+2. In **Triage**, Avery chooses **Sort** when ready, reviews the resulting draft, and decides what becomes a task or stays unresolved. An **Area** keeps related work, such as “Finances” or “Home,” in one place.
+3. In **Plan**, Avery creates or adjusts a time-block proposal. It stays inside LifeOS; creating an event in Google Calendar needs a separate explicit approval.
+4. In **Flow**, Avery works from the current planned block and can capture a side thought without leaving the moment.
+5. In **Close**, Avery reviews what happened, records the day, and leaves a clearer starting point for tomorrow.
 
-Architecture Decision Records in `docs/adr/` clarify or amend `ARCHITECTURE.md` for the decisions they record.
+The home cockpit groups this work into three moments:
 
-## Environment variables
+| Moment    | Use it for                                                               |
+| --------- | ------------------------------------------------------------------------ |
+| **Start** | Orient, open Capture, Triage, Plan, or Review, and choose the next move. |
+| **Flow**  | Work through the current planned block without expanding the plan.       |
+| **Close** | Review the day, record outcomes, and prepare for the next one.           |
 
-Use `.env.example` at the repo root as the template. When wiring Supabase, OpenAI, or Google, copy the needed lines into `apps/web/.env.local` so Next.js picks them up. Never commit real secrets.
+Capture is available from any moment. The Start pipeline also opens Triage, Plan, and Review. Deep links such as `/?capture=1`, `/?sheet=triage`, and `/?sheet=plan` open the same cockpit surfaces; older stage routes redirect there. The full behavior is specified in [UX flows](docs/UX_FLOWS.md).
 
-Mock mode remains usable without Supabase, OpenAI, or Google OAuth vars for the Phase 2 shell and offline flows.
+## Quick start
 
-## Production / Vercel rollout
+Run these commands from the repository root. The checked-in runtime is Node 22.13.0, and the project pins pnpm 11.1.3.
 
-There is no single `DEMO_MODE=false` switch in this repo.
+```powershell
+node --version
+# Expected: v22.13.0
 
-The app falls back to Demo mode when the relevant production integrations are not configured:
+corepack pnpm --version
+# Expected: 11.1.3
 
-- missing `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` => local/browser fallback paths stay active
-- missing `OPENAI_API_KEY` or all AI model tier vars => AI capture sorting falls back to Demo mode sorting
-- `AI_PARSE_CAPTURE_ENABLED=false` => AI capture sorting is explicitly disabled
-- missing Google OAuth vars or `SUPABASE_SERVICE_ROLE_KEY` => Google Calendar connect/write paths stay unavailable
+corepack pnpm install
+corepack pnpm dev
+# Expected: the web app is available at http://localhost:3000
+```
 
-For a real Vercel deployment with the current shipped feature set, set these environment variables in the Vercel project:
+If pnpm is already enabled through Corepack, `pnpm install` and `pnpm dev` are the equivalent commands. A basic local shell works without integration variables.
 
-Required for persisted app behavior:
+For routine checks, run:
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+```powershell
+corepack pnpm format:check
+corepack pnpm lint
+corepack pnpm type-check
+corepack pnpm test
+corepack pnpm build
+```
 
-Required for server-side Google Calendar connect, free/busy, and approval-gated event creation:
+## Accounts, demo mode, and integrations
 
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_REDIRECT_URI`
-- `GOOGLE_TOKEN_ENCRYPTION_KEY`
+LifeOS is intentionally honest about where work is saved.
 
-Required for AI capture sorting:
+- **Demo or local fallback:** without the relevant Supabase configuration, account features are unavailable and work can stay in the browser or on the device. This is useful for trying the shell; it is not account persistence.
+- **Account mode:** Supabase-backed areas and workflow data require sign-in. The app distinguishes “saved on this device” from “saved to your account” instead of treating them as interchangeable.
+- **AI sorting:** Capture saves raw text first. Sorting is an explicit Triage action. If an AI environment is configured, the server can produce a draft; otherwise the demo sorter can still provide a local draft. In either case, the person reviews it before making work from it.
+- **Google Calendar:** connecting an account and checking availability are optional. A proposed block stays inside LifeOS until the person explicitly asks to create a Google Calendar event.
 
-- `OPENAI_API_KEY`
-- one of `AI_MODEL_STANDARD`, `AI_MODEL_CHEAP`, or `AI_MODEL_STRONG`
-- optional: `AI_PARSE_CAPTURE_ENABLED=true`
+Copy only the required values from [.env.example](.env.example) into `apps/web/.env.local` for the integrations you are configuring; replace placeholders with your own values. Never commit real keys. For the local Supabase stack, map `API_URL` from `supabase status -o env` to `NEXT_PUBLIC_SUPABASE_URL`, and map `ANON_KEY` to `NEXT_PUBLIC_SUPABASE_ANON_KEY`. The complete variable matrix and deployment smoke order live in the [Vercel production checklist](docs/VERCEL_PRODUCTION_CHECKLIST.md).
 
-Optional observability:
+### Local Supabase and RLS checks
 
-- `NEXT_PUBLIC_SENTRY_DSN`
-- `SENTRY_DSN`
-- `NEXT_PUBLIC_POSTHOG_TOKEN`
-- `NEXT_PUBLIC_POSTHOG_HOST`
-- `LANGFUSE_PUBLIC_KEY`
-- `LANGFUSE_SECRET_KEY`
-- `LANGFUSE_BASE_URL`
+The default test suite does not start Docker or validate row-level security. On Windows, install the Supabase CLI with Scoop so `supabase` is on `PATH`; if it is unavailable, use the `npx supabase` fallback shown below. For local persistence and RLS work, start the local stack and get its generated public values:
 
-What this does not change:
-
-- persisted `/execute` still does not support a live elapsed timer or persisted stop/resume workflow beyond the shipped truthfulness contract
-- Google Calendar writes remain explicit approval-only
-- mock/demo fallback code remains in the repo by design for local degraded operation
-
-Recommended rollout order:
-
-1. Set the required Vercel env vars.
-2. Redeploy.
-3. Verify `/login`, `/settings/areas`, `/capture`, `/triage`, `/calendar`, `/execute`, `/review`, and `/health`.
-4. Confirm Google Calendar connect, free/busy, and explicit event creation with a non-critical test calendar before relying on it.
-
-Use [docs/VERCEL_PRODUCTION_CHECKLIST.md](docs/VERCEL_PRODUCTION_CHECKLIST.md) for the exact env matrix and post-deploy smoke order.
-
-## Supabase local development
-
-On Windows, the recommended path is a Scoop-installed Supabase CLI (`supabase` in PATH). If `supabase` is unavailable, use the `npx` fallback commands shown below.
-
-CI pins the CLI to a fixed release (`supabase/setup-cli@v1`, `version: 2.109.1` in `.github/workflows/ci.yml`) for reproducibility. Match that version locally if you hit CLI-version-specific behavior.
-
-Start the local Supabase stack:
-
-```bash
+```powershell
 supabase start
-npx supabase start
-```
+# Or: npx supabase start
 
-Show local service URLs and keys:
-
-```bash
-supabase status
-npx supabase status
 supabase status -o env
+# Or: npx supabase status -o env
 ```
 
-Reset the local database, re-run migrations, and apply `supabase/seed.sql`:
-
-```bash
-supabase db reset
-npx supabase db reset
-```
-
-`supabase/seed.sql` inserts local test users and starter areas for Phase 4A smoke tests. Use `user_a@example.test` with password `password123` at `/login`, then verify `/settings/areas` and `/capture`.
-
-Run the opt-in local RLS tests after the stack is running and the database has been reset:
+Use `supabase db reset` (or `npx supabase db reset`) only for the local development database. It applies migrations and seeds the local RLS test users, including `user_a@example.test` with password `password123`. With the local stack running, opt into the RLS test tier with the generated anonymous key:
 
 ```powershell
 $env:RUN_SUPABASE_RLS_TESTS = "1"
 $env:NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:15431"
 $env:NEXT_PUBLIC_SUPABASE_ANON_KEY = "<ANON_KEY from supabase status -o env>"
-pnpm --filter @lifeos/web test -- phase4aRls.local
+corepack pnpm --filter @lifeos/web exec vitest run src/__tests__/phase4aRls.local.test.ts --pool=threads --maxWorkers=4
 ```
 
-```bash
-RUN_SUPABASE_RLS_TESTS=1 \
-NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:15431 \
-NEXT_PUBLIC_SUPABASE_ANON_KEY="<ANON_KEY from supabase status -o env>" \
-pnpm --filter @lifeos/web test -- phase4aRls.local
-```
+`NEXT_PUBLIC_*` values are browser-safe public configuration. Never put `SUPABASE_SERVICE_ROLE_KEY` in browser code. The [test plan](docs/TEST_PLAN.md) and repository [Supabase/RLS skill](.agents/skills/lifeos-supabase-rls/SKILL.md) cover the two-user procedure; this README does not replace migration, RLS, or production-apply procedures.
 
-The default `pnpm test` run skips this suite because it requires Docker-backed local Supabase and seeded Auth users.
+## What is proven, and what is not
 
-## Monorepo commands
+The repository has automated unit, integration, browser, and local-stack test coverage for defined technical behavior. Those tests do not prove personal adoption, usefulness, or that a configuration is present in a particular deployment. The current program status, remaining gates, and known limits are kept in [PROJECT_STATE.md](docs/PROJECT_STATE.md).
 
-Run from the repository root after `pnpm install`.
+LifeOS is not a team workspace, a SaaS collaboration product, or an autonomous rescheduler. It does not silently create external calendar events or let AI output bypass review and validation.
 
-Recommended local validation order for routine checks: `pnpm format:check`, `pnpm lint`, `pnpm type-check`, `pnpm test`, `pnpm build`. (`format:check` is a blocking CI step and checks the whole repo — omitting it locally is how main went red in the PR #471/#472 race; see `docs/FAILURES.md`.)
+## Documentation
 
-| Command                         | Purpose                                                          |
-| ------------------------------- | ---------------------------------------------------------------- |
-| `pnpm install`                  | Install dependencies                                             |
-| `pnpm dev`                      | Runs the Next.js app through Turborepo (`http://localhost:3000`) |
-| `pnpm --filter @lifeos/web dev` | Run only the web app                                             |
-| `pnpm build`                    | Builds all workspaces                                            |
-| `pnpm agent:context <area>`     | Print bounded repo context for one task area                     |
-| `pnpm lint`                     | Lint / type validation for configured workspaces                 |
-| `pnpm type-check`               | TypeScript checks                                                |
-| `pnpm test`                     | Vitest suites                                                    |
-| `pnpm format`                   | Format the repo when configured                                  |
-| `pnpm format:check`             | Check formatting when configured                                 |
+Read the smallest relevant source of truth. If documents conflict, the higher entry in this order wins.
 
-Filter a single workspace with commands such as `pnpm --filter @lifeos/web test`.
+| Read this                                                | For                                                     |
+| -------------------------------------------------------- | ------------------------------------------------------- |
+| [AGENTS.md](AGENTS.md)                                   | Repository operating rules and contributor boundaries.  |
+| [Requirements](docs/REQUIREMENTS.md)                     | Product scope and non-negotiable behavior.              |
+| [Architecture](docs/ARCHITECTURE.md)                     | Application boundaries and system structure.            |
+| [Data model](docs/DATA_MODEL.md)                         | Canonical domain and persistence model.                 |
+| [Engineering invariants](docs/ENGINEERING_INVARIANTS.md) | System guarantees and their enforcement.                |
+| [UX flows](docs/UX_FLOWS.md)                             | User journeys, entry points, and interaction rules.     |
+| [Security and privacy](docs/SECURITY_PRIVACY.md)         | Auth, data, and external-write boundaries.              |
+| [Test plan](docs/TEST_PLAN.md)                           | Validation requirements and test tiers.                 |
+| [Architecture decisions](docs/adr/README.md)             | Decisions that amend the architecture.                  |
+| [Project state](docs/PROJECT_STATE.md)                   | Current program, maturity, constraints, and open gates. |
 
-Example orientation command: `pnpm agent:context capture`
-
-If you pass an unknown area, the script lists the available areas.
+For the headless client surface, see [the CLI package](packages/cli). For deployment configuration, use the [Vercel production checklist](docs/VERCEL_PRODUCTION_CHECKLIST.md), not this README.
