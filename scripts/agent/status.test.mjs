@@ -957,7 +957,8 @@ test("stripMarkdown: gate item markup never reaches the rendered page", () => {
 // and asserts none of it survives as live markup.
 // ---------------------------------------------------------------------------
 
-const XSS = "<script>alert(1)</script>";
+const XSS =
+  '<script>alert(1)</script><SCRIPT type="text/javascript">alert(2)</SCRIPT>';
 const BREAKOUT = '"><img src=x onerror=alert(1)>';
 
 test("renderStatusHtml: hostile text in any GitHub-sourced field is escaped, never live markup", () => {
@@ -1110,8 +1111,16 @@ test("renderStatusHtml: hostile text in any GitHub-sourced field is escaped, nev
     "the breakout payload should survive as escaped, readable text",
   );
 
-  // The page's own inline filter script is the only real <script> block.
-  assert.equal(html.match(/<script>/g).length, 1);
+  assert.ok(
+    html.includes(
+      "&lt;SCRIPT type=&quot;text/javascript&quot;&gt;alert(2)&lt;/SCRIPT&gt;",
+    ),
+    "uppercase tags with attributes must also remain escaped text",
+  );
+
+  // Count tags for this assertion, not for sanitization. Include mixed case
+  // and attributes so an injected variant cannot evade the one-script limit.
+  assert.equal(html.match(/<script\b[^>]*>/gi)?.length ?? 0, 1);
 });
 
 test("escapeHtml: escaping is applied exactly once, not twice", () => {
