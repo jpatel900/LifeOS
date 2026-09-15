@@ -1,9 +1,13 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Dispatch } from "react";
-import { createEmptyWorkflowState, type WorkflowState } from "../workflow";
+import {
+  acceptLatestDraft,
+  captureWorkflow,
+  workflowSeed,
+} from "@/__tests__/helpers/workflowReachability";
 import type { TaskMapDraftRequestResult } from "../ai/taskMapDraftClient";
-import type { WorkflowAction } from "./reducerCore";
+import { workflowReducer, type WorkflowAction } from "./reducerCore";
 import type { TaskMapDraftState } from "./types";
 import { useTaskMapDraftActions } from "./taskMapDraft";
 
@@ -25,7 +29,6 @@ vi.mock("../supabase/browser", () => ({
   createSupabaseBrowserClient: createSupabaseBrowserClientMock,
 }));
 
-const LOCAL_TASK_ID = "task-1";
 const PERSISTED_TASK_ID = "22222222-2222-4222-8222-222222222222";
 
 const DRAFT = {
@@ -36,41 +39,51 @@ const DRAFT = {
   edges: [],
 };
 
-function taskState(taskId: string): WorkflowState {
-  const state = createEmptyWorkflowState();
-  state.tasks = [
-    {
-      id: taskId,
-      user_id: "11111111-1111-4111-8111-111111111111",
-      area_id: "area-main-job",
-      project_id: null,
-      source_capture_item_id: null,
-      title: "Finish the synthetic report",
-      description: null,
-      status: "active",
-      priority_score: null,
-      priority_confidence: null,
-      task_type: null,
-      is_reversible: null,
-      energy_type: null,
-      estimated_minutes_low: null,
-      estimated_minutes_high: null,
-      due_at: null,
-      definition_of_done: null,
-      first_tiny_step: null,
-      created_at: "2026-09-15T00:00:00.000Z",
-      updated_at: "2026-09-15T00:00:00.000Z",
+function aliasKnownLocalTaskState() {
+  let state = workflowSeed();
+  state = captureWorkflow(state, "Finish the synthetic report.");
+  state = acceptLatestDraft(state);
+  const localTask = state.tasks.at(-1);
+  if (!localTask) throw new Error("No accepted task was reachable.");
+  const next = workflowReducer(state, {
+    type: "recordAccountId",
+    family: "tasks",
+    localId: localTask.id,
+    accountId: PERSISTED_TASK_ID,
+  });
+  return { state: next, localTaskId: localTask.id };
+}
+
+function retiredLocalTaskState() {
+  const { state, localTaskId } = aliasKnownLocalTaskState();
+  const localTask = state.tasks.find((task) => task.id === localTaskId);
+  if (!localTask)
+    throw new Error("The local task was not retained before sync.");
+  const next = workflowReducer(state, {
+    type: "syncPersistedWorkflow",
+    payload: {
+      captures: [],
+      tasks: [{ ...localTask, id: PERSISTED_TASK_ID }],
+      proposals: [],
+      blocks: [],
+      sessions: [],
+      reviewLog: [],
+      idAliases: {
+        captures: new Map(),
+        tasks: new Map(),
+        proposals: new Map(),
+        blocks: new Map(),
+        sessions: new Map(),
+      },
     },
-  ];
-  return state;
+  });
+  return { state: next, localTaskId };
 }
 
-function retiredLocalTaskState(): WorkflowState {
-  return taskState(PERSISTED_TASK_ID);
-}
-
-function aliasKnownLocalTaskState(): WorkflowState {
-  return taskState(LOCAL_TASK_ID);
+function taskAliasRef(state: ReturnType<typeof workflowSeed>) {
+  return {
+    current: new Map(Object.entries(state.accountIdByLocalId.tasks)),
+  };
 }
 
 describe("useTaskMapDraftActions (#687)", () => {
@@ -93,8 +106,17 @@ describe("useTaskMapDraftActions (#687)", () => {
     const taskMapDraftRef: { current: TaskMapDraftState } = {
       current: { phase: "idle" },
     };
-    const stateRef = { current: retiredLocalTaskState() };
+    const retired = retiredLocalTaskState();
+    const stateRef = { current: retired.state };
+    const { localTaskId } = retired;
     const setTaskMapDraft = vi.fn();
+
+    expect(stateRef.current.tasks.map((task) => task.id)).toEqual([
+      PERSISTED_TASK_ID,
+    ]);
+    expect(stateRef.current.tasks.some((task) => task.id === localTaskId)).toBe(
+      false,
+    );
 
     const { result } = renderHook(() =>
       useTaskMapDraftActions({
@@ -103,9 +125,7 @@ describe("useTaskMapDraftActions (#687)", () => {
         setTaskMapDraft,
         stateRef,
         persistedAreasRef: { current: [] },
-        persistedTaskIdByLocalIdRef: {
-          current: new Map([[LOCAL_TASK_ID, PERSISTED_TASK_ID]]),
-        },
+        persistedTaskIdByLocalIdRef: taskAliasRef(stateRef.current),
         markLocalOnly: vi.fn(),
         syncPersistedWorkflowRows: vi.fn().mockResolvedValue(undefined),
       }),
@@ -113,17 +133,17 @@ describe("useTaskMapDraftActions (#687)", () => {
 
     let request: Promise<void>;
     act(() => {
-      request = result.current.requestTaskMapDraftAction(LOCAL_TASK_ID);
+      request = result.current.requestTaskMapDraftAction(localTaskId);
     });
 
     expect(taskMapDraftRef.current).toEqual({
       phase: "pending",
-      taskId: LOCAL_TASK_ID,
+      taskId: localTaskId,
     });
     expect(requestTaskMapDraftMock).toHaveBeenCalledWith(
       expect.objectContaining({
         taskId: PERSISTED_TASK_ID,
-        title: "Finish the synthetic report",
+        title: stateRef.current.tasks[0]?.title,
       }),
     );
 
@@ -134,7 +154,7 @@ describe("useTaskMapDraftActions (#687)", () => {
 
     expect(taskMapDraftRef.current).toEqual({
       phase: "ready",
-      taskId: LOCAL_TASK_ID,
+      taskId: localTaskId,
       draft: DRAFT,
       suggestionRecordId: null,
     });
@@ -152,7 +172,8 @@ describe("useTaskMapDraftActions (#687)", () => {
     const taskMapDraftRef: { current: TaskMapDraftState } = {
       current: { phase: "idle" },
     };
-    const stateRef = { current: retiredLocalTaskState() };
+    const retired = retiredLocalTaskState();
+    const stateRef = { current: retired.state };
 
     const { result } = renderHook(() =>
       useTaskMapDraftActions({
@@ -161,9 +182,7 @@ describe("useTaskMapDraftActions (#687)", () => {
         setTaskMapDraft: vi.fn(),
         stateRef,
         persistedAreasRef: { current: [] },
-        persistedTaskIdByLocalIdRef: {
-          current: new Map([[LOCAL_TASK_ID, PERSISTED_TASK_ID]]),
-        },
+        persistedTaskIdByLocalIdRef: taskAliasRef(stateRef.current),
         markLocalOnly: vi.fn(),
         syncPersistedWorkflowRows: vi.fn().mockResolvedValue(undefined),
       }),
@@ -201,6 +220,7 @@ describe("useTaskMapDraftActions (#687)", () => {
       error: "safe",
       degrade: "breakdown_rail",
     });
+    const local = aliasKnownLocalTaskState();
     const taskMapDraftRef: { current: TaskMapDraftState } = {
       current: { phase: "idle" },
     };
@@ -209,18 +229,16 @@ describe("useTaskMapDraftActions (#687)", () => {
         dispatch: vi.fn() as unknown as Dispatch<WorkflowAction>,
         taskMapDraftRef,
         setTaskMapDraft: vi.fn(),
-        stateRef: { current: aliasKnownLocalTaskState() },
+        stateRef: { current: local.state },
         persistedAreasRef: { current: [] },
-        persistedTaskIdByLocalIdRef: {
-          current: new Map([[LOCAL_TASK_ID, PERSISTED_TASK_ID]]),
-        },
+        persistedTaskIdByLocalIdRef: taskAliasRef(local.state),
         markLocalOnly: vi.fn(),
         syncPersistedWorkflowRows: vi.fn().mockResolvedValue(undefined),
       }),
     );
 
     await act(async () => {
-      await result.current.requestTaskMapDraftAction(LOCAL_TASK_ID);
+      await result.current.requestTaskMapDraftAction(local.localTaskId);
     });
 
     expect(requestTaskMapDraftMock).toHaveBeenCalledWith(
@@ -228,7 +246,7 @@ describe("useTaskMapDraftActions (#687)", () => {
     );
     expect(taskMapDraftRef.current).toEqual({
       phase: "failed",
-      taskId: LOCAL_TASK_ID,
+      taskId: local.localTaskId,
       message: "Couldn't draft a map right now. Staying on the step list.",
     });
   });
@@ -241,6 +259,7 @@ describe("useTaskMapDraftActions (#687)", () => {
           resolveRequest = resolve;
         }),
     );
+    const retired = retiredLocalTaskState();
     const taskMapDraftRef: { current: TaskMapDraftState } = {
       current: { phase: "idle" },
     };
@@ -250,11 +269,9 @@ describe("useTaskMapDraftActions (#687)", () => {
         dispatch: vi.fn() as unknown as Dispatch<WorkflowAction>,
         taskMapDraftRef,
         setTaskMapDraft,
-        stateRef: { current: retiredLocalTaskState() },
+        stateRef: { current: retired.state },
         persistedAreasRef: { current: [] },
-        persistedTaskIdByLocalIdRef: {
-          current: new Map([[LOCAL_TASK_ID, PERSISTED_TASK_ID]]),
-        },
+        persistedTaskIdByLocalIdRef: taskAliasRef(retired.state),
         markLocalOnly: vi.fn(),
         syncPersistedWorkflowRows: vi.fn().mockResolvedValue(undefined),
       }),
@@ -262,7 +279,7 @@ describe("useTaskMapDraftActions (#687)", () => {
 
     let request: Promise<void>;
     act(() => {
-      request = result.current.requestTaskMapDraftAction(LOCAL_TASK_ID);
+      request = result.current.requestTaskMapDraftAction(retired.localTaskId);
     });
     taskMapDraftRef.current = { phase: "pending", taskId: "task-later" };
 
@@ -284,12 +301,13 @@ describe("useTaskMapDraftActions (#687)", () => {
     const client = {};
     const dispatch = vi.fn();
     const syncPersistedWorkflowRows = vi.fn().mockResolvedValue(undefined);
+    const retired = retiredLocalTaskState();
     createSupabaseBrowserClientMock.mockReturnValue(client);
     approveTaskMapMock.mockResolvedValue(undefined);
     const taskMapDraftRef: { current: TaskMapDraftState } = {
       current: {
         phase: "ready",
-        taskId: LOCAL_TASK_ID,
+        taskId: retired.localTaskId,
         draft: DRAFT,
         suggestionRecordId: "suggestion-1",
       },
@@ -299,18 +317,19 @@ describe("useTaskMapDraftActions (#687)", () => {
         dispatch: dispatch as unknown as Dispatch<WorkflowAction>,
         taskMapDraftRef,
         setTaskMapDraft: vi.fn(),
-        stateRef: { current: retiredLocalTaskState() },
+        stateRef: { current: retired.state },
         persistedAreasRef: { current: [] },
-        persistedTaskIdByLocalIdRef: {
-          current: new Map([[LOCAL_TASK_ID, PERSISTED_TASK_ID]]),
-        },
+        persistedTaskIdByLocalIdRef: taskAliasRef(retired.state),
         markLocalOnly: vi.fn(),
         syncPersistedWorkflowRows,
       }),
     );
 
     await act(async () => {
-      await result.current.approveTaskMapDraftAction(LOCAL_TASK_ID, DRAFT);
+      await result.current.approveTaskMapDraftAction(
+        retired.localTaskId,
+        DRAFT,
+      );
     });
 
     expect(dispatch).toHaveBeenCalledWith({
@@ -333,12 +352,13 @@ describe("useTaskMapDraftActions (#687)", () => {
   it("keeps approval on the local row until reconciliation replaces it", async () => {
     const client = {};
     const dispatch = vi.fn();
+    const local = aliasKnownLocalTaskState();
     createSupabaseBrowserClientMock.mockReturnValue(client);
     approveTaskMapMock.mockResolvedValue(undefined);
     const taskMapDraftRef: { current: TaskMapDraftState } = {
       current: {
         phase: "ready",
-        taskId: LOCAL_TASK_ID,
+        taskId: local.localTaskId,
         draft: DRAFT,
         suggestionRecordId: null,
       },
@@ -348,23 +368,21 @@ describe("useTaskMapDraftActions (#687)", () => {
         dispatch: dispatch as unknown as Dispatch<WorkflowAction>,
         taskMapDraftRef,
         setTaskMapDraft: vi.fn(),
-        stateRef: { current: aliasKnownLocalTaskState() },
+        stateRef: { current: local.state },
         persistedAreasRef: { current: [] },
-        persistedTaskIdByLocalIdRef: {
-          current: new Map([[LOCAL_TASK_ID, PERSISTED_TASK_ID]]),
-        },
+        persistedTaskIdByLocalIdRef: taskAliasRef(local.state),
         markLocalOnly: vi.fn(),
         syncPersistedWorkflowRows: vi.fn().mockResolvedValue(undefined),
       }),
     );
 
     await act(async () => {
-      await result.current.approveTaskMapDraftAction(LOCAL_TASK_ID, DRAFT);
+      await result.current.approveTaskMapDraftAction(local.localTaskId, DRAFT);
     });
 
     expect(dispatch).toHaveBeenCalledWith({
       type: "approveTaskMapLocal",
-      taskId: LOCAL_TASK_ID,
+      taskId: local.localTaskId,
       graph: DRAFT,
     });
     expect(approveTaskMapMock).toHaveBeenCalledWith(
