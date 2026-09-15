@@ -157,6 +157,7 @@ export {
   acceptTimeBlockProposal,
   checkTimeBlockProposalConflict,
   createGoogleCalendarEventFromProposal,
+  findPlacedCalendarBlockIdByClientWriteId,
   placeTimeBlock,
 } from "./workflow/calendar";
 export type { PlaceTimeBlockInput } from "./workflow/calendar";
@@ -164,6 +165,7 @@ export type { PlaceTimeBlockInput } from "./workflow/calendar";
 // --- draftAccept (#737 C1 S3) ---
 export {
   acceptProposalClientWriteId,
+  findJournaledTaskIdByClientWriteId,
   syncJournaledTaskDraftAccept,
 } from "./workflow/draftAccept";
 export type {

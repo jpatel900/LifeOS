@@ -97,26 +97,26 @@ export default function AreasSettingsPage() {
     "unconfirmed",
   );
   useEffect(() => {
-    if (state.status !== "signed-out" || hasRedirectedRef.current) {
+    if (state.status !== "signed-out") {
       return;
     }
 
+    const areasPathname = pathname ?? "/settings/areas";
     const client = createSupabaseBrowserClient();
     if (!client?.auth) {
       // No auth client at all (Supabase not configured): nothing can ever
       // confirm a session, so there is nothing to wait for — same behavior
       // as before this fix.
+      if (hasRedirectedRef.current) return;
       hasRedirectedRef.current = true;
-      router.replace(
-        `/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`,
-      );
+      router.replace(`/login?next=${encodeURIComponent(areasPathname)}`);
       return;
     }
 
     let active = true;
     const { data: subscription } = client.auth.onAuthStateChange(
       (_event, session) => {
-        if (!active || hasRedirectedRef.current) return;
+        if (!active) return;
         if (session) {
           // A session showed up after all. `state.status` is STILL
           // "signed-out" though — `useAreasLoadState`'s mount effect already
@@ -142,16 +142,22 @@ export default function AreasSettingsPage() {
           // already confirmed here — not anything about the reload itself.
           if (sessionConfirmedRef.current === "signed-in") return;
           sessionConfirmedRef.current = "signed-in";
-          if (typeof window !== "undefined") {
+          if (
+            typeof window !== "undefined" &&
+            window.location.pathname === areasPathname
+          ) {
             window.location.reload();
           }
           return;
         }
-        if (sessionConfirmedRef.current === "signed-in") return;
+        if (
+          hasRedirectedRef.current ||
+          sessionConfirmedRef.current === "signed-in"
+        ) {
+          return;
+        }
         hasRedirectedRef.current = true;
-        router.replace(
-          `/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`,
-        );
+        router.replace(`/login?next=${encodeURIComponent(areasPathname)}`);
       },
     );
 

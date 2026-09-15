@@ -993,13 +993,15 @@ export interface DurableWriteServerOps {
   /** Late resolution of the block id for an unplan journalled before it synced. */
   resolvePlanUnplacementBlockId?(
     payload: PlanUnplacementWritePayload,
-  ): string | null;
+  ): string | null | Promise<string | null>;
   /** #737 C1 S5: mark a task dropped on the account. */
   syncTaskDrop?(
     args: SyncTaskDropArgs,
   ): Promise<{ provider: "mock" | "supabase" }>;
   /** Late resolution of the task id for a drop journalled before it synced. */
-  resolveTaskDropTaskId?(payload: TaskDropWritePayload): string | null;
+  resolveTaskDropTaskId?(
+    payload: TaskDropWritePayload,
+  ): string | null | Promise<string | null>;
   /** #960 defect 3: send one journalled raw capture, idempotently. */
   syncCapture?(args: SyncCaptureArgs): Promise<SyncCaptureResult>;
   /**
@@ -1436,7 +1438,7 @@ function planUnplacementHandler(ops: DurableWriteServerOps) {
 
     const blockId =
       payload.persisted_block_id ??
-      ops.resolvePlanUnplacementBlockId?.(payload) ??
+      (await ops.resolvePlanUnplacementBlockId?.(payload)) ??
       null;
 
     if (!blockId) {
@@ -1476,7 +1478,9 @@ function taskDropHandler(ops: DurableWriteServerOps) {
     }
 
     const taskId =
-      payload.persisted_task_id ?? ops.resolveTaskDropTaskId?.(payload) ?? null;
+      payload.persisted_task_id ??
+      (await ops.resolveTaskDropTaskId?.(payload)) ??
+      null;
 
     if (!taskId) {
       throw new Error(
@@ -1569,19 +1573,16 @@ export function createDurableWriteHandlers(
  * mount and every reconnect: an entry already sent is gone from the journal,
  * and one still queued is retried idempotently.
  *
- * #737 C1 S5: annulled pairs are resolved FIRST, before any dispatch, so a
- * write the user has taken back is never delivered. That pass is deliberately
- * not fault-coupled to the drain — if it fails, both halves of the pair stay
- * queued and the drain proceeds, which is the pre-S5 behaviour rather than a
- * new failure mode.
+ * Account-capable replay deliberately does NOT annul queued compensating
+ * pairs. A queued original may already have reached the account before its
+ * response was lost, or may still be in flight in another tab. FIFO replay
+ * recovers the original idempotently, records its account ids, and then sends
+ * the later undo. The no-client caller retains the established unconfigured
+ * local-cancellation path; configuration-history handling is outside this
+ * dispatcher.
  */
 export async function replayDurableWrites(
   ops: DurableWriteServerOps,
 ): Promise<ReplaySummary> {
-  try {
-    await resolveSupersededWrites();
-  } catch {
-    // Nothing was cancelled; nothing was lost. The drain still runs.
-  }
   return replayPendingWrites(createDurableWriteHandlers(ops));
 }

@@ -53,6 +53,7 @@ import {
   DURATION_RECALIBRATION_POLICY_ID,
   type MinimalSupabaseClient,
 } from "./workflow";
+import { findPlacedCalendarBlockIdByClientWriteId } from "./workflow/calendar";
 import {
   PersistenceWriteError,
   getPersistenceFailureKind,
@@ -2860,6 +2861,65 @@ describe("workflow data provider", () => {
       failureKind: "server-capability-missing",
       message: "column block_id does not exist",
     });
+  });
+
+  it("recovers a placed block through the owner's original client write id", async () => {
+    const proposalMaybeSingle = vi.fn().mockResolvedValue({
+      data: { id: proposalId },
+      error: null,
+    });
+    const proposalClientWriteEq = vi
+      .fn()
+      .mockReturnValue({ maybeSingle: proposalMaybeSingle });
+    const proposalUserEq = vi
+      .fn()
+      .mockReturnValue({ eq: proposalClientWriteEq });
+    const proposalSelect = vi.fn().mockReturnValue({ eq: proposalUserEq });
+
+    const blockMaybeSingle = vi.fn().mockResolvedValue({
+      data: { id: blockId },
+      error: null,
+    });
+    const blockProposalEq = vi
+      .fn()
+      .mockReturnValue({ maybeSingle: blockMaybeSingle });
+    const blockUserEq = vi.fn().mockReturnValue({ eq: blockProposalEq });
+    const blockSelect = vi.fn().mockReturnValue({ eq: blockUserEq });
+    const from = vi.fn((table: string) =>
+      table === "time_block_proposals"
+        ? { select: proposalSelect }
+        : { select: blockSelect },
+    );
+
+    const result = await findPlacedCalendarBlockIdByClientWriteId(
+      authenticatedClient(from as MinimalSupabaseClient["from"]),
+      " journal-place-recover ",
+    );
+
+    expect(result).toBe(blockId);
+    expect(proposalUserEq).toHaveBeenCalledWith("user_id", userId);
+    expect(proposalClientWriteEq).toHaveBeenCalledWith(
+      "client_write_id",
+      "journal-place-recover",
+    );
+    expect(blockUserEq).toHaveBeenCalledWith("user_id", userId);
+    expect(blockProposalEq).toHaveBeenCalledWith("proposal_id", proposalId);
+  });
+
+  it("returns no placed block when the owner's client write id has no proposal", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const clientWriteEq = vi.fn().mockReturnValue({ maybeSingle });
+    const userEq = vi.fn().mockReturnValue({ eq: clientWriteEq });
+    const select = vi.fn().mockReturnValue({ eq: userEq });
+    const from = vi.fn().mockReturnValue({ select });
+
+    const result = await findPlacedCalendarBlockIdByClientWriteId(
+      authenticatedClient(from),
+      "journal-place-missing",
+    );
+
+    expect(result).toBeNull();
+    expect(from).toHaveBeenCalledTimes(1);
   });
 
   it("preserves typed failure on syncJournaledRollup errors", async () => {
