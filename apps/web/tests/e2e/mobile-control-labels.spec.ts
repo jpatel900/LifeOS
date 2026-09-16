@@ -73,14 +73,9 @@ test.describe("mobile control label containment (#1011)", () => {
     }) => {
       await page.setViewportSize({ width, height: 824 });
       await page.goto("/");
-      await expect(
-        page.getByTestId("bottom-navigator-capture"),
-      ).toBeVisible();
+      await expect(page.getByTestId("bottom-navigator-capture")).toBeVisible();
 
-      const result = await textContainedInBox(
-        page,
-        "bottom-navigator-capture",
-      );
+      const result = await textContainedInBox(page, "bottom-navigator-capture");
       expect(
         result.contained,
         `Capture label ${JSON.stringify(result.text)} must fit inside button ${JSON.stringify(result.box)} at ${width}px`,
@@ -156,7 +151,4 @@ test.describe("mobile control label containment (#1011)", () => {
  * `PlanSheet.tsx` — rather than either asserting the broken geometry as
  * "passing" or quietly disappearing the finding.
  */
-test.fixme(
-  "Move to today label stays inside its own control when wrapped (PlanSheet.tsx:1032 — outside this lane's manifest, see comment above)",
-  async () => {},
-);
+test.fixme("Move to today label stays inside its own control when wrapped (PlanSheet.tsx:1032 — outside this lane's manifest, see comment above)", async () => {});
