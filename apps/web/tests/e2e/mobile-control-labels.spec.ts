@@ -44,18 +44,6 @@ async function textContainedInBox(
   }>;
 }
 
-function intersects(
-  a: { x: number; y: number; width: number; height: number },
-  b: { x: number; y: number; width: number; height: number },
-): boolean {
-  return (
-    a.x < b.x + b.width &&
-    a.x + a.width > b.x &&
-    a.y < b.y + b.height &&
-    a.y + a.height > b.y
-  );
-}
-
 const MOBILE_WIDTHS = [320, 384, 390] as const;
 
 test.describe("bottom navigator: label containment and geometry (#1011)", () => {
@@ -204,6 +192,53 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
     });
   }
 
+  test("the unsynced-capture badge does not overlap MomentSwitcher's row in the stacked layout (320px)", async ({
+    page,
+  }) => {
+    // Unlike `captureDisabled`, `unsyncedCount` IS wired in production
+    // (TodayMoments.tsx passes `unsyncedCaptureCount`), and the two-row
+    // layout put MomentSwitcher's row directly above Capture's badge
+    // (`absolute -right-1 -top-1` on the button). `unsyncedCaptureCount` is
+    // internal WorkflowContext state with no session-storage seed, so this
+    // renders the same badge markup the app renders (not a fabricated
+    // shape) next to the real button, measures it, and removes it — no
+    // state wiring added, same synthetic-probe discipline as the
+    // disabled-label check above.
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.goto("/");
+    await expect(page.getByTestId("bottom-navigator-capture")).toBeVisible();
+
+    const gap = await page.evaluate(() => {
+      const btn = document.querySelector(
+        '[data-testid="bottom-navigator-capture"]',
+      );
+      const switcher = document.querySelector(
+        '[data-testid="moment-switcher-bottom-nav"]',
+      );
+      if (!btn || !switcher)
+        throw new Error("missing bottom-navigator elements");
+      const badge = document.createElement("span");
+      badge.className =
+        "absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full border border-border bg-background px-1.5 py-0.5 text-[0.7rem] font-semibold leading-none tabular-nums shadow-sm";
+      badge.textContent = "3";
+      btn.appendChild(badge);
+      const badgeRect = badge.getBoundingClientRect();
+      const switcherRect = switcher.getBoundingClientRect();
+      badge.remove();
+      return badgeRect.top - switcherRect.bottom;
+    });
+
+    // Known cosmetic tightness (root's taste call, not fixed here): the
+    // badge's top edge touches the switcher row's bottom edge at 0px gap —
+    // adjacent, not overlapping. This assertion only guards the hard
+    // requirement (no actual overlap); it is not a claim of comfortable
+    // spacing.
+    expect(
+      gap,
+      "unsynced-capture badge must not overlap MomentSwitcher's row at 320px",
+    ).toBeGreaterThanOrEqual(0);
+  });
+
   test("Capture and More each activate in one interaction, via mouse and keyboard, at 390px", async ({
     page,
   }) => {
@@ -261,9 +296,18 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
     await expect(page.getByTestId("close-moment")).toBeVisible();
   });
 
-  test("the two-row band (320px) clears real content at scroll-end, inside the reserved safe-area padding", async ({
+  test("the two-row band (320px) keeps a real clearance margin from content at scroll-end", async ({
     page,
   }) => {
+    // Zero-intersection alone can't discriminate MomentsThemeShell's fix
+    // (152px padding over the 111px two-row band, ~41px margin) from the
+    // pre-fix pairing (112px padding over the SAME 111px band, ~1px margin
+    // — a real bug this test must be able to catch, not just "the two-row
+    // band over the OLD 63px single-row padding", which never intersects
+    // either and proves nothing). A real margin threshold, same shape as
+    // moments-home-parity.spec.ts:911's own "keeps a real clearance margin".
+    const MIN_CLEARANCE_PX = 20;
+
     await page.setViewportSize({ width: 320, height: 700 });
     await page.goto("/?moment=start");
     await expect(page.getByTestId("start-moment-pipeline-rail")).toBeVisible();
@@ -284,14 +328,17 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
     expect(pipelineBox).not.toBeNull();
     expect(areasBox).not.toBeNull();
 
+    const pipelineClearance =
+      navBox!.y - (pipelineBox!.y + pipelineBox!.height);
+    const areasClearance = navBox!.y - (areasBox!.y + areasBox!.height);
     expect(
-      intersects(navBox!, pipelineBox!),
-      "bottom band must not cover the pipeline rail at scroll-end (320px)",
-    ).toBe(false);
+      pipelineClearance,
+      `bottom band clearance from the pipeline rail at scroll-end (320px)`,
+    ).toBeGreaterThanOrEqual(MIN_CLEARANCE_PX);
     expect(
-      intersects(navBox!, areasBox!),
-      "bottom band must not cover the areas card at scroll-end (320px)",
-    ).toBe(false);
+      areasClearance,
+      `bottom band clearance from the areas card at scroll-end (320px)`,
+    ).toBeGreaterThanOrEqual(MIN_CLEARANCE_PX);
   });
 });
 
@@ -369,6 +416,14 @@ const PLAN_WIDTHS = [320, 384, 390, 1440] as const; // PlanSheet is not sm-gated
 test.describe("Plan deferred button: label containment (#1011)", () => {
   test.beforeEach(async ({ page }) => {
     await stubParseCaptureRoute(page);
+    // `created_at`/`updated_at` deliberately use the real current time, not
+    // a pinned literal: `useReEntryRitual.ts` triggers a "Welcome back — N
+    // days away" screen when a task's timestamp is stale relative to
+    // wall-clock now (confirmed live — a fixed past literal broke this
+    // exact test once the repo aged past it). Moment-based flake (the class
+    // `pinMomentPreference` below exists for, see that helper's own doc
+    // comment) is unaffected: this fixture never depends on which moment
+    // heuristic the clock hour would pick.
     const state = planSeedState(new Date().toISOString());
     await page.addInitScript(
       ([key, value]) => {

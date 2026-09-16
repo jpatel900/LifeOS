@@ -105,6 +105,9 @@ export function MomentSwitcher({
   // Capture/More/Settings, all fixed-width — tighter padding/gap here (no
   // rendered label changes) keeps that row fitting. The header instance
   // (sm+, its own row, kbd hints on hover/focus) keeps its original spacing.
+  // Below 384px (BottomNavigator.tsx's two-row layout) this instance owns
+  // its own row and no longer needs the squeeze — left applied anyway
+  // rather than adding a third width tier for no visible benefit.
   const isBottomNav = idPrefix === "bottom-nav";
   const tabRefs = useRef<
     Partial<Record<MomentValue, HTMLButtonElement | null>>
