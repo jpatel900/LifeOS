@@ -101,14 +101,10 @@ export function MomentSwitcher({
   const testIdBase = idPrefix
     ? `moment-switcher-${idPrefix}`
     : "moment-switcher";
-  // #1011: the bottom-nav instance shares its row with Capture (now
-  // `shrink-0`, see BottomNavigator.tsx) plus More and Settings, all four
-  // fixed-width. At 390px that row's combined min-content already exceeds
-  // the available width once Capture stops shrinking — measured live, the
-  // header's roomier px-2.5/gap-1 pushed Settings ~26px past the row. The
-  // header instance (sm+, no such constraint, kbd hints visible on
-  // hover/focus) keeps its own spacing; only the bottom-nav copy tightens
-  // padding/gap, which does not change any rendered label.
+  // #1011: at >=384px the bottom-nav instance shares one row with
+  // Capture/More/Settings, all fixed-width — tighter padding/gap here (no
+  // rendered label changes) keeps that row fitting. The header instance
+  // (sm+, its own row, kbd hints on hover/focus) keeps its original spacing.
   const isBottomNav = idPrefix === "bottom-nav";
   const tabRefs = useRef<
     Partial<Record<MomentValue, HTMLButtonElement | null>>

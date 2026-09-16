@@ -34,38 +34,25 @@ export function MomentsThemeShell({ children }: { children: ReactNode }) {
       data-theme={dataTheme}
       data-testid="moments-home-shell"
     >
-      {/* #553: `pb-32` (128px) reserves clearance for CaptureAffordance's
-          footprint (see page.tsx's #477 comment) — the `calc(...)` term below
-          keeps that clearance in step with the pill's own
-          `env(safe-area-inset-bottom)` offset (CaptureAffordance.tsx), so a
-          device with a home-indicator safe area doesn't lose the last row of
-          content under the pill's now-taller reserved band. 0 on
-          devices/browsers without a safe area, so this is a no-op there.
+      {/* #553/#593/#1011: below `sm` the fixed BottomNavigator is the only
+          bottom obstruction; this padding clears it with a buffer, scoped to
+          the scrolled-to-end position (an unscrolled view can't be helped by
+          trailing padding — a bigger structural change, e.g. an internally
+          scrolled pane, is out of this fix's scope). The `calc(...)` term
+          matches BottomNavigator's own safe-area offset, so it cancels out
+          of the clearance. `min-h-dvh` (not `min-h-screen`): 100vh on mobile
+          Safari measures against the largest viewport (toolbar hidden),
+          which would under-reserve this padding once the toolbar shows.
 
-          This clearance is scoped to the scrolled-to-end position, same as
-          #477 established (padding after the last child can't move
-          earlier-in-flow content, like the side rail's Areas card, out from
-          under the pill on an *unscrolled* view — only a bigger structural
-          change, e.g. bounding this pane to its own internally-scrolled
-          height, could do that, and that's a larger, riskier change than
-          this fix's "smallest safe change" scope — see the #553 e2e guard's
-          comment in tests/e2e/moments-home-parity.spec.ts for the tradeoff
-          this leaves on the table). `min-h-dvh` (not `min-h-screen`)
-          because `100vh` on mobile Safari is measured against the *largest*
-          viewport (address bar hidden), which would under-reserve this
-          padding once the toolbar is showing.
-
-          #593 (audit #2, supersedes the #574 padding math): below `sm` the
-          capture pill no longer renders — the capture action moved into the
-          fixed BottomNavigator band, so the only mobile bottom obstruction
-          is the navigator itself (~74px content height per its
-          MOBILE_NAV_CONTENT_HEIGHT_PX, above the same safe-area term this
-          padding carries, which therefore cancels out of the clearance).
-          `pb-7rem` (112px) keeps a ~38px buffer past that (74+38=112) —
-          same formula as #477/#574, re-solved for the shorter obstruction.
-          `sm:pb-8rem` stays the original desktop value, where the navigator
-          doesn't render and the pill floats at its #553 offset. */}
-      <div className="mx-auto flex min-h-dvh w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-[calc(env(safe-area-inset-bottom)+7rem)] pt-4 sm:px-6 sm:pb-[calc(env(safe-area-inset-bottom)+8rem)] sm:pt-6">
+          Three tiers, kept in sync with BottomNavigator.tsx's own height
+          constants: <384px the navigator is two rows
+          (MOBILE_NAV_CONTENT_HEIGHT_STACKED_PX, 111px) -> `pb-9.5rem` (152px,
+          ~41px buffer); 384px–<640px it's one row
+          (MOBILE_NAV_CONTENT_HEIGHT_PX, 63px) -> `pb-7rem` (112px, ~38px
+          buffer); `sm:pb-8rem` is the original desktop value, where the
+          navigator doesn't render and the pill floats at its own #553
+          offset instead. */}
+      <div className="mx-auto flex min-h-dvh w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-[calc(env(safe-area-inset-bottom)+9.5rem)] pt-4 min-[384px]:pb-[calc(env(safe-area-inset-bottom)+7rem)] sm:px-6 sm:pb-[calc(env(safe-area-inset-bottom)+8rem)] sm:pt-6">
         {/* This div used to open with its own `#stage-content` skip link
             (`--btn`/`--btn-fg` tokens, scoped to the `.lifeos-cockpit` class
             this shell applies) — SUPERSEDED by #974: the true root
