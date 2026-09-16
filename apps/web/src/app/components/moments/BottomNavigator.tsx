@@ -98,7 +98,17 @@ export function BottomNavigator({
   return (
     <nav
       aria-label="Moment and settings"
-      className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 border-t border-border bg-background/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:hidden"
+      // #1011: gap-2 -> gap-0.5 alongside Capture's own px-4 -> px-2 below —
+      // both needed together. shrink-0 (below) keeps Capture at its natural
+      // width, but the row's disabled label ("Resolving…", ~103px in-flow)
+      // is wider than "Capture" (60.25px text) and was NOT covered by the
+      // idle-state pin: at 390px the idle row only had ~2px of spare width,
+      // so the wider disabled label alone pushed Settings past the row's own
+      // edge (measured, gap-2/px-4: overflow; gap-1/px-2 alone: only 2.9px
+      // margin, too thin for cross-browser font variance). Verified live
+      // (390px, disabled label, this spacing): Settings right edge 366.08px
+      // inside a 375px row — an 8.9px margin.
+      className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-0.5 border-t border-border bg-background/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:hidden"
       data-testid="bottom-navigator"
     >
       <MomentSwitcher value={value} onChange={onChange} idPrefix="bottom-nav" />
@@ -120,7 +130,7 @@ export function BottomNavigator({
           // a 48.27px box against a 60.25px label. `shrink-0` keeps this
           // button at its natural content width instead, so the label never
           // paints past its own control.
-          "relative shrink-0 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-70",
+          "relative shrink-0 rounded-full bg-primary px-2 text-sm font-semibold text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-70",
         )}
         data-testid="bottom-navigator-capture"
       >

@@ -114,6 +114,56 @@ test.describe("mobile control label containment (#1011)", () => {
       moreBox!.x + 0.5,
     );
   });
+
+  for (const width of [384, 390] as const) {
+    test(`Capture's disabled label ("Resolving…") does not push Settings past the row at ${width}px`, async ({
+      page,
+    }) => {
+      // `captureDisabled` is modeled on BottomNavigatorProps and fully
+      // styled/aria-wired, but TodayMoments.tsx's only call site never
+      // passes it (always `false` today) — so this state cannot be reached
+      // through any current user flow. That does not make its geometry
+      // safe to skip: the prop and its longer "Resolving…" label are part
+      // of this component's shipped contract, the first thing a future
+      // wiring change would exercise, and the label is 43px wider than
+      // "Capture" while the idle row had only ~9px of spare width at 390px
+      // post-fix (2.9px at 384px) — enough to have silently re-broken
+      // Settings' reachability had this gone unchecked. Synthetic DOM
+      // mutation (not a real interaction) is used because no reachable UI
+      // path can trigger this state without editing TodayMoments.tsx,
+      // which is outside this lane's manifest.
+      await page.setViewportSize({ width, height: 824 });
+      await page.goto("/");
+      await expect(page.getByTestId("bottom-navigator-capture")).toBeVisible();
+
+      const result = await page.evaluate(() => {
+        const btn = document.querySelector(
+          '[data-testid="bottom-navigator-capture"]',
+        );
+        const nav = document.querySelector('[data-testid="bottom-navigator"]');
+        const settings = document.querySelector(
+          '[data-testid="bottom-navigator-settings-link"]',
+        );
+        if (!btn || !nav || !settings) {
+          throw new Error("missing bottom-navigator elements");
+        }
+        const originalHTML = btn.innerHTML;
+        // The label is the button's first text node ("Capture"); swap only
+        // that node's text, leaving every class/attribute untouched, so the
+        // measured box reflects the real `disabled:` variant's own styling.
+        (btn.childNodes[0] as Text).textContent = "Resolving…";
+        const navRight = nav.getBoundingClientRect().right;
+        const settingsRight = settings.getBoundingClientRect().right;
+        btn.innerHTML = originalHTML;
+        return { navRight, settingsRight };
+      });
+
+      expect(
+        result.settingsRight,
+        `Settings (right edge ${result.settingsRight}) must stay within the row (right edge ${result.navRight}) even with the longer disabled label at ${width}px`,
+      ).toBeLessThanOrEqual(result.navRight + 0.5);
+    });
+  }
 });
 
 /**
