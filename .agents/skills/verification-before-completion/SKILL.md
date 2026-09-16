@@ -14,10 +14,12 @@ description: Use when about to claim work is complete, fixed, or passing, before
 ## The Iron Law
 
 ```
-NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
+NO COMPLETION CLAIMS WITHOUT RELEVANT VERIFICATION EVIDENCE
 ```
 
-If you haven't run the verification command in this message, you cannot claim it passes.
+Reuse a captured verification result while the relevant code, inputs and environment remain unchanged. Run fresh checks when those conditions changed, their validity is uncertain, the claim concerns current live state, or the target repository requires a fresh run. A new message alone does not invalidate a result. State what was verified and when; do not describe an earlier run as newly executed.
+
+Reasonable confidence can justify a low-downside reversible change without a measured improvement. That permits acting; it does not justify claiming an unobserved test pass, behavior or saving.
 
 ## The Gate Function
 
@@ -25,7 +27,7 @@ If you haven't run the verification command in this message, you cannot claim it
 BEFORE claiming any status or expressing satisfaction:
 
 1. IDENTIFY: What command proves this claim?
-2. RUN: Execute the FULL command (fresh, complete)
+2. CHECK: Run the required command, or inspect a captured result that still matches the code, inputs and environment. Preserve mandatory fresh-run requirements.
 3. READ: Full output, check exit code, count failures
 4. VERIFY: Does output confirm the claim?
    - If NO: State actual status with evidence
@@ -39,7 +41,7 @@ Skip any step = lying, not verifying
 
 | Claim | Requires | Not Sufficient |
 |-------|----------|----------------|
-| Tests pass | Test command output: 0 failures | Previous run, "should pass" |
+| Tests pass | Matching captured test output: 0 failures | Unmatched old result, "should pass" |
 | Linter clean | Linter output: 0 errors | Partial check, extrapolation |
 | Build succeeds | Build command: exit 0 | Linter passing, logs look good |
 | Bug fixed | Test original symptom: passes | Code changed, assumed fixed |
@@ -56,7 +58,7 @@ Skip any step = lying, not verifying
 - Relying on partial verification
 - Thinking "just this once"
 - Tired and wanting work over
-- **ANY wording implying success without having run verification**
+- **ANY wording implying success without relevant verification evidence**
 
 ## Rationalization Prevention
 
@@ -68,7 +70,7 @@ Skip any step = lying, not verifying
 | "Linter passed" | Linter ≠ compiler |
 | "Agent said success" | Verify independently |
 | "I'm tired" | Exhaustion ≠ excuse |
-| "Partial check is enough" | Partial proves nothing |
+| "Partial check is enough" | Match the claim to the check; do not extrapolate beyond its scope |
 | "Different words so rule doesn't apply" | Spirit over letter |
 
 ## Key Patterns
