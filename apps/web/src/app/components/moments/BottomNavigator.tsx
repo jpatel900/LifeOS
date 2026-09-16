@@ -109,7 +109,18 @@ export function BottomNavigator({
         aria-disabled={captureDisabled}
         className={cn(
           HIT_TARGET_MIN,
-          "relative rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-70",
+          // #1011: this button sits between two other flex items in a
+          // `justify-between` row (MomentSwitcher, then Capture, then
+          // More/Settings). HIT_TARGET_MIN's own `min-w-[44px]` overrides a
+          // flex item's automatic content-based minimum width, so without
+          // `shrink-0` the row's flex-shrink algorithm was free to compress
+          // this button down to that 44px floor even though its label
+          // ("Capture", an unbreakable word) needs ~60px plus padding to
+          // render without escaping the button's own box — measured live at
+          // a 48.27px box against a 60.25px label. `shrink-0` keeps this
+          // button at its natural content width instead, so the label never
+          // paints past its own control.
+          "relative shrink-0 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-70",
         )}
         data-testid="bottom-navigator-capture"
       >
