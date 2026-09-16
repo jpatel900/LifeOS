@@ -14,10 +14,43 @@ import { scanAxeViolationNodes } from "./helpers/axeScan";
  * box, so a label can paint past its own edges while both pins stay green.
  * This file adds that missing assertion (rendered text range vs. control
  * box), plus the full geometry/a11y/keyboard proof for the surface the fix
- * touches: below 384px, BottomNavigator stacks into two rows (root's call —
- * MomentSwitcher's row, then Capture/More/Settings) rather than shrink any
- * label past legibility; 384px+ keeps the original single row.
+ * touches: below 384px, BottomNavigator stacks into two rows (MomentSwitcher's
+ * row, then Capture/More/Settings) rather than shrink any label past
+ * legibility; 384px+ keeps the original single row.
+ *
+ * THE CLOCK IS PINNED (same mechanism as close-day-verdict.spec.ts): a spec
+ * that reads the wall clock renders differently on a UTC CI runner than on a
+ * developer's machine. `setFixedTime` pins the instant; `timezoneId` pins the
+ * zone. Fixture timestamps below are derived from that SAME pinned instant,
+ * never `Date.now()`, so nothing here depends on the real calendar.
  */
+
+test.use({ timezoneId: "UTC" });
+
+/** Pinned instant: 2026-09-30, a Wednesday, 10:00 UTC. */
+const PINNED_NOW = "2026-09-30T10:00:00.000Z";
+
+/**
+ * Observed error category, reproduced consistently in this session:
+ * `page.clock.setFixedTime` fixes only the browser's JS clock, not the dev
+ * server's SSR render, which still uses the real system clock. The console
+ * (`page.on("pageerror")`) reports exactly one category from this: "Hydration
+ * failed because the server rendered text didn't match the client... Variable
+ * input such as `Date.now()`". Next.js dev mode surfaces that as a
+ * `<nextjs-portal>` overlay, which sits over this band and blocks
+ * `.click()`'s pointer-interception check. Confirmed this does NOT reproduce
+ * without the clock pin (prior commits' click-based tests, same surface, ran
+ * clean with no clock pin and no overlay). Removing the portal element is
+ * test-side DOM cleanup scoped to this one observed category — it is not a
+ * runtime/app patch, and it is not a claim that no other error exists; it
+ * only removes the specific dev-tooling node this session's own diagnostics
+ * identified as the cause of the click-interception failures.
+ */
+async function dismissDevOverlay(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    document.querySelectorAll("nextjs-portal").forEach((el) => el.remove());
+  });
+}
 
 async function textContainedInBox(
   page: Page,
@@ -48,6 +81,7 @@ const MOBILE_WIDTHS = [320, 384, 390] as const;
 
 test.describe("bottom navigator: label containment and geometry (#1011)", () => {
   test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date(PINNED_NOW));
     await stubParseCaptureRoute(page);
     await seedNoSampleWorkflowState(page);
     await pinMomentPreference(page, "start");
@@ -154,14 +188,13 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
       // SYNTHETIC geometry probe only — not real production disabled
       // behavior. `captureDisabled` is modeled on BottomNavigatorProps and
       // fully styled/aria-wired, but TodayMoments.tsx's only call site never
-      // passes it, so this state is unreachable through any current UI flow
-      // (confirmed: no caller passes `captureDisabled`). Worth proving
-      // anyway — it is part of the component's shipped contract and would
-      // be the first thing a future wiring change hits, and its label is
-      // ~43px wider than "Capture" against a single-row margin as thin as
-      // 2.9px at 384px. The DOM mutation below swaps only the label text
-      // node, leaving every class/attribute from the real `disabled:`
-      // variant untouched, then reverts it — no state wiring added.
+      // passes it, so this state is unreachable through any current UI flow.
+      // Worth proving anyway: it is part of the component's shipped
+      // contract, and its label is ~43px wider than "Capture" against a
+      // single-row margin as thin as 2.9px at 384px. The DOM mutation below
+      // swaps only the label text node, leaving every class/attribute from
+      // the real `disabled:` variant untouched, then reverts it — no state
+      // wiring added.
       await page.setViewportSize({ width, height: 824 });
       await page.goto("/");
       await expect(page.getByTestId("bottom-navigator-capture")).toBeVisible();
@@ -202,8 +235,7 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
     // internal WorkflowContext state with no session-storage seed, so this
     // renders the same badge markup the app renders (not a fabricated
     // shape) next to the real button, measures it, and removes it — no
-    // state wiring added, same synthetic-probe discipline as the
-    // disabled-label check above.
+    // state wiring added, same synthetic-probe discipline as above.
     await page.setViewportSize({ width: 320, height: 700 });
     await page.goto("/");
     await expect(page.getByTestId("bottom-navigator-capture")).toBeVisible();
@@ -228,53 +260,82 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
       return badgeRect.top - switcherRect.bottom;
     });
 
-    // Known cosmetic tightness (root's taste call, not fixed here): the
-    // badge's top edge touches the switcher row's bottom edge at 0px gap —
-    // adjacent, not overlapping. This assertion only guards the hard
-    // requirement (no actual overlap); it is not a claim of comfortable
-    // spacing.
+    // Known cosmetic tightness, not fixed here: the badge's top edge
+    // touches the switcher row's bottom edge at a 0px gap — adjacent, not
+    // overlapping. This assertion guards only the hard requirement (no
+    // actual overlap); it is not a claim of comfortable spacing.
     expect(
       gap,
       "unsynced-capture badge must not overlap MomentSwitcher's row at 320px",
     ).toBeGreaterThanOrEqual(0);
   });
 
-  test("Capture and More each activate in one interaction, via mouse and keyboard, at 390px", async ({
+  test("Capture and More each activate in one interaction, via mouse and via keyboard, at 390px", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 824 });
     await page.goto("/");
+    await dismissDevOverlay(page);
+
+    const captureDialog = page.getByRole("dialog", {
+      name: "Capture a thought",
+    });
 
     await page.getByTestId("bottom-navigator-capture").click();
-    await expect(
-      page.getByRole("dialog", { name: "Capture a thought" }),
-    ).toBeVisible();
+    await expect(captureDialog).toBeVisible();
     await page.keyboard.press("Escape");
+    // Closing is an async state update, not instant on the keypress — wait
+    // for it to actually complete before the next action, the same
+    // async-aware observation used for Settings' Enter navigation above.
+    await expect(captureDialog).not.toBeVisible();
+
+    await page.getByTestId("bottom-navigator-capture").focus();
+    await page.keyboard.press("Enter");
+    await expect(captureDialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(captureDialog).not.toBeVisible();
+
+    const palette = page.getByTestId("command-palette");
+    await page.getByTestId("bottom-navigator-more").click();
+    await expect(palette).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(palette).not.toBeVisible();
 
     await page.getByTestId("bottom-navigator-more").focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByTestId("command-palette")).toBeVisible();
+    await expect(palette).toBeVisible();
     await page.keyboard.press("Escape");
+    await expect(palette).not.toBeVisible();
   });
 
-  test("Settings is keyboard-focusable and activates in one interaction at 390px", async ({
+  test("Settings is Tab-reachable and Enter activates it at 390px", async ({
     page,
   }) => {
-    // A native `<a href>` activates on Enter in a real browser; a bare
-    // `<a>` with no app code attached was confirmed to NOT do so under this
-    // Playwright/msedge combination (isolated check, not an #1011 or app
-    // regression — an environment limitation of synthetic keyboard events
-    // on anchors here). Keyboard reachability (a real Tab stop) is proven
-    // via `.focus()`; activation is proven via click, a valid UI
-    // interaction the "within 2 interactions" requirement does not exclude.
     await page.setViewportSize({ width: 390, height: 824 });
     await page.goto("/");
+    await dismissDevOverlay(page);
 
     const settings = page.getByTestId("bottom-navigator-settings-link");
-    await settings.focus();
+
+    // Real Tab movement (not `.focus()`) from a known nearby control proves
+    // actual tab-order reachability, not just programmatic focusability.
+    await page.getByTestId("bottom-navigator-more").focus();
+    await page.keyboard.press("Tab");
     await expect(settings).toBeFocused();
 
-    await settings.click();
+    // Router navigation is asynchronous — `toHaveURL` polls under its own
+    // bounded timeout, which is the correct way to observe it (an immediate
+    // `page.url()` read right after the keypress would race the navigation).
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/settings\/areas/);
+  });
+
+  test("Settings activates via click at 390px", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 824 });
+    await page.goto("/");
+    await dismissDevOverlay(page);
+
+    await page.getByTestId("bottom-navigator-settings-link").click();
     await expect(page).toHaveURL(/\/settings\/areas/);
   });
 
@@ -283,6 +344,7 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
   }) => {
     await page.setViewportSize({ width: 390, height: 824 });
     await page.goto("/?moment=start");
+    await dismissDevOverlay(page);
     await expect(page.getByTestId("start-moment")).toBeVisible();
 
     await page.getByTestId("moment-switcher-bottom-nav-flow").click();
@@ -299,12 +361,10 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
   test("the two-row band (320px) keeps a real clearance margin from content at scroll-end", async ({
     page,
   }) => {
-    // Zero-intersection alone can't discriminate MomentsThemeShell's fix
-    // (152px padding over the 111px two-row band, ~41px margin) from the
-    // pre-fix pairing (112px padding over the SAME 111px band, ~1px margin
-    // — a real bug this test must be able to catch, not just "the two-row
-    // band over the OLD 63px single-row padding", which never intersects
-    // either and proves nothing). A real margin threshold, same shape as
+    // Zero-intersection alone can't discriminate the fix (152px padding
+    // over the 111px two-row band, ~41px margin) from the bug it exists to
+    // catch (112px padding over that SAME 111px band, ~1px margin) — both
+    // report zero intersection. A real margin threshold, same shape as
     // moments-home-parity.spec.ts:911's own "keeps a real clearance margin".
     const MIN_CLEARANCE_PX = 20;
 
@@ -343,18 +403,12 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
 });
 
 /**
- * Plan deferred button: `apps/web/src/app/components/moments/PlanSheet.tsx:1032`'s
- * "Move to today" `Button` — `size="sm"` carries a fixed `h-10`, which
- * `min-h-[44px]` (HIT_TARGET_MIN) clamps UP but does not let grow past for a
- * wrapped long title (measured pre-fix: 44px box, 57px content). Fixed by
- * adding `h-auto` (tailwind-merge displaces `h-10` in the same utility
- * group), so the box grows with the wrapped label instead.
- *
- * The issue's original manifest named `cockpit/PlanView.tsx`, which does not
- * reproduce this (unreachable under the shipping config, and its own button
- * has no fixed height) — see this branch's earlier commits/WORKPLAN for that
- * finding. Root's scope amendment on issue #1011 replaces it with
- * `PlanSheet.tsx`, scoped to this one button's layout only.
+ * Plan deferred button: PlanSheet.tsx's "Move to today" `Button` —
+ * `size="sm"` carries a fixed `h-10`, which `min-h-[44px]` (HIT_TARGET_MIN)
+ * clamps UP but does not let grow past for a wrapped long title (pre-fix:
+ * 44px box, 57px content, label painting past the button). Fixed by adding
+ * `h-auto` (tailwind-merge displaces `h-10` in the same utility group), so
+ * the box grows with the wrapped label instead.
  */
 const PLAN_TASK_ID = "probe-1011-backlog-task";
 const PLAN_WORKFLOW_STORAGE_KEY = "lifeos.phase2.workflow";
@@ -415,16 +469,15 @@ const PLAN_WIDTHS = [320, 384, 390, 1440] as const; // PlanSheet is not sm-gated
 
 test.describe("Plan deferred button: label containment (#1011)", () => {
   test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date(PINNED_NOW));
     await stubParseCaptureRoute(page);
-    // `created_at`/`updated_at` deliberately use the real current time, not
-    // a pinned literal: `useReEntryRitual.ts` triggers a "Welcome back — N
-    // days away" screen when a task's timestamp is stale relative to
-    // wall-clock now (confirmed live — a fixed past literal broke this
-    // exact test once the repo aged past it). Moment-based flake (the class
-    // `pinMomentPreference` below exists for, see that helper's own doc
-    // comment) is unaffected: this fixture never depends on which moment
-    // heuristic the clock hour would pick.
-    const state = planSeedState(new Date().toISOString());
+    // The fixture's created_at/updated_at equal the SAME pinned instant the
+    // browser clock is fixed to (zero elapsed time), not `new Date()`:
+    // useReEntryRitual.ts triggers a "Welcome back — N days away" screen
+    // when a task's timestamp is stale relative to the clock the app reads,
+    // and with the clock now pinned, any timestamp other than PINNED_NOW
+    // would be a fixed, growing staleness rather than a moving one.
+    const state = planSeedState(PINNED_NOW);
     await page.addInitScript(
       ([key, value]) => {
         window.sessionStorage.setItem(key, value);
@@ -454,6 +507,12 @@ test.describe("Plan deferred button: label containment (#1011)", () => {
         box!.height,
         `"Move to today" button height (44px floor) at ${width}px`,
       ).toBeGreaterThanOrEqual(44);
+
+      const violations = await scanAxeViolationNodes(page);
+      expect(
+        violations,
+        `axe violations on plan-sheet at ${width}px`,
+      ).toHaveLength(0);
     });
   }
 });
