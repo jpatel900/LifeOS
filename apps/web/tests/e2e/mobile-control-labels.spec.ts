@@ -170,6 +170,65 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
     });
   }
 
+  test("the 383/384px hinge: stacked below, single row at and above, all controls in-viewport and >=44px", async ({
+    page,
+  }) => {
+    // Pins the exact breakpoint BottomNavigator.tsx's `min-[384px]:` switches
+    // on, which MOBILE_WIDTHS (320/384/390) never directly exercises: 320 and
+    // 390 are comfortably on either side, so a hinge planted at the wrong
+    // pixel would not fail any existing test in this file.
+    for (const { width, stacked } of [
+      { width: 383, stacked: true },
+      { width: 384, stacked: false },
+    ] as const) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto("/");
+      await expect(page.getByTestId("bottom-navigator")).toBeVisible();
+
+      const switcherBox = await page
+        .getByTestId("moment-switcher-bottom-nav")
+        .boundingBox();
+      const captureBox = await page
+        .getByTestId("bottom-navigator-capture")
+        .boundingBox();
+      expect(switcherBox, `switcher row at ${width}px`).not.toBeNull();
+      expect(captureBox, `capture row at ${width}px`).not.toBeNull();
+
+      if (stacked) {
+        expect(
+          captureBox!.y,
+          `capture must sit on a row below the switcher at ${width}px`,
+        ).toBeGreaterThanOrEqual(switcherBox!.y + switcherBox!.height - 0.5);
+      } else {
+        expect(
+          Math.abs(captureBox!.y - switcherBox!.y),
+          `capture must share the switcher's row (near-equal top) at ${width}px`,
+        ).toBeLessThanOrEqual(2);
+      }
+
+      for (const testId of BOTTOM_NAV_CONTROLS) {
+        const box = await page.getByTestId(testId).boundingBox();
+        expect(box, `${testId} at ${width}px`).not.toBeNull();
+        expect(
+          box!.width,
+          `${testId} width floor at ${width}px`,
+        ).toBeGreaterThanOrEqual(44);
+        expect(
+          box!.height,
+          `${testId} height floor at ${width}px`,
+        ).toBeGreaterThanOrEqual(44);
+        expect(
+          box!.x,
+          `${testId} left edge at ${width}px`,
+        ).toBeGreaterThanOrEqual(0);
+        expect(
+          box!.x + box!.width,
+          `${testId} right edge at ${width}px (viewport ${width}px)`,
+        ).toBeLessThanOrEqual(width + 0.5);
+      }
+    }
+  });
+
   for (const width of MOBILE_WIDTHS) {
     test(`no WCAG 2.1 AA violations at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });

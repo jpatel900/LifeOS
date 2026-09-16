@@ -44,14 +44,13 @@ export function MomentsThemeShell({ children }: { children: ReactNode }) {
           Safari measures against the largest viewport (toolbar hidden),
           which would under-reserve this padding once the toolbar shows.
 
-          Three tiers, kept in sync with BottomNavigator.tsx's own height
-          constants: <384px the navigator is two rows
-          (MOBILE_NAV_CONTENT_HEIGHT_STACKED_PX, 111px) -> `pb-9.5rem` (152px,
-          ~41px buffer); 384px–<640px it's one row
-          (MOBILE_NAV_CONTENT_HEIGHT_PX, 63px) -> `pb-7rem` (112px, ~38px
-          buffer); `sm:pb-8rem` is the original desktop value, where the
-          navigator doesn't render and the pill floats at its own #553
-          offset instead. */}
+          Three tiers matching BottomNavigator.tsx's own measured content
+          height: <384px it's two rows (~111px) -> `pb-9.5rem` (152px,
+          ~41px buffer); 384px–<640px it's one row (~63px) -> `pb-7rem`
+          (112px, ~49px buffer); `sm:pb-8rem` is the original desktop value,
+          where the navigator doesn't render and the pill floats at its own
+          #553 offset instead. Pinned by mobile-control-labels.spec.ts's
+          breakpoint-hinge and scroll-end clearance tests. */}
       <div className="mx-auto flex min-h-dvh w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-[calc(env(safe-area-inset-bottom)+9.5rem)] pt-4 min-[384px]:pb-[calc(env(safe-area-inset-bottom)+7rem)] sm:px-6 sm:pb-[calc(env(safe-area-inset-bottom)+8rem)] sm:pt-6">
         {/* This div used to open with its own `#stage-content` skip link
             (`--btn`/`--btn-fg` tokens, scoped to the `.lifeos-cockpit` class

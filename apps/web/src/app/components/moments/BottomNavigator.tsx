@@ -20,12 +20,12 @@ import { HIT_TARGET_MIN } from "./hitTarget";
  * #1011: below 384px, MomentSwitcher's three text labels plus
  * Capture/More/Settings don't fit one row without a control's label escaping
  * its own box — this stacks into two rows there instead of shrinking a
- * label past legibility. `min-[384px]:` restores the single row.
- * MOBILE_NAV_CONTENT_HEIGHT_PX below is kept in sync with
- * MomentsThemeShell's reserved bottom padding at each width tier.
+ * label past legibility. `min-[384px]:` restores the single row. Measured
+ * live content height: ~63px single row (>=384px), ~111px stacked (<384px)
+ * — MomentsThemeShell.tsx's reserved bottom padding is sized against both.
+ * Pinned by mobile-control-labels.spec.ts's breakpoint-hinge and scroll-end
+ * clearance tests.
  */
-export const MOBILE_NAV_CONTENT_HEIGHT_PX = 63; // single row, >=384px, measured live
-export const MOBILE_NAV_CONTENT_HEIGHT_STACKED_PX = 111; // two rows, <384px, measured live
 
 export interface BottomNavigatorProps {
   value: MomentValue;
