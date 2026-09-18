@@ -1040,12 +1040,16 @@ export function PlanSheet({
                         }}
                         className={cn(
                           HIT_TARGET_MIN,
-                          // Overrides the shared Button primitive's own
-                          // `whitespace-nowrap` (see the `<li>` comment
-                          // above) so a long title wraps onto further lines
-                          // inside this button instead of forcing it wider
-                          // than the available width.
-                          "touch-manipulation min-w-0 max-w-full justify-start whitespace-normal break-words text-left",
+                          // #1011: `size="sm"` carries a fixed `h-10` —
+                          // `min-h-[44px]` (HIT_TARGET_MIN) clamps the box up
+                          // to 44px but does not let it grow past that for a
+                          // wrapped long title, so the label painted past the
+                          // box (measured live: 44px box, 57px content).
+                          // `h-auto` (tailwind-merge displaces `h-10`) lets
+                          // the box grow with wrapped text instead; the
+                          // `whitespace-normal` below is what enables the
+                          // wrap that then needs room to grow into.
+                          "h-auto touch-manipulation min-w-0 max-w-full justify-start whitespace-normal break-words text-left",
                         )}
                         data-testid={`plan-sheet-promote-${task.id}`}
                       >

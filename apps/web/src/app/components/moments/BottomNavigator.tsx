@@ -8,57 +8,24 @@ import { MomentSwitcher, type MomentValue } from "./MomentSwitcher";
 import { HIT_TARGET_MIN } from "./hitTarget";
 
 /**
- * #574 (epic #555 item 6) — mobile shell: a compact bottom navigator, visible
- * only below the `sm` breakpoint (<640px), so the Start/Flow/Close moment
- * switch and Settings are reachable in the thumb zone without scrolling to
- * the header at the top of the viewport.
+ * #574 — mobile shell: a compact bottom navigator, visible only below `sm`
+ * (640px), so Start/Flow/Close, Capture, More, and Settings stay reachable
+ * in the thumb zone. `TodayMoments.tsx` hides its header equivalents below
+ * `sm`, so this is the only moment switch / Settings link rendered there.
  *
- * D-10 R2 (#483 round 2, blocker #1 — "no taste argument for it"): the
- * header's own MomentSwitcher and Settings link used to render
- * unconditionally at every width too, which meant <640px showed the
- * identical Start/Flow/Close control twice — this bar's, plus the header's
- * (the header's copy additionally stamped keyboard hints on a device with
- * no keyboard). TodayMoments.tsx now wraps its header MomentSwitcher,
- * CountdownClockToggle, and Settings link in a `hidden sm:contents` slot
- * each, so this bar is the ONLY moment switch / Settings link rendered
- * below `sm`, and the header is the only one at `sm`+ (this bar is
- * `sm:hidden`) — a clean split, never both at once.
+ * Renders the SAME MomentSwitcher the header uses (same value/onChange, no
+ * forked state) — `idPrefix="bottom-nav"` only changes its testids, since
+ * both breakpoint instances stay mounted (CSS-hidden, not unmounted).
  *
- * State: this component owns none. It renders the SAME MomentSwitcher
- * component the header uses, wired to the SAME `value`/`onChange` pair
- * (TodayMoments' `moment`/`setMoment`), passed straight through as props —
- * there is no forked/local moment state here, just a second view onto the
- * one source of truth. `idPrefix="bottom-nav"` only changes the rendered
- * `data-testid`s (see MomentSwitcher.tsx) so the two DOM instances (one per
- * breakpoint, never both mounted-and-visible at once post round-2) don't
- * collide on existing `getByTestId("moment-switcher-*")` queries.
- *
- * Height math (kept in sync with CaptureAffordance's mobile bottom offset
- * and MomentsThemeShell's reserved bottom padding — see the cross-reference
- * comments in both, and MOBILE_NAV_CONTENT_HEIGHT_PX below):
- *   pt-2 (8px)
- *   + MomentSwitcher row: 44px button floor (HIT_TARGET_ROW), no extra
- *     wrapper padding or border contribution — D-10 R2 dropped the
- *     `.workflow-shell__nav` class this track used to carry (see
- *     MomentSwitcher.tsx's own comment: its unlayered `padding: 0.35rem`
- *     was inflating the pill to ~57px against every other masthead
- *     control's 44px floor) — measured live at 46px (44 + this pill's own
- *     2px border, border-box).
- *   + pb 0.5rem (8px, before the safe-area-inset-bottom term composed into
- *     the same bottom-padding declaration)
- *   = 8 + 46 + 8 = 62px, measured live (getBoundingClientRect) at 63px.
- *   Was ~73.2px/74 before D-10 R2's height-lock fix — MomentsThemeShell's
- *   reserved end-of-scroll clearance (`pb-7rem` = 112px, sized against the
- *   OLD 74px figure with a ~38px buffer) is untouched by this packet
- *   (that file isn't in this packet's ownership) and is now simply more
- *   generous than the 63px band strictly needs — safe, just not
- *   re-tightened. Originally verified against the real rendered height by
- *   the #574 e2e overlap guard (tests/e2e/moments-home-parity.spec.ts) — a
- *   first cut of this constant assumed the Tailwind `p-1` and undercounted
- *   at 60px, which that guard caught as an actual 390x844 pill/navigator
- *   intersection.
+ * #1011: below 384px, MomentSwitcher's three text labels plus
+ * Capture/More/Settings don't fit one row without a control's label escaping
+ * its own box — this stacks into two rows there instead of shrinking a
+ * label past legibility. `min-[384px]:` restores the single row. Measured
+ * live content height: ~63px single row (>=384px), ~111px stacked (<384px)
+ * — MomentsThemeShell.tsx's reserved bottom padding is sized against both.
+ * Pinned by mobile-control-labels.spec.ts's breakpoint-hinge and scroll-end
+ * clearance tests.
  */
-export const MOBILE_NAV_CONTENT_HEIGHT_PX = 63;
 
 export interface BottomNavigatorProps {
   value: MomentValue;
@@ -98,71 +65,88 @@ export function BottomNavigator({
   return (
     <nav
       aria-label="Moment and settings"
-      className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 border-t border-border bg-background/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:hidden"
+      // #1011: below 384px there is no single-row arrangement that fits the
+      // switcher's three text labels plus Capture/More/Settings without a
+      // control escaping its own box (measured live) — root's call: stack
+      // into two rows there (`flex-col`) rather than shrink any label past
+      // legibility. `min-[384px]:` restores the original single row.
+      className="fixed inset-x-0 bottom-0 z-40 flex flex-col gap-1 border-t border-border bg-background/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:hidden min-[384px]:flex-row min-[384px]:items-center min-[384px]:justify-between min-[384px]:gap-0.5"
       data-testid="bottom-navigator"
     >
-      <MomentSwitcher value={value} onChange={onChange} idPrefix="bottom-nav" />
-      <button
-        type="button"
-        onClick={captureDisabled ? undefined : onCapture}
-        disabled={captureDisabled}
-        aria-disabled={captureDisabled}
-        className={cn(
-          HIT_TARGET_MIN,
-          "relative rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-70",
-        )}
-        data-testid="bottom-navigator-capture"
-      >
-        {captureDisabled ? "Resolving…" : "Capture"}
-        {pendingSync ? (
-          <span
-            role="status"
-            aria-live="polite"
-            className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full border border-border bg-background px-1.5 py-0.5 text-[0.7rem] font-semibold leading-none tabular-nums shadow-sm"
-            style={{ color: "var(--state-watch)" }}
-            data-testid="bottom-navigator-capture-badge"
-          >
-            <span aria-hidden="true">{unsyncedCount}</span>
-            <span className="sr-only">
-              {unsyncedCount} {unsyncedCount === 1 ? "capture" : "captures"}{" "}
-              {SAVED_ON_THIS_DEVICE_SHORT}
+      {/* `min-[384px]:contents` unwraps this row at 384px+, so its child
+          becomes a direct flex item of `nav` again — byte-identical to the
+          pre-two-row single-row layout. */}
+      <div className="flex min-[384px]:contents">
+        <MomentSwitcher
+          value={value}
+          onChange={onChange}
+          idPrefix="bottom-nav"
+        />
+      </div>
+      <div className="flex items-center justify-between gap-0.5 min-[384px]:contents">
+        <button
+          type="button"
+          onClick={captureDisabled ? undefined : onCapture}
+          disabled={captureDisabled}
+          aria-disabled={captureDisabled}
+          className={cn(
+            HIT_TARGET_MIN,
+            // #1011: `min-w-[44px]` (HIT_TARGET_MIN) overrides a flex item's
+            // automatic content-based minimum width, so without `shrink-0`
+            // this button could compress below its own label's render width
+            // (measured live: 48.27px box vs 60.25px "Capture" text).
+            "relative shrink-0 rounded-full bg-primary px-2 text-sm font-semibold text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-70",
+          )}
+          data-testid="bottom-navigator-capture"
+        >
+          {captureDisabled ? "Resolving…" : "Capture"}
+          {pendingSync ? (
+            <span
+              role="status"
+              aria-live="polite"
+              className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full border border-border bg-background px-1.5 py-0.5 text-[0.7rem] font-semibold leading-none tabular-nums shadow-sm"
+              style={{ color: "var(--state-watch)" }}
+              data-testid="bottom-navigator-capture-badge"
+            >
+              <span aria-hidden="true">{unsyncedCount}</span>
+              <span className="sr-only">
+                {unsyncedCount} {unsyncedCount === 1 ? "capture" : "captures"}{" "}
+                {SAVED_ON_THIS_DEVICE_SHORT}
+              </span>
             </span>
-          </span>
-        ) : null}
-      </button>
-      {/* C2-S6 (#687): the palette's touch trigger, same icon-only +
-          sr-only-label pattern as Settings right next to it (390px has no
-          room for a fourth visible text label). "More" is the plain word for
-          "everything else reachable from here" — the palette itself lists
-          Health, Areas, and every moment switch by plain-language name. */}
-      <button
-        type="button"
-        onClick={onOpenPalette}
-        aria-label="More"
-        className={cn(
-          HIT_TARGET_MIN,
-          "rounded-full text-muted-foreground hover:text-foreground",
-        )}
-        data-testid="bottom-navigator-more"
-      >
-        <MoreHorizontal aria-hidden="true" className="size-5" />
-        <span className="sr-only">More</span>
-      </button>
-      {/* #593: icon-only at mobile — the band now also carries Capture, and
-          three text affordances don't fit 390px without crowding. 44px
-          square target; the name survives for AT via aria-label/sr-only. */}
-      <Link
-        href={settingsHref}
-        aria-label="Settings"
-        className={cn(
-          HIT_TARGET_MIN,
-          "rounded-full text-muted-foreground hover:text-foreground",
-        )}
-        data-testid="bottom-navigator-settings-link"
-      >
-        <Settings aria-hidden="true" className="size-5" />
-        <span className="sr-only">Settings</span>
-      </Link>
+          ) : null}
+        </button>
+        {/* C2-S6 (#687): icon-only + sr-only-label, same pattern as
+            Settings — no room for a fourth visible text label. "More" is the
+            plain word for "everything else reachable from here". */}
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          aria-label="More"
+          className={cn(
+            HIT_TARGET_MIN,
+            "rounded-full text-muted-foreground hover:text-foreground",
+          )}
+          data-testid="bottom-navigator-more"
+        >
+          <MoreHorizontal aria-hidden="true" className="size-5" />
+          <span className="sr-only">More</span>
+        </button>
+        {/* #593: icon-only at mobile; the name survives for AT via
+            aria-label/sr-only. */}
+        <Link
+          href={settingsHref}
+          aria-label="Settings"
+          className={cn(
+            HIT_TARGET_MIN,
+            "rounded-full text-muted-foreground hover:text-foreground",
+          )}
+          data-testid="bottom-navigator-settings-link"
+        >
+          <Settings aria-hidden="true" className="size-5" />
+          <span className="sr-only">Settings</span>
+        </Link>
+      </div>
     </nav>
   );
 }

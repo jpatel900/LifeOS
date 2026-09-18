@@ -101,6 +101,14 @@ export function MomentSwitcher({
   const testIdBase = idPrefix
     ? `moment-switcher-${idPrefix}`
     : "moment-switcher";
+  // #1011: at >=384px the bottom-nav instance shares one row with
+  // Capture/More/Settings, all fixed-width — tighter padding/gap here (no
+  // rendered label changes) keeps that row fitting. The header instance
+  // (sm+, its own row, kbd hints on hover/focus) keeps its original spacing.
+  // Below 384px (BottomNavigator.tsx's two-row layout) this instance owns
+  // its own row and no longer needs the squeeze — left applied anyway
+  // rather than adding a third width tier for no visible benefit.
+  const isBottomNav = idPrefix === "bottom-nav";
   const tabRefs = useRef<
     Partial<Record<MomentValue, HTMLButtonElement | null>>
   >({});
@@ -170,7 +178,10 @@ export function MomentSwitcher({
       aria-label="Moment"
       aria-orientation="horizontal"
       onKeyDown={handleKeyDown}
-      className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40"
+      className={cn(
+        "inline-flex items-center rounded-full border border-border bg-muted/40",
+        isBottomNav ? "gap-0.5" : "gap-1",
+      )}
       data-testid={testIdBase}
     >
       {TABS.map((tab) => {
@@ -194,7 +205,8 @@ export function MomentSwitcher({
               // header comment. MomentSwitcher stays the visually dominant
               // control (only accent fill, still the widest by a wide
               // margin) — this is a padding harmonization, not a demotion.
-              "group flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0",
+              "group flex items-center gap-1.5 rounded-full py-1.5 text-sm font-semibold outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0",
+              isBottomNav ? "px-1.5" : "px-2.5",
               selected
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground",
