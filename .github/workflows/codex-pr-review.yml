@@ -161,6 +161,24 @@ jobs:
       final_message: ${{ steps.run_codex.outputs.final-message }}
 
     steps:
+      - name: Create unprivileged Codex review user
+        run: |
+          sudo adduser --system --home /home/codex-review --shell /bin/bash --group codex-review
+          sudo usermod -a -G codex-review runner
+          sudo usermod -a -G runner codex-review
+
+          review_groups="$(id -nG codex-review)"
+          echo "Codex review user groups: $review_groups"
+          for review_group in $review_groups; do
+            case "$review_group" in
+              codex-review | runner) ;;
+              *)
+                echo "Codex review user unexpectedly belongs to $review_group." >&2
+                exit 1
+                ;;
+            esac
+          done
+
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
@@ -176,6 +194,18 @@ jobs:
           git fetch --no-tags origin \
             "$PR_BASE_REF" \
             "+refs/pull/$PR_NUMBER/head"
+
+      - name: Prepare checkout for unprivileged review
+        run: |
+          sudo chown -hR runner:codex-review "$GITHUB_WORKSPACE"
+          sudo chmod -R g+rwX "$GITHUB_WORKSPACE"
+          sudo find "$GITHUB_WORKSPACE" -type d -exec chmod g+s {} +
+          sudo -H -u codex-review git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sudo -H -u codex-review test -r "$GITHUB_WORKSPACE/AGENTS.md"
+          if sudo -H -u codex-review sudo -n true 2>/dev/null; then
+            echo "Codex review user unexpectedly has sudo access." >&2
+            exit 1
+          fi
 
       - name: Run Codex baseline PR review
         id: run_codex
@@ -193,7 +223,8 @@ jobs:
           prompt-file: .github/codex/prompts/pr-review-baseline.md
           output-file: codex-pr-review-baseline.md
           sandbox: read-only
-          safety-strategy: drop-sudo
+          safety-strategy: unprivileged-user
+          codex-user: codex-review
 
   post-baseline-review:
     name: Post baseline review
@@ -271,6 +302,24 @@ jobs:
       final_message: ${{ steps.run_codex.outputs.final-message }}
 
     steps:
+      - name: Create unprivileged Codex review user
+        run: |
+          sudo adduser --system --home /home/codex-review --shell /bin/bash --group codex-review
+          sudo usermod -a -G codex-review runner
+          sudo usermod -a -G runner codex-review
+
+          review_groups="$(id -nG codex-review)"
+          echo "Codex review user groups: $review_groups"
+          for review_group in $review_groups; do
+            case "$review_group" in
+              codex-review | runner) ;;
+              *)
+                echo "Codex review user unexpectedly belongs to $review_group." >&2
+                exit 1
+                ;;
+            esac
+          done
+
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
@@ -286,6 +335,18 @@ jobs:
           git fetch --no-tags origin \
             "$PR_BASE_REF" \
             "+refs/pull/$PR_NUMBER/head"
+
+      - name: Prepare checkout for unprivileged review
+        run: |
+          sudo chown -hR runner:codex-review "$GITHUB_WORKSPACE"
+          sudo chmod -R g+rwX "$GITHUB_WORKSPACE"
+          sudo find "$GITHUB_WORKSPACE" -type d -exec chmod g+s {} +
+          sudo -H -u codex-review git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sudo -H -u codex-review test -r "$GITHUB_WORKSPACE/AGENTS.md"
+          if sudo -H -u codex-review sudo -n true 2>/dev/null; then
+            echo "Codex review user unexpectedly has sudo access." >&2
+            exit 1
+          fi
 
       - name: Run Codex escalated PR review
         id: run_codex
@@ -304,7 +365,8 @@ jobs:
           prompt-file: .github/codex/prompts/pr-review-escalated.md
           output-file: codex-pr-review-escalated.md
           sandbox: read-only
-          safety-strategy: drop-sudo
+          safety-strategy: unprivileged-user
+          codex-user: codex-review
 
   post-escalated-review:
     name: Post escalated review
