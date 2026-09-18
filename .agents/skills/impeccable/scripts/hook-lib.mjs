@@ -1837,13 +1837,9 @@ export async function runHook({ stdinJson, env = {}, cwd = process.cwd(), now = 
 
     const cache = readCache(projectCwd);
     const sessionId = event.session_id || 'unknown';
-    const det = detector || await loadDetector();
-    if (!det || typeof det.detectText !== 'function') {
-      // Cache is not mutated yet at this point; nothing to persist.
-      return result({ skipped: 'detector-missing', durationMs: Date.now() - started });
-    }
-    const scanOptions = designSystemOptions(config, det, projectCwd);
     const tiered = perEditTieringActive(config, harness);
+    let det = detector;
+    let scanOptions;
 
     let pendingWinner = null;
     let cleanWinner = null;
@@ -1902,6 +1898,13 @@ export async function runHook({ stdinJson, env = {}, cwd = process.cwd(), now = 
           continue;
         }
       }
+
+      if (!det) det = await loadDetector();
+      if (!det || typeof det.detectText !== 'function') {
+        // Cache is not mutated yet at this point; nothing to persist.
+        return result({ skipped: 'detector-missing', durationMs: Date.now() - started });
+      }
+      if (!scanOptions) scanOptions = designSystemOptions(config, det, projectCwd);
 
       if (primaryFileSet.has(filePath)) {
         const editCount = bumpEditCount(cache, sessionId, filePath);
