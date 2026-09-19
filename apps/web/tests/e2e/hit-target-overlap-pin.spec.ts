@@ -32,9 +32,6 @@ import { scanInteractiveGeometry } from "./helpers/interactiveGeometry";
  *
  * A few surfaces are NOT yet at zero, and are pinned at their honest
  * measured count instead of a wishful 0:
- *   - `login` (both viewports): the shadcn Input/Button default height is
- *     40px, not 44 — three controls (email, password, Sign in) on the
- *     pre-account sign-in door. Pre-existing, not introduced by this lane.
  *   - `settings-areas` (both viewports): the legacy AdminShell surface has
  *     accumulated 40px controls (tab links, color swatches, area actions) —
  *     23 on desktop, 10 on mobile (fewer because mobile collapses some rows
@@ -63,6 +60,11 @@ import { scanInteractiveGeometry } from "./helpers/interactiveGeometry";
  * AreasSheet's chips are not the legacy 20px-wide ones). Total drops
  * 45 -> 41 (the 4 that leave are exactly the old `areas` mobile row).
  *
+ * #687 C5 (Target Card 8): `login` cleared to 0 on both viewports — its
+ * three 40px controls (email, password, Sign in; shadcn's `h-10` default)
+ * now reach 44px via local sizing in `app/login/page.tsx` only, measured at
+ * 44px before this entry was removed. Total drops 41 -> 35.
+ *
  * Two assertions make it a ratchet, same mechanism as plainLanguageGuard:
  *   1. Per-surface, per-viewport counts are asserted with STRICT EQUALITY,
  *      not `<=`. A regression (count goes up) fails immediately. A genuine
@@ -88,10 +90,6 @@ const BASELINE_OVERRIDES: Record<
   string,
   Partial<Record<ViewportId, SurfaceBaseline>>
 > = {
-  login: {
-    desktop: { subMin: 3, overlaps: 0 },
-    mobile: { subMin: 3, overlaps: 0 },
-  },
   "settings-areas": {
     desktop: { subMin: 23, overlaps: 0 },
     mobile: { subMin: 10, overlaps: 0 },
@@ -123,7 +121,7 @@ for (const surface of PINNED_SURFACES) {
 // deliberate per-surface entry above explaining the new count, and moving
 // either DOWN without deleting/shrinking the matching entry above is a bug
 // (assertion 3 below catches that drift).
-const TOTAL_SUB_MIN_PINNED = 41;
+const TOTAL_SUB_MIN_PINNED = 35;
 const TOTAL_OVERLAPS_PINNED = 0;
 
 test.describe("hit-target + overlap pin (Final UX Loop C5)", () => {
