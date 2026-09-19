@@ -255,8 +255,8 @@ sign in (or demo mode)
 → plan/place on the rail in the Plan sheet
 → approval-gated calendar write (mock adapter; real Google only in manual/prod smoke)
 → run the block in the Flow moment
-→ complete with an outcome in the Close moment
-→ close the day, see the verdict
+→ end the session with an outcome in the end-session sheet
+→ close the day in the Close moment, see the verdict
 ```
 
 Acceptance criteria:
@@ -313,8 +313,10 @@ Named families, not a file inventory — `apps/web/tests/e2e/` is the truth if t
 - hit-targets-390 + overlap pin: no target under 44px, no overlaps, at 390px
 - close-day-verdict: closing the day shows a verdict; further closes are idempotent
 - durable-wins-reviews, durable-plans-drafts: device-journal replay dedupes; copy tells the persistence truth
-- cockpit-google-approval: the approval bridge survives the port
+- plan-, review-, health-, areas-port-truth (signed-in tier): drive each ported sheet, check it against what the account holds, and check refresh/Back/Forward agree with the URL (C2 ports)
 - a11y-axe-pin: axe at AA on the covered surfaces
+
+Legacy cockpit specs (`cockpit-google-approval`, `cockpit-flow-repair`, `handoff-cockpit`, `capture-parse-mock`, `taskmap-lifecycle`, and the legacy-route cases in `hit-targets-390`) skip unless `NEXT_PUBLIC_MOMENTS_HOME=false`. CI runs with the flag on, so they are not standing pins. The Plan sheet's Google approval gate is held by a unit test in `PlanSheet.test.tsx`.
 
 ## 8. AI Contract Tests
 
