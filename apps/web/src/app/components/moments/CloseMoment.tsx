@@ -407,7 +407,10 @@ export function CloseMoment({
                     {draft.summary.misses.join("; ")}
                   </p>
                 ) : null}
-                <div className="flex items-center justify-end gap-1">
+                {/* #1016: the row wraps so the toggle and both decisions never
+                    push the card past a phone screen; Dismiss + Approve wrap as a
+                    pair. */}
+                <div className="flex flex-wrap items-center justify-end gap-x-1 gap-y-2">
                   {draft.hasEnhancement && onToggleRollupProse ? (
                     <Button
                       type="button"
@@ -420,26 +423,28 @@ export function CloseMoment({
                       {draft.enhanced ? "Keep original" : "Use AI version"}
                     </Button>
                   ) : null}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onDismissRollup(draft.areaId)}
-                    className="min-h-[44px] touch-manipulation"
-                    data-testid={`close-moment-rollup-dismiss-${draft.areaId}`}
-                  >
-                    Dismiss
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="sm"
-                    onClick={() => onApproveRollup(draft)}
-                    className="min-h-[44px] touch-manipulation"
-                    data-testid={`close-moment-rollup-approve-${draft.areaId}`}
-                  >
-                    Approve rollup
-                  </Button>
+                  <div className="flex flex-wrap justify-end gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDismissRollup(draft.areaId)}
+                      className="min-h-[44px] touch-manipulation"
+                      data-testid={`close-moment-rollup-dismiss-${draft.areaId}`}
+                    >
+                      Dismiss
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      onClick={() => onApproveRollup(draft)}
+                      className="min-h-[44px] touch-manipulation"
+                      data-testid={`close-moment-rollup-approve-${draft.areaId}`}
+                    >
+                      Approve rollup
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -530,7 +535,10 @@ export function CloseMoment({
                       )}
                     </p>
                   ) : null}
-                  <div className="flex items-center justify-end gap-1">
+                  {/* #1016: the row wraps so the toggle and both decisions never
+                      push the card past a phone screen; Dismiss + Approve wrap as a
+                      pair. */}
+                  <div className="flex flex-wrap items-center justify-end gap-x-1 gap-y-2">
                     {draft.hasEnhancement && onToggleMonthlyRollupProse ? (
                       <Button
                         type="button"
@@ -543,26 +551,28 @@ export function CloseMoment({
                         {draft.enhanced ? "Keep original" : "Use AI version"}
                       </Button>
                     ) : null}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDismissMonthlyRollup(draft.areaId)}
-                      className="min-h-[44px] touch-manipulation"
-                      data-testid={`close-moment-monthly-rollup-dismiss-${draft.areaId}`}
-                    >
-                      Dismiss
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="default"
-                      size="sm"
-                      onClick={() => onApproveMonthlyRollup(draft)}
-                      className="min-h-[44px] touch-manipulation"
-                      data-testid={`close-moment-monthly-rollup-approve-${draft.areaId}`}
-                    >
-                      Approve rollup
-                    </Button>
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDismissMonthlyRollup(draft.areaId)}
+                        className="min-h-[44px] touch-manipulation"
+                        data-testid={`close-moment-monthly-rollup-dismiss-${draft.areaId}`}
+                      >
+                        Dismiss
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        onClick={() => onApproveMonthlyRollup(draft)}
+                        className="min-h-[44px] touch-manipulation"
+                        data-testid={`close-moment-monthly-rollup-approve-${draft.areaId}`}
+                      >
+                        Approve rollup
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );

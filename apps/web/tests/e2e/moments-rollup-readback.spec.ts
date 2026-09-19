@@ -34,8 +34,7 @@ const MISS_TASK_ID = "e2e-task-rollup-miss";
 const BLOCK_DONE = "e2e-block-rollup-done";
 const BLOCK_MISS = "e2e-block-rollup-miss";
 
-function buildSeedState() {
-  const nowMs = Date.now();
+function buildSeedState(nowMs: number = Date.now()) {
   const nowIso = new Date(nowMs).toISOString();
   const daysBefore = (days: number) =>
     new Date(nowMs - days * MS_PER_DAY).toISOString();
@@ -108,12 +107,12 @@ function buildSeedState() {
   };
 }
 
-async function openCloseMoment(page: Page) {
+async function openCloseMoment(page: Page, nowMs?: number) {
   await page.addInitScript(
     ({ key, value }) => {
       window.sessionStorage.setItem(key, JSON.stringify(value));
     },
-    { key: STORAGE_KEY, value: buildSeedState() },
+    { key: STORAGE_KEY, value: buildSeedState(nowMs) },
   );
   await page.goto("/");
   await expect(page.getByTestId("today-moments")).toBeVisible();
@@ -160,3 +159,231 @@ test.describe("moments rollup readback (/, #260)", () => {
     );
   });
 });
+
+/**
+ * #1016 — at a 390px phone width the pending weekly rollup card must stay
+ * inside the screen. The action row (Keep original / Dismiss / Approve
+ * rollup) used to sit on one line that could not wrap; with the AI-polished
+ * toggle present its three buttons need ~360px, which pushed the card (and
+ * the whole page) to ~436px wide.
+ *
+ * The unenhanced case runs in every lane. The AI-polished case needs a
+ * Supabase browser client to exist (the prose request is skipped without
+ * one), which the default E2E server does not have — so it runs only when the
+ * server was booted with synthetic NEXT_PUBLIC_SUPABASE_* values and
+ * LIFEOS_E2E_SYNTHETIC_SUPABASE=1 is set. No real Supabase is contacted: the
+ * session read is local and every request to the synthetic host is aborted.
+ * The class-level pin for both weekly and monthly rows lives in
+ * CloseMoment.test.tsx.
+ */
+
+// Fixed clock + zone so the week label and moment are the same on every run.
+const FIXED_NOW_MS = Date.parse("2026-09-16T14:00:00-04:00");
+const SYNTHETIC_SUPABASE = process.env.LIFEOS_E2E_SYNTHETIC_SUPABASE === "1";
+const SYNTHETIC_SUPABASE_ORIGIN = "http://127.0.0.1:54321";
+
+async function measureRollupCard(page: Page) {
+  return page.evaluate((areaId) => {
+    const rect = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return {
+        left: r.left,
+        right: r.right,
+        top: r.top,
+        bottom: r.bottom,
+        width: r.width,
+        height: r.height,
+      };
+    };
+    const card = document.querySelector(
+      `[data-testid="close-moment-rollup-${areaId}"]`,
+    );
+    const stage = document.querySelector('[data-testid="close-moment"]');
+    if (!card || !stage) {
+      throw new Error("rollup card missing");
+    }
+    return {
+      docScrollWidth: document.documentElement.scrollWidth,
+      docClientWidth: document.documentElement.clientWidth,
+      viewportWidth: window.innerWidth,
+      stage: rect(stage),
+      card: rect(card),
+      buttons: Array.from(card.querySelectorAll("button")).map((button) => ({
+        label: (button.textContent ?? "").trim(),
+        ...rect(button),
+      })),
+      text: Array.from(card.querySelectorAll("p, span")).map((node) => ({
+        label: (node.textContent ?? "").trim().slice(0, 40),
+        ...rect(node),
+      })),
+    };
+  }, AREA_ID);
+}
+
+type Measured = Awaited<ReturnType<typeof measureRollupCard>>;
+
+function expectContained(m: Measured, expectedLabels: string[]) {
+  // The page never scrolls sideways and the stage/card fit the viewport.
+  expect(m.docScrollWidth).toBeLessThanOrEqual(m.docClientWidth);
+  expect(m.stage.right).toBeLessThanOrEqual(m.viewportWidth);
+  expect(m.card.left).toBeGreaterThanOrEqual(0);
+  expect(m.card.right).toBeLessThanOrEqual(m.viewportWidth);
+
+  // Every control is still there, inside the card, and a full touch target.
+  expect(m.buttons.map((b) => b.label)).toEqual(expectedLabels);
+  for (const b of m.buttons) {
+    expect(b.left, b.label).toBeGreaterThanOrEqual(m.card.left);
+    expect(b.right, b.label).toBeLessThanOrEqual(m.card.right);
+    expect(b.height, b.label).toBeGreaterThanOrEqual(44);
+    expect(b.width, b.label).toBeGreaterThanOrEqual(44);
+  }
+  // No two controls overlap.
+  for (let i = 0; i < m.buttons.length; i += 1) {
+    for (let j = i + 1; j < m.buttons.length; j += 1) {
+      const a = m.buttons[i];
+      const b = m.buttons[j];
+      const overlaps =
+        a.left < b.right &&
+        b.left < a.right &&
+        a.top < b.bottom &&
+        b.top < a.bottom;
+      expect(overlaps, `${a.label} overlaps ${b.label}`).toBe(false);
+    }
+  }
+  // Prose, labels and the AI badge stay inside the card.
+  for (const t of m.text) {
+    expect(t.left, t.label).toBeGreaterThanOrEqual(m.card.left);
+    expect(t.right, t.label).toBeLessThanOrEqual(m.card.right);
+  }
+}
+
+// Optional: where to save proof screenshots (never set in CI).
+const SHOTS_DIR = process.env.LIFEOS_E2E_SHOTS_DIR;
+
+async function maybeShoot(page: Page, name: string) {
+  if (!SHOTS_DIR) {
+    return;
+  }
+  await page
+    .getByTestId(`close-moment-rollup-${AREA_ID}`)
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${SHOTS_DIR}/${name}.png` });
+}
+
+for (const viewport of [
+  { name: "390 mobile", width: 390, height: 844 },
+  { name: "desktop", width: 1280, height: 900 },
+]) {
+  test.describe(`rollup card stays on screen (#1016, ${viewport.name})`, () => {
+    test.use({
+      viewport: { width: viewport.width, height: viewport.height },
+      timezoneId: "America/Toronto",
+    });
+
+    test.beforeEach(async ({ page }) => {
+      await page.clock.setFixedTime(FIXED_NOW_MS);
+    });
+
+    test("unenhanced draft: Dismiss and Approve fit inside the card", async ({
+      page,
+    }) => {
+      await page.route(`${SYNTHETIC_SUPABASE_ORIGIN}/**`, (route) =>
+        route.abort(),
+      );
+      // Keep this case unenhanced in every lane: the prose request (if any)
+      // falls back to the plain draft.
+      await page.route("**/api/rollup-prose", (route) =>
+        route.fulfill({ status: 503, body: "{}" }),
+      );
+      await openCloseMoment(page, FIXED_NOW_MS);
+      const draft = page.getByTestId(`close-moment-rollup-${AREA_ID}`);
+      await expect(draft).toBeVisible();
+      await expect(
+        page.getByTestId(`close-moment-rollup-toggleprose-${AREA_ID}`),
+      ).toHaveCount(0);
+
+      await maybeShoot(page, `unenhanced-${viewport.width}`);
+      expectContained(await measureRollupCard(page), [
+        "Dismiss",
+        "Approve rollup",
+      ]);
+    });
+
+    test("AI-polished draft: all three actions fit inside the card", async ({
+      page,
+    }) => {
+      test.skip(
+        !SYNTHETIC_SUPABASE,
+        "needs a server booted with synthetic NEXT_PUBLIC_SUPABASE_* values",
+      );
+      // Never contact the synthetic Supabase host.
+      await page.route(`${SYNTHETIC_SUPABASE_ORIGIN}/**`, (route) =>
+        route.abort(),
+      );
+      let proseRequests = 0;
+      await page.route("**/api/rollup-prose", async (route) => {
+        proseRequests += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ok: true,
+            source: "ai",
+            summary: {
+              highlights: ["You shipped the onboarding flow this week."],
+              misses: ["The weekly review slipped past its slot."],
+              counts: { completed: 1, missed: 1 },
+            },
+          }),
+        });
+      });
+
+      await openCloseMoment(page, FIXED_NOW_MS);
+      const draft = page.getByTestId(`close-moment-rollup-${AREA_ID}`);
+      // Assert the enhanced state is really on screen before measuring — a
+      // two-button row would pass vacuously.
+      await expect(
+        page.getByTestId(`close-moment-rollup-aiflag-${AREA_ID}`),
+      ).toHaveText("AI-polished");
+      const toggle = page.getByTestId(
+        `close-moment-rollup-toggleprose-${AREA_ID}`,
+      );
+      await expect(toggle).toHaveText("Keep original");
+      await expect(draft).toContainText("You shipped the onboarding flow");
+      expect(proseRequests).toBe(1);
+
+      await maybeShoot(page, `enhanced-${viewport.width}`);
+      expectContained(await measureRollupCard(page), [
+        "Keep original",
+        "Dismiss",
+        "Approve rollup",
+      ]);
+
+      // Keyboard: the three actions are reachable in reading order.
+      await toggle.focus();
+      await expect(toggle).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(
+        page.getByTestId(`close-moment-rollup-dismiss-${AREA_ID}`),
+      ).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(
+        page.getByTestId(`close-moment-rollup-approve-${AREA_ID}`),
+      ).toBeFocused();
+
+      // Keep original still swaps back to the plain wording, and the row
+      // stays contained with the "Use AI version" label.
+      await toggle.click();
+      await expect(toggle).toHaveText("Use AI version");
+      await expect(
+        page.getByTestId(`close-moment-rollup-aiflag-${AREA_ID}`),
+      ).toHaveCount(0);
+      await expect(draft).toContainText("Shipped onboarding flow");
+      expectContained(await measureRollupCard(page), [
+        "Use AI version",
+        "Dismiss",
+        "Approve rollup",
+      ]);
+    });
+  });
+}

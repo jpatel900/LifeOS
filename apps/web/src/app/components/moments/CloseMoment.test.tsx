@@ -545,6 +545,52 @@ describe("CloseMoment — #486 monthly rollup readback", () => {
   });
 });
 
+// #1016 — with the AI-polished toggle present, the three rollup actions need
+// ~360px on one line, which pushed the card off a 390px phone screen. jsdom
+// has no layout, so this pins the classes; the geometric proof lives in
+// tests/e2e/moments-rollup-readback.spec.ts.
+describe("CloseMoment — #1016 rollup actions wrap on narrow screens", () => {
+  for (const kind of ["rollup", "monthly-rollup"] as const) {
+    it(`${kind}: the action row wraps and keeps all three 44px controls`, () => {
+      renderClose(
+        kind === "rollup"
+          ? {
+              pendingRollups: [
+                { ...rollupDraft, enhanced: true, hasEnhancement: true },
+              ],
+            }
+          : {
+              pendingMonthlyRollups: [
+                { ...monthlyRollupDraft, enhanced: true, hasEnhancement: true },
+              ],
+            },
+      );
+      const toggle = screen.getByTestId(
+        `close-moment-${kind}-toggleprose-area-1`,
+      );
+      const dismiss = screen.getByTestId(`close-moment-${kind}-dismiss-area-1`);
+      const approve = screen.getByTestId(`close-moment-${kind}-approve-area-1`);
+
+      const row = toggle.parentElement as HTMLElement;
+      expect(row).toHaveClass("flex", "flex-wrap");
+      expect(row).not.toHaveClass("overflow-hidden");
+
+      // Dismiss + Approve wrap together as one group inside the row.
+      const decisions = dismiss.parentElement as HTMLElement;
+      expect(decisions).toBe(approve.parentElement);
+      expect(decisions.parentElement).toBe(row);
+      expect(decisions).toHaveClass("flex", "flex-wrap");
+
+      for (const control of [toggle, dismiss, approve]) {
+        expect(control).toHaveClass("min-h-[44px]");
+      }
+      expect(toggle).toHaveTextContent("Keep original");
+      expect(dismiss).toHaveTextContent("Dismiss");
+      expect(approve).toHaveTextContent("Approve rollup");
+    });
+  }
+});
+
 // FR-031 slice F5 (#679) — the single Close map-revision surface.
 describe("CloseMoment — F5 map-revision offer", () => {
   const offerVm = {
