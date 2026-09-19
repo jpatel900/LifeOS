@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
+import { SIGNED_IN_TAG, requireSupabaseEnv } from "./helpers/signedInAccount";
 
 // HIGH-1 (#670): /api/parse-capture requires a verified bearer token and the
 // E2E dev server has no Supabase env, so every capture flow in this file runs
@@ -167,20 +168,35 @@ test.describe("moments rollup readback (/, #260)", () => {
  * toggle present its three buttons need ~360px, which pushed the card (and
  * the whole page) to ~436px wide.
  *
- * The unenhanced case runs in every lane. The AI-polished case needs a
- * Supabase browser client to exist (the prose request is skipped without
- * one), which the default E2E server does not have — so it runs only when the
- * server was booted with synthetic NEXT_PUBLIC_SUPABASE_* values and
- * LIFEOS_E2E_SYNTHETIC_SUPABASE=1 is set. No real Supabase is contacted: the
- * session read is local and every request to the synthetic host is aborted.
- * The class-level pin for both weekly and monthly rows lives in
- * CloseMoment.test.tsx.
+ * The unenhanced case runs in the ordinary `e2e` job. The AI-polished case
+ * needs a Supabase browser client to exist (the prose request is skipped
+ * without one), which only the `e2e-signed-in` job's server has — so it
+ * carries the @signed-in tag and runs there, and `requireSupabaseEnv()` makes
+ * it fail loudly (never skip) if the env is missing. It never signs in and
+ * never touches the account: the page stays signed out, every request to the
+ * Supabase origin is aborted, and the prose response is a local stub, so no
+ * AI provider is called. The class-level pin for both weekly and monthly rows
+ * lives in CloseMoment.test.tsx.
  */
 
 // Fixed clock + zone so the week label and moment are the same on every run.
 const FIXED_NOW_MS = Date.parse("2026-09-16T14:00:00-04:00");
-const SYNTHETIC_SUPABASE = process.env.LIFEOS_E2E_SYNTHETIC_SUPABASE === "1";
-const SYNTHETIC_SUPABASE_ORIGIN = "http://127.0.0.1:54321";
+
+/**
+ * The Supabase origin the page would talk to, checked to be loopback-only so
+ * this spec can never be pointed at a hosted project. Throws (via
+ * `requireSupabaseEnv`) when the env is missing.
+ */
+function localSupabaseOrigin(): string {
+  const { url } = requireSupabaseEnv();
+  const parsed = new URL(url);
+  if (!["127.0.0.1", "localhost", "[::1]"].includes(parsed.hostname)) {
+    throw new Error(
+      `#1016 rollup layout spec only runs against a local Supabase; got host ${parsed.hostname}.`,
+    );
+  }
+  return parsed.origin;
+}
 
 async function measureRollupCard(page: Page) {
   return page.evaluate((areaId) => {
@@ -287,10 +303,7 @@ for (const viewport of [
     test("unenhanced draft: Dismiss and Approve fit inside the card", async ({
       page,
     }) => {
-      await page.route(`${SYNTHETIC_SUPABASE_ORIGIN}/**`, (route) =>
-        route.abort(),
-      );
-      // Keep this case unenhanced in every lane: the prose request (if any)
+      // Keep this case unenhanced in any lane: the prose request (if any)
       // falls back to the plain draft.
       await page.route("**/api/rollup-prose", (route) =>
         route.fulfill({ status: 503, body: "{}" }),
@@ -309,17 +322,18 @@ for (const viewport of [
       ]);
     });
 
-    test("AI-polished draft: all three actions fit inside the card", async ({
+    test(`${SIGNED_IN_TAG} AI-polished draft: all three actions fit inside the card`, async ({
       page,
     }) => {
-      test.skip(
-        !SYNTHETIC_SUPABASE,
-        "needs a server booted with synthetic NEXT_PUBLIC_SUPABASE_* values",
-      );
-      // Never contact the synthetic Supabase host.
-      await page.route(`${SYNTHETIC_SUPABASE_ORIGIN}/**`, (route) =>
-        route.abort(),
-      );
+      // Fails (never skips) without NEXT_PUBLIC_SUPABASE_*; loopback only.
+      const supabaseOrigin = localSupabaseOrigin();
+      // No account reads or writes: every Supabase request is aborted and
+      // the page stays signed out.
+      let supabaseRequests = 0;
+      await page.route(`${supabaseOrigin}/**`, (route) => {
+        supabaseRequests += 1;
+        return route.abort();
+      });
       let proseRequests = 0;
       await page.route("**/api/rollup-prose", async (route) => {
         proseRequests += 1;
@@ -351,6 +365,7 @@ for (const viewport of [
       await expect(toggle).toHaveText("Keep original");
       await expect(draft).toContainText("You shipped the onboarding flow");
       expect(proseRequests).toBe(1);
+      await expect(page.getByTestId("masthead-auth-signed-in")).toHaveCount(0);
 
       await maybeShoot(page, `enhanced-${viewport.width}`);
       expectContained(await measureRollupCard(page), [
@@ -384,6 +399,11 @@ for (const viewport of [
         "Dismiss",
         "Approve rollup",
       ]);
+      // Informational only: any Supabase call was aborted, never delivered.
+      test.info().annotations.push({
+        type: "aborted-supabase-requests",
+        description: String(supabaseRequests),
+      });
     });
   });
 }
