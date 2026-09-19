@@ -493,3 +493,254 @@ describe("TodayMoments — URL and deep-link parameter truth (#687 finding 1)", 
     });
   });
 });
+
+/**
+ * #687 C2 gap-1 (F2): the End session form is an in-app state change, so it
+ * is URL-visible like every other overlay (`?end=1`, owned by
+ * `useOverlayUrlState`). The running session itself lives only on this
+ * device, so the form only ever exists over a real running session: a
+ * stale `?end=1` is stripped, never rendered.
+ *
+ * Close-via-`back()` is asserted with a mocked `history.back`, the same
+ * pattern this file's header explains (jsdom's async popstate would leak
+ * into later tests); the real Back button is pinned in
+ * `tests/e2e/session-truth.spec.ts`.
+ */
+describe("TodayMoments — End session form URL truth (#687 C2 F2)", () => {
+  function seedRunningSession() {
+    const nowMs = Date.now();
+    window.localStorage.setItem(
+      "lifeos.running-session",
+      JSON.stringify({
+        task_id: "seeded-running-task",
+        running: true,
+        remaining: 1500,
+        total: 1500,
+        saved_at_ms: nowMs,
+        started_at_ms: nowMs,
+      }),
+    );
+  }
+
+  function endParam() {
+    return new URL(window.location.href).searchParams.get("end");
+  }
+
+  async function openEndForm() {
+    await waitFor(() => {
+      expect(screen.getByTestId("current-block-hero-done")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+  }
+
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState(null, "", "/?moment=flow");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("Done writes ?end=1, keeps ?moment=flow, and adds exactly one history entry", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await waitFor(() => {
+      expect(screen.getByTestId("current-block-hero-done")).toBeInTheDocument();
+    });
+    const lengthBefore = window.history.length;
+
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    expect(endParam()).toBe("1");
+    expect(new URL(window.location.href).searchParams.get("moment")).toBe(
+      "flow",
+    );
+    expect(window.history.length).toBe(lengthBefore + 1);
+  });
+
+  it("Cancel on a form this tab opened steps back off its own entry", async () => {
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await openEndForm();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(endParam()).toBeNull();
+  });
+
+  it("Back (popstate without ?end) closes the form and leaves the session running", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await openEndForm();
+
+    act(() => {
+      window.history.replaceState(null, "", "/?moment=flow");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(screen.getByTestId("current-block-hero")).toBeInTheDocument();
+    expect(window.localStorage.getItem("lifeos.running-session")).toBeTruthy();
+  });
+
+  it("a reload on ?end=1 with a running session reopens the form once the device session loads", async () => {
+    seedRunningSession();
+    window.history.replaceState(null, "", "/?moment=flow&end=1");
+
+    renderToday({ initialMoment: "flow", deepLink: { moment: "flow" } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    });
+    expect(endParam()).toBe("1");
+    // A fresh form: nothing typed survives a reload (no draft storage).
+    expect(screen.getByTestId("end-session-note")).toHaveValue("");
+  });
+
+  it("a stale ?end=1 with no running session is stripped in place — no form, no new entry", async () => {
+    window.history.replaceState(null, "", "/?moment=flow&end=1");
+    const lengthBefore = window.history.length;
+
+    renderToday({ initialMoment: "flow", deepLink: { moment: "flow" } });
+
+    await waitFor(() => {
+      expect(endParam()).toBeNull();
+    });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(window.history.length).toBe(lengthBefore);
+    expect(new URL(window.location.href).searchParams.get("moment")).toBe(
+      "flow",
+    );
+  });
+
+  it("Forward onto ?end=1 after the session is gone shows no form and strips the param", async () => {
+    renderToday({ initialMoment: "flow" });
+    await waitFor(() => {
+      expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
+    });
+
+    act(() => {
+      window.history.replaceState(null, "", "/?moment=flow&end=1");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    await waitFor(() => {
+      expect(endParam()).toBeNull();
+    });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+  });
+
+  it("a palette named beside ?end=1 loses exactly as it loses to a sheet", async () => {
+    seedRunningSession();
+    window.history.replaceState(null, "", "/?moment=flow&end=1&palette=1");
+
+    renderToday({
+      initialMoment: "flow",
+      deepLink: { moment: "flow", endSession: true },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        new URL(window.location.href).searchParams.get("palette"),
+      ).toBeNull();
+    });
+    expect(endParam()).toBe("1");
+  });
+
+  it("an invalid ?end= value is scrubbed like any other overlay flag", async () => {
+    seedRunningSession();
+    window.history.replaceState(null, "", "/?moment=flow&end=bogus");
+
+    renderToday({ initialMoment: "flow", deepLink: { moment: "flow" } });
+
+    await waitFor(() => {
+      expect(endParam()).toBeNull();
+    });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+  });
+
+  it("C from the form opens capture IN FRONT: the end sheet goes inert, both states stay in the URL", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await openEndForm();
+
+    fireEvent.keyDown(window, { key: "c" });
+
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+    const endShell = screen
+      .getByTestId("end-session-sheet")
+      .closest('[data-testid="moment-sheet"]');
+    expect(endShell).toHaveAttribute("inert");
+    const endDialog = screen
+      .getByTestId("end-session-sheet")
+      .closest('[role="dialog"]');
+    expect(endDialog).not.toHaveAttribute("aria-modal");
+    const params = new URL(window.location.href).searchParams;
+    expect(params.get("capture")).toBe("1");
+    expect(params.get("end")).toBe("1");
+  });
+
+  it("Cmd/Ctrl+K from the form says why instead of stacking the palette on it", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await openEndForm();
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+    expect(
+      new URL(window.location.href).searchParams.get("palette"),
+    ).toBeNull();
+    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+      "Close the sheet to open the command palette",
+    );
+  });
+
+  it("moment keys do nothing behind the open form (no moment switch under it)", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await openEndForm();
+
+    fireEvent.keyDown(window, { key: "1" });
+
+    expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    expect(new URL(window.location.href).searchParams.get("moment")).toBe(
+      "flow",
+    );
+  });
+
+  it("the palette's Done hand-off opens the form and the palette steps out of the URL", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await waitFor(() => {
+      expect(screen.getByTestId("current-block-hero-done")).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.click(screen.getByTestId("command-palette-option-focus-done"));
+
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    const params = new URL(window.location.href).searchParams;
+    expect(params.get("end")).toBe("1");
+    expect(params.get("palette")).toBeNull();
+  });
+});

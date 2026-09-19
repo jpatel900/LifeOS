@@ -201,6 +201,35 @@ describe("deepLinkTargetFromParams", () => {
       ).toEqual({ moment: "start", sheet: "health", overlay: "capture" });
     });
 
+    // #687 C2 F2: the End session form is a sheet-shaped overlay of its own
+    // (`?end=1`), separate from `overlay` so it composes with `moment=flow`.
+    // It follows the existing sheet precedence: the palette loses to it
+    // exactly as it loses to `?sheet=`, and capture still composes over it.
+    it("maps ?end=1 to endSession, composing with moment", () => {
+      expect(deepLinkTargetFromParams({ moment: "flow", end: "1" })).toEqual({
+        moment: "flow",
+        endSession: true,
+      });
+      expect(deepLinkTargetFromParams({ end: "true" })).toEqual({
+        endSession: true,
+      });
+    });
+
+    it("treats a non-affirmative ?end= exactly like capture/palette (absent)", () => {
+      for (const value of ["", "0", "false", "bogus"]) {
+        expect(deepLinkTargetFromParams({ end: value })).toBeNull();
+      }
+    });
+
+    it("the end form wins over palette, like a sheet; capture still composes over it", () => {
+      expect(
+        deepLinkTargetFromParams({ moment: "flow", end: "1", palette: "1" }),
+      ).toEqual({ moment: "flow", endSession: true });
+      expect(
+        deepLinkTargetFromParams({ moment: "flow", end: "1", capture: "1" }),
+      ).toEqual({ moment: "flow", endSession: true, overlay: "capture" });
+    });
+
     it("capture takes precedence over palette when both are set", () => {
       expect(deepLinkTargetFromParams({ capture: "1", palette: "1" })).toEqual({
         overlay: "capture",
@@ -276,12 +305,18 @@ describe("dropUnknownParams", () => {
 
   it("keeps every known app key, exact case, untouched", () => {
     const params = new URLSearchParams(
-      "?moment=flow&sheet=plan&capture=1&palette=1&area=area-personal",
+      "?moment=flow&sheet=plan&capture=1&palette=1&area=area-personal&end=1",
     );
     expect(dropUnknownParams(params)).toBe(false);
     expect(params.toString()).toBe(
-      "moment=flow&sheet=plan&capture=1&palette=1&area=area-personal",
+      "moment=flow&sheet=plan&capture=1&palette=1&area=area-personal&end=1",
     );
+  });
+
+  it("drops a case-variant of the end-form key like any other near-miss", () => {
+    const params = new URLSearchParams("?End=1&moment=flow");
+    expect(dropUnknownParams(params)).toBe(true);
+    expect(params.toString()).toBe("moment=flow");
   });
 
   it("keeps /login's ?next= return-target param", () => {

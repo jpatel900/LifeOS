@@ -113,10 +113,18 @@ export function parseOverlayParam(value: string | null): boolean {
   return value === "1" || value === "true" || value === "";
 }
 
+/**
+ * The query keys a boolean overlay can own. #687 C2 F2 adds `"end"`: the End
+ * session form, previously a bare `useState` that Back, Forward and reload
+ * could not see — it now rides this exact open/close/adopt contract, owned by
+ * `useFlowFocusSession`.
+ */
+export type OverlayParam = "capture" | "palette" | "end";
+
 /** Current URL with `param` set to `"1"`, or removed when `open` is false. */
 export function urlWithOverlay(
   location: { pathname: string; search: string },
-  param: "capture" | "palette",
+  param: OverlayParam,
   open: boolean,
 ): string {
   const params = new URLSearchParams(location.search);
@@ -143,7 +151,7 @@ export interface OverlayUrlState {
 }
 
 export function useOverlayUrlState(
-  param: "capture" | "palette",
+  param: OverlayParam,
   resolvedInitialOpen = false,
 ): OverlayUrlState {
   const [open, setOpen] = useState(resolvedInitialOpen);

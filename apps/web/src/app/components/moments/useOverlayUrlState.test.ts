@@ -62,7 +62,9 @@ describe("urlWithOverlay", () => {
   });
 });
 
-describe.each(["capture", "palette"] as const)(
+// #687 C2 F2: the End session form (`?end=1`) is the third boolean overlay
+// on this same contract — every case below runs for it unchanged.
+describe.each(["capture", "palette", "end"] as const)(
   "useOverlayUrlState(%s)",
   (param) => {
     beforeEach(() => {

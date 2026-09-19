@@ -32,6 +32,14 @@ export type DeepLinkTarget = {
    * `parseAreaParam` itself).
    */
   area?: string | null;
+  /**
+   * #687 C2 F2: `?end=1`, the End session form. Kept apart from `overlay` so
+   * it composes with `moment=flow` (and with capture, which is always the
+   * front dialog). Only the URL's claim: whether a session is actually
+   * running lives on this device alone, so `useFlowFocusSession` decides
+   * after hydration whether the form renders or the param is stripped.
+   */
+  endSession?: true;
 } | null;
 
 /**
@@ -101,9 +109,21 @@ export function deepLinkTargetFromParams(
     target.area = parseAreaParam(areaRaw);
   }
 
+  // #687 C2 F2: the End session form follows the sheet precedence below —
+  // a palette named beside it loses exactly as it loses to `?sheet=`
+  // (`TodayMoments.tsx`'s mount scrub drops the losing `palette` param the
+  // same way), while capture keeps composing over it.
+  if (isTruthyFlag(params.end)) {
+    target.endSession = true;
+  }
+
   if (isTruthyFlag(params.capture)) {
     target.overlay = "capture";
-  } else if (isTruthyFlag(params.palette) && !target.sheet) {
+  } else if (
+    isTruthyFlag(params.palette) &&
+    !target.sheet &&
+    !target.endSession
+  ) {
     // Final UX Loop C2 round-7 judge ("one URL renders two different
     // screens depending on how you arrived at it"): sheet + palette is the
     // one composition that does NOT survive, unlike every other pair this
@@ -259,6 +279,9 @@ export const KNOWN_APP_PARAM_KEYS = [
   "capture",
   "palette",
   "area",
+  // #687 C2 F2: the End session form. Without this the mount scrub would
+  // erase `?end=1` on every reload.
+  "end",
 ] as const;
 
 /**

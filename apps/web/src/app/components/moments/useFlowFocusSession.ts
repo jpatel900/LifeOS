@@ -32,6 +32,12 @@ import {
   readRunningSession,
   writeRunningSession,
 } from "@/lib/execute/runningSession";
+import { historyReplaceState } from "@/lib/rawHistory";
+import {
+  parseOverlayParam,
+  urlWithOverlay,
+  useOverlayUrlState,
+} from "./useOverlayUrlState";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -158,13 +164,34 @@ export function useFlowFocusSession({
   // post-mount commit would persist the EMPTY default over the record it is
   // about to restore.
   const [hydrated, setHydrated] = useState(false);
+
+  // #687 C2 F2: the End session form is URL-visible (`?end=1`) on the same
+  // push/close/adopt contract as capture and the palette — Back closes it,
+  // Forward reopens it, and closing a form this tab opened steps back off
+  // its own entry instead of growing history. It is never seeded open for
+  // the first render: the server cannot see the device-only running
+  // session, so whether `?end=1` names a real form is only knowable here,
+  // right after the session is restored (the same one-beat device-storage
+  // limit `?area=` already accepts).
+  const {
+    open: endOverlayOpen,
+    openOverlay: openEndOverlay,
+    closeOverlay: closeEndOverlay,
+    adoptOverlayFromUrl: adoptEndFromUrl,
+  } = useOverlayUrlState("end");
+
   useEffect(() => {
     const restored = readRunningSession();
     if (restored) {
       setSession(restored);
     }
     setHydrated(true);
-  }, []);
+    // Read the LIVE address bar, not the `deepLink` prop: a remount after a
+    // Back/Forward walk can carry a stale prop (see `deepLinkTargetFromSearch`).
+    adoptEndFromUrl(
+      parseOverlayParam(new URLSearchParams(window.location.search).get("end")),
+    );
+  }, [adoptEndFromUrl]);
   useEffect(() => {
     if (!hydrated) return;
     writeRunningSession(session);
@@ -357,12 +384,26 @@ export function useFlowFocusSession({
   // instantly. "Done" opens the end sheet (outcome, actual duration,
   // optional note) — the verdict/toast copy below only fires once
   // `handleEndSessionSave` has awaited the save.
-  const [endSessionOpen, setEndSessionOpen] = useState(false);
+  const hasSession = hasRunningSession(session);
+
+  // The form only ever exists over a real running session. `?end=1` with
+  // none behind it — a stale link, a fresh browser, or Forward onto the
+  // entry after Save already ended the session — is stripped in place:
+  // no form, no new history entry, and nothing recorded.
+  useEffect(() => {
+    if (!hydrated || !endOverlayOpen || hasSession) return;
+    adoptEndFromUrl(false);
+    if (new URLSearchParams(window.location.search).has("end")) {
+      historyReplaceState(urlWithOverlay(window.location, "end", false));
+    }
+  }, [hydrated, endOverlayOpen, hasSession, adoptEndFromUrl]);
+
+  const endSessionOpen = endOverlayOpen && hasSession;
 
   const finishFocus = useCallback(() => {
     if (session.activeTaskId === null && session.total === 0) return;
-    setEndSessionOpen(true);
-  }, [session.activeTaskId, session.total]);
+    openEndOverlay();
+  }, [session.activeTaskId, session.total, openEndOverlay]);
 
   const endSessionElapsedMinutes =
     session.total > 0
@@ -419,7 +460,10 @@ export function useFlowFocusSession({
         remaining: 0,
         total: 0,
       });
-      setEndSessionOpen(false);
+      // Clears `?end=1` too: steps back off the entry this tab pushed, or
+      // strips the param if the form was adopted from the URL (a reload) or
+      // Back already left its entry while the save was in flight.
+      closeEndOverlay();
       showToast(endSessionToast(outcome, result));
     },
     [
@@ -428,6 +472,7 @@ export function useFlowFocusSession({
       markSession,
       session.remaining,
       showToast,
+      closeEndOverlay,
     ],
   );
 
@@ -497,7 +542,8 @@ export function useFlowFocusSession({
     startFocus,
     finishFocus,
     endSessionOpen,
-    setEndSessionOpen,
+    /** Cancel: closes the form and its `?end=1` entry; the session keeps running. */
+    closeEndSession: closeEndOverlay,
     endSessionElapsedMinutes,
     handleEndSessionSave,
     pauseFocus,
