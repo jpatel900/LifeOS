@@ -288,4 +288,38 @@ describe("LoginPage", () => {
     );
     expect(mocks.push).not.toHaveBeenCalled();
   });
+
+  // #687 C5: the three form controls were resized for the 44px hit-target
+  // floor. Their in-flight lock is what stops a second tap from sending a
+  // second sign-in, so hold it: locked while pending, released on failure.
+  it("locks the form while sign-in is in flight and releases it on failure", async () => {
+    let finish: (value: { error: { message: string } }) => void = () => {};
+    mocks.signInWithPassword.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+
+    render(<LoginPage />);
+    fillCredentials("user_a@example.test", "password123");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    const pending = await screen.findByRole("button", {
+      name: "Signing in...",
+    });
+    expect(pending).toBeDisabled();
+    expect(screen.getByLabelText("Email")).toBeDisabled();
+    expect(screen.getByLabelText("Password")).toBeDisabled();
+    fireEvent.click(pending);
+    expect(mocks.signInWithPassword).toHaveBeenCalledTimes(1);
+
+    finish({ error: { message: "Invalid login credentials" } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Invalid login credentials",
+    );
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled();
+    expect(screen.getByLabelText("Email")).toBeEnabled();
+    expect(screen.getByLabelText("Password")).toBeEnabled();
+  });
 });
