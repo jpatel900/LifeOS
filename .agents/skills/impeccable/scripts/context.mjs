@@ -1266,7 +1266,7 @@ function automaticHookMode(ctx) {
   const activeRoot = path.resolve(ctx.projectRoot || process.cwd());
   if (!hookEnabledAt(activeRoot)) return 'none';
   const manifests = HOOK_MANIFESTS_BY_PROVIDER[IMPECCABLE_PROVIDER_ID] || [];
-  const roots = [...new Set([process.cwd(), ctx.projectRoot, ctx.repoRoot].filter(Boolean).map((root) => path.resolve(root)))];
+  const roots = [...new Set([ctx.projectRoot || process.cwd(), ctx.repoRoot].filter(Boolean).map((root) => path.resolve(root)))];
   for (const root of roots) {
     for (const rel of manifests) {
       const raw = readJson(path.join(root, rel));

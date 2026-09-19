@@ -49,11 +49,11 @@ git log --format='%ad %s' --date=short -5 -- docs/   # is docs/ maintained or ab
 Get-ChildItem -Recurse -Filter *.md | Where-Object FullName -NotMatch 'node_modules|\.git' | Select-Object -First 50 FullName
 ```
 
-**The registry.** Keep one index (commonly `docs/README.md` or a "Documentation" table in the root README) listing every doc of record: path, one-line scope, owner if known. Rules:
+**The registry.** Reuse the existing index or navigation to authoritative records. Add an index only for a concrete discovery gap; include paths, scope and owners where useful. Rules:
 
-- The registry may **shrink freely** (deleting a stale doc is always safe if its facts have a new home or are dead).
+- Reuse the existing index or authoritative record. A doc absent from the registry is evidence to investigate, not proof it is safe to delete.
 - It **grows only deliberately**: adding a doc means declaring what concern it owns and confirming no existing doc already owns it. If one does, extend that doc instead.
-- A doc not in the registry is a candidate for deletion, not a hidden second source of truth.
+- Resolve the purpose, consumers and required history of an unindexed doc before retiring it; index absence alone establishes none of these.
 
 **Duplication check** before writing a fact into a second place:
 
@@ -84,11 +84,11 @@ wc -l README.md CLAUDE.md AGENTS.md 2>/dev/null
 Get-Item README.md, CLAUDE.md, AGENTS.md -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Name): $((Get-Content $_ | Measure-Object -Line).Lines)" }
 ```
 
-**When over budget, do not summarize harder - relocate.** Move detail to a linked doc of record and leave a one-line pointer. The entry file keeps: identity, the 3-5 commands used daily, the registry link, and standing constraints. Everything else is a link.
+**When over budget, assess the task and audience.** Relocate detail to an existing linked doc of record when it improves use; keep necessary context where it is needed.
 
 ## 3. Agent-readable house style
 
-Written for a zero-context engineer or an agent dropped in cold. Every rule below is a hard rule unless marked otherwise.
+Written for a zero-context engineer or an agent dropped in cold. Use these defaults where they improve the document; follow explicit user and project format requirements.
 
 1. **Imperative voice.** "Run X. Then check Y." Not "one might consider running X." Agents execute instructions; hedged prose produces hedged action.
 2. **Copy-pasteable commands in fenced blocks, with expected output.** A command whose success state is unstated cannot be verified:
@@ -110,11 +110,11 @@ Written for a zero-context engineer or an agent dropped in cold. Every rule belo
 
 ## 4. Freshness discipline
 
-Docs drift. Assume every doc is stale until re-verified.
+Docs drift. Recheck affected changed or uncertain facts before relying on them.
 
 **Rule 1 - runbooks end with re-verification one-liners.** The last section of every runbook is a fenced block of cheap commands that confirm the runbook's core facts are still true (the tool exists, the path exists, the target responds). If those fail, the runbook is stale - fix it before executing it.
 
-**Rule 2 - CI is ground truth (this is the rule's one home; siblings reference it).** When sources disagree, trust in this precedence order: **CI config > lockfiles/build scripts > code comments > README > wiki** - the higher source wins because it executes. Fix the losing doc the same day, as its own commit (or its own PR): riding the fix into an unrelated open PR is silent scope widening (see `agentic-change-control`) unless the PR body explicitly declares the added doc fix. Discover what CI actually runs:
+**Rule 2 - reconcile configured checks, sources, and observed behavior.** CI proves what its configured checks run, not universal truth. When sources or observed behavior disagree, reconcile the relevant executable source and intended requirement without overriding user intent. Update documentation in the existing project scope and commit/PR practice; preserve project-required scope declaration or review gates. Discover what CI actually runs:
 
 ```bash
 ls .github/workflows/ .gitlab-ci.yml .circleci/ azure-pipelines.yml 2>/dev/null
@@ -137,7 +137,7 @@ Stale doc found mid-task: fix it if under ~5 minutes, otherwise leave a dated `<
 
 ## 5. Templates
 
-Copy verbatim; delete sections that do not apply rather than leaving them empty.
+Match the existing project format first. Use these templates when helpful and omit sections that do not apply.
 
 ### README skeleton
 
@@ -197,7 +197,7 @@ Copy verbatim; delete sections that do not apply rather than leaving them empty.
 
 ### ADR-lite
 
-This is the template's ONLY home (`agentic-architecture-contract` owns when an ADR is mandatory; it links here for the format). Canonical path: `docs/adr/NNNN-<slug>.md`.
+Follow the project's existing decision-record format and location. This fallback ADR-lite template lives here; `agentic-architecture-contract` owns when a decision record is required. Example path when no convention exists: `docs/adr/NNNN-<slug>.md`.
 
 ```markdown
 # ADR-NNNN: <decision as a verb phrase>
@@ -231,7 +231,7 @@ Append-only: never edit an accepted ADR's decision - supersede it with a new one
 |---|---|---|
 ```
 
-Cross-file the lesson into the failure chronicle - **agentic-failure-archaeology** owns that.
+Link a significant durable lesson to the existing failure record when needed; **agentic-failure-archaeology** owns that record.
 
 ### PR description
 
@@ -254,22 +254,22 @@ Cross-file the lesson into the failure chronicle - **agentic-failure-archaeology
 
 ## 6. Authoring skill files
 
-Skill files (this file's own format) follow the portable Agent Skills convention: a directory containing `SKILL.md` with YAML frontmatter of exactly two keys, `name` and `description`.
+Skill files follow the current host-native creator convention. Preserve required identity fields and supported optional metadata. Follow the target host's invocation policy and any explicit user choice; add only metadata and boundaries needed for the skill's job.
 
 - **The description is written for the retriever, not the reader.** It is matched against the user's request to decide whether to load the skill. Write "Use when <situation>; also when <situation>; trigger phrases: '<literal thing a user says>'" - not a title, not a summary. A beautiful skill with a title-shaped description never fires.
-- **"When NOT to use" with a sibling redirect is mandatory.** Skills overlap; without explicit boundaries the retriever or the agent loads the wrong one and the right one's content is never seen. Name the exact sibling skill for each excluded case.
+- Add an exclusion or an available sibling redirect when it prevents likely misrouting; avoid exhaustive exclusion lists or references to unavailable skills.
 - Body follows the house style in section 3: imperative, fenced commands with expected output, tables, negative space, date-stamped volatile facts.
-- Keep skills tool-agnostic: no load-bearing references to any one agent product's features; plain shell commands; "the agent", not a product name.
-- Every skill ends with provenance and re-verification (section 7 of this file is the pattern).
+- Keep skills portable where practical, while preserving host-native supported conventions when the target requires them.
+- Include provenance and re-verification guidance when volatile facts or consequential claims require it; use the target creator for packaging requirements.
 
 ## 7. Provenance and maintenance
 
-- **Authored:** 2026-07-02, from cross-project practice. Line budgets in section 2 are defaults calibrated to 2026-era model context behavior, not hard rules; re-calibrate if entry files are demonstrably read in full at larger sizes. The "one home per fact" rule and "CI wins" rule are hard rules. The relative-links preference is a default.
-- **Volatile facts:** the frontmatter convention (two-key `name`/`description` SKILL.md) is the portable convention as of 2026-07-02; agent tools may extend it. Agent memory file names (CLAUDE.md / AGENTS.md / .cursor/rules) are tool-specific and change as tools evolve.
+- **Authored:** 2026-07-02, from cross-project practice. Line budgets in section 2 are defaults calibrated to 2026-era model context behavior, not hard rules; re-calibrate if entry files are demonstrably read in full at larger sizes. Preserve authoritative ownership and reconcile conflicting sources using their relevant scope; CI configuration does not override intended requirements. The relative-links preference is a default.
+- **Volatile facts:** the target host's supported skill metadata and invocation policy; check its installed creator or validator before changing those fields. Agent memory file names (CLAUDE.md / AGENTS.md / .cursor/rules) are tool-specific and change as tools evolve.
 - **Re-verify:**
   ```bash
   wc -l README.md CLAUDE.md AGENTS.md 2>/dev/null        # budgets still respected?
   ls docs/ 2>/dev/null                                    # registry location still true?
-  head -5 "$(dirname "$0")/SKILL.md" 2>/dev/null          # frontmatter still two keys?
+  # Validate skill metadata with the target host's installed creator/validator.
   git log --format='%ad' --date=short -1 -- docs/         # is docs/ still alive?
   ```
