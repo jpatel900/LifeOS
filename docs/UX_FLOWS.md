@@ -51,10 +51,17 @@ fresh-context reproduction all agree. The pinned proof lives in
 `apps/web/tests/e2e/nav-truth.spec.ts` (C2 Target Card 2), which also pins
 that any surface is reachable in at most two interactions from home.
 
-**Retired stage routes.** The legacy stage routes (`/capture`, `/triage`,
-`/plan`, `/execute`, `/review`, `/health`, `/calendar`, `/areas`, `/today`)
-survive only as redirect shims behind the #590 rollback flag
-(`NEXT_PUBLIC_MOMENTS_HOME=false`). They are not user paths.
+**Retired stage routes.** The nine legacy stage routes are redirect shims
+into the moments home. By default they redirect: `/capture` → `?capture=1`,
+`/triage` → `?sheet=triage`, `/plan` and `/calendar` → `?sheet=plan`,
+`/execute` → `?moment=flow`, `/review` → `?sheet=review`, `/health` →
+`?sheet=health`, `/areas` → `?sheet=areas`, and `/today` → `/`. Other known
+query keys (such as `?area=`) carry through; unknown keys are dropped. Only
+under the #590 rollback flag (`NEXT_PUBLIC_MOMENTS_HOME=false`) do they
+render the old cockpit stage instead. They are not user paths. `/settings`
+always redirects to `/settings/areas`, with or without the flag. The pins
+are `apps/web/src/app/legacyRouteRedirects.test.tsx` and
+`apps/web/src/app/routeAllowlist.test.ts`.
 
 ### Stage 1 slice status
 
@@ -79,6 +86,7 @@ statuses is `docs/DATA_MODEL.md`.
 | Command palette  | More trigger (mobile bottom navigator)                   | Transient `?palette=1`, scrubbed  |
 | Settings — Areas | Settings link (desktop masthead or mobile bottom nav)    | `/settings/areas`                 |
 | Sign-in door     | Automatic redirect when signed out (Supabase configured) | `/login`                          |
+| Setup ritual     | Automatic hand-off for a brand-new account, or Settings  | `/welcome`                        |
 
 Notes: `/settings/areas` is the one settings destination (areas, policies,
 integrations) and requires sign-in — signed-out users land on `/login` with
@@ -121,20 +129,19 @@ Create enough structure to use the system without over-onboarding.
 ### Steps
 
 1. User signs in (with Supabase configured; see the demo-mode note under Surface map).
-2. App creates default areas:
-   - Main Job
-   - Personal
-   - Volunteer Work
-   - Side Project
-3. User edits names/colors/icons or skips.
-4. User sets basic global preferences:
-   - normal wake/sleep window
-   - preferred work window
-   - default session length
-   - strictness of calendar approval
-5. User optionally connects Google Calendar.
+2. An account with no areas and no captures is handed to the setup ritual
+   at `/welcome` with no page reload. It is three steps, one screen each,
+   and every step can be skipped (ratified plan:
+   `docs/implementation-planning/plan-onboarding-ritual.md`).
+3. Areas: prefilled chips (Main Job, Personal, Side Project) the user can
+   rename, recolor, delete, or add to. Skipping keeps the defaults.
+4. Day shape: work window (prefilled 9–17) and focus session length
+   (25/45/60 minutes, prefilled 45). Google Calendar appears only as an
+   optional link to Settings, never a gate.
+5. First capture, through the shared capture core.
 6. App lands on the Today home (`/`); Capture is one keystroke away (`c` or
-   the Capture button) and Areas live under Settings (`/settings/areas`).
+   the Capture button) and Areas live under Settings (`/settings/areas`),
+   which can also run the setup ritual again.
 
 ### Acceptance Criteria
 
