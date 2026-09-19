@@ -291,10 +291,13 @@ describe("MomentSheet", () => {
       sheetOpen = true,
       captureOpen = false,
       onClose = vi.fn(),
+      saving = false,
     }: {
       sheetOpen?: boolean;
       captureOpen?: boolean;
       onClose?: () => void;
+      /** Mirrors EndSessionSheet disabling its fields while Save runs. */
+      saving?: boolean;
     }) {
       const [remounted, setRemounted] = useState(false);
       return (
@@ -309,8 +312,14 @@ describe("MomentSheet", () => {
           ) : null}
           <CaptureOverlayOpenContext.Provider value={captureOpen}>
             <MomentSheet open={sheetOpen} title="End session" onClose={onClose}>
-              <textarea data-testid="sheet-note" defaultValue="" />
-              <button data-testid="sheet-save">Save</button>
+              <textarea
+                data-testid="sheet-note"
+                defaultValue=""
+                disabled={saving}
+              />
+              <button data-testid="sheet-save" disabled={saving}>
+                Save
+              </button>
             </MomentSheet>
           </CaptureOverlayOpenContext.Provider>
         </div>
@@ -347,6 +356,21 @@ describe("MomentSheet", () => {
       render(<BehindHarness />);
       const outside = screen.getByTestId("remount");
       outside.focus();
+      expect(screen.getByTestId("moment-sheet-dialog")).toHaveFocus();
+    });
+
+    it("falls back to the dialog itself when the field it left has since been disabled (Save in flight)", () => {
+      const { rerender } = render(<BehindHarness />);
+      const note = screen.getByTestId("sheet-note");
+      note.focus();
+      expect(note).toHaveFocus();
+
+      // EndSessionSheet disables every control while Save runs. The field
+      // is still connected and still inside, but `focus()` on it is a no-op.
+      rerender(<BehindHarness saving />);
+      expect(note).toBeDisabled();
+
+      screen.getByTestId("remount").focus();
       expect(screen.getByTestId("moment-sheet-dialog")).toHaveFocus();
     });
 

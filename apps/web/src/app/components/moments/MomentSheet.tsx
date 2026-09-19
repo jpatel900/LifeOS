@@ -130,13 +130,19 @@ export function MomentSheet({
   // end-session sheet open remounts the Flow moment, and its `autoFocus`
   // First-move input grabbed focus from behind the scrim: Escape went dead,
   // Tab walked the page underneath, and typing landed in the hidden input.
-  // While this sheet is the front dialog (same `open && !obscured` gate as
-  // the trap and autofocus above), focus that lands outside it goes back to
-  // where it was inside — so a caret in a half-typed field is not lost —
-  // or to the dialog shell. Focus inside ANY other `aria-modal` dialog is
-  // left alone: capture in front (including the one commit before
-  // `obscured` flips), the command palette, or a second sheet each own
-  // their focus, so two dialogs can never bounce it between them.
+  // While this sheet is open and not obscured (same `open && !obscured` gate
+  // as the trap and autofocus above), focus that lands outside it goes back
+  // to where it was inside — so a caret in a half-typed field is not lost —
+  // or to the dialog shell if that field can no longer take focus (e.g.
+  // disabled while Save runs).
+  //
+  // Focus that lands inside ANY other `aria-modal` dialog is left alone.
+  // That is NOT a claim the other dialog is in front: `EndSessionSheet`
+  // renders after `CaptureOverlay` and outside its open-context provider, so
+  // capture or the command palette can sit UNDER it. The bail-out only keeps
+  // two focus-holders from fighting (no ping-pong between two traps) and
+  // leaves today's other-modal behavior exactly as it was; which dialog
+  // should own focus when two are open is not decided here.
   useEffect(() => {
     if (!open || obscured) return undefined;
     let lastInside: HTMLElement | null = null;
@@ -155,6 +161,11 @@ export function MomentSheet({
       const restore =
         lastInside && dialog.contains(lastInside) ? lastInside : dialog;
       restore.focus();
+      // `focus()` on a disabled or otherwise unfocusable element is a silent
+      // no-op; check where focus actually went.
+      if (!dialog.contains(document.activeElement)) {
+        dialog.focus();
+      }
     }
 
     document.addEventListener("focusin", handleFocusIn);
