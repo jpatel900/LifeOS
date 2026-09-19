@@ -437,12 +437,20 @@ test.describe("#737 C1 card 1 — session truth", () => {
 });
 
 /**
- * #687 C2 gap-1 (F1): Back then Forward with the end sheet open remounts the
- * Flow moment under the sheet, and its autofocusing First-move input used to
- * take focus from behind the scrim — Escape went dead, Tab walked the page
- * underneath, and typing landed in the hidden input. Navigation must still
- * be no outcome: the session keeps running and nothing is journaled until
- * the user presses Save.
+ * #687 C2 gap-1 — the End session form across Back, Forward and reload.
+ *
+ * F1 found focus escaping from behind the open form when Back then Forward
+ * remounted the Flow moment under it. F2 (the ratified URL-truth repair)
+ * made the form itself URL-visible (`?end=1`), so the approved truth for
+ * Back is now "close the form and stay on Flow" — not "switch the moment
+ * under a still-open form", which is what F1's original walk exercised.
+ * That walk is RE-ANCHORED below, not deleted: Back closes the form, Forward
+ * reopens a fresh one, and focus, typing, Tab and Escape all stay in it.
+ * The remount-behind-an-open-form mechanism itself stays pinned at the unit
+ * tier (`MomentSheet.test.tsx`, "#687 C2 gap-1" block).
+ *
+ * Every case also holds Target Card 6: navigation never ends the session,
+ * and only the form's own Save records an outcome — exactly one.
  */
 async function focusIsInEndSheet(page: Page): Promise<boolean> {
   return page.evaluate(
@@ -453,57 +461,215 @@ async function focusIsInEndSheet(page: Page): Promise<boolean> {
   );
 }
 
+function searchParam(page: Page, key: string): string | null {
+  return new URL(page.url()).searchParams.get(key);
+}
+
+async function historyLength(page: Page): Promise<number> {
+  return page.evaluate(() => window.history.length);
+}
+
+async function runningSessionRecord(page: Page): Promise<string | null> {
+  return page.evaluate(
+    (key) => window.localStorage.getItem(key),
+    RUNNING_SESSION_KEY,
+  );
+}
+
+/** Start -> Flow (session running) -> Done (form open over Flow). */
+async function startSessionAndOpenEndForm(page: Page) {
+  await openHome(page, { scheduled: true, blockless: false });
+  await page.getByTestId("first-move-start").click();
+  await expect(page.getByTestId("current-block-hero")).toBeVisible();
+  await page.getByTestId("current-block-hero-done").click();
+  await expect(page.getByTestId("end-session-sheet")).toBeVisible();
+}
+
 for (const viewport of [
   { width: 390, height: 844 },
   { width: 1280, height: 800 },
 ]) {
-  test.describe(`#687 C2 gap-1 — end sheet keeps focus across Back/Forward at ${viewport.width}px`, () => {
+  test.describe(`#687 C2 gap-1 — End session form history truth at ${viewport.width}px`, () => {
     test.use({ viewport });
 
-    test("Back and Forward with the end sheet open keep focus, typing, Tab and Escape in the sheet, and record nothing", async ({
+    test("1. Done puts ?end=1 in the URL over Flow with exactly one history step", async ({
       page,
     }) => {
       await openHome(page, { scheduled: true, blockless: false });
-
       await page.getByTestId("first-move-start").click();
       await expect(page.getByTestId("current-block-hero")).toBeVisible();
+      const before = await historyLength(page);
 
       await page.getByTestId("current-block-hero-done").click();
+
       await expect(page.getByTestId("end-session-sheet")).toBeVisible();
+      await expect.poll(() => searchParam(page, "end")).toBe("1");
+      expect(searchParam(page, "moment")).toBe("flow");
+      expect(await historyLength(page)).toBe(before + 1);
+      expect(await sessionWrites(page)).toHaveLength(0);
+    });
+
+    test("2. Back closes the form, stays on Flow, keeps the session running and records nothing", async ({
+      page,
+    }) => {
+      await startSessionAndOpenEndForm(page);
       await page.getByTestId("end-session-outcome-partial").click();
       await page.getByTestId("end-session-note").fill("unsaved draft");
 
       await page.goBack();
-      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+      await expect.poll(() => searchParam(page, "end")).toBeNull();
+      expect(searchParam(page, "moment")).toBe("flow");
+      await expect(page.getByTestId("current-block-hero")).toBeVisible();
+      expect(await runningSessionRecord(page)).toBeTruthy();
+      expect(await sessionWrites(page)).toHaveLength(0);
+    });
+
+    test("3. Forward reopens a fresh form and still records nothing", async ({
+      page,
+    }) => {
+      await startSessionAndOpenEndForm(page);
+      await page.getByTestId("end-session-note").fill("unsaved draft");
+      await page.goBack();
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+
       await page.goForward();
+
+      await expect(page.getByTestId("end-session-sheet")).toBeVisible();
+      await expect.poll(() => searchParam(page, "end")).toBe("1");
+      await expect(page.getByTestId("end-session-note")).toHaveValue("");
+      expect(await runningSessionRecord(page)).toBeTruthy();
+      expect(await sessionWrites(page)).toHaveLength(0);
+    });
+
+    test("4. Reload on ?end=1 with a running session reopens the form after the page loads", async ({
+      page,
+    }) => {
+      await startSessionAndOpenEndForm(page);
+      await page.getByTestId("end-session-note").fill("unsaved draft");
+
+      await page.reload({ waitUntil: "domcontentloaded" });
+
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await expect(page.getByTestId("end-session-sheet")).toBeVisible();
+      expect(searchParam(page, "end")).toBe("1");
+      // Documented: the typed, unsaved note is not kept (no draft storage).
+      await expect(page.getByTestId("end-session-note")).toHaveValue("");
+      expect(await runningSessionRecord(page)).toBeTruthy();
+      expect(await sessionWrites(page)).toHaveLength(0);
+    });
+
+    test("5. A fresh browser opening ?moment=flow&end=1 with no session gets a clean URL and no form", async ({
+      browser,
+    }) => {
+      const context = await browser.newContext({ viewport });
+      const fresh = await context.newPage();
+      await pinMomentPreference(fresh, "flow");
+      await fresh.goto("/?moment=flow&end=1");
+      await expect(fresh.getByTestId("today-moments")).toBeVisible();
+
+      await expect.poll(() => searchParam(fresh, "end")).toBeNull();
+      const settledLength = await historyLength(fresh);
+      await expect(fresh.getByTestId("end-session-sheet")).toBeHidden();
+      expect(searchParam(fresh, "moment")).toBe("flow");
+      // Stripped in place: no history entry was added to do it.
+      expect(await historyLength(fresh)).toBe(settledLength);
+      expect(await sessionWrites(fresh)).toHaveLength(0);
+      await context.close();
+    });
+
+    test("6. Cancel consumes the form's own history entry, so one Back reaches a different screen", async ({
+      page,
+    }) => {
+      await startSessionAndOpenEndForm(page);
+
+      await page
+        .getByTestId("end-session-sheet")
+        .getByRole("button", { name: "Cancel" })
+        .click();
+
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+      await expect.poll(() => searchParam(page, "end")).toBeNull();
+      expect(searchParam(page, "moment")).toBe("flow");
+
+      await page.goBack();
+
+      // Not a dead press onto a duplicate Flow entry: the Start entry the
+      // session was started from.
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await expect.poll(() => searchParam(page, "moment")).toBe("start");
+      expect(await runningSessionRecord(page)).toBeTruthy();
+      expect(await sessionWrites(page)).toHaveLength(0);
+    });
+
+    test("7. Save records exactly the chosen outcome and clears ?end; Forward afterwards cannot reopen or record", async ({
+      page,
+    }) => {
+      await startSessionAndOpenEndForm(page);
+
+      await page.getByTestId("end-session-outcome-partial").click();
+      await page.getByTestId("end-session-minutes").fill("12");
+      await page.getByTestId("end-session-note").fill("First section done");
+      await page.getByTestId("end-session-save").click();
+
+      await expect.poll(async () => (await sessionWrites(page)).length).toBe(1);
+      const [write] = await sessionWrites(page);
+      expect(write!.payload.outcome).toBe("partial");
+      expect(write!.payload.actual_minutes).toBe(12);
+      expect(write!.payload.notes).toBe("First section done");
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+      await expect.poll(() => searchParam(page, "end")).toBeNull();
+      expect(await runningSessionRecord(page)).toBeNull();
+
+      await page.goForward();
+
+      await expect.poll(() => searchParam(page, "end")).toBeNull();
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+      expect(await sessionWrites(page)).toHaveLength(1);
+      expect(await runningSessionRecord(page)).toBeNull();
+    });
+
+    test("F1 re-anchored: Back closes the form, Forward reopens it with focus, typing, Tab and Escape held inside, and nothing recorded", async ({
+      page,
+    }) => {
+      await startSessionAndOpenEndForm(page);
+      await page.getByTestId("end-session-outcome-partial").click();
+      await page.getByTestId("end-session-note").fill("unsaved draft");
+
+      // Approved truth (F2): Back closes the form and stays on Flow.
+      await page.goBack();
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
       await expect(page.getByTestId("flow-moment")).toBeVisible();
-      await expect(page.getByTestId("first-tiny-step-input")).toBeVisible();
+      expect(await sessionWrites(page)).toHaveLength(0);
+
+      await page.goForward();
       await expect(page.getByTestId("end-session-sheet")).toBeVisible();
 
-      // Focus came back to the field it left, caret included.
+      // Focus is in the form, never behind it: typing reaches nothing
+      // behind the scrim, and the First-move box stays untouched.
       await expect.poll(() => focusIsInEndSheet(page)).toBe(true);
-      await page.keyboard.type(" more");
-      await expect(page.getByTestId("end-session-note")).toHaveValue(
-        "unsaved draft more",
-      );
+      await page.keyboard.type("zz");
       await expect(page.getByTestId("first-tiny-step-input")).toHaveValue("");
 
-      // Tab walks the sheet, never the page behind it.
+      await page.getByTestId("end-session-note").click();
+      await page.keyboard.type("fresh note");
+      await expect(page.getByTestId("end-session-note")).toHaveValue(
+        "fresh note",
+      );
+
+      // Tab walks the form, never the page behind it.
       for (let step = 0; step < 4; step += 1) {
         await page.keyboard.press("Tab");
         expect(await focusIsInEndSheet(page)).toBe(true);
       }
 
-      // Escape closes the sheet — and closing is not an outcome either.
+      // Escape closes the form — and closing is not an outcome either.
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+      await expect.poll(() => searchParam(page, "end")).toBeNull();
       await expect(page.getByTestId("current-block-hero")).toBeVisible();
-      expect(
-        await page.evaluate(
-          (key) => window.localStorage.getItem(key),
-          RUNNING_SESSION_KEY,
-        ),
-      ).toBeTruthy();
+      expect(await runningSessionRecord(page)).toBeTruthy();
       expect(await sessionWrites(page)).toHaveLength(0);
 
       // The user's own choice is still the one and only record.
@@ -512,6 +678,67 @@ for (const viewport of [
       const [write] = await sessionWrites(page);
       expect(write!.payload.outcome).toBe("skipped");
       expect(write!.payload.notes).toBe("Came back to it later");
+    });
+
+    test("capture from the form opens IN FRONT, Back returns to the form with focus in it, and the palette stays out", async ({
+      page,
+    }) => {
+      await startSessionAndOpenEndForm(page);
+      await expect.poll(() => focusIsInEndSheet(page)).toBe(true);
+
+      await page.keyboard.press("c");
+
+      const capture = page.getByRole("dialog", { name: "Capture a thought" });
+      await expect(capture).toBeVisible();
+      await expect.poll(() => searchParam(page, "capture")).toBe("1");
+      expect(searchParam(page, "end")).toBe("1");
+      // Capture is the front dialog: what paints at its centre is capture,
+      // focus is in it, and the form behind it is inert.
+      const frontIsCapture = await capture.evaluate((dialog) => {
+        const box = dialog.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        );
+        return Boolean(hit && dialog.contains(hit));
+      });
+      expect(frontIsCapture).toBe(true);
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () =>
+              document.activeElement
+                ?.closest('[role="dialog"]')
+                ?.getAttribute("aria-label") ?? null,
+          ),
+        )
+        .toBe("Capture a thought");
+      expect(
+        await page
+          .getByTestId("end-session-sheet")
+          .evaluate((el) =>
+            el.closest('[data-testid="moment-sheet"]')?.hasAttribute("inert"),
+          ),
+      ).toBe(true);
+
+      // Back closes capture only; the form is back in front with focus.
+      await page.goBack();
+      await expect(capture).toBeHidden();
+      await expect(page.getByTestId("end-session-sheet")).toBeVisible();
+      await expect.poll(() => searchParam(page, "capture")).toBeNull();
+      expect(searchParam(page, "end")).toBe("1");
+      await expect.poll(() => focusIsInEndSheet(page)).toBe(true);
+
+      // The palette never stacks on the form; it says why instead.
+      await page.keyboard.press("Control+k");
+      await expect(page.getByTestId("command-palette")).toBeHidden();
+      expect(searchParam(page, "palette")).toBeNull();
+      await expect(page.getByTestId("today-moments-toast")).toContainText(
+        "Close the sheet to open the command palette",
+      );
+
+      expect(await runningSessionRecord(page)).toBeTruthy();
+      expect(await sessionWrites(page)).toHaveLength(0);
     });
   });
 }
