@@ -280,6 +280,151 @@ describe("MomentSheet", () => {
     });
   });
 
+  // #687 C2 gap-1 (F1): with the end-session sheet open, Back then Forward
+  // remounts the Flow moment underneath, and its `autoFocus` First-move input
+  // pulled focus out from behind the scrim. The Tab trap and Escape both
+  // listen on the dialog itself, so both went dead and typing landed in the
+  // hidden input. The sheet must hold focus while it is the front dialog —
+  // and only then.
+  describe("#687 C2 gap-1: focus stays in the front sheet when something behind it grabs focus", () => {
+    function BehindHarness({
+      sheetOpen = true,
+      captureOpen = false,
+      onClose = vi.fn(),
+      saving = false,
+    }: {
+      sheetOpen?: boolean;
+      captureOpen?: boolean;
+      onClose?: () => void;
+      /** Mirrors EndSessionSheet disabling its fields while Save runs. */
+      saving?: boolean;
+    }) {
+      const [remounted, setRemounted] = useState(false);
+      return (
+        <div>
+          <button data-testid="remount" onClick={() => setRemounted(true)}>
+            Remount behind
+          </button>
+          {remounted ? (
+            // Same shape as FirstTinyStepCard: an input that autofocuses on
+            // mount, rendered behind the sheet.
+            <input data-testid="behind-autofocus" autoFocus />
+          ) : null}
+          <CaptureOverlayOpenContext.Provider value={captureOpen}>
+            <MomentSheet open={sheetOpen} title="End session" onClose={onClose}>
+              <textarea
+                data-testid="sheet-note"
+                defaultValue=""
+                disabled={saving}
+              />
+              <button data-testid="sheet-save" disabled={saving}>
+                Save
+              </button>
+            </MomentSheet>
+          </CaptureOverlayOpenContext.Provider>
+        </div>
+      );
+    }
+
+    it("puts focus back on the field it left, caret and all, when an element behind autofocuses", async () => {
+      const onClose = vi.fn();
+      render(<BehindHarness onClose={onClose} />);
+      const note = screen.getByTestId("sheet-note") as HTMLTextAreaElement;
+      await waitFor(() => {
+        expect(screen.getByTestId("moment-sheet-dialog")).toHaveFocus();
+      });
+
+      note.focus();
+      fireEvent.change(note, { target: { value: "unsaved draft" } });
+      note.setSelectionRange(3, 3);
+
+      fireEvent.click(screen.getByTestId("remount"));
+
+      expect(screen.getByTestId("behind-autofocus")).toBeInTheDocument();
+      expect(note).toHaveFocus();
+      expect(note.value).toBe("unsaved draft");
+      expect(note.selectionStart).toBe(3);
+
+      // With focus back inside, the dialog's own Escape handler hears keys
+      // again (it listens on the dialog, so it was dead while focus sat
+      // behind the scrim).
+      fireEvent.keyDown(note, { key: "Escape" });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to the dialog itself when nothing inside had focus yet", () => {
+      render(<BehindHarness />);
+      const outside = screen.getByTestId("remount");
+      outside.focus();
+      expect(screen.getByTestId("moment-sheet-dialog")).toHaveFocus();
+    });
+
+    it("falls back to the dialog itself when the field it left has since been disabled (Save in flight)", () => {
+      const { rerender } = render(<BehindHarness />);
+      const note = screen.getByTestId("sheet-note");
+      note.focus();
+      expect(note).toHaveFocus();
+
+      // EndSessionSheet disables every control while Save runs. The field
+      // is still connected and still inside, but `focus()` on it is a no-op.
+      rerender(<BehindHarness saving />);
+      expect(note).toBeDisabled();
+
+      screen.getByTestId("remount").focus();
+      expect(screen.getByTestId("moment-sheet-dialog")).toHaveFocus();
+    });
+
+    it("leaves focus alone when it moves between elements inside the sheet", () => {
+      render(<BehindHarness />);
+      const note = screen.getByTestId("sheet-note");
+      const save = screen.getByTestId("sheet-save");
+      note.focus();
+      save.focus();
+      expect(save).toHaveFocus();
+    });
+
+    it("does nothing once the sheet is closed", () => {
+      render(<BehindHarness sheetOpen={false} />);
+      fireEvent.click(screen.getByTestId("remount"));
+      expect(screen.getByTestId("behind-autofocus")).toHaveFocus();
+    });
+
+    it("never pulls focus back while capture sits in front (obscured)", () => {
+      render(<BehindHarness captureOpen />);
+      fireEvent.click(screen.getByTestId("remount"));
+      expect(screen.getByTestId("behind-autofocus")).toHaveFocus();
+    });
+
+    it("never pulls focus out of another open modal dialog, so two dialogs cannot fight", () => {
+      // The one-commit window before `obscured` flips, or any other
+      // `aria-modal` dialog (capture, command palette, a second sheet): its
+      // focus is its own. A redirect here would ping-pong between them.
+      const focusSpy = vi.fn();
+      render(
+        <div>
+          <div role="dialog" aria-modal="true" aria-label="Capture a thought">
+            <input data-testid="other-modal-input" onFocus={focusSpy} />
+          </div>
+          <MomentSheet open title="End session" onClose={vi.fn()}>
+            <textarea data-testid="sheet-note" />
+          </MomentSheet>
+          <MomentSheet open title="Second sheet" onClose={vi.fn()}>
+            <button data-testid="second-sheet-button">Go</button>
+          </MomentSheet>
+        </div>,
+      );
+
+      const otherInput = screen.getByTestId("other-modal-input");
+      otherInput.focus();
+      expect(otherInput).toHaveFocus();
+      expect(focusSpy).toHaveBeenCalledTimes(1);
+
+      const secondButton = screen.getByTestId("second-sheet-button");
+      secondButton.focus();
+      expect(secondButton).toHaveFocus();
+    });
+  });
+
   // SP-9: the close button reaches a >=44px effective hit area and drops
   // the 300ms double-tap delay on coarse pointers.
   it("close button carries hit-area and touch-manipulation utilities", () => {
