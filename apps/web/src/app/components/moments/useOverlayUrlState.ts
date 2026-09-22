@@ -153,6 +153,12 @@ export interface OverlayUrlState {
 export function useOverlayUrlState(
   param: OverlayParam,
   resolvedInitialOpen = false,
+  // #687 C2 F2 round 2: which values of `param` mean "open". Defaults to
+  // `parseOverlayParam`, so capture and palette are unchanged. The End
+  // session form passes the strict reader its direct link and mount scrub
+  // already use (`deepLink.ts`'s `isAffirmativeFlag`), so a traversal can
+  // never open it on a value those paths reject.
+  parse: (value: string | null) => boolean = parseOverlayParam,
 ): OverlayUrlState {
   const [open, setOpen] = useState(resolvedInitialOpen);
 
@@ -167,25 +173,19 @@ export function useOverlayUrlState(
 
   useEffect(() => {
     function handlePopState() {
-      setOpen(
-        parseOverlayParam(
-          new URLSearchParams(window.location.search).get(param),
-        ),
-      );
+      setOpen(parse(new URLSearchParams(window.location.search).get(param)));
     }
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [param]);
+  }, [param, parse]);
 
   const openOverlay = useCallback(() => {
     setOpen(true);
     if (typeof window === "undefined") return;
     // Already on this overlay's URL (e.g. re-opening after a deep link):
     // keep the stack flat rather than stacking an identical entry.
-    if (
-      parseOverlayParam(new URLSearchParams(window.location.search).get(param))
-    ) {
+    if (parse(new URLSearchParams(window.location.search).get(param))) {
       return;
     }
     // Predicted mirror of #897 (Part of #687), verified rather than
@@ -203,7 +203,7 @@ export function useOverlayUrlState(
       urlWithOverlay(window.location, param, true),
       { resyncNextRouter: true },
     );
-  }, [param]);
+  }, [param, parse]);
 
   const closeOverlay = useCallback(() => {
     setOpen(false);

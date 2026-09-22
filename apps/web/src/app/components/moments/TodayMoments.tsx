@@ -88,6 +88,7 @@ import {
   consumeIsRemount,
   deepLinkTargetFromSearch,
   dropUnknownParams,
+  isAffirmativeFlag,
 } from "./deepLink";
 import type { ToastAction } from "./toast";
 import { useFlowFocusSession } from "./useFlowFocusSession";
@@ -1300,7 +1301,7 @@ function TodayMomentsContent({
     // here: that lives on the device, so `useFlowFocusSession` strips a
     // stale one right after it restores the session.
     const endParam = params.get("end");
-    const endValid = endParam === "1" || endParam === "true";
+    const endValid = isAffirmativeFlag(endParam);
     if (endParam !== null && !endValid) {
       params.delete("end");
       changed = true;
@@ -1392,6 +1393,7 @@ function TodayMomentsContent({
     handleDismissRevisionOffer,
     finishFocus,
     endSessionOpen,
+    endSessionPending,
     closeEndSession,
     endSessionElapsedMinutes,
     handleEndSessionSave,
@@ -1403,6 +1405,7 @@ function TodayMomentsContent({
     hasActiveSession,
   } = useFlowFocusSession({
     state,
+    sheetActive: Boolean(activeSheet),
     now,
     startVM,
     fallbackFocusMinutes,
@@ -2438,6 +2441,7 @@ function TodayMomentsContent({
               "Focus session"
             }
             elapsedMinutes={endSessionElapsedMinutes}
+            pending={endSessionPending}
             onCancel={() => closeEndSession()}
             onSave={handleEndSessionSave}
           />

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { deepLinkTargetFromParams, dropUnknownParams } from "./deepLink";
+import {
+  deepLinkTargetFromParams,
+  dropUnknownParams,
+  isAffirmativeFlag,
+} from "./deepLink";
 
 // #687: every demoted route (`/capture`, `/triage`, `/calendar`, `/execute`,
 // `/review`, `/health`, `/areas`) now server-redirects straight into `/`
@@ -282,6 +286,23 @@ describe("deepLinkTargetFromParams", () => {
 // to the one it honors. This matrix pins the allowlist scrub: drop anything
 // not on the explicit keep-list, including a case-variant near-miss of a
 // known key.
+// #687 C2 F2 round 2: the one strict flag reader, shared by this parser,
+// the mount scrub and the End session form's Back/Forward handling.
+describe("isAffirmativeFlag", () => {
+  it.each(["1", "true"])("accepts %s", (value) => {
+    expect(isAffirmativeFlag(value)).toBe(true);
+  });
+
+  it.each(["", "0", "false", "TRUE", "bogus"])("rejects %s", (value) => {
+    expect(isAffirmativeFlag(value)).toBe(false);
+  });
+
+  it("rejects an absent value", () => {
+    expect(isAffirmativeFlag(null)).toBe(false);
+    expect(isAffirmativeFlag(undefined)).toBe(false);
+  });
+});
+
 describe("dropUnknownParams", () => {
   it("drops a plain unknown key", () => {
     const params = new URLSearchParams("?foo=bar&moment=flow");

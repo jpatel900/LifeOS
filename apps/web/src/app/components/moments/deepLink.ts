@@ -67,8 +67,19 @@ function first(value: RawParam): string | undefined {
 // "boolean-ish param matrix" pins the full capture/palette x
 // affirmative/non-affirmative grid so this can't drift back.
 function isTruthyFlag(value: RawParam): boolean {
-  const v = first(value);
-  return v === "1" || v === "true";
+  return isAffirmativeFlag(first(value));
+}
+
+/**
+ * #687 C2 F2 round 2: the single strict reader for a boolean app flag's
+ * value — "1" or "true", nothing else. Exported so the End session form's
+ * Back/Forward handling (`useOverlayUrlState`'s parser option) and
+ * `TodayMoments`' mount scrub decide `?end=` exactly as this parser does:
+ * an empty `?end=` used to open the form on popstate while a direct link
+ * and the scrub both rejected it.
+ */
+export function isAffirmativeFlag(value: string | null | undefined): boolean {
+  return value === "1" || value === "true";
 }
 
 /**
