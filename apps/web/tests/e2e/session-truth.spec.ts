@@ -740,5 +740,98 @@ for (const viewport of [
       expect(await runningSessionRecord(page)).toBeTruthy();
       expect(await sessionWrites(page)).toHaveLength(0);
     });
+
+    async function activeDialogLabel(page: Page): Promise<string | null> {
+      return page.evaluate(
+        () =>
+          document.activeElement
+            ?.closest('[role="dialog"]')
+            ?.getAttribute("aria-label") ?? null,
+      );
+    }
+
+    async function activeModalCount(page: Page): Promise<number> {
+      return page.evaluate(
+        () =>
+          document.querySelectorAll('[role="dialog"][aria-modal="true"]')
+            .length,
+      );
+    }
+
+    test("capture's Open triage from the form selects Triage (one modal, focus in it), and Back returns to the form", async ({
+      page,
+    }) => {
+      await startSessionAndOpenEndForm(page);
+      await expect.poll(() => focusIsInEndSheet(page)).toBe(true);
+
+      await page.keyboard.press("c");
+      const capture = page.getByRole("dialog", { name: "Capture a thought" });
+      await expect(capture).toBeVisible();
+      await page
+        .getByTestId("capture-overlay-textarea")
+        .fill("Call the plumber back");
+      await page.getByTestId("capture-overlay-textarea").press("Enter");
+      await expect(capture).toBeHidden();
+
+      const openTriage = page.getByTestId("today-moments-toast-undo");
+      await expect(openTriage).toHaveText("Open triage");
+      await openTriage.click();
+
+      // The selected sheet is the one active sheet: the form closes in
+      // place, the session keeps running, nothing is recorded.
+      const triage = page.getByRole("dialog", { name: "Triage" });
+      await expect(triage).toBeVisible();
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+      await expect.poll(() => activeModalCount(page)).toBe(1);
+      await expect.poll(() => activeDialogLabel(page)).toBe("Triage");
+      await expect.poll(() => searchParam(page, "end")).toBeNull();
+      expect(searchParam(page, "sheet")).toBe("triage");
+      expect(searchParam(page, "capture")).toBeNull();
+      expect(searchParam(page, "moment")).toBe("flow");
+      expect(await runningSessionRecord(page)).toBeTruthy();
+      expect(await sessionWrites(page)).toHaveLength(0);
+
+      // Back steps to the entry the user came from: the End session form,
+      // fresh, with focus in it — still one modal, still nothing recorded.
+      await page.goBack();
+      await expect(triage).toBeHidden();
+      await expect(page.getByTestId("end-session-sheet")).toBeVisible();
+      await expect.poll(() => searchParam(page, "end")).toBe("1");
+      expect(searchParam(page, "sheet")).toBeNull();
+      await expect.poll(() => focusIsInEndSheet(page)).toBe(true);
+      await expect.poll(() => activeModalCount(page)).toBe(1);
+      expect(await runningSessionRecord(page)).toBeTruthy();
+      expect(await sessionWrites(page)).toHaveLength(0);
+    });
+
+    test("a canonical composed ?sheet=triage&end=1 opens Triage only, drops end in place, and a reload agrees", async ({
+      page,
+    }) => {
+      await openHome(page, { scheduled: true, blockless: false });
+      await page.getByTestId("first-move-start").click();
+      await expect(page.getByTestId("current-block-hero")).toBeVisible();
+
+      await page.goto("/?moment=flow&sheet=triage&end=1");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+
+      const triage = page.getByRole("dialog", { name: "Triage" });
+      await expect(triage).toBeVisible();
+      await expect.poll(() => searchParam(page, "end")).toBeNull();
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+      expect(searchParam(page, "sheet")).toBe("triage");
+      expect(searchParam(page, "moment")).toBe("flow");
+      expect(await activeModalCount(page)).toBe(1);
+      expect(await runningSessionRecord(page)).toBeTruthy();
+      expect(await sessionWrites(page)).toHaveLength(0);
+
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(triage).toBeVisible();
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+      expect(searchParam(page, "end")).toBeNull();
+      expect(searchParam(page, "sheet")).toBe("triage");
+      expect(await activeModalCount(page)).toBe(1);
+      expect(await runningSessionRecord(page)).toBeTruthy();
+      expect(await sessionWrites(page)).toHaveLength(0);
+    });
   });
 }
