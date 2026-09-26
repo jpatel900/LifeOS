@@ -804,6 +804,120 @@ for (const viewport of [
       expect(await sessionWrites(page)).toHaveLength(0);
     });
 
+    /**
+     * F2 round 3, REQUIRED 1 (`f2-review-r2-corrections.txt`): the strip
+     * effect that clears `end` while a sheet is active (useFlowFocusSession.ts
+     * ~409-418) calls `adoptEndFromUrl(false)` for BOTH suppression reasons
+     * (no session, or a sheet is active) — but `adoptOverlayFromUrl` zeroes
+     * `pushedEntryIdRef` (useOverlayUrlState.ts ~287-290), unconditionally
+     * disclaiming ownership of the entry THIS hook pushed for the form (E).
+     * In the sheet-active case the form's own entry E is never touched by
+     * that strip (only the sheet's own entry is rewritten) — so E is still,
+     * in truth, this tab's own push. Once ownership is wrongly zeroed,
+     * `closeEndOverlay()` (Cancel, or Save's own close) can no longer tell it
+     * owns E, so it takes the "someone else pushed" branch: it strips `end`
+     * from E IN PLACE via replaceState instead of `back()`ing off it. E is
+     * left content-identical to the entry beneath it (Flow, no `end`) without
+     * being consumed — so the NEXT Back moves off a real entry that LOOKS
+     * unchanged (a dead press), and a second Back is needed to reach a
+     * genuinely different screen (Start). The two cases below continue the
+     * Open-triage walk above through Cancel, and separately Save, then prove
+     * the immediately following Back is not dead.
+     */
+    test("8. After Open triage, Cancel on the reopened form leaves a real Back — not a dead press onto a duplicate Flow entry", async ({
+      page,
+    }) => {
+      await startSessionAndOpenEndForm(page);
+
+      await page.keyboard.press("c");
+      const capture = page.getByRole("dialog", { name: "Capture a thought" });
+      await expect(capture).toBeVisible();
+      await page
+        .getByTestId("capture-overlay-textarea")
+        .fill("Call the plumber back");
+      await page.getByTestId("capture-overlay-textarea").press("Enter");
+      await expect(capture).toBeHidden();
+
+      const openTriage = page.getByTestId("today-moments-toast-undo");
+      await expect(openTriage).toHaveText("Open triage");
+      await openTriage.click();
+
+      const triage = page.getByRole("dialog", { name: "Triage" });
+      await expect(triage).toBeVisible();
+
+      // Back from Triage: the form reopens over the still-running session,
+      // exactly as the walk above already pins.
+      await page.goBack();
+      await expect(triage).toBeHidden();
+      await expect(page.getByTestId("end-session-sheet")).toBeVisible();
+      await expect.poll(() => searchParam(page, "end")).toBe("1");
+
+      await page
+        .getByTestId("end-session-sheet")
+        .getByRole("button", { name: "Cancel" })
+        .click();
+
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+      await expect.poll(() => searchParam(page, "end")).toBeNull();
+      expect(searchParam(page, "moment")).toBe("flow");
+
+      await page.goBack();
+
+      // Not a dead press onto a duplicate Flow entry: the Start entry the
+      // session was originally started from (mirrors case 6's own proof).
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await expect.poll(() => searchParam(page, "moment")).toBe("start");
+      expect(await runningSessionRecord(page)).toBeTruthy();
+      expect(await sessionWrites(page)).toHaveLength(0);
+    });
+
+    test("9. After Open triage, Save on the reopened form leaves a real Back — not a dead press onto a duplicate Flow entry", async ({
+      page,
+    }) => {
+      await startSessionAndOpenEndForm(page);
+
+      await page.keyboard.press("c");
+      const capture = page.getByRole("dialog", { name: "Capture a thought" });
+      await expect(capture).toBeVisible();
+      await page
+        .getByTestId("capture-overlay-textarea")
+        .fill("Call the plumber back");
+      await page.getByTestId("capture-overlay-textarea").press("Enter");
+      await expect(capture).toBeHidden();
+
+      const openTriage = page.getByTestId("today-moments-toast-undo");
+      await expect(openTriage).toHaveText("Open triage");
+      await openTriage.click();
+
+      const triage = page.getByRole("dialog", { name: "Triage" });
+      await expect(triage).toBeVisible();
+
+      await page.goBack();
+      await expect(triage).toBeHidden();
+      await expect(page.getByTestId("end-session-sheet")).toBeVisible();
+      await expect.poll(() => searchParam(page, "end")).toBe("1");
+
+      await page.getByTestId("end-session-outcome-partial").click();
+      await page.getByTestId("end-session-minutes").fill("12");
+      await page.getByTestId("end-session-note").fill("First section done");
+      await page.getByTestId("end-session-save").click();
+
+      await expect.poll(async () => (await sessionWrites(page)).length).toBe(1);
+      const [write] = await sessionWrites(page);
+      expect(write!.payload.outcome).toBe("partial");
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+      await expect.poll(() => searchParam(page, "end")).toBeNull();
+      expect(await runningSessionRecord(page)).toBeNull();
+
+      await page.goBack();
+
+      // Not a dead press onto a duplicate Flow entry: the Start entry the
+      // session was originally started from.
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await expect.poll(() => searchParam(page, "moment")).toBe("start");
+      expect(await sessionWrites(page)).toHaveLength(1);
+    });
+
     test("a canonical composed ?sheet=triage&end=1 opens Triage only, drops end in place, and a reload agrees", async ({
       page,
     }) => {
