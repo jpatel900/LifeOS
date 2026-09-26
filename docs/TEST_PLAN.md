@@ -313,6 +313,7 @@ Named families, not a file inventory — `apps/web/tests/e2e/` is the truth if t
 - hit-targets-390 + overlap pin: no target under 44px, no overlaps, at 390px
 - close-day-verdict: closing the day shows a verdict; further closes are idempotent
 - durable-wins-reviews, durable-plans-drafts: device-journal replay dedupes; copy tells the persistence truth
+- back-today (device + signed-in, FR-049/#1025): a put-off task's chosen return day is hidden before it arrives, shown on Start with its details once it does, and "Move to today" removes it — at 390px and 1280px
 - plan-, review-, health-, areas-port-truth (signed-in tier): drive each ported sheet, check it against what the account holds, and check refresh/Back/Forward agree with the URL (C2 ports)
 - a11y-axe-pin: axe at AA on the covered surfaces
 
