@@ -9,6 +9,7 @@ import type {
   Phase2MockTask,
 } from "../types";
 import {
+  acceptedTaskDueAt,
   hasLaunchSequenceStep,
   nextId,
   nowIso,
@@ -376,7 +377,9 @@ function acceptDraftWithStatus(
     energy_type: null,
     estimated_minutes_low: draft.estimated_minutes_low,
     estimated_minutes_high: draft.estimated_minutes_high,
-    due_at: draft.due_at ?? null,
+    // FR-049 (#1025): only a decision draft's due_at (its FR-024 deadline)
+    // survives accept — an ordinary draft's due_at is never copied.
+    due_at: acceptedTaskDueAt(draft.task_type, draft.due_at),
     first_tiny_step: draft.first_tiny_step,
     definition_of_done: "Complete the first useful move and note the outcome.",
     // S3 (#255): the local demo path has no people store, so person-id links
