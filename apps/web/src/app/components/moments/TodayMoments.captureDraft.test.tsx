@@ -20,7 +20,8 @@ vi.mock("next/navigation", () => ({
 // isolates these tests from Supabase client/network concerns. Only
 // TodayMoments.briefView.test.tsx needs the hoisted-spy form below to assert
 // on recordIfNeeded directly.
-vi.mock("@/lib/reEntry/briefView", () => ({
+vi.mock("@/lib/reEntry/briefView", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/reEntry/briefView")>()),
   createBriefViewRecorder: () => ({ recordIfNeeded: vi.fn() }),
 }));
 

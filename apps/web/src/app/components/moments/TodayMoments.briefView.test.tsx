@@ -24,7 +24,8 @@ vi.mock("next/navigation", () => ({
 const { recordBriefViewIfNeeded } = vi.hoisted(() => ({
   recordBriefViewIfNeeded: vi.fn(),
 }));
-vi.mock("@/lib/reEntry/briefView", () => ({
+vi.mock("@/lib/reEntry/briefView", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/reEntry/briefView")>()),
   createBriefViewRecorder: () => ({ recordIfNeeded: recordBriefViewIfNeeded }),
 }));
 
