@@ -1114,6 +1114,33 @@ Decided (owner, 2026-07-23 backlog sitting; written back 2026-08-05 — these we
 - `date_window` is **strictly for windows that don't warrant a calendar entry** (e.g., "sometime next month") — it never overlaps calendar/time-block rows.
 - `manual_review` fires **once per local day** while unresolved, not on every brief render.
 
+### FR-049 — Bring a put-off task back on a chosen day
+
+**Priority:** MUST
+
+**Stage:** Owner-ratified 2026-09-25 (issue #1025, option A1) as a narrow exception to `docs/program/final-ux-loop.md` R8 for this one capability. It does not open the feature freeze for anything else.
+
+Rationale: the core loop is messy input → a clear next step → the work comes back when it is needed. A baseline on 2026-09-25 found the third step missing in every area: a task put off for later had no way to return at a chosen time, so the person had to remember to go looking for it. This FR gives a put-off task one optional return day and shows it on Start when that day arrives.
+
+Acceptance criteria:
+
+- The existing put-off-for-later (backlog) editor gains one optional field, "Bring it back on", holding a calendar day. The person can set it, change it, or clear it. Saving uses the existing backlog edit path and its existing guards (same user, `status = backlog`, expected `updated_at`); it is stored in the existing `tasks.due_at` column. No new column, table, migration, or RLS change.
+- The day is the person's local calendar day. It is saved so that reading it back yields the same local day, and the check "has this day arrived" uses the local day, including just before and just after local midnight. The saved value must round-trip through both `Z` and `+00:00` timestamp forms.
+- Only a day the person sets counts. Accepting an AI draft no longer copies the draft's `due_at` into a new ordinary task; the AI parse schema, prompt, and draft display are unchanged. (Existing data at ratification: 0 put-off tasks carried a date.)
+- Decision tasks are the one exception, because FR-024 requires every decision to carry a deadline in `due_at`. Accept keeps copying a decision draft's deadline. A put-off decision whose deadline has arrived appears in "Back today", which is how FR-024's "surfaces like a due task" is met here. In the editor, a decision's day can be changed but not cleared.
+- On Start, every put-off task whose return day is today or earlier appears in one "Back today" group, in the area currently selected (or all areas when "All areas" is selected), with its title, area, and description. Each item offers the existing "Move to today" action. It never appears in another area's view.
+- The return day survives closing and reopening the app in the tier being used. The demo tier states its existing limit (this tab only) and makes no account claim.
+- Moving the task to today, finishing it, or clearing the day removes it from "Back today". A task that is not put off for later never appears there, whatever its `due_at`.
+- The "has this day arrived" rule takes the current time as a caller-supplied parameter, with no ambient clock inside the rule, matching the existing `compostPolicy.ts` pattern.
+- Covered at 390px and 1280px.
+
+Non-goals (binding):
+
+- Notifications, reminders while the app is closed, or any outside-app delivery.
+- A multi-day Plan or calendar view; scheduling time blocks on future days.
+- Using AI-inferred dates to bring anything back.
+- Treating a return day as a deadline, or showing an overdue or guilt-framed state. A day that has passed simply means "back today".
+
 ---
 
 ### Constraint Layer — Explicitly Unapproved Capabilities
