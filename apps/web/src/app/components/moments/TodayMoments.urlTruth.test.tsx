@@ -885,6 +885,56 @@ describe("TodayMoments — End session form: a pending save across navigation (#
     expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
   });
 
+  /**
+   * #687 C2 F2 round 3, REQUIRED 2 (`f2-review-r2-corrections.txt`): the
+   * second click in the test above lands on an ALREADY re-rendered, disabled
+   * button — `EndSessionSheet`'s own `if (busy) return;` (busy = saving ||
+   * parent `pending`) blocks it before it ever calls `onSave`, so the hook's
+   * own guard (`useFlowFocusSession.ts` ~451, `if (saveInFlightRef.current)
+   * return;`) is never actually reached by that test; deleting the hook
+   * guard still passes it. This test dispatches BOTH clicks inside one `act`
+   * batch, before React commits the first click's `setSavePending(true)` to
+   * the DOM or to `EndSessionSheet`'s own closure — the real race a rapid
+   * double-click (or a click racing an Enter-key submit) can produce. Both
+   * dispatches reach `EndSessionSheet.handleSave` with the SAME stale
+   * `busy === false` closure, so its own guard does not fire either — only
+   * `saveInFlightRef`, set synchronously (not batched) by the first call
+   * before the second one checks it, blocks the second `onSave`.
+   */
+  it("REQUIRED 2: two Saves dispatched in the same tick reach the hook's in-flight guard — exactly one policy call, one write", async () => {
+    await startRealSession();
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    fireEvent.click(screen.getByTestId("end-session-outcome-partial"));
+
+    const saveButton = screen.getByTestId(
+      "end-session-save",
+    ) as HTMLButtonElement;
+    expect(saveButton).not.toBeDisabled();
+
+    act(() => {
+      saveButton.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      saveButton.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    // The guard, not a disabled DOM button or EndSessionSheet's own stale
+    // closure, is what kept this at exactly one call.
+    expect(endPolicy.calls).toBe(1);
+
+    await drainJournal(
+      () =>
+        (screen.getByTestId("today-moments-toast").textContent ?? "") !== "",
+    );
+
+    const writes = await listPendingWrites("execution_session");
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.payload).toMatchObject({ outcome: "partial" });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+  });
+
   it("a deferred policy is launched once across Back, Forward and a second Save", async () => {
     const pending = deferredResult();
     endPolicy.override = () => pending.promise;

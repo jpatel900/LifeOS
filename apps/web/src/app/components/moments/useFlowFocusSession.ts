@@ -409,13 +409,52 @@ export function useFlowFocusSession({
   const endSuppressed = !hasSession || sheetActive;
   useEffect(() => {
     if (!hydrated || !endOverlayOpen || !endSuppressed) return;
-    adoptEndFromUrl(false);
-    if (new URLSearchParams(window.location.search).has("end")) {
-      historyReplaceState(urlWithOverlay(window.location, "end", false), {
-        resyncNextRouter: true,
-      });
+    // #687 C2 F2 round 3 (REQUIRED 1, `f2-review-r2-corrections.txt`): the
+    // two suppression reasons are NOT the same claim about ownership. `
+    // !hasSession` means there is no real form at all — a stale link, a
+    // fresh browser, or Forward after Save already cleared the session — so
+    // this hook never legitimately pushed anything for it, and explicitly
+    // disclaiming via `adoptOverlayFromUrl(false)` is correct: it clears
+    // `pushedEntryIdRef` because there is genuinely nothing to remember.
+    // `sheetActive`, by contrast, only means a DIFFERENT entry (the sheet's
+    // own push) needs its `end` param stripped right now — the form's own
+    // entry (this tab's own earlier `openOverlay` push, if there was one) is
+    // untouched by that strip and is still, in truth, ours. Calling
+    // `adoptEndFromUrl(false)` here anyway (the pre-round-3 bug) zeroed that
+    // memory unconditionally, so a LATER Cancel or Save — once the sheet
+    // closes and the user is back on the form's own entry — could no longer
+    // tell it owns that entry, and stripped `end` from it in place instead of
+    // `back()`ing off it: a real entry left content-identical to the one
+    // beneath it, sitting there unconsumed, so the very next Back moved onto
+    // it and looked like nothing happened (a dead press exactly matching
+    // useOverlayUrlState.ts's own C2-S11 pattern), and a second Back was
+    // needed to reach a genuinely different screen. Routing this case through
+    // `closeEndOverlay()` (this hook's own `closeOverlay`) instead reuses its
+    // existing, already-correct ownership check: it strips the CURRENT
+    // entry's `end` in place exactly as before (ids won't match while the
+    // sheet's entry is current, so it never mistakenly `back()`s off the
+    // sheet's own push), but it does not touch `pushedEntryIdRef` — so if
+    // this hook really did push the form's entry, that memory survives the
+    // sheet detour, and the next Cancel/Save correctly consumes it with a
+    // real `back()`.
+    if (!hasSession) {
+      adoptEndFromUrl(false);
+      if (new URLSearchParams(window.location.search).has("end")) {
+        historyReplaceState(urlWithOverlay(window.location, "end", false), {
+          resyncNextRouter: true,
+        });
+      }
+      return;
     }
-  }, [hydrated, endOverlayOpen, endSuppressed, adoptEndFromUrl]);
+    closeEndOverlay();
+  }, [
+    hydrated,
+    endOverlayOpen,
+    endSuppressed,
+    hasSession,
+    adoptEndFromUrl,
+    closeEndOverlay,
+  ]);
 
   // Render-time, not only via the effect above: a selected sheet and the
   // form are never both on screen, not even for one frame.
