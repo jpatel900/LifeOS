@@ -88,6 +88,7 @@ import {
   consumeIsRemount,
   deepLinkTargetFromSearch,
   dropUnknownParams,
+  isAffirmativeFlag,
 } from "./deepLink";
 import type { ToastAction } from "./toast";
 import { useFlowFocusSession } from "./useFlowFocusSession";
@@ -236,6 +237,7 @@ const MOMENTS_URL_KEYS = [
   "capture",
   "palette",
   "area",
+  "end",
 ] as const;
 
 function dedupeParam(params: URLSearchParams, key: string): boolean {
@@ -1292,7 +1294,19 @@ function TodayMomentsContent({
     // `?sheet=X` claiming a screen that never rendered — the exact
     // address-bar lie finding 2's scrub exists to prevent, just for the
     // other overlay.
-    if (paletteValid && sheetValid) {
+    // #687 C2 F2: `?end=` (the End session form) gets the same two rules —
+    // a value `deepLinkTargetFromParams` would not honor is scrubbed, and a
+    // palette named beside a valid one loses exactly as it loses to a sheet.
+    // Whether a session is actually running behind `end=1` is NOT decided
+    // here: that lives on the device, so `useFlowFocusSession` strips a
+    // stale one right after it restores the session.
+    const endParam = params.get("end");
+    const endValid = isAffirmativeFlag(endParam);
+    if (endParam !== null && !endValid) {
+      params.delete("end");
+      changed = true;
+    }
+    if (paletteValid && (sheetValid || endValid)) {
       params.delete("palette");
       changed = true;
     }
@@ -1379,7 +1393,8 @@ function TodayMomentsContent({
     handleDismissRevisionOffer,
     finishFocus,
     endSessionOpen,
-    setEndSessionOpen,
+    endSessionPending,
+    closeEndSession,
     endSessionElapsedMinutes,
     handleEndSessionSave,
     pauseFocus,
@@ -1390,6 +1405,7 @@ function TodayMomentsContent({
     hasActiveSession,
   } = useFlowFocusSession({
     state,
+    sheetActive: Boolean(activeSheet),
     now,
     startVM,
     fallbackFocusMinutes,
@@ -1629,16 +1645,24 @@ function TodayMomentsContent({
       closeCapture();
       return;
     }
+    // #687 C2 F2: the End session form paints above the five sheets (it
+    // renders after them), so it closes before them.
+    if (endSessionOpen) {
+      closeEndSession();
+      return;
+    }
     if (activeSheet) {
       closeSheet();
     }
   }, [
     paletteOpen,
     captureOpen,
+    endSessionOpen,
     activeSheet,
     closeSheet,
     closePalette,
     closeCapture,
+    closeEndSession,
   ]);
 
   // FR-028 recovery candidate derivation: deterministic, pure. Ordered list
@@ -1712,10 +1736,16 @@ function TodayMomentsContent({
   // useMomentKeyboard's `enabled` below, so neither shortcut can fire
   // behind a modal/ritual/onboarding, matching every other global shortcut
   // in this file.
+  // #687 C2 F2: the End session form counts as a sheet here. Before it was
+  // URL-owned this gate ignored it, so 1/2/3 switched the moment underneath
+  // an open form and Escape reached `closeTopOverlay` as a second handler
+  // beside `MomentSheet`'s own — harmless while the form was a bare boolean,
+  // a double `back()` now that closing it steps history.
   const topbarShortcutsEnabled =
     !captureOpen &&
     !paletteOpen &&
     !activeSheet &&
+    !endSessionOpen &&
     !ritualActive &&
     !onboardingActive;
 
@@ -1753,8 +1783,10 @@ function TodayMomentsContent({
   // so instead of staying silent. Never touches Escape, 1/2/3, or Enter —
   // that is what keeps it from regrowing the double-handler hazard above.
   useEffect(() => {
+    // #687 C2 F2: the End session form gets the same sheet treatment — "c"
+    // opens capture IN FRONT of it, Cmd/Ctrl+K explains instead of stacking.
     const sheetOnlyShortcutsEnabled =
-      Boolean(activeSheet) &&
+      (Boolean(activeSheet) || endSessionOpen) &&
       !captureOpen &&
       !paletteOpen &&
       !ritualActive &&
@@ -1791,6 +1823,7 @@ function TodayMomentsContent({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     activeSheet,
+    endSessionOpen,
     captureOpen,
     paletteOpen,
     ritualActive,
@@ -2394,6 +2427,24 @@ function TodayMomentsContent({
             selectedAreaId={selectedAreaId}
             onSelectArea={handleAreasSheetSelectArea}
           />
+
+          {/* #687 C2 F2: inside this Provider and before `<CaptureOverlay>`,
+            like every sheet — it used to render after capture and outside
+            this context, so capture opened from the form painted BEHIND it
+            and the form never went `inert`. Now capture is the front dialog
+            here too, and the form's `?end=1` is URL-owned. */}
+          <EndSessionSheet
+            open={endSessionOpen && showingMastheadAndMoments}
+            taskTitle={
+              focusedTask?.title ??
+              flowVM.currentBlock?.title ??
+              "Focus session"
+            }
+            elapsedMinutes={endSessionElapsedMinutes}
+            pending={endSessionPending}
+            onCancel={() => closeEndSession()}
+            onSave={handleEndSessionSave}
+          />
         </CaptureOverlayOpenContext.Provider>
 
         {/* #687 DEFECT 1 (round-11 judge): renders AFTER every sheet above —
@@ -2459,16 +2510,6 @@ function TodayMomentsContent({
             writeStoredCaptureDraft("");
           }}
           onClose={() => closeCapture()}
-        />
-
-        <EndSessionSheet
-          open={endSessionOpen}
-          taskTitle={
-            focusedTask?.title ?? flowVM.currentBlock?.title ?? "Focus session"
-          }
-          elapsedMinutes={endSessionElapsedMinutes}
-          onCancel={() => setEndSessionOpen(false)}
-          onSave={handleEndSessionSave}
         />
 
         <div

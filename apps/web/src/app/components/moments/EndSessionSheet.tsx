@@ -48,6 +48,14 @@ export interface EndSessionSheetProps {
   elapsedMinutes: number;
   /** Outcome the sheet opens with pre-selected (e.g. which button was tapped). */
   initialOutcome?: EndSessionOutcome;
+  /**
+   * #687 C2 F2 round 2: the PARENT's save is still settling. The form can be
+   * closed and reopened (Back/Forward on `?end=1`) mid-save, and every open
+   * re-primes the local form — so the parent owns "a save is in flight",
+   * and while it is, the sheet shows "Saving…" with every control disabled
+   * instead of a fresh form that could submit the same session twice.
+   */
+  pending?: boolean;
   onCancel(): void;
   /** Awaited by the sheet; resolving closes the sheet and reveals the verdict. */
   onSave(
@@ -62,6 +70,7 @@ export function EndSessionSheet({
   taskTitle,
   elapsedMinutes,
   initialOutcome = "completed",
+  pending = false,
   onCancel,
   onSave,
 }: EndSessionSheetProps) {
@@ -69,6 +78,7 @@ export function EndSessionSheet({
   const [minutes, setMinutes] = useState(String(Math.max(0, elapsedMinutes)));
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const busy = saving || pending;
 
   // Re-prime the form every time the sheet opens fresh — never carry a
   // stale draft from a previous session into this one.
@@ -83,7 +93,7 @@ export function EndSessionSheet({
   }, [open]);
 
   async function handleSave() {
-    if (saving) return;
+    if (busy) return;
     setSaving(true);
     const parsedMinutes = Math.max(0, Math.round(Number(minutes) || 0));
     const trimmedNote = note.trim();
@@ -115,7 +125,7 @@ export function EndSessionSheet({
                 data-testid={`end-session-outcome-${option.value}`}
                 aria-pressed={outcome === option.value}
                 onClick={() => setOutcome(option.value)}
-                disabled={saving}
+                disabled={busy}
                 className={`min-h-12 rounded-2xl border px-3 py-2 text-left text-sm font-semibold transition-colors ${
                   outcome === option.value
                     ? "border-primary bg-primary/10 text-foreground"
@@ -143,7 +153,7 @@ export function EndSessionSheet({
             min={0}
             inputMode="numeric"
             value={minutes}
-            disabled={saving}
+            disabled={busy}
             onChange={(event) => setMinutes(event.target.value)}
             className="min-h-11 rounded-xl border border-border bg-transparent px-3 text-base font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
@@ -158,7 +168,7 @@ export function EndSessionSheet({
             id="end-session-note"
             data-testid="end-session-note"
             value={note}
-            disabled={saving}
+            disabled={busy}
             onChange={(event) => setNote(event.target.value)}
             rows={2}
             className="rounded-xl border border-border bg-transparent px-3 py-2 text-base font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -169,7 +179,7 @@ export function EndSessionSheet({
           <button
             type="button"
             onClick={onCancel}
-            disabled={saving}
+            disabled={busy}
             className="min-h-11 rounded-full border border-border px-4 text-sm font-semibold text-muted-foreground"
           >
             Cancel
@@ -178,10 +188,10 @@ export function EndSessionSheet({
             type="button"
             data-testid="end-session-save"
             onClick={() => void handleSave()}
-            disabled={saving}
+            disabled={busy}
             className="min-h-11 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground disabled:opacity-70"
           >
-            {saving ? "Saving…" : "Save"}
+            {busy ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
