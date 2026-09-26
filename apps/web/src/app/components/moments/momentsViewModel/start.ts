@@ -13,6 +13,8 @@ import {
   countUnsortedCaptures,
   selectUnsortedCaptures,
 } from "@/lib/workflow/captureStatus";
+import { selectBackTodayTasks } from "@/lib/workflow/backToday";
+import { hasLaunchSequenceStep } from "@/lib/workflow/shared";
 import {
   MS_PER_DAY,
   areaName,
@@ -133,6 +135,21 @@ export interface PendingTriageItemVM {
   areaLabel: string;
 }
 
+/**
+ * FR-049 (#1025) — one put-off task whose chosen return day has arrived
+ * ("Back today"). `canMoveToToday` mirrors `promoteBacklogTask`'s own
+ * refusal (`hasLaunchSequenceStep`/`hasFirstMove`'s exact rule): the action
+ * silently no-ops without a first move, so the card disables its button
+ * instead of looking like it worked when it did not.
+ */
+export interface BackTodayItemVM {
+  taskId: string;
+  title: string;
+  areaLabel: string;
+  description: string | null;
+  canMoveToToday: boolean;
+}
+
 export interface StartVM {
   firstMove: FirstMoveVM | null;
   blocks: ScheduleBlockVM[];
@@ -173,6 +190,14 @@ export interface StartVM {
    * `firstMove` is null — see `StartMoment`'s hero-promotion branch.
    */
   topPendingTriageItem: PendingTriageItemVM | null;
+  /**
+   * FR-049 (#1025): every put-off task whose return day is today or
+   * earlier, scoped to the selected area (or all areas — see
+   * `selectBackTodayTasks`), oldest return day first. Empty when nothing
+   * qualifies; the group hides itself entirely rather than rendering
+   * empty (StartMoment's job, not this builder's).
+   */
+  backToday: BackTodayItemVM[];
   /**
    * D-2 (design alignment, #483): start-moment hero copy, porting
    * prototype-2's "Good morning, Jay." + subline. Both are pure derivations
@@ -545,6 +570,38 @@ function deriveTopPendingTriageItem(
   };
 }
 
+/**
+ * FR-049 (#1025): the "Back today" group. `selectBackTodayTasks` owns the
+ * pure "has this day arrived" rule and the strict area scoping (no
+ * fall-back-to-all-areas — a task never appears in another area's view);
+ * this builder only maps the result to view-model shape and orders it,
+ * oldest return day first, so the item that has waited longest to come back
+ * leads the list. Ties break on `id` ascending for a deterministic result,
+ * the same idiom `deriveTopPendingTriageItem`/`deriveStaleProject` use.
+ */
+function buildBackToday(
+  state: WorkflowState,
+  now: Date,
+  selectedAreaId?: string | null,
+): BackTodayItemVM[] {
+  const due = selectBackTodayTasks(state.tasks, selectedAreaId ?? null, now);
+
+  const sorted = [...due].sort((a, b) => {
+    const aTime = new Date(a.due_at ?? 0).getTime();
+    const bTime = new Date(b.due_at ?? 0).getTime();
+    if (aTime !== bTime) return aTime - bTime;
+    return a.id.localeCompare(b.id);
+  });
+
+  return sorted.map((task) => ({
+    taskId: task.id,
+    title: task.title,
+    areaLabel: areaName(state.areas, task.area_id),
+    description: task.description,
+    canMoveToToday: hasLaunchSequenceStep(task.first_tiny_step),
+  }));
+}
+
 export type GreetingPeriod = "morning" | "afternoon" | "evening";
 
 /**
@@ -701,6 +758,10 @@ export function buildStartVM(
   // besides StartMoment may want to know what's next regardless.
   const topPendingTriageItem = deriveTopPendingTriageItem(state);
 
+  // FR-049 (#1025): "Back today" — pure over state.tasks and now, scoped to
+  // the same selectedAreaId every other area-scoped derivation here uses.
+  const backToday = buildBackToday(state, now, selectedAreaId);
+
   // D-2 (#483) start-moment hero copy — pure over the values already
   // computed above; see `buildGreeting`/`buildDaySynthesis` doc comments.
   const greeting = buildGreeting(now, userName);
@@ -731,6 +792,7 @@ export function buildStartVM(
     staleProject,
     recoveryNudge,
     topPendingTriageItem,
+    backToday,
     greeting,
     daySynthesis,
   };

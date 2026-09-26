@@ -19,6 +19,7 @@ function baseVM(overrides: Partial<StartVM> = {}): StartVM {
     staleProject: null,
     recoveryNudge: null,
     topPendingTriageItem: null,
+    backToday: [],
     greeting: "Good morning.",
     daySynthesis: "Nothing on the calendar, and nothing queued yet.",
     ...overrides,
@@ -34,6 +35,7 @@ const NOOP_HANDLERS = {
   onDrillPipeline: vi.fn(),
   onOpenRecovery: vi.fn(),
   onOpenTriage: vi.fn(),
+  onMoveToToday: vi.fn(),
 };
 
 describe("StartMoment — S5 focus budget (#257)", () => {
@@ -1089,5 +1091,152 @@ describe("StartMoment — pipeline rail (#483 round 4, post-LoopOrientation)", (
     expect(
       screen.getByTestId("pipeline-overview-caption-capture"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("StartMoment — FR-049 Back today (#1025)", () => {
+  it("renders nothing when backToday is empty", () => {
+    const vm = baseVM({ backToday: [] });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.queryByTestId("start-back-today")).not.toBeInTheDocument();
+  });
+
+  it("renders title, area, and description for each item", () => {
+    const vm = baseVM({
+      backToday: [
+        {
+          taskId: "t1",
+          title: "Call the plumber",
+          areaLabel: "Personal",
+          description: "Ask about the quote",
+          canMoveToToday: true,
+        },
+      ],
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const row = screen.getByTestId("start-back-today-row-t1");
+    expect(row.textContent).toContain("Call the plumber");
+    expect(row.textContent).toContain("Personal");
+    expect(row.textContent).toContain("Ask about the quote");
+    // Plain copy only — no guilt/urgency language (FR-049 non-goal).
+    expect(screen.getByTestId("start-back-today").textContent).not.toMatch(
+      /overdue|late|behind/i,
+    );
+  });
+
+  it("Move to today calls onMoveToToday with the task id", () => {
+    const onMoveToToday = vi.fn();
+    const vm = baseVM({
+      backToday: [
+        {
+          taskId: "t1",
+          title: "Call the plumber",
+          areaLabel: "Personal",
+          description: null,
+          canMoveToToday: true,
+        },
+      ],
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+        onMoveToToday={onMoveToToday}
+      />,
+    );
+
+    screen.getByTestId("start-back-today-move-t1").click();
+    expect(onMoveToToday).toHaveBeenCalledTimes(1);
+    expect(onMoveToToday).toHaveBeenCalledWith("t1");
+  });
+
+  it("disables Move to today when the task has no first move yet, with a plain reason", () => {
+    const vm = baseVM({
+      backToday: [
+        {
+          taskId: "t1",
+          title: "Call the plumber",
+          areaLabel: "Personal",
+          description: null,
+          canMoveToToday: false,
+        },
+      ],
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const button = screen.getByTestId(
+      "start-back-today-move-t1",
+    ) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.getByTestId("start-back-today-row-t1").textContent).toMatch(
+      /first move/i,
+    );
+  });
+
+  it("renders one row per item and never mixes rows across items", () => {
+    const vm = baseVM({
+      backToday: [
+        {
+          taskId: "t1",
+          title: "First",
+          areaLabel: "Personal",
+          description: null,
+          canMoveToToday: true,
+        },
+        {
+          taskId: "t2",
+          title: "Second",
+          areaLabel: "Main Job",
+          description: null,
+          canMoveToToday: true,
+        },
+      ],
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.getByTestId("start-back-today-row-t1")).toBeInTheDocument();
+    expect(screen.getByTestId("start-back-today-row-t2")).toBeInTheDocument();
   });
 });

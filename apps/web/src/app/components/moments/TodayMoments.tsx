@@ -2224,6 +2224,13 @@ function TodayMomentsContent({
                 onDrillPipeline={handleDrillPipeline}
                 onOpenRecovery={() => setMoment("close")}
                 onOpenTriage={() => openSheet("triage")}
+                /* FR-049 (#1025): the exact same action + toast PlanSheet's
+                 backlog list already uses for "Move to today" — no second
+                 promote path. */
+                onMoveToToday={(taskId) => {
+                  promoteBacklogTask(taskId);
+                  showToast("Moved to today");
+                }}
               />
             ) : null}
 
