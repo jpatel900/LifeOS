@@ -277,4 +277,34 @@ describe("editBacklogTaskAccountRow", () => {
       ),
     ).rejects.toThrow("permission denied");
   });
+
+  // FR-049 (#1025): the "Bring it back on" day is stored in this same
+  // `due_at` column. PostgREST can return either an explicit `+00:00`
+  // offset or a `Z` suffix for the same instant — `TaskSchema.due_at`
+  // (`offsetDatetime()`) already accepts both, so this pins that a
+  // live-shaped `+00:00` row parses through `parseTask`/`parseTasks`
+  // exactly like its `Z` equivalent, rather than trusting that untested.
+  describe("due_at (FR-049) — +00:00 / Z round trip", () => {
+    it("parses a due_at row PostgREST returns with an explicit +00:00 offset", () => {
+      const zRow = rowFor({ due_at: "2026-09-30T16:00:00.000Z" });
+      const offsetRow = rowFor({ due_at: "2026-09-30T16:00:00.000+00:00" });
+
+      const zTask = parseTask(zRow);
+      const offsetTask = parseTask(offsetRow);
+
+      expect(offsetTask.due_at).toBe(zTask.due_at);
+      expect(offsetTask.due_at).toBe("2026-09-30T16:00:00.000Z");
+
+      const [zFromList] = parseTasks([zRow]);
+      const [offsetFromList] = parseTasks([offsetRow]);
+      expect(offsetFromList!.due_at).toBe(zFromList!.due_at);
+    });
+
+    it("also round-trips a non-UTC offset for due_at", () => {
+      const task = parseTask(
+        rowFor({ due_at: "2026-09-30T12:00:00.000-04:00" }),
+      );
+      expect(task.due_at).toBe("2026-09-30T16:00:00.000Z");
+    });
+  });
 });
