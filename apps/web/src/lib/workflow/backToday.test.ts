@@ -127,7 +127,7 @@ describe("selectBackTodayTasks", () => {
     const now = new Date(2026, 8, 30, 9, 0, 0);
     const due = localNoonIsoForDay("2026-09-20");
     const statuses: Task["status"][] = [
-      "new",
+      "draft",
       "active",
       "scheduled",
       "blocked",
@@ -171,8 +171,9 @@ describe("selectBackTodayTasks", () => {
       inAreaA,
       inAreaB,
     ]);
-    expect(
-      selectBackTodayTasks([inAreaA, inAreaB], undefined, now),
-    ).toEqual([inAreaA, inAreaB]);
+    expect(selectBackTodayTasks([inAreaA, inAreaB], undefined, now)).toEqual([
+      inAreaA,
+      inAreaB,
+    ]);
   });
 });

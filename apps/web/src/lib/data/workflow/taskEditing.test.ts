@@ -278,6 +278,107 @@ describe("editBacklogTaskAccountRow", () => {
     ).rejects.toThrow("permission denied");
   });
 
+  // FR-049 (#1025): the account edit patch keeps its guards when it also
+  // carries due_at — same id/user_id/status/updated_at `.eq()` chain as the
+  // title/description/area_id tests above.
+  describe("due_at (FR-049) — the guarded update", () => {
+    const DUE_AT = "2026-09-30T16:00:00.000Z";
+
+    it("omits due_at from the write when the caller never mentions it", async () => {
+      const { supabase, update, eq4 } = client({ data: rowFor(), error: null });
+
+      await editBacklogTaskAccountRow(
+        supabase,
+        TASK_ID,
+        { title: "New title", description: null, area_id: AREA_ID },
+        UPDATED_AT,
+      );
+
+      expect(update).toHaveBeenCalledWith({
+        title: "New title",
+        description: null,
+        area_id: AREA_ID,
+      });
+      expect(eq4).toHaveBeenCalledWith("updated_at", UPDATED_AT);
+    });
+
+    it("includes due_at in the write when the caller sets it", async () => {
+      const { supabase, update } = client({
+        data: rowFor({ due_at: DUE_AT }),
+        error: null,
+      });
+
+      await editBacklogTaskAccountRow(
+        supabase,
+        TASK_ID,
+        {
+          title: "New title",
+          description: null,
+          area_id: AREA_ID,
+          due_at: DUE_AT,
+        },
+        UPDATED_AT,
+      );
+
+      expect(update).toHaveBeenCalledWith({
+        title: "New title",
+        description: null,
+        area_id: AREA_ID,
+        due_at: DUE_AT,
+      });
+    });
+
+    it("includes due_at: null in the write when the caller explicitly clears it", async () => {
+      const { supabase, update } = client({
+        data: rowFor({ due_at: null }),
+        error: null,
+      });
+
+      await editBacklogTaskAccountRow(
+        supabase,
+        TASK_ID,
+        {
+          title: "New title",
+          description: null,
+          area_id: AREA_ID,
+          due_at: null,
+        },
+        UPDATED_AT,
+      );
+
+      expect(update).toHaveBeenCalledWith({
+        title: "New title",
+        description: null,
+        area_id: AREA_ID,
+        due_at: null,
+      });
+    });
+
+    it("still guards id/user_id/status/updated_at when due_at is part of the write", async () => {
+      const { supabase, eq1, eq2, eq3, eq4 } = client({
+        data: rowFor({ due_at: DUE_AT }),
+        error: null,
+      });
+
+      await editBacklogTaskAccountRow(
+        supabase,
+        TASK_ID,
+        {
+          title: "New title",
+          description: null,
+          area_id: AREA_ID,
+          due_at: DUE_AT,
+        },
+        UPDATED_AT,
+      );
+
+      expect(eq1).toHaveBeenCalledWith("id", TASK_ID);
+      expect(eq2).toHaveBeenCalledWith("user_id", USER_ID);
+      expect(eq3).toHaveBeenCalledWith("status", "backlog");
+      expect(eq4).toHaveBeenCalledWith("updated_at", UPDATED_AT);
+    });
+  });
+
   // FR-049 (#1025): the "Bring it back on" day is stored in this same
   // `due_at` column. PostgREST can return either an explicit `+00:00`
   // offset or a `Z` suffix for the same instant — `TaskSchema.due_at`

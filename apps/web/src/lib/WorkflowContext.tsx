@@ -2769,6 +2769,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     const validation = validateTaskEditInput(changes, {
       availableAreaIds: previous.areas.map((area) => area.id),
+      // FR-049 (#1025): a decision task's return day can be changed but
+      // never cleared.
+      isDecision: task.task_type === "decision",
     });
     if (!validation.ok) {
       return { status: "invalid", errors: validation.errors };
@@ -2810,6 +2813,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           title: editedTask.title,
           description: editedTask.description,
           area_id: editedTask.area_id,
+          // FR-049 (#1025): `editedTask.due_at` already reflects
+          // `applyTaskEditPatch`'s "omitted means untouched" rule — passing
+          // it unconditionally here is exactly that same value, whether the
+          // caller touched it or not.
+          due_at: editedTask.due_at,
         },
         changes.expected_updated_at,
       );
@@ -2876,6 +2884,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           title: persisted.task.title,
           description: persisted.task.description,
           area_id: confirmedWorkflowAreaId,
+          // FR-049 (#1025): the server's own confirmed value, same reasoning
+          // as every other reflected field here — never a value only this
+          // tab asked for.
+          due_at: persisted.task.due_at,
           updated_at: persisted.task.updated_at,
         };
         applyWorkflowState({

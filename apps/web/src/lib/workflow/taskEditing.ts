@@ -2,20 +2,30 @@ import type { Task } from "@lifeos/schemas";
 import { nowIso, type WorkflowState } from "./shared";
 
 /**
- * Issue #984 — accepted-backlog task editor: title, description, area only.
- * Id, source capture, project link, status, and scheduling are never touched
- * here (see `applyTaskEditPatch`), matching the contract's preservation
- * requirement.
+ * Issue #984 — accepted-backlog task editor: title, description, area, and
+ * (FR-049, #1025) an optional return day. Id, source capture, project link,
+ * status, and scheduling are never touched here (see `applyTaskEditPatch`),
+ * matching the contract's preservation requirement.
+ *
+ * `due_at` is OPTIONAL, unlike the other three fields, on purpose: a caller
+ * that never mentions it means "leave the return day exactly as it is" —
+ * every pre-FR-049 call site (and every pre-FR-049 test) still compiles and
+ * behaves unchanged. The real "Bring it back on" editor always sends it
+ * explicitly (a date string, or `null` to clear), which is what lets a
+ * decision task's "can change but not clear" rule below actually fire for
+ * real usage.
  */
 export interface TaskEditFormInput {
   title: string;
   description: string | null;
   area_id: string;
+  due_at?: string | null;
 }
 
 export interface TaskEditFieldErrors {
   title?: string;
   area_id?: string;
+  due_at?: string;
 }
 
 export type TaskEditValidation =
@@ -45,12 +55,27 @@ export function normalizeTaskEditInput(
     title,
     description: isBlank ? null : rawDescription,
     area_id: input.area_id,
+    // Passed through exactly as given — including `undefined` ("don't
+    // touch"). The UI layer is responsible for turning a chosen calendar
+    // day into the stored ISO instant (`localNoonIsoForDay`) before this
+    // ever sees it; there is no free-text day string to trim/fold here.
+    due_at: input.due_at,
   };
 }
 
 export function validateTaskEditInput(
   input: TaskEditFormInput,
-  context: { availableAreaIds: readonly string[] },
+  context: {
+    availableAreaIds: readonly string[];
+    /**
+     * FR-049 (#1025): a decision task's return day can be changed but not
+     * cleared (FR-024 requires every decision to carry a deadline in
+     * `due_at`). Only checked when the caller is actually touching
+     * `due_at` (`!== undefined`) — a caller that omits the field entirely
+     * is not clearing anything, decision or not.
+     */
+    isDecision?: boolean;
+  },
 ): TaskEditValidation {
   const normalized = normalizeTaskEditInput(input);
   const errors: TaskEditFieldErrors = {};
@@ -64,6 +89,14 @@ export function validateTaskEditInput(
     !context.availableAreaIds.includes(normalized.area_id)
   ) {
     errors.area_id = "Pick an area that still exists.";
+  }
+
+  if (
+    context.isDecision &&
+    normalized.due_at !== undefined &&
+    normalized.due_at === null
+  ) {
+    errors.due_at = "Decision tasks need a return day.";
   }
 
   if (Object.keys(errors).length > 0) {
@@ -110,6 +143,11 @@ export interface TaskEditPatchResult {
  * project this state does not hold. The project's area is then unknown, so
  * any area move is refused rather than risk splitting a task from its
  * project; an unlinked task (`project_id: null`) is never restricted.
+ *
+ * FR-049 (#1025): `due_at` only changes when `patch.due_at !== undefined` —
+ * an omitted `due_at` means this edit never touched the return day, so the
+ * task's existing value rides through untouched, same as every other
+ * column not named above.
  */
 export function applyTaskEditPatch(
   task: Task,
@@ -129,6 +167,7 @@ export function applyTaskEditPatch(
       title: patch.title,
       description: patch.description,
       area_id: areaChangeBlocked ? task.area_id : patch.area_id,
+      due_at: patch.due_at !== undefined ? patch.due_at : task.due_at,
     },
     areaChangeBlocked,
   };

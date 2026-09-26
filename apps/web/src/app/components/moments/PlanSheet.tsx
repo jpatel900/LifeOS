@@ -12,6 +12,10 @@ import { selectTasksToPlace } from "@/lib/workflow/planStatus";
 // Issue #984: a direct submodule import, not an addition to the frozen
 // `workflow.ts` barrel `useWorkflow` itself imports from.
 import type { TaskEditFieldErrors } from "@/lib/workflow/taskEditing";
+import {
+  localDayStampFromDueAt,
+  localNoonIsoForDay,
+} from "@/lib/workflow/backToday";
 import { Button } from "@/components/ui/button";
 import { GoogleCalendarApprovalBridge } from "../GoogleCalendarApprovalBridge";
 // Reused, not re-derived: the same hour label, the same estimate fallback and
@@ -164,23 +168,34 @@ function TaskEditForm({
   onChangeTitle,
   onChangeDescription,
   onChangeArea,
+  onChangeDueAtDay,
   onSave,
   onCancel,
 }: {
   task: Task;
-  draft: { title: string; description: string; area_id: string };
+  draft: {
+    title: string;
+    description: string;
+    area_id: string;
+    dueAtDay: string;
+  };
   errors: TaskEditFieldErrors & { message?: string };
   pending: boolean;
   areas: Phase2MockArea[];
   onChangeTitle(value: string): void;
   onChangeDescription(value: string): void;
   onChangeArea(value: string): void;
+  onChangeDueAtDay(value: string): void;
   onSave(): void;
   onCancel(): void;
 }) {
   const titleId = `plan-sheet-edit-title-${task.id}`;
   const descriptionId = `plan-sheet-edit-description-${task.id}`;
   const areaId = `plan-sheet-edit-area-${task.id}`;
+  const dueAtId = `plan-sheet-edit-due-at-${task.id}`;
+  // FR-049 (#1025): a decision task's return day can be changed but never
+  // cleared (FR-024 requires every decision to carry a deadline).
+  const isDecision = task.task_type === "decision";
   const canSave = draft.title.trim().length > 0 && !pending;
 
   return (
@@ -248,6 +263,27 @@ function TaskEditForm({
           available, the area stays as it is.
         </p>
       ) : null}
+      <label htmlFor={dueAtId} className="grid gap-1 text-sm font-semibold">
+        Bring it back on
+        <input
+          id={dueAtId}
+          type="date"
+          value={draft.dueAtDay}
+          onChange={(event) => onChangeDueAtDay(event.target.value)}
+          disabled={pending}
+          className="min-h-11 rounded-[var(--surface-radius-sm)] border border-border bg-background px-3 outline-none focus:border-primary disabled:opacity-60"
+          data-testid={`plan-sheet-edit-due-at-input-${task.id}`}
+        />
+        {errors.due_at ? (
+          <span className="text-xs text-destructive">{errors.due_at}</span>
+        ) : (
+          <span className="text-xs font-normal text-muted-foreground">
+            {isDecision
+              ? "This task's a decision, so it needs a return day — you can change it, just not clear it."
+              : "Optional. It shows up in “Back today” on that day."}
+          </span>
+        )}
+      </label>
       {errors.message ? (
         <p
           className="text-xs text-destructive"
@@ -328,6 +364,12 @@ export function PlanSheet({
         title: string;
         description: string;
         area_id: string;
+        // FR-049 (#1025): the "Bring it back on" day as the browser's own
+        // `<input type="date">` value — "" means "not set". Converted to
+        // the stored local-noon ISO instant (or `null`) only at save time
+        // (`localNoonIsoForDay`), matching how `description`'s blank-vs-kept
+        // fold happens at save too, not on every keystroke.
+        dueAtDay: string;
         // Frozen at OPEN time and never re-read from the live task at save
         // time. Reading it fresh at save would let a background sync that
         // lands WHILE the form is open (first move saved, a resync,
@@ -428,6 +470,7 @@ export function PlanSheet({
     title: string;
     description: string | null;
     area_id: string;
+    due_at: string | null;
     updated_at: string;
   }) {
     const key = editDraftKey(task.id);
@@ -437,6 +480,7 @@ export function PlanSheet({
         title: task.title,
         description: task.description ?? "",
         area_id: task.area_id,
+        dueAtDay: localDayStampFromDueAt(task.due_at) ?? "",
         expectedUpdatedAt: task.updated_at,
       },
     }));
@@ -471,6 +515,11 @@ export function PlanSheet({
       title: draft.title,
       description: draft.description,
       area_id: draft.area_id,
+      // FR-049 (#1025): the browser's own `<input type="date">` day string
+      // ("" for unset), turned into the stored local-noon ISO instant here
+      // — a fresh Save always sends a concrete `due_at`, never omits it, so
+      // the decision "can change but not clear" validation actually runs.
+      due_at: draft.dueAtDay ? localNoonIsoForDay(draft.dueAtDay) : null,
       expected_updated_at: draft.expectedUpdatedAt,
     });
     setEditPending((current) => ({ ...current, [key]: false }));
@@ -1108,6 +1157,15 @@ export function PlanSheet({
                           setEditDrafts((current) => ({
                             ...current,
                             [editKey]: { ...current[editKey], area_id: value },
+                          }))
+                        }
+                        onChangeDueAtDay={(value) =>
+                          setEditDrafts((current) => ({
+                            ...current,
+                            [editKey]: {
+                              ...current[editKey],
+                              dueAtDay: value,
+                            },
                           }))
                         }
                         onSave={() => saveTaskEdit(task.id)}

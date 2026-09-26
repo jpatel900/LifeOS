@@ -729,7 +729,15 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
    */
   async function persistBacklogTaskEdit(
     localTaskId: string,
-    patch: { title: string; description: string | null; area_id: string },
+    patch: {
+      title: string;
+      description: string | null;
+      area_id: string;
+      // FR-049 (#1025): optional — omitted means this edit never touched
+      // the return day (see `TaskEditAccountPatch`'s own doc comment for
+      // why that has to stay distinguishable from "clear it").
+      due_at?: string | null;
+    },
     expectedUpdatedAt: string,
   ): Promise<
     | { status: "persisted"; task: Task; userId: string }
@@ -766,6 +774,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         title: patch.title,
         description: patch.description,
         area_id: persistedAreaId,
+        ...(patch.due_at !== undefined ? { due_at: patch.due_at } : {}),
       },
       expectedUpdatedAt,
     );
