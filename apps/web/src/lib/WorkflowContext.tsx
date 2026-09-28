@@ -415,19 +415,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  // The browser refuses to hold anything on this device (private mode, a
+  // The browser refuses a local recovery write (private mode, a
   // storage quota, a blocking extension). Extracted by #737-A slice 2 because
   // the durable-write path needs the same state the storage-restore and
   // state-mirror effects already set, and three hand-copied literals would
   // drift.
-  const markDeviceStorageBlocked = useCallback(() => {
-    setSyncStatus((current) => ({
-      ...current,
-      storage: "blocked",
-      message: DEVICE_STORAGE_BLOCKED,
-      pendingLocalChanges: true,
-    }));
-  }, []);
+  const markDeviceStorageBlocked = useCallback(
+    (options?: { preservePendingLocalChanges?: boolean }) => {
+      setSyncStatus((current) => ({
+        ...current,
+        storage: "blocked",
+        message: DEVICE_STORAGE_BLOCKED,
+        // A confirmed account fallback owes no new local write. Keep any
+        // other pending work until the existing queue refresh reconciles it.
+        pendingLocalChanges: options?.preservePendingLocalChanges
+          ? current.pendingLocalChanges
+          : true,
+      }));
+    },
+    [],
+  );
 
   // #967: `preserveLocalOnlyWhilePending` guards against a genuine race —
   // `runAccountSync`'s mount/reconnect finalization can land after a replay

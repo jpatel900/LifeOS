@@ -226,13 +226,16 @@ export const ACCOUNT_NEEDS_APP_UPDATE =
   "LifeOS needs an update before it can save this to your account. Open Health to see the next step.";
 
 /**
- * The browser refuses to hold anything on this device (private mode, a storage
- * quota, a blocking extension). This one IS alarming and should read that way:
- * unlike every other state in this file the work is not safely anywhere, and
- * reloading the page loses it.
+ * The browser refused a local recovery write (private mode, a storage quota,
+ * a blocking extension). Account delivery is a separate fact: a confirmed
+ * account write survives even when its device journal could not be saved.
  */
 export const DEVICE_STORAGE_BLOCKED =
-  "This browser is blocking LifeOS from keeping your work on this device, so anything you do may be lost if you reload the page.";
+  "This browser is blocking LifeOS from keeping your work on this device. Work not saved to your account may be lost if you reload the page.";
+
+/** Account readback succeeded and no local work remains pending. */
+export const ACCOUNT_SAVED_DEVICE_STORAGE_BLOCKED =
+  "Your work is saved to your account, but this browser can't keep a copy on this device.";
 
 /**
  * The two ways Google Calendar can be off the table, in plain words (#692).

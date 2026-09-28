@@ -1,6 +1,7 @@
 import {
   ACCOUNT_NEEDS_APP_UPDATE,
   ACCOUNT_SAVE_FAILED,
+  ACCOUNT_SAVED_DEVICE_STORAGE_BLOCKED,
   ACCOUNT_UNREACHABLE_NOW,
   DEVICE_STORAGE_BLOCKED,
   SIGNED_OUT_SAVING_ON_THIS_DEVICE,
@@ -49,8 +50,8 @@ import type { WorkflowSyncStatus } from "./workflowContext/types";
  * rather than there.
  *
  * `alarm` is reserved for the two states where something is actually wrong:
- * a save that was attempted and failed, and a browser refusing to hold
- * anything on this device at all (where a reload really does lose work).
+ * a save that was attempted and failed, and a browser refusing a local
+ * recovery write. Confirmed account work remains safe in the latter case.
  *
  * #967 VISIBILITY: A FAILED ATTEMPT IS NOT THE SAME AS AN ORDINARY QUEUE
  * ------------------------------------------------------------------
@@ -129,7 +130,17 @@ export function resolveDeviceSaveNotice(
   }
 
   if (status.storage === "blocked") {
-    return { tone: "alarm", message: DEVICE_STORAGE_BLOCKED, signedOut: false };
+    return {
+      tone: "alarm",
+      message:
+        status.account === "synced" &&
+        !status.signedOut &&
+        !status.pendingLocalChanges &&
+        !status.pendingSaveFailed
+          ? ACCOUNT_SAVED_DEVICE_STORAGE_BLOCKED
+          : DEVICE_STORAGE_BLOCKED,
+      signedOut: false,
+    };
   }
 
   // #967 root/independent review: the ONE message in this codebase that
