@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { acceptDraft, backlogDraft, promoteBacklogTask } from "./triage";
-import { createInitialWorkflowState, submitCapture } from "@/lib/workflow";
-import type { WorkflowState } from "./shared";
+import {
+  acceptDraft,
+  backlogDraft,
+  editDraft,
+  promoteBacklogTask,
+} from "./triage";
+import {
+  captureWorkflow,
+  workflowSeed,
+} from "@/__tests__/helpers/workflowReachability";
+import { editBacklogTaskInState } from "./taskEditing";
 import { deferTask } from "./review";
 import { localNoonIsoForDay, selectBackTodayTasks } from "./backToday";
 
@@ -19,22 +27,21 @@ import { localNoonIsoForDay, selectBackTodayTasks } from "./backToday";
 
 const DUE_AT = "2026-09-30T16:00:00.000Z";
 
-function stateWithDraftDueAt(
-  taskType: "task" | "decision" | undefined,
-): WorkflowState {
-  let state = createInitialWorkflowState();
-  state = submitCapture(state, {
-    rawText: "Someday review old notes.",
-    areaId: "area-main-job",
-  });
+function stateWithDraftDueAt(taskType: "task" | "decision" | undefined) {
+  let state = captureWorkflow(workflowSeed(), "Someday review old notes.");
+  const draftId = state.taskDrafts[0]!.id;
+  state = editDraft(state, draftId, { first_tiny_step: "Open the old notes." });
 
-  const draft = state.taskDrafts[0]!;
+  // Parser boundary: exercise incoming draft dates/types without hand-building state.
   return {
     ...state,
-    taskDrafts: [{ ...draft, due_at: DUE_AT, task_type: taskType }],
+    taskDrafts: state.taskDrafts.map((draft) =>
+      draft.id === draftId
+        ? { ...draft, due_at: DUE_AT, task_type: taskType }
+        : draft,
+    ),
   };
 }
-
 describe("accept mapping never copies an ordinary draft's due_at (#1025)", () => {
   it("drops due_at on accept-to-active for a plain (no task_type) draft", () => {
     const state = stateWithDraftDueAt(undefined);
@@ -71,20 +78,26 @@ describe("Move to today consumes an ordinary return day (FR-049)", () => {
   const now = new Date(2026, 8, 30, 12);
   const returnDay = localNoonIsoForDay("2026-09-30");
 
-  function datedBacklog(taskType: "task" | "decision" | null): WorkflowState {
+  function datedBacklog(taskType: "task" | "decision" | null) {
     const drafted = stateWithDraftDueAt(taskType ?? undefined);
-    const backlogged = backlogDraft(drafted, drafted.taskDrafts[0]!.id);
-    return {
-      ...backlogged,
-      tasks: backlogged.tasks.map((task) => ({
-        ...task,
-        task_type: taskType,
-        due_at: returnDay,
-        first_tiny_step: "Open the old notes.",
-      })),
-    };
+    let backlogged = backlogDraft(drafted, drafted.taskDrafts[0]!.id);
+    const task = backlogged.tasks[0]!;
+    if (taskType === null) {
+      // Account-load boundary: legacy ordinary rows can have a NULL task_type.
+      backlogged = {
+        ...backlogged,
+        tasks: backlogged.tasks.map((item) =>
+          item.id === task.id ? { ...item, task_type: null } : item,
+        ),
+      };
+    }
+    return editBacklogTaskInState(backlogged, task.id, {
+      title: task.title,
+      description: task.description,
+      area_id: task.area_id,
+      due_at: returnDay,
+    }).state;
   }
-
   it.each(["task", null] as const)(
     "clears the return day for an ordinary %s task so deferring again does not bring it back",
     (taskType) => {
