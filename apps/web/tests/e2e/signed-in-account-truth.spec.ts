@@ -298,6 +298,7 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
     // P0#1 half — the `partial` row nobody ever picked.
     expect(await account.rows("execution_sessions?select=id")).toHaveLength(0);
 
+    const endSessionReturnUrl = page.url();
     await page.getByTestId("current-block-hero-done").click();
     await expect(page.getByTestId("end-session-sheet")).toBeVisible({
       timeout: 20_000,
@@ -305,6 +306,22 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
     await page.getByTestId("end-session-outcome-partial").click();
     await page.getByTestId("end-session-minutes").fill("18");
     await page.getByTestId("end-session-note").fill("Got through section one");
+    // Saving closes this form through history.back(). The URL loses `end`
+    // before that traversal finishes, so wait for its actual popstate too.
+    const endSessionTraversal = await page.evaluateHandle(
+      (returnUrl) => ({
+        settled: new Promise<void>((resolve) => {
+          window.addEventListener(
+            "popstate",
+            () => {
+              if (window.location.href === returnUrl) resolve();
+            },
+            { once: true },
+          );
+        }),
+      }),
+      endSessionReturnUrl,
+    );
     await page.getByTestId("end-session-save").click();
 
     const sessions = await rowsEventually<{
@@ -323,6 +340,11 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
     expect(sessions[0]!.actual_minutes).toBe(18);
     expect(sessions[0]!.notes).toBe("Got through section one");
     expect(sessions[0]!.client_write_id).toBeTruthy();
+
+    await endSessionTraversal.evaluate(({ settled }) => settled);
+    await endSessionTraversal.dispose();
+    await expect(page.getByTestId("end-session-sheet")).toHaveCount(0);
+    await expect(page).toHaveURL(endSessionReturnUrl);
 
     // A reload re-arms the journal's mount replay. The `client_write_id` must
     // make that replay a no-op against the real unique index, not a second row.

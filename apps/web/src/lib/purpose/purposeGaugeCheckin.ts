@@ -1,3 +1,4 @@
+import { localDayStamp } from "../time/localDay";
 import type { MinimalSupabaseClient } from "@/lib/data/workflow";
 import {
   shouldOfferPurposeGauge,
@@ -20,13 +21,7 @@ import {
  * keeping all clock authority on the client per the NS surfaces convention.
  */
 
-/** Local-calendar YYYY-MM-DD stamp (matches lib/reEntry/briefView.ts). */
-export function localDayStamp(now: Date): string {
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+export { localDayStamp } from "../time/localDay";
 
 /**
  * True when the Close moment should show the optional one-tap check-in:
