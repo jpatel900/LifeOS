@@ -18,6 +18,9 @@ export const SuggestionRecordTypeSchema = z.enum([
   // the DB column is free text with a not-blank check; this enum is the
   // client-side vocabulary gate.
   "re_entry_defer",
+  // Existing free-text event columns; return and recovery have distinct meanings.
+  "re_entry_return",
+  "re_entry_recovery",
   "wip_refused",
   "wip_swapped",
   // S9 (#261): learning-loop consumer decisions. Additive — the DB column is

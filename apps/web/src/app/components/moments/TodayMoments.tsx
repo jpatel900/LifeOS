@@ -45,7 +45,8 @@ import type { TaskMapDraftUiState } from "./TaskMapSection";
 import type { TaskMapGraph } from "@/lib/taskmap/graph";
 import { validateTaskMapForPersistence } from "@/lib/taskmap/persistence";
 import { useReEntryRitual } from "./useReEntryRitual";
-import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
+import { ReEntryRitual } from "./ReEntryRitual";
+import { useReEntryRecovery } from "./useReEntryRecovery";
 import {
   createBriefViewRecorder,
   type BriefViewRecorder,
@@ -420,6 +421,7 @@ function TodayMomentsContent({
     listApprovedRollups,
     refreshPersistedWorkflow,
     promoteBacklogTask,
+    clearWipRefusal,
     unsyncedCaptureCount,
     accountClosedDays,
     journalledClosedDays,
@@ -604,7 +606,11 @@ function TodayMomentsContent({
   const ritual = useReEntryRitual({
     state,
     now,
-    enabled: !onboardingOwnsScreen,
+    workflowAreaIdByPersistedId,
+    enabled:
+      !onboardingOwnsScreen &&
+      areasReadbackSettled &&
+      syncStatus.account !== "checking",
     refreshPersistedWorkflow,
   });
   const ritualActive =
@@ -617,8 +623,6 @@ function TodayMomentsContent({
   // hand-off tick renders nothing instead of a stale Today greeting.
   const showingMastheadAndMoments =
     !onboardingOwnsScreen && !(ritualActive && ritual.summary && ritual.plan);
-
-  const [recoverySwapIndex, setRecoverySwapIndex] = useState(0);
 
   // #690 Part 2: resolve the active area the same way the stage cockpit does
   // (`activeArea ?? areas[0]`, via resolveSelectedArea) so an "All areas"
@@ -1682,67 +1686,16 @@ function TodayMomentsContent({
     closeEndSession,
   ]);
 
-  // FR-028 recovery candidate derivation: deterministic, pure. Ordered list
-  // = [stalest open task, then each planned task deferral], deduped by
-  // taskId. "Something else" cycles the index; empty list -> null.
-  const recoveryCandidates = useMemo<RecoveryCandidate[]>(() => {
-    if (!ritual.summary || !ritual.plan) return [];
-
-    const candidates: RecoveryCandidate[] = [];
-    const seen = new Set<string>();
-
-    if (ritual.summary.stalest && ritual.summary.stalest.kind === "task") {
-      const { id, label } = ritual.summary.stalest;
-      candidates.push({ taskId: id, title: label, why: "Oldest waiting" });
-      seen.add(id);
-    }
-
-    for (const deferral of ritual.plan.taskDeferrals) {
-      if (seen.has(deferral.taskId)) continue;
-      seen.add(deferral.taskId);
-      candidates.push({
-        taskId: deferral.taskId,
-        title: deferral.taskTitle ?? "Task",
-        why: "Just moved to backlog",
-      });
-    }
-
-    return candidates;
-  }, [ritual.summary, ritual.plan]);
-
-  const recovery: RecoveryCandidate | null =
-    recoveryCandidates.length > 0
-      ? recoveryCandidates[recoverySwapIndex % recoveryCandidates.length]
-      : null;
-
-  const handleAcceptRecovery = useCallback(
-    (taskId: string) => {
-      const task = state.tasks.find((item) => item.id === taskId);
-      const wasBacklog = task ? task.status === "backlog" : false;
-      if (wasBacklog) {
-        promoteBacklogTask(taskId);
-      }
-      ritual.complete();
-      setMoment("start");
-      // SP-6: `deferTask` genuinely reverses `promoteBacklogTask` here — it
-      // returns the task to backlog exactly where it started, cancelling no
-      // blocks that didn't already exist (a backlog task has none). Only
-      // wire the undo when the promotion actually ran; otherwise there is
-      // nothing to reverse and Undo would be a lie.
-      showToast(
-        "Welcome back — first move queued",
-        wasBacklog
-          ? { label: "Undo", run: () => deferTask(taskId) }
-          : undefined,
-      );
-    },
-    [state.tasks, promoteBacklogTask, deferTask, ritual, showToast, setMoment],
-  );
-
-  const handleSwapRecovery = useCallback(() => {
-    setRecoverySwapIndex((current) => current + 1);
-  }, []);
-
+  const recoveryActions = useReEntryRecovery({
+    state,
+    ritual,
+    updateTaskFirstTinyStep,
+    promoteBacklogTask,
+    clearWipRefusal,
+    deferTask,
+    showToast,
+    setMoment,
+  });
   const handleDismissRitual = useCallback(() => {
     ritual.complete();
     showToast("Welcome back");
@@ -2216,9 +2169,10 @@ function TodayMomentsContent({
             plan={ritual.plan}
             outcomes={ritual.outcomes}
             demoMode={ritual.demoMode}
-            recovery={recovery}
-            onAcceptRecovery={handleAcceptRecovery}
-            onSwapRecovery={handleSwapRecovery}
+            recovery={recoveryActions.recovery}
+            onAcceptRecovery={recoveryActions.onAcceptRecovery}
+            onSwapRecovery={recoveryActions.onSwapRecovery}
+            onEditRecovery={recoveryActions.onEditRecovery}
             onDismiss={handleDismissRitual}
           />
         ) : (
