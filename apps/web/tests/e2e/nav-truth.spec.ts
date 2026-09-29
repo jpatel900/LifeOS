@@ -281,6 +281,7 @@ test("All areas Capture count opens its thoughts and the capture box shows its t
     "Will save to Personal.",
   );
   await textarea.fill("Synthetic personal thought for capture review");
+  await expect(dialog.getByTestId("capture-overlay-save")).toBeEnabled();
   await page.screenshot({
     path: testInfo.outputPath("capture-review-desktop.png"),
   });
