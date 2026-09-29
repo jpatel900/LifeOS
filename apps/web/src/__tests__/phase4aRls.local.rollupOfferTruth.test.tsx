@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { createClient } from "@supabase/supabase-js";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import {
   afterAll,
   afterEach,
@@ -10,7 +10,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { useCloseMomentRollups } from "@/app/components/moments/useCloseMomentRollups";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -93,22 +93,12 @@ vi.mock("next/navigation", () => ({
 }));
 
 /**
- * Makes the race resolve the HOSTILE way, every time.
+ * Holds the hook's area map until the real approved-row read completes.
  *
- * The defect is an ORDERING: the rollup readback resolves before hydration has
- * filled the area map, so the account row can only be keyed by its persisted
- * uuid and the suppression key never meets the draft's. Left to chance that
- * ordering is a coin flip — a run where the areas load happens to land first
- * resolves correctly at fetch time and the pin passes on a broken build. It
- * did: an earlier draft of this file went green under a deliberately broken
- * build, which is why the ordering is now held rather than hoped for.
- *
- * `holdHydration` withholds the area map from the hook (and only from the
- * hook) until the test releases it — the same shape as the judge's own
- * discriminating experiment, which delayed one response to force the opposite
- * ordering. Everything else stays real: the row is real, the JWT is real, the
- * fetch is real, and `listApprovedRollups`' own fetch-time mapping runs
- * untouched against a provider whose areas genuinely have not landed yet.
+ * The provider still loads and maps its areas independently. This harness
+ * controls only when the hook receives that map; it does not force the
+ * provider's fetch-time mapping to run before its own area load. The row,
+ * session and account reader all stay real.
  */
 function requireAnonKey() {
   if (!supabaseAnonKey) {
@@ -142,6 +132,22 @@ function AccountRollupOfferHarness({
     areasReadbackSettled,
   } = useWorkflow();
   const [toast, setToast] = useState("");
+  const [approvedReadback, setApprovedReadback] = useState(false);
+  const observeApprovedRollups = useCallback(async () => {
+    const rows = await listApprovedRollups();
+    setApprovedReadback(
+      rows.some(
+        (row) =>
+          row.period_type === "week" &&
+          row.period_start === APPROVED_PERIOD_START &&
+          row.period_end === APPROVED_PERIOD_END &&
+          (row.area_id === userA.workflowAreaId ||
+            row.area_id === userA.persistedAreaId ||
+            row.areaIdAliases?.includes(userA.persistedAreaId)),
+      ),
+    );
+    return rows;
+  }, [listApprovedRollups]);
 
   const { displayedRollups } = useCloseMomentRollups({
     state,
@@ -171,10 +177,9 @@ function AccountRollupOfferHarness({
     showToast: setToast,
     confirmWin,
     confirmRollup,
-    listApprovedRollups,
+    listApprovedRollups: observeApprovedRollups,
     journalledRollupKeys,
-    // Held back, then released: hydration landing AFTER the readback is the
-    // defect's precondition, and it has to be deterministic to be a pin.
+    // Hold only the hook's map until the real account reader returns its row.
     workflowAreaIdByPersistedId: holdHydration
       ? EMPTY_ALIASES
       : workflowAreaIdByPersistedId,
@@ -188,6 +193,10 @@ function AccountRollupOfferHarness({
           expose these at all the pin must still go red on the OFFER, which is
           the judge's finding, rather than erroring in the harness. */}
       <span data-testid="areas-settled">{String(areasReadbackSettled)}</span>
+      <span data-testid="hook-areas-settled">
+        {String(holdHydration ? false : areasReadbackSettled)}
+      </span>
+      <span data-testid="approved-readback">{String(approvedReadback)}</span>
       <span data-testid="alias-count">
         {Object.keys(workflowAreaIdByPersistedId ?? {}).length}
       </span>
@@ -346,10 +355,8 @@ describeLocalRls(
       // mount-scoped and nothing re-runs it, so before the fix this rendered the
       // `Approve rollup` action for a period `rollup_summaries` already held.
       //
-      // Hydration is HELD for this first phase, which is the defect's
-      // precondition made deterministic: the readback resolves against a
-      // provider whose areas have genuinely not landed, so `listApprovedRollups`
-      // can only hand over the row in persisted-uuid space.
+      // Hold the hook's area map for this first phase. Provider hydration
+      // remains real and independent; the reader's returned rows stay untouched.
       const { rerender } = render(
         <WorkflowProvider>
           <AccountRollupOfferHarness
@@ -359,24 +366,30 @@ describeLocalRls(
         </WorkflowProvider>,
       );
 
-      // The readback has settled and the offer is correctly WITHHELD while the
-      // map it would be keyed through does not exist. Anything else here and
-      // the release below would prove nothing.
+      // An empty offer while the map is held does not prove the account read
+      // finished. Require the real reader to return the approved row first.
+      await waitFor(
+        () =>
+          expect(screen.getByTestId("approved-readback")).toHaveTextContent(
+            "true",
+          ),
+        { timeout: 30_000 },
+      );
+      // Flush the hook's state update from that completed read before release.
+      await act(async () => {});
       await waitFor(
         () => expect(screen.getByTestId("offer-count")).toHaveTextContent("0"),
         { timeout: 30_000 },
       );
       await waitFor(
         () =>
-          expect(screen.getByTestId("areas-settled")).toHaveTextContent(
+          expect(screen.getByTestId("hook-areas-settled")).toHaveTextContent(
             "false",
           ),
         { timeout: 30_000 },
       );
 
-      // Hydration lands. Nothing re-fetches — the row the hook is holding is
-      // the one it fetched in uuid space — so the offer may only stay withdrawn
-      // if the key is resolved at USE.
+      // Release the hook's map after its real account row has arrived.
       rerender(
         <WorkflowProvider>
           <AccountRollupOfferHarness periodStart={APPROVED_PERIOD_START} />
@@ -388,10 +401,9 @@ describeLocalRls(
           expect(screen.getByTestId("areas-settled")).toHaveTextContent("true"),
         { timeout: 30_000 },
       );
-      // The judge polled 60 s over three mounts before calling this a defect
-      // rather than a slow settle; a full second after hydration is the same
-      // question with the race already decided.
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      expect(screen.getByTestId("hook-areas-settled")).toHaveTextContent(
+        "true",
+      );
       expect(screen.getByTestId("offer-count")).toHaveTextContent("0");
     }, 90_000);
   },
