@@ -2,9 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSyncExternalStore } from "react";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { cn } from "@/lib/utils";
 import { HIT_TARGET_MIN } from "@/app/components/moments/hitTarget";
+
+const subscribeToHydration = () => () => undefined;
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 /**
  * FR-029 loud non-persistence (F-G3b), RECONCILED WITH REALITY by #737 C1 S5.
@@ -168,6 +173,14 @@ export function DemoModeBanner({
   hasSeedData?: boolean;
 } = {}) {
   const pathname = usePathname();
+  // The server's workflow starts empty; a fresh browser may start seeded.
+  // React uses the server snapshot during hydration, then reads the client
+  // snapshot. Keep the account warning until that first render has matched.
+  const hasHydrated = useSyncExternalStore(
+    subscribeToHydration,
+    getClientSnapshot,
+    getServerSnapshot,
+  );
 
   if (isSupabaseConfigured()) {
     return null;
@@ -181,7 +194,7 @@ export function DemoModeBanner({
   // "no account to save to here" clause `/login` is exactly the moment for.
   // The default sentence is the true one on `/login` regardless of what the
   // rest of the tab is showing.
-  const showSeededCopy = hasSeedData && pathname !== "/login";
+  const showSeededCopy = hasHydrated && hasSeedData && pathname !== "/login";
 
   return (
     <div
