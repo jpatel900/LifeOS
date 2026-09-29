@@ -6,6 +6,7 @@ import {
   urlWithOverlay,
   useOverlayUrlState,
 } from "./useOverlayUrlState";
+import { isAffirmativeFlag } from "./deepLink";
 
 /**
  * Final UX Loop C2-S7 (#687 finding 2): the useSheetUrlState-shaped hook for
@@ -62,7 +63,9 @@ describe("urlWithOverlay", () => {
   });
 });
 
-describe.each(["capture", "palette"] as const)(
+// #687 C2 F2: the End session form (`?end=1`) is the third boolean overlay
+// on this same contract — every case below runs for it unchanged.
+describe.each(["capture", "palette", "end"] as const)(
   "useOverlayUrlState(%s)",
   (param) => {
     beforeEach(() => {
@@ -211,6 +214,69 @@ describe.each(["capture", "palette"] as const)(
     });
   },
 );
+
+// #687 C2 F2 round 2: an overlay can bring its own parser. The End session
+// form passes the strict one its direct link and mount scrub already use,
+// so Back/Forward can never open it on a value those paths reject. The
+// default (capture/palette) parser is untouched — see "accepts 1, true and
+// empty-string as open" above.
+describe("useOverlayUrlState — an overlay-specific parser", () => {
+  beforeEach(() => {
+    goto("/");
+  });
+
+  // A failing assertion must never leave a history spy behind for the
+  // simulator-based describes below.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each(["", "0", "false", "bogus"])(
+    "popstate onto ?end=%s stays closed under the strict parser",
+    (value) => {
+      const { result } = renderHook(() =>
+        useOverlayUrlState("end", false, isAffirmativeFlag),
+      );
+
+      act(() => {
+        goto(`/?end=${value}`);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
+
+      expect(result.current.open).toBe(false);
+    },
+  );
+
+  it.each(["1", "true"])(
+    "popstate onto ?end=%s opens under the strict parser",
+    (value) => {
+      const { result } = renderHook(() =>
+        useOverlayUrlState("end", false, isAffirmativeFlag),
+      );
+
+      act(() => {
+        goto(`/?end=${value}`);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
+
+      expect(result.current.open).toBe(true);
+    },
+  );
+
+  it("opening from a URL carrying a rejected ?end= value pushes a real entry instead of trusting it", () => {
+    goto("/?end=");
+    const push = vi.spyOn(window.history, "pushState");
+    const { result } = renderHook(() =>
+      useOverlayUrlState("end", false, isAffirmativeFlag),
+    );
+
+    act(() => result.current.openOverlay());
+
+    expect(result.current.open).toBe(true);
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toBe("?end=1");
+  });
+});
 
 /**
  * C2-S11 (#687 round-5 judge, C2 blocker — "one Back press does nothing",

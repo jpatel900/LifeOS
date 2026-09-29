@@ -124,6 +124,54 @@ export function MomentSheet({
     return () => cancelAnimationFrame(id);
   }, [open, obscured]);
 
+  // #687 C2 gap-1 (F1): the Tab trap and Escape both listen on the dialog
+  // itself, so they only work while focus is INSIDE it. Something rendered
+  // behind can still take focus without a click — Back then Forward with the
+  // end-session sheet open remounts the Flow moment, and its `autoFocus`
+  // First-move input grabbed focus from behind the scrim: Escape went dead,
+  // Tab walked the page underneath, and typing landed in the hidden input.
+  // While this sheet is open and not obscured (same `open && !obscured` gate
+  // as the trap and autofocus above), focus that lands outside it goes back
+  // to where it was inside — so a caret in a half-typed field is not lost —
+  // or to the dialog shell if that field can no longer take focus (e.g.
+  // disabled while Save runs).
+  //
+  // Focus that lands inside ANY other `aria-modal` dialog is left alone.
+  // That is NOT a claim the other dialog is in front: `EndSessionSheet`
+  // renders after `CaptureOverlay` and outside its open-context provider, so
+  // capture or the command palette can sit UNDER it. The bail-out only keeps
+  // two focus-holders from fighting (no ping-pong between two traps) and
+  // leaves today's other-modal behavior exactly as it was; which dialog
+  // should own focus when two are open is not decided here.
+  useEffect(() => {
+    if (!open || obscured) return undefined;
+    let lastInside: HTMLElement | null = null;
+
+    function handleFocusIn(event: FocusEvent): void {
+      const dialog = dialogRef.current;
+      // Closing detaches the dialog before return-focus runs; never fight it.
+      if (!dialog || !dialog.isConnected) return;
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (dialog.contains(target)) {
+        lastInside = target;
+        return;
+      }
+      if (target.closest('[aria-modal="true"]')) return;
+      const restore =
+        lastInside && dialog.contains(lastInside) ? lastInside : dialog;
+      restore.focus();
+      // `focus()` on a disabled or otherwise unfocusable element is a silent
+      // no-op; check where focus actually went.
+      if (!dialog.contains(document.activeElement)) {
+        dialog.focus();
+      }
+    }
+
+    document.addEventListener("focusin", handleFocusIn);
+    return () => document.removeEventListener("focusin", handleFocusIn);
+  }, [open, obscured]);
+
   if (!open) return null;
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
