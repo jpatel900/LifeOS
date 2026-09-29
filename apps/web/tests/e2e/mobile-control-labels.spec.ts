@@ -342,6 +342,9 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
 
     await page.getByTestId("bottom-navigator-capture").click();
     await expect(captureDialog).toBeVisible();
+    // CaptureCore focuses on the next frame so it can preserve the opener.
+    // Prove the keyboard target is ready before testing its Escape action.
+    await expect(captureDialog.getByLabel("Capture thought")).toBeFocused();
     await page.keyboard.press("Escape");
     // Closing is an async state update, not instant on the keypress — wait
     // for it to actually complete before the next action, the same
@@ -351,6 +354,7 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
     await page.getByTestId("bottom-navigator-capture").focus();
     await page.keyboard.press("Enter");
     await expect(captureDialog).toBeVisible();
+    await expect(captureDialog.getByLabel("Capture thought")).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(captureDialog).not.toBeVisible();
 
