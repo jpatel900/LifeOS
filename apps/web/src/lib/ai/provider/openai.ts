@@ -1,3 +1,7 @@
+import {
+  AI_PROVIDER_DEADLINE_MS,
+  withRequestDeadline,
+} from "../requestDeadline";
 import type {
   StructuredOutputProvider,
   StructuredOutputRequest,
@@ -82,27 +86,35 @@ export const openAiStructuredOutputProvider: StructuredOutputProvider = {
   async generateStructuredOutput(
     request: StructuredOutputRequest,
   ): Promise<StructuredOutputResult> {
-    const response = await (request.fetchImpl ?? fetch)(RESPONSES_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${request.apiKey}`,
-        "Content-Type": "application/json",
+    const body = await withRequestDeadline(
+      AI_PROVIDER_DEADLINE_MS,
+      async (signal) => {
+        const response = await (request.fetchImpl ?? fetch)(RESPONSES_API_URL, {
+          signal,
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${request.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: request.model,
+            store: false,
+            input: request.messages,
+            text: {
+              format: request.responseFormat,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `AI capture parsing request failed: ${response.status}`,
+          );
+        }
+
+        return (await response.json()) as ResponsesApiResponseBody;
       },
-      body: JSON.stringify({
-        model: request.model,
-        store: false,
-        input: request.messages,
-        text: {
-          format: request.responseFormat,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`AI capture parsing request failed: ${response.status}`);
-    }
-
-    const body = (await response.json()) as ResponsesApiResponseBody;
+    );
     const outputText = getOutputText(body);
     if (!outputText) {
       throw new Error(
