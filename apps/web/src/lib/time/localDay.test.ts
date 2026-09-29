@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { localDayStamp } from "./localDay";
-import { localDayStamp as briefDayStamp } from "../reEntry/briefView";
+import { localIsoDate } from "../review/dayClose";
 import { localDayStamp as purposeDayStamp } from "../purpose/purposeGaugeCheckin";
 
 describe("localDayStamp", () => {
@@ -15,8 +15,8 @@ describe("localDayStamp", () => {
     expect(localDayStamp(new Date(2026, 8, 30, 0, 0, 0, 1))).toBe("2026-09-30");
   });
 
-  it("preserves both existing exports as the same shared helper", () => {
-    expect(briefDayStamp).toBe(localDayStamp);
+  it("keeps the review and purpose exports on the shared helper", () => {
+    expect(localIsoDate).toBe(localDayStamp);
     expect(purposeDayStamp).toBe(localDayStamp);
   });
 });

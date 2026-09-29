@@ -23,8 +23,8 @@
  *
  * Local wins because the day being closed is the USER's day: the counts, the
  * carry-forward and the wins on that screen are all "today" in the sense the
- * person sitting there means it. `localIsoDate` is now the only derivation,
- * used by the write, the readback, and the specs.
+ * person sitting there means it. `localIsoDate` exposes the shared local-day
+ * derivation used by the write, the readback, and the specs.
  */
 
 /**
@@ -34,12 +34,7 @@
  * `toISOString().slice(0, 10)`, which is the UTC day and differs from this one
  * for most of the planet for most of the evening.
  */
-export function localIsoDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+export { localDayStamp as localIsoDate } from "../time/localDay";
 
 /**
  * One recorded day-close, and where it actually lives.

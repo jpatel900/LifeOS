@@ -15,8 +15,6 @@ import type { MinimalSupabaseClient } from "@/lib/data/workflow";
  * "a learning-write failure must never affect the return ritual" contract.
  */
 
-export { localDayStamp } from "../time/localDay";
-
 interface BriefViewsQuery {
   upsert: (
     row: Record<string, unknown>,

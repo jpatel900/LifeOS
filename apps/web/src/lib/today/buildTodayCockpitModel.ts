@@ -1,3 +1,5 @@
+import { localDayStamp } from "../time/localDay";
+
 export type TodayHealthState = "ok" | "attention" | "unavailable";
 
 export interface TodayCockpitTask {
@@ -104,13 +106,6 @@ const TODAY_BLOCK_STATUSES = new Set([
 const RECOVERY_SESSION_STATUSES = new Set(["missed", "stuck", "distracted"]);
 const RECOVERY_OUTCOMES = new Set(["blocked", "skipped", "distracted"]);
 
-function getRuntimeLocalDateKey(value: Date) {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function getDueTime(task: TodayCockpitTask): number {
   return task.dueAt ? new Date(task.dueAt).getTime() : Number.POSITIVE_INFINITY;
 }
@@ -134,7 +129,7 @@ export function decisionFocusNudge(task: TodayCockpitTask, now = new Date()) {
 
 function createCalendarDateKeyGetter(timezone?: string) {
   if (!timezone) {
-    return (value: Date) => getRuntimeLocalDateKey(value);
+    return (value: Date) => localDayStamp(value);
   }
 
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -151,7 +146,7 @@ function createCalendarDateKeyGetter(timezone?: string) {
     const day = parts.find((part) => part.type === "day")?.value;
 
     if (!year || !month || !day) {
-      return getRuntimeLocalDateKey(value);
+      return localDayStamp(value);
     }
 
     return `${year}-${month}-${day}`;
