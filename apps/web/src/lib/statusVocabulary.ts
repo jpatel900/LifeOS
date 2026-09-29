@@ -284,12 +284,12 @@ export const BLOCK_NOT_IN_ACCOUNT_FOR_GOOGLE = `This block is ${SAVED_ON_THIS_DE
  * `api/parse-capture`. It should import these instead of writing its own.
  */
 export const AI_SORTING_UNAVAILABLE_SORTED_HERE =
-  "AI sorting is unavailable right now, so LifeOS sorted this capture on your device.";
+  "AI sorting is unavailable right now, so LifeOS used basic sorting.";
 
 export const AI_SORTING_OFF_SORTED_HERE =
-  "AI sorting is turned off, so LifeOS sorted this capture on your device.";
+  "AI sorting is turned off, so LifeOS used basic sorting.";
 
-export const SORT_ON_THIS_DEVICE_ACTION = "Sort on this device";
+export const SORT_ON_THIS_DEVICE_ACTION = "Try basic sorting";
 
 /**
  * WHEN A SORT DOES NOT PRODUCE DRAFTS (#692 Slice D).

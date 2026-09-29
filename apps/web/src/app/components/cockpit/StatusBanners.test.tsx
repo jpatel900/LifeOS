@@ -19,7 +19,6 @@ import {
   ACCOUNT_UNREACHABLE_NOW,
   DEVICE_STORAGE_BLOCKED,
   SOME_WORK_ON_THIS_DEVICE,
-  SORT_ON_THIS_DEVICE_ACTION,
 } from "@/lib/statusVocabulary";
 import type { WipRefusal } from "@/lib/workflow/shared";
 import { WIP_ENFORCEMENT_POLICY_ID } from "@/lib/workflow/shared";
@@ -33,6 +32,33 @@ import { WIP_ENFORCEMENT_POLICY_ID } from "@/lib/workflow/shared";
 // layout, so this is a className-level guard.
 
 describe("StatusBanners 44px hit targets (#615)", () => {
+  it.each([
+    [
+      "ai_unavailable",
+      "AI sorting is unavailable right now, so LifeOS used basic sorting.",
+    ],
+    ["mock", "AI sorting is turned off, so LifeOS used basic sorting."],
+  ] as const)(
+    "names basic sorting without promising device execution (%s)",
+    (status, message) => {
+      render(
+        <CaptureParseNotice
+          state={{
+            phase: "parsed",
+            captureId: "capture-1",
+            parser: "mock",
+            status,
+          }}
+          onRetryWithMock={() => {}}
+        />,
+      );
+      expect(screen.getByRole("status")).toHaveTextContent(message);
+      expect(screen.getByRole("status")).not.toHaveTextContent(
+        "on your device",
+      );
+    },
+  );
+
   it("the capture-parse-failed retry button carries the 44px hit-target class", () => {
     const state: CaptureParseState = {
       phase: "failed",
@@ -45,8 +71,7 @@ describe("StatusBanners 44px hit targets (#615)", () => {
     render(<CaptureParseNotice state={state} onRetryWithMock={() => {}} />);
 
     expect(
-      screen.getByRole("button", { name: SORT_ON_THIS_DEVICE_ACTION })
-        .className,
+      screen.getByRole("button", { name: "Try basic sorting" }).className,
     ).toContain("min-h-[44px]");
   });
 
