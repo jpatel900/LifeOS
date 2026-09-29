@@ -359,7 +359,7 @@ describe("parse-capture route", () => {
     expect(body).toEqual({
       ok: false,
       error:
-        "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. You can sort it on this device instead.",
+        "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. Sorting requires you to be signed in.",
       can_retry_with_mock: true,
       status: "ai_configured",
     });
@@ -395,7 +395,7 @@ describe("parse-capture route", () => {
 
     expect(response.status).toBe(502);
     expect(body.error).toBe(
-      "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. You can sort it on this device instead.",
+      "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. Sorting requires you to be signed in.",
     );
     expect(body.can_retry_with_mock).toBe(true);
     expect(body.status).toBe("ai_configured");
