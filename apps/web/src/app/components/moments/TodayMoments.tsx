@@ -2324,7 +2324,10 @@ function TodayMomentsContent({
           </>
         )}
 
-        <KeyboardLegend onOpenPalette={() => openPalette()} />
+        <KeyboardLegend
+          onOpenPalette={() => openPalette()}
+          inFlow={moment === "close"}
+        />
 
         {/* #703: capture is never blocked. It used to be disabled while a
           parse was in flight; parsing now happens in triage, and a sort
