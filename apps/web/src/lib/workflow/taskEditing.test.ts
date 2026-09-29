@@ -164,6 +164,94 @@ describe("validateTaskEditInput", () => {
       patch: { title: "Buy milk", description: null, area_id: AREA_PERSONAL },
     });
   });
+
+  // FR-049 (#1025): "Bring it back on" — an ordinary task's due_at can be
+  // set, changed, or cleared freely; a decision task's can be changed but
+  // never cleared (FR-024 requires a decision to carry a deadline).
+  describe("due_at (FR-049)", () => {
+    const DUE_AT = "2026-09-30T16:00:00.000Z";
+    const OTHER_DUE_AT = "2026-10-05T16:00:00.000Z";
+
+    it("accepts setting a due_at on an ordinary task", () => {
+      const result = validateTaskEditInput(
+        {
+          title: "Buy milk",
+          description: null,
+          area_id: AREA_MAIN,
+          due_at: DUE_AT,
+        },
+        context,
+      );
+      expect(result).toEqual({
+        ok: true,
+        patch: {
+          title: "Buy milk",
+          description: null,
+          area_id: AREA_MAIN,
+          due_at: DUE_AT,
+        },
+      });
+    });
+
+    it("accepts clearing a due_at on an ordinary task", () => {
+      const result = validateTaskEditInput(
+        {
+          title: "Buy milk",
+          description: null,
+          area_id: AREA_MAIN,
+          due_at: null,
+        },
+        { ...context, isDecision: false },
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.patch.due_at).toBeNull();
+      }
+    });
+
+    it("leaves due_at alone when the caller never mentions it", () => {
+      const result = validateTaskEditInput(
+        { title: "Buy milk", description: null, area_id: AREA_MAIN },
+        { ...context, isDecision: true },
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.patch.due_at).toBeUndefined();
+      }
+    });
+
+    it("accepts changing a decision task's due_at", () => {
+      const result = validateTaskEditInput(
+        {
+          title: "Decide on the vendor",
+          description: null,
+          area_id: AREA_MAIN,
+          due_at: OTHER_DUE_AT,
+        },
+        { ...context, isDecision: true },
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.patch.due_at).toBe(OTHER_DUE_AT);
+      }
+    });
+
+    it("rejects clearing a decision task's due_at", () => {
+      const result = validateTaskEditInput(
+        {
+          title: "Decide on the vendor",
+          description: null,
+          area_id: AREA_MAIN,
+          due_at: null,
+        },
+        { ...context, isDecision: true },
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.errors.due_at).toBeTruthy();
+      }
+    });
+  });
 });
 
 describe("isProjectAreaBlocked", () => {
@@ -308,6 +396,57 @@ describe("applyTaskEditPatch", () => {
 
     expect(areaChangeBlocked).toBe(false);
     expect(nextTask.area_id).toBe(AREA_PERSONAL);
+  });
+
+  // FR-049 (#1025).
+  describe("due_at", () => {
+    const DUE_AT = "2026-09-30T16:00:00.000Z";
+
+    it("leaves due_at untouched when the patch omits it", () => {
+      const task = makeTask({ id: "task-1", due_at: DUE_AT });
+
+      const { task: nextTask } = applyTaskEditPatch(
+        task,
+        { title: "New title", description: null, area_id: AREA_MAIN },
+        null,
+      );
+
+      expect(nextTask.due_at).toBe(DUE_AT);
+    });
+
+    it("sets due_at when the patch gives one", () => {
+      const task = makeTask({ id: "task-1", due_at: null });
+
+      const { task: nextTask } = applyTaskEditPatch(
+        task,
+        {
+          title: "New title",
+          description: null,
+          area_id: AREA_MAIN,
+          due_at: DUE_AT,
+        },
+        null,
+      );
+
+      expect(nextTask.due_at).toBe(DUE_AT);
+    });
+
+    it("clears due_at when the patch explicitly gives null", () => {
+      const task = makeTask({ id: "task-1", due_at: DUE_AT });
+
+      const { task: nextTask } = applyTaskEditPatch(
+        task,
+        {
+          title: "New title",
+          description: null,
+          area_id: AREA_MAIN,
+          due_at: null,
+        },
+        null,
+      );
+
+      expect(nextTask.due_at).toBeNull();
+    });
   });
 });
 

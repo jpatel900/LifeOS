@@ -197,6 +197,104 @@ describe("persistBacklogTaskEdit (#984)", () => {
       ),
     ).rejects.toThrow("Sign in before saving task edits.");
   });
+
+  // FR-049 (#1025).
+  describe("due_at", () => {
+    const DUE_AT = "2026-09-30T16:00:00.000Z";
+
+    it("omits due_at from the account-row call when the caller never mentions it", async () => {
+      editBacklogTaskAccountRowMock.mockResolvedValue({
+        provider: "supabase",
+        status: "updated",
+        task: { id: PERSISTED_TASK_ID },
+        userId: WRITER_USER_ID,
+      });
+      const { ops } = makeSync({ hasClient: true });
+
+      await ops.persistBacklogTaskEdit(
+        LOCAL_TASK_ID,
+        { title: "New title", description: null, area_id: LOCAL_AREA_ID },
+        UPDATED_AT,
+      );
+
+      expect(editBacklogTaskAccountRowMock).toHaveBeenCalledWith(
+        expect.anything(),
+        PERSISTED_TASK_ID,
+        {
+          title: "New title",
+          description: null,
+          area_id: PERSISTED_AREA_ID,
+        },
+        UPDATED_AT,
+      );
+    });
+
+    it("passes due_at through to the account-row call when the caller sets it", async () => {
+      editBacklogTaskAccountRowMock.mockResolvedValue({
+        provider: "supabase",
+        status: "updated",
+        task: { id: PERSISTED_TASK_ID },
+        userId: WRITER_USER_ID,
+      });
+      const { ops } = makeSync({ hasClient: true });
+
+      await ops.persistBacklogTaskEdit(
+        LOCAL_TASK_ID,
+        {
+          title: "New title",
+          description: null,
+          area_id: LOCAL_AREA_ID,
+          due_at: DUE_AT,
+        },
+        UPDATED_AT,
+      );
+
+      expect(editBacklogTaskAccountRowMock).toHaveBeenCalledWith(
+        expect.anything(),
+        PERSISTED_TASK_ID,
+        {
+          title: "New title",
+          description: null,
+          area_id: PERSISTED_AREA_ID,
+          due_at: DUE_AT,
+        },
+        UPDATED_AT,
+      );
+    });
+
+    it("passes an explicit null through to the account-row call when the caller clears it", async () => {
+      editBacklogTaskAccountRowMock.mockResolvedValue({
+        provider: "supabase",
+        status: "updated",
+        task: { id: PERSISTED_TASK_ID },
+        userId: WRITER_USER_ID,
+      });
+      const { ops } = makeSync({ hasClient: true });
+
+      await ops.persistBacklogTaskEdit(
+        LOCAL_TASK_ID,
+        {
+          title: "New title",
+          description: null,
+          area_id: LOCAL_AREA_ID,
+          due_at: null,
+        },
+        UPDATED_AT,
+      );
+
+      expect(editBacklogTaskAccountRowMock).toHaveBeenCalledWith(
+        expect.anything(),
+        PERSISTED_TASK_ID,
+        {
+          title: "New title",
+          description: null,
+          area_id: PERSISTED_AREA_ID,
+          due_at: null,
+        },
+        UPDATED_AT,
+      );
+    });
+  });
 });
 
 describe("isSameSignedInUser (#984)", () => {

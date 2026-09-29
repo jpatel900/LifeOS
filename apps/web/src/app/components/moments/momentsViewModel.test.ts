@@ -22,6 +22,7 @@ import {
   waitingOnAgingBucket,
 } from "./momentsViewModel";
 import { localIsoDate } from "@/lib/review/dayClose";
+import { localNoonIsoForDay } from "@/lib/workflow/backToday";
 
 /** Pinned clock — no ambient Date.now anywhere in these tests. */
 const NOW = new Date("2026-07-05T12:00:00.000Z");
@@ -2293,3 +2294,187 @@ describe("buildStartVM — D-8 topPendingTriageItem (#483)", () => {
 // "explain mode" coverage for the replacement behaviour/tests. The
 // `buildDaySynthesis` "genuinely nothing" sentence itself is unchanged and
 // still covered above.
+
+/** `NOW`'s own local calendar day, offset by `days` (can be negative). */
+function localDayStampOffset(days: number): string {
+  const shifted = new Date(NOW);
+  shifted.setDate(shifted.getDate() + days);
+  const year = shifted.getFullYear();
+  const month = String(shifted.getMonth() + 1).padStart(2, "0");
+  const day = String(shifted.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+describe("buildStartVM — FR-049 backToday (#1025)", () => {
+  it("is empty when nothing is put off", () => {
+    const state = stateWith({});
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.backToday).toEqual([]);
+  });
+
+  it("includes a backlog task whose return day is today, with title/area/description", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({
+          id: "t1",
+          title: "Call the plumber",
+          description: "Ask about the quote",
+          status: "backlog",
+          due_at: localNoonIsoForDay(localDayStampOffset(0)),
+          first_tiny_step: "Find the phone number",
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.backToday).toEqual([
+      {
+        taskId: "t1",
+        title: "Call the plumber",
+        areaLabel: "Area area-1",
+        description: "Ask about the quote",
+        canMoveToToday: true,
+      },
+    ]);
+  });
+
+  it("includes a backlog task whose return day is in the past", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({
+          id: "t1",
+          title: "Past due return day",
+          status: "backlog",
+          due_at: localNoonIsoForDay(localDayStampOffset(-5)),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.backToday.map((item) => item.taskId)).toEqual(["t1"]);
+  });
+
+  it("excludes a backlog task whose return day is in the future", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({
+          id: "t1",
+          title: "Future return day",
+          status: "backlog",
+          due_at: localNoonIsoForDay(localDayStampOffset(5)),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.backToday).toEqual([]);
+  });
+
+  it("excludes a backlog task with no return day set", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({
+          id: "t1",
+          title: "No return day",
+          status: "backlog",
+          due_at: null,
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.backToday).toEqual([]);
+  });
+
+  it("never includes a non-backlog task, whatever its due_at", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({
+          id: "t1",
+          title: "Active task with a due_at",
+          status: "active",
+          due_at: localNoonIsoForDay(localDayStampOffset(-5)),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.backToday).toEqual([]);
+  });
+
+  it("scopes to the selected area and never leaks into another area's view", () => {
+    const state = stateWith({
+      areas: [makeArea({ id: "area-a" }), makeArea({ id: "area-b" })],
+      tasks: [
+        makeTask({
+          id: "t-a",
+          title: "In area A",
+          area_id: "area-a",
+          status: "backlog",
+          due_at: localNoonIsoForDay(localDayStampOffset(0)),
+        }),
+        makeTask({
+          id: "t-b",
+          title: "In area B",
+          area_id: "area-b",
+          status: "backlog",
+          due_at: localNoonIsoForDay(localDayStampOffset(0)),
+        }),
+      ],
+    });
+
+    const scopedToA = buildStartVM(state, {
+      now: NOW,
+      selectedAreaId: "area-a",
+    });
+    expect(scopedToA.backToday.map((item) => item.taskId)).toEqual(["t-a"]);
+
+    const allAreas = buildStartVM(state, { now: NOW, selectedAreaId: null });
+    expect(allAreas.backToday.map((item) => item.taskId).sort()).toEqual([
+      "t-a",
+      "t-b",
+    ]);
+  });
+
+  it("marks canMoveToToday false when the task has no first move yet", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({
+          id: "t1",
+          title: "No first move yet",
+          status: "backlog",
+          due_at: localNoonIsoForDay(localDayStampOffset(0)),
+          first_tiny_step: null,
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.backToday[0]?.canMoveToToday).toBe(false);
+  });
+
+  it("orders by return day, oldest first", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({
+          id: "t-recent",
+          title: "Recent return day",
+          status: "backlog",
+          due_at: localNoonIsoForDay(localDayStampOffset(0)),
+        }),
+        makeTask({
+          id: "t-oldest",
+          title: "Oldest return day",
+          status: "backlog",
+          due_at: localNoonIsoForDay(localDayStampOffset(-10)),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.backToday.map((item) => item.taskId)).toEqual([
+      "t-oldest",
+      "t-recent",
+    ]);
+  });
+});

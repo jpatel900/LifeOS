@@ -352,3 +352,25 @@ export function hasLaunchSequenceStep(
 ): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
+
+/**
+ * FR-049 (#1025): accepting an AI draft must not copy the draft's `due_at`
+ * into a new ORDINARY task — only a day the person explicitly sets (via the
+ * "Bring it back on" backlog editor) counts. Decision tasks are the one
+ * exception: FR-024 requires every decision to carry its deadline in
+ * `due_at`, and accept keeps copying it. `task_type` is a plain nullable
+ * string column, not an enum, so the check is a literal `"decision"`
+ * comparison — the same one `triage.ts`/`draftAccept.ts` already use for
+ * `is_reversible`.
+ *
+ * One function, used at every place a draft becomes a task: the demo
+ * accept path (`triage.ts`'s `acceptDraftWithStatus`) and the persisted
+ * accept path (`draftAccept.ts`'s `createTask` call, which also covers a
+ * journal entry queued before this change replaying after it).
+ */
+export function acceptedTaskDueAt(
+  taskType: string | null | undefined,
+  dueAt: string | null | undefined,
+): string | null {
+  return taskType === "decision" ? (dueAt ?? null) : null;
+}

@@ -2,12 +2,14 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { momentKeyLabel } from "@/lib/keys/keymap";
 import { FirstMoveCard, type FirstMoveCardMove } from "./FirstMoveCard";
 import { ScheduleList } from "./ScheduleList";
 import { SideRail } from "./SideRail";
 import { PipelineOverview } from "./PipelineOverview";
 import { FocusList } from "./FocusList";
+import { HIT_TARGET_MIN } from "./hitTarget";
 import type { FirstMoveVM, StartVM } from "./momentsViewModel";
 
 /**
@@ -165,6 +167,12 @@ export interface StartMomentProps {
   onDrillPipeline(stage: string): void;
   onOpenRecovery(taskId: string): void;
   onOpenTriage(): void;
+  /**
+   * FR-049 (#1025): the existing "Move to today" action (`promoteBacklogTask`)
+   * for a "Back today" row — the same action `PlanSheet`'s backlog list
+   * already offers, reused here rather than a second promote path.
+   */
+  onMoveToToday(taskId: string): void;
 }
 
 export function StartMoment({
@@ -180,6 +188,7 @@ export function StartMoment({
   onDrillPipeline,
   onOpenRecovery,
   onOpenTriage,
+  onMoveToToday,
 }: StartMomentProps) {
   const cardMove: FirstMoveCardMove | null = vm.firstMove
     ? {
@@ -315,6 +324,86 @@ export function StartMoment({
               </CardContent>
             </Card>
           )}
+
+          {/* FR-049 (#1025): "Back today" — every put-off task whose chosen
+              return day is today or earlier. Hidden entirely when empty
+              (never an empty-state card): a day that hasn't arrived for
+              anything is simply not worth a section. Plain copy throughout
+              — no "overdue", no guilt; a passed day just means "back
+              today". */}
+          {vm.backToday.length > 0 ? (
+            <Card
+              className="workflow-support-card moments-card min-w-0"
+              data-testid="start-back-today"
+            >
+              <CardContent className="grid min-w-0 gap-3 p-4 sm:p-5">
+                <h2 className="workflow-page-eyebrow m-0">Back today</h2>
+                <ul
+                  className="grid min-w-0 gap-2"
+                  data-testid="start-back-today-list"
+                >
+                  {vm.backToday.map((item) => (
+                    <li
+                      key={item.taskId}
+                      // `min-w-0`: the same PlanSheet backlog-row fix
+                      // (#1011) applies here — a grid item's default
+                      // `min-width: auto` sizes it to its content's
+                      // min-content width, and an unbroken long title would
+                      // force this row (and the card around it) wider than
+                      // a narrow viewport. `break-words` on the text spans
+                      // below is the other half: it lets a single long
+                      // word actually wrap once the row can shrink.
+                      className="workflow-compact-item moments-row grid min-w-0 gap-2 p-3"
+                      data-testid={`start-back-today-row-${item.taskId}`}
+                    >
+                      {/* Every grid ITEM below also needs its own `min-w-0`,
+                           not only its ancestors: a CSS grid track sizes to
+                           at least an item's "automatic minimum size" (its
+                           min-content — which, per spec, ignores
+                           `overflow-wrap`/`break-words` for ONE unbroken
+                           word), so a long single-word title can force the
+                           SPAN ITSELF wider than its own track even while
+                           every ancestor stays correctly constrained.
+                           `break-words` alone (no `min-w-0` on the item)
+                           measurably still overflowed at 390px — proven by
+                           `back-today.spec.ts`'s long-unbroken-title case. */}
+                      <div className="grid min-w-0 gap-1">
+                        <span className="min-w-0 break-words text-sm font-semibold">
+                          {item.title}
+                        </span>
+                        <span className="min-w-0 break-words text-xs text-muted-foreground">
+                          {item.areaLabel}
+                        </span>
+                        {item.description ? (
+                          <span className="min-w-0 break-words text-xs text-muted-foreground">
+                            {item.description}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={!item.canMoveToToday}
+                          onClick={() => onMoveToToday(item.taskId)}
+                          className={cn(HIT_TARGET_MIN, "touch-manipulation")}
+                          data-testid={`start-back-today-move-${item.taskId}`}
+                        >
+                          Move to today
+                        </Button>
+                        {!item.canMoveToToday ? (
+                          <span className="text-xs text-muted-foreground">
+                            Needs a first move before it can go on the rail.
+                          </span>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
 
           {vm.focusItems.length > 1 || vm.deferredItems.length > 0 ? (
             <section className="grid gap-3">

@@ -12,17 +12,27 @@ import {
  * file, so `title`'s `min(1)` and `area_id`'s `uuid()` shape are enforced
  * here too, not just trusted from the caller. `description` stays exactly
  * `TaskSchema`'s own `string | null`.
+ *
+ * FR-049 (#1025): `due_at` is picked too (same "Bring it back on" column),
+ * then re-declared `.optional()` on top of `TaskSchema`'s own
+ * `offsetDatetime().nullable()` shape — `.pick()` alone would keep it
+ * required, but an omitted `due_at` here means "this edit doesn't touch the
+ * return day", not "clear it". See `editBacklogTaskAccountRow` below for
+ * where that distinction is applied to the actual `.update()` payload.
  */
 const TaskEditAccountPatchSchema = TaskSchema.pick({
   title: true,
   description: true,
   area_id: true,
+}).extend({
+  due_at: TaskSchema.shape.due_at.optional(),
 });
 
 export type TaskEditAccountPatch = {
   title: string;
   description: string | null;
   area_id: string;
+  due_at?: string | null;
 };
 
 export type TaskEditAccountResult =
@@ -104,6 +114,11 @@ export async function editBacklogTaskAccountRow(
       title: parsedPatch.title,
       description: parsedPatch.description,
       area_id: parsedPatch.area_id,
+      // FR-049 (#1025): only included in the write when the caller actually
+      // touched it — an omitted `due_at` must never clear the column.
+      ...(parsedPatch.due_at !== undefined
+        ? { due_at: parsedPatch.due_at }
+        : {}),
     })
     .eq("id", taskId)
     .eq("user_id", user.id)

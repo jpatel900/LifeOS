@@ -36,6 +36,7 @@
  * keying it is not worth a second index.
  */
 import type { Task, TimeBlockProposal } from "@lifeos/schemas";
+import { acceptedTaskDueAt } from "../../workflow/shared";
 import { normalizePersonName } from "../personLinks";
 import { resolveCaptureItems } from "./capture";
 import { recordPersonLinkAcceptance, findOrCreatePerson } from "./people";
@@ -352,7 +353,10 @@ export async function syncJournaledTaskDraftAccept(
       task_type: input.task_type ?? "task",
       is_reversible:
         input.task_type === "decision" ? (input.is_reversible ?? null) : null,
-      due_at: input.due_at,
+      // FR-049 (#1025): only a decision draft's due_at (its FR-024 deadline)
+      // survives accept — an ordinary draft's due_at is never copied, even
+      // for a journal entry queued before this change.
+      due_at: acceptedTaskDueAt(input.task_type, input.due_at),
       estimated_minutes_low: input.estimated_minutes_low,
       estimated_minutes_high: input.estimated_minutes_high,
       first_tiny_step: input.first_tiny_step,

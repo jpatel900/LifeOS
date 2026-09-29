@@ -290,6 +290,16 @@ Suggest when to do a task without writing to calendar yet.
 - Conflict flag is visible.
 - User can edit start/end before approval.
 
+### Put off for later: return day (FR-049)
+
+The put-off-for-later (backlog) editor's "Edit details" form (Plan sheet) has one
+optional field, "Bring it back on" — a calendar day. Setting it puts the task
+in the "Back today" group on Start once that day arrives (today or earlier);
+"Move to today" there is the same action as everywhere else it appears. A
+decision task's day can be changed but not cleared (FR-024 still requires a
+deadline). No notifications, no overdue framing — a passed day just reads
+"back today".
+
 ## 8. Flow 6 — Approval-Gated Calendar Write
 
 ### Goal

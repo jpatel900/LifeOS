@@ -10,7 +10,8 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
 }));
 
-vi.mock("@/lib/reEntry/briefView", () => ({
+vi.mock("@/lib/reEntry/briefView", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/reEntry/briefView")>()),
   createBriefViewRecorder: () => ({ recordIfNeeded: vi.fn() }),
 }));
 
