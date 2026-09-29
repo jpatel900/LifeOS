@@ -120,21 +120,26 @@ describe("Capture destination and return path", () => {
     const dialog = within(
       screen.getByRole("dialog", { name: "Capture a thought" }),
     );
-    expect(dialog.getByLabelText("Save to area (optional)")).toHaveValue("");
+    expect(dialog.getByLabelText("Save to area (optional)")).toHaveValue(
+      "area-main-job",
+    );
+    expect(dialog.getByText("Will save to Main Job.")).toBeInTheDocument();
+    fireEvent.change(dialog.getByLabelText("Save to area (optional)"), {
+      target: { value: "" },
+    });
     expect(
       dialog.getByText(
         "No area selected. Choose one to control where this thought goes.",
       ),
     ).toBeInTheDocument();
+    expect(dialog.getByText("Will save without an area.")).toBeInTheDocument();
     fireEvent.change(dialog.getByLabelText("Capture thought"), {
       target: { value: "Synthetic thought" },
     });
     fireEvent.keyDown(dialog.getByLabelText("Capture thought"), {
       key: "Enter",
     });
-    expect(screen.getByTestId("saved-capture-area")).toHaveTextContent(
-      "area-main-job",
-    );
+    expect(screen.getByTestId("saved-capture-area")).toBeEmptyDOMElement();
   });
 
   it("opens the counted capture in Triage instead of a new composer", async () => {
@@ -148,6 +153,43 @@ describe("Capture destination and return path", () => {
       "Unsorted example",
     );
     expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+  });
+
+  it("opens captures from every area when All areas has a positive count", async () => {
+    await renderCaptureContext(null, "area-personal");
+    expect(
+      screen.getByTestId("pipeline-overview-count-capture"),
+    ).toHaveTextContent("1");
+    fireEvent.click(screen.getByTestId("pipeline-overview-stage-capture"));
+    expect(screen.getByRole("dialog", { name: "Triage" })).toBeInTheDocument();
+    expect(screen.getByTestId("triage-sheet-captures")).toHaveTextContent(
+      "Unsorted example",
+    );
+  });
+
+  it("keeps capture's area choice local to the box and names the destination", async () => {
+    await renderCaptureContext("area-main-job");
+    fireEvent.click(screen.getByTestId("capture-affordance"));
+    const dialog = within(
+      screen.getByRole("dialog", { name: "Capture a thought" }),
+    );
+    const beforeUrl = window.location.href;
+    const beforeHistoryLength = window.history.length;
+    fireEvent.change(dialog.getByLabelText("Save to area (optional)"), {
+      target: { value: CUSTOM_AREA },
+    });
+    expect(window.location.href).toBe(beforeUrl);
+    expect(window.history.length).toBe(beforeHistoryLength);
+    expect(dialog.getByText("Will save to Example area.")).toBeInTheDocument();
+    fireEvent.change(dialog.getByLabelText("Capture thought"), {
+      target: { value: "Synthetic thought" },
+    });
+    fireEvent.keyDown(dialog.getByLabelText("Capture thought"), {
+      key: "Enter",
+    });
+    expect(screen.getByTestId("saved-capture-area")).toHaveTextContent(
+      CUSTOM_AREA,
+    );
   });
 
   it("opens a new composer when the selected area has no counted captures", async () => {

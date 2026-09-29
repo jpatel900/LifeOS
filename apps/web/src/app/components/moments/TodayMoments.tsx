@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 import { Settings as SettingsIcon } from "lucide-react";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { workflowStateHasDemoSeed } from "@/lib/workflow";
+import { resolveRawCaptureAreaId } from "@/lib/workflow/capture";
 import { historyReplaceState } from "@/lib/rawHistory";
 import { buildCockpitAccentStyle } from "@/lib/cockpit/accent";
 import { resolveSelectedArea } from "@/lib/areaAccent";
@@ -984,6 +985,18 @@ function TodayMomentsContent({
   const [captureDraft, setCaptureDraft] = useState<string>(() =>
     readStoredCaptureDraft(),
   );
+  const [captureAreaChoice, setCaptureAreaChoice] = useState<
+    string | null | undefined
+  >(undefined);
+  const captureAreaId =
+    captureAreaChoice === undefined
+      ? (resolveRawCaptureAreaId(state.areas, selectedAreaId) ??
+        state.areas[0]?.id ??
+        null)
+      : resolveRawCaptureAreaId(state.areas, captureAreaChoice);
+  useEffect(() => {
+    if (!captureOpen) setCaptureAreaChoice(undefined);
+  }, [captureOpen]);
   const {
     open: paletteOpen,
     openOverlay: openPalette,
@@ -2478,15 +2491,15 @@ function TodayMomentsContent({
         <CaptureOverlay
           open={captureOpen && showingMastheadAndMoments}
           areas={state.areas}
-          selectedAreaId={selectedAreaId}
-          onAreaChange={setArea}
+          selectedAreaId={captureAreaId}
+          onAreaChange={setCaptureAreaChoice}
           initialText={captureDraft}
           onDraftChange={(text) => {
             setCaptureDraft(text);
             writeStoredCaptureDraft(text);
           }}
           onSave={(text, returnHook) =>
-            submitCaptureText(text, selectedAreaId, returnHook)
+            submitCaptureText(text, captureAreaId, returnHook)
           }
           onResolved={() => {
             // #556: the success toast only fires once the capture truly

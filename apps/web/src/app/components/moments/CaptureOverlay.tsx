@@ -60,6 +60,9 @@ export function CaptureOverlay({
   useFocusTrap(open, dialogRef);
 
   if (!open) return null;
+  const destinationName = areas.find(
+    (area) => area.id === selectedAreaId,
+  )?.name;
 
   // Containment: the scrim/Close only abandon the dialog while idle. Once a
   // parse is in flight (or its degraded/conclusion tail is showing), the
@@ -101,6 +104,19 @@ export function CaptureOverlay({
               <select
                 value={selectedAreaId ?? ""}
                 onChange={(event) => onAreaChange(event.target.value || null)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.stopPropagation();
+                    if (
+                      typeof CSS !== "undefined" &&
+                      CSS.supports?.("selector(select:open)") &&
+                      event.currentTarget.matches(":open")
+                    ) {
+                      return;
+                    }
+                    handleCancel();
+                  }
+                }}
                 disabled={locked}
                 className={cn(
                   HIT_TARGET_ROW,
@@ -122,6 +138,15 @@ export function CaptureOverlay({
             ) : null}
           </div>
         ) : null}
+
+        <p
+          className="text-xs text-muted-foreground"
+          data-testid="capture-save-destination"
+        >
+          {destinationName
+            ? `Will save to ${destinationName}.`
+            : "Will save without an area."}
+        </p>
 
         <CaptureCore
           mode="full"
