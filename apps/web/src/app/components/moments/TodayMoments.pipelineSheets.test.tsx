@@ -103,9 +103,9 @@ describe("TodayMoments — P5 pipeline rail and sheets", () => {
 
   // C2-S6 (#687): every pipeline-rail node opens something real now — no
   // control promises "the full shell" (a shell that no longer exists once
-  // C2-S6 retires the legacy routes). Capture opens the capture overlay;
+  // C2-S6 retires the legacy routes). Capture with no counted thoughts opens the capture overlay;
   // Execute switches to the Flow moment.
-  it("drilling into capture from the Pipeline rail opens the capture overlay", () => {
+  it("drilling into zero-count capture from the Pipeline rail opens the capture overlay", () => {
     renderToday({ initialMoment: "start" });
 
     fireEvent.click(screen.getByTestId("pipeline-overview-stage-capture"));

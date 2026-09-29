@@ -1,6 +1,6 @@
 # PROGRAM: The Final UX Loop
 
-**STATUS: REAL USE FIRST — preparing the 10-day trial; day 1 has not started.** Owner decision 2026-09-29 (Option A) replaces the serial campaign queue. The trial owns priority; campaign implementation C2–C6 is parked and resumes only from trial findings. This program keeps its safety rules and history. Repo home since 2026-08-04; the out-of-repo planning folder is provenance-only.
+**STATUS: REAL USE FIRST — trial start UNSET.** Owner decisions 2026-09-29 replace the serial campaign queue and keep development running during the 10-day trial. Trial blockers take priority; other bug and truth repairs may continue under the feature freeze. Campaign implementation C2–C6 resumes only from trial findings. This program keeps its safety rules and history. Repo home since 2026-08-04; the out-of-repo planning folder is provenance-only.
 
 Owner directive (2026-07-26, verbatim intent): "We have done this loop so many times but it still doesn't turn out as we want — do it so properly this time that this will be the last ever. Step by step, strategic and structured." This document IS the structure. It supersedes ad-hoc fix queues.
 
@@ -20,13 +20,13 @@ The rules in §3 retain those lessons. The 2026-09-29 decision puts real use ahe
 ```
 Phase 0  MEASURE      (done)     Audit v2, same 11-dimension rubric → scorecard + findings
 Phase 1  DEFINE       (done)     Per-dimension target + written "what 10 looks like" criteria → RATIFIED TARGET CARD
-NOW      PREPARE      (agents)   FR-049 deployed + production capture/Sort truth
-NEXT     REAL USE    (owner)    10 days using the core loop; record one line a day
+NOW      PREPARE      (agents)   FR-049 deployed + Claude-confirmed production capture/Sort truth
+NEXT     REAL USE    (owner)    10 days using the core loop; record one line and production SHA each day
 THEN     LEARN       (agents)   Measure the trial; choose one bounded repair from the biggest friction
 LATER    CAMPAIGNS              Resume only from trial findings; no automatic serial queue
 ```
 
-**Priority now:** real use, not a target score, decides the next work. The original full re-audit and owner U3 hour remain the program's later completion gates; neither blocks the trial. An open program no longer owns the queue. C2's pending owner glance is described in §5.2; the trial contract is in §7.
+**Priority now:** real use, not a target score, decides the next work. Development continues during the trial: fix trial blockers first, then other bugs and truth faults; batch merges into `main` at most once per day. The original full re-audit and owner U3 hour remain the program's later completion gates; neither blocks the trial. An open program no longer owns the queue. C2's pending owner glance is described in §5.2; the trial contract is in §7.
 
 ## 3. Rules of engagement (each rule ↔ the failure it kills)
 
@@ -37,7 +37,7 @@ LATER    CAMPAIGNS              Resume only from trial findings; no automatic se
 - **R5 (kills #5):** All scoring happens at the running-build tier, desktop + 390px mobile. File reads prove nothing about experience. Prod-only defects count double — they're what the owner actually hits.
 - **R6 (kills #6; amended 2026-09-29):** Keep dependency order when trial findings justify work: Structure → Truth → Flow → Polish. The old serial queue is parked. C6 still requires C1–C5 to be closed, plus a trial finding that warrants the work.
 - **R7 (amended by owner 2026-08-05; was "one implementation lane at a time"):** Concurrent implementation lanes are allowed when each lane has claimed its issue and declared a file manifest, and the manifests are disjoint (overlap → COLLISION protocol in `docs/agent/LANES.md`; second lane waits or renegotiates). Hot-file surfaces (the LANES.md red zones plus any files two campaigns both touch) stay single-lane. Merges still serialize through the queue — CI and the Main Red Guard own integration truth. Within one lane, a driver may parallelize its own subagents freely inside the lane's manifest. Read-only audit/score lanes remain unrestricted. All other repo rules (lane playbook, guards sacred, plain-language pin) apply unchanged.
-- **R8 (scope honesty; amended 2026-09-29):** New feature work stays frozen. FR-049 is the sole feature exception; it supersedes the old 737-A and P0 feature carveouts during the trial. A production fault that blocks the trial may receive a narrow repair; that is not another feature exception. No other LifeOS building runs during the 10 days unless the trial itself hits a blocker.
+- **R8 (scope honesty; amended 2026-09-29):** New feature work stays frozen except for FR-049 and FR-028. The owner approved FR-028 as the second exception: finish the return ritual in [REQUIREMENTS.md](../REQUIREMENTS.md#fr-028--re-entry-amnesty-return-without-a-guilt-wall), keeping one recovery proposal and zero red. These two exceptions replace the old 737-A and P0 feature carveouts during the trial. Development continues on bugs and truth faults, with trial blockers first. Batch merges into `main` at most once per day during the trial. No other new feature enters the trial.
 
 ## 4. Campaigns (final composition, set by the Phase 0 scorecard and the ratified Target Cards)
 
@@ -59,7 +59,7 @@ Implementation is parked; trial findings are the only resume trigger. C2 remains
 
 ## 6. Program state (live — update at every checkpoint; newest first)
 
-- **2026-09-29 — REAL USE FIRST; TRIAL NOT STARTED:** owner chose Option A. The 10-day trial owns priority. Campaign implementation C2–C6 is parked; C2 awaits only the five-minute owner glance. No implementation or re-score round is active. Resume work only from trial findings (§7).
+- **2026-09-29 — REAL USE FIRST; TRIAL START UNSET:** owner chose Option A and amended it to allow bug and truth repairs during the 10-day trial, with blockers first and at most one merge batch into `main` per day. Campaign implementation C2–C6 is parked; C2 awaits only the five-minute owner glance. No campaign implementation or re-score round is active. Resume campaign work only from trial findings (§7).
 - **2026-09-29 — DAY-1 READINESS:** FR-049 is merged at `db968fff`; the production alias was verified at that commit, its function migration is applied, and Migration Drift is green. Part of #1026: the smoke test selected the wrong moment; PR #1036 corrects that test. The production rerun and account-save warning remain UNVERIFIED. Day 1 still requires production proof that a real capture appears on Start and Sort makes a next step.
 
 > ## ★ CAMPAIGN C1 (TRUST) — **CLOSED 2026-07-30, 10/10 (6/6)** ★
@@ -86,11 +86,13 @@ Implementation is parked; trial findings are the only resume trigger. C2 remains
 
 ## 7. The 10-day real-use trial (owner decision 2026-09-29)
 
-**Before day 1:** FR-049 must be merged and deployed. One real capture in production must appear on Start and sort into a next step. If this fails, repair only that blocker before starting. The trial has not started; no start or end date is recorded yet.
+**Before day 1:** FR-049 must be merged and deployed. Trial start remains **UNSET** until Claude confirms that the first real production capture appears on Start and sorts into a next step. If this fails, fix that trial blocker first. Do not record a start or end date before this confirmation.
 
 **Day 1 (about 10 minutes):** enter three real commitments: one delayed admin task, one meaningful deliverable, and one piece of work needing several sessions. Give the delayed task a return day. Write each finish line in one sentence.
 
-**Each day (at most 10 minutes):** open Start, do or choose the first move, and capture new thoughts. Use Close in the evening. Keep one line in a single text file: date, opened yes/no, first move done yes/no, and one friction word. This decision creates no dashboard, telemetry, reminder automation, or daily assignment.
+**Each day (at most 10 minutes):** open Start, do or choose the first move, and capture new thoughts. Use Close in the evening. Keep one line in a single text file: date, production SHA, opened yes/no, first move done yes/no, and one friction word. Record the SHA even on days without a deployment so findings can be tied to the version used. This decision creates no dashboard, telemetry, reminder automation, or daily assignment.
+
+**Development during the trial:** fix trial blockers first. Other bug and truth repairs may continue under R8. Batch merges into `main` at most once per day; record the production SHA in that day's trial line after deployment. Do not treat a green PR as production proof.
 
 **Resume test:** at least once, after two missed days, return and take one useful action. Pass means under two minutes with no cleanup; fail means backlog or a red state must be handled first.
 
