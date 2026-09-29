@@ -292,7 +292,6 @@ autonomous half immediately while keeping CI and the Main Red Guard alive:
 
 ```
 gh workflow disable pipeline-advance.yml
-gh workflow disable codex-ci-autofix.yml
 gh workflow disable codex-low-risk-issue-to-pr.yml
 gh workflow disable codex-issue-plan.yml
 ```

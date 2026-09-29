@@ -17,7 +17,12 @@ Rules:
 3. Rows are never deleted. A resurrected capability keeps its row, marked returned.
 4. Commented-out code is not an accepted parking form anywhere in this repo.
 
-| Capability | Tag | What it did | Proven by | Comes back when |
-| ---------- | --- | ----------- | --------- | --------------- |
+| Capability         | Tag                         | What it did                                                                                                                          | Proven by                                                                                                                                                                      | Comes back when                                                                                                                                                                                        |
+| ------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `codex-ci-autofix` | `attic/codex-ci-autofix-v1` | Tried to repair failed CI runs and open repair PRs. Parked because the workflow was retired on 2026-07-04 and has had no user since. | No successful repair recorded. Commit `863d87c7` records 100+ runs and zero landed fixes; `c4d9a5b6` records a mutation-verified stale-context guard, not a successful repair. | The owner approves a bounded trial for a recurring CI failure that existing repair workflows cannot handle, with a funded API budget and at least one validated repair before enabling automatic runs. |
 
-_No entries yet. The first entries land with the ADR 0009 implementation slice._
+Restore the workflow and its prompt:
+
+```sh
+git checkout attic/codex-ci-autofix-v1 -- .github/workflows/codex-ci-autofix.yml .github/codex/prompts/ci-autofix.md
+```
