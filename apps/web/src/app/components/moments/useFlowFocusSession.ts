@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WorkflowState } from "@/lib/workflow";
 import type { useWorkflow } from "@/lib/WorkflowContext";
 import { buildProgressionNodes } from "./progressionNodes";
@@ -32,6 +32,9 @@ import {
   readRunningSession,
   writeRunningSession,
 } from "@/lib/execute/runningSession";
+import { historyReplaceState } from "@/lib/rawHistory";
+import { urlWithOverlay, useOverlayUrlState } from "./useOverlayUrlState";
+import { isAffirmativeFlag } from "./deepLink";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -53,6 +56,12 @@ export interface FlowSessionState {
 
 interface UseFlowFocusSessionOptions {
   state: WorkflowState;
+  /**
+   * #687 C2 F2 round 2: a `?sheet=` sheet is the active sheet. There is ONE
+   * active sheet (`useSheetUrlState`) and the End session form counts as
+   * one, so a selected sheet closes the form — see the strip effect below.
+   */
+  sheetActive: boolean;
   now: Date;
   startVM: StartVM;
   fallbackFocusMinutes: number;
@@ -140,6 +149,7 @@ export function useFlowFocusSession({
   approveTaskMapDraft,
   toggleTaskMapNodeCompletion,
   updateTaskFirstTinyStep,
+  sheetActive,
 }: UseFlowFocusSessionOptions) {
   // Interim local session state — replaced by useFocusSession when packet
   // P0 extracts it from LifeOSCockpit.
@@ -158,13 +168,34 @@ export function useFlowFocusSession({
   // post-mount commit would persist the EMPTY default over the record it is
   // about to restore.
   const [hydrated, setHydrated] = useState(false);
+
+  // #687 C2 F2: the End session form is URL-visible (`?end=1`) on the same
+  // push/close/adopt contract as capture and the palette — Back closes it,
+  // Forward reopens it, and closing a form this tab opened steps back off
+  // its own entry instead of growing history. It is never seeded open for
+  // the first render: the server cannot see the device-only running
+  // session, so whether `?end=1` names a real form is only knowable here,
+  // right after the session is restored (the same one-beat device-storage
+  // limit `?area=` already accepts).
+  const {
+    open: endOverlayOpen,
+    openOverlay: openEndOverlay,
+    closeOverlay: closeEndOverlay,
+    adoptOverlayFromUrl: adoptEndFromUrl,
+  } = useOverlayUrlState("end", false, isAffirmativeFlag);
+
   useEffect(() => {
     const restored = readRunningSession();
     if (restored) {
       setSession(restored);
     }
     setHydrated(true);
-  }, []);
+    // Read the LIVE address bar, not the `deepLink` prop: a remount after a
+    // Back/Forward walk can carry a stale prop (see `deepLinkTargetFromSearch`).
+    adoptEndFromUrl(
+      isAffirmativeFlag(new URLSearchParams(window.location.search).get("end")),
+    );
+  }, [adoptEndFromUrl]);
   useEffect(() => {
     if (!hydrated) return;
     writeRunningSession(session);
@@ -338,8 +369,14 @@ export function useFlowFocusSession({
     return () => clearInterval(id);
   }, [session.running]);
 
+  // #687 C2 F2 round 2: which session a save belongs to. A save can still be
+  // settling after the user leaves the form and starts another session; its
+  // late settle must not clear the newer one.
+  const sessionGenerationRef = useRef(0);
+
   const startFocus = useCallback(
     (taskId: string | null, minutes: number) => {
+      sessionGenerationRef.current += 1;
       setSession({
         activeTaskId: taskId,
         running: true,
@@ -357,12 +394,84 @@ export function useFlowFocusSession({
   // instantly. "Done" opens the end sheet (outcome, actual duration,
   // optional note) — the verdict/toast copy below only fires once
   // `handleEndSessionSave` has awaited the save.
-  const [endSessionOpen, setEndSessionOpen] = useState(false);
+  const hasSession = hasRunningSession(session);
+
+  // The form only ever exists over a real running session, and only while no
+  // `?sheet=` sheet is selected. `?end=1` with no session behind it — a
+  // stale link, a fresh browser, or Forward onto the entry after Save
+  // already ended the session — or with a selected sheet (a composed link,
+  // a traversal, capture's "Open triage") is stripped IN PLACE: no form, no
+  // new history entry, no `back()` (which would steal the sheet's own
+  // destination entry), and nothing recorded — the session keeps running.
+  // `resyncNextRouter`: safe, since nothing here follows with `back()`, and
+  // needed after a sheet push for the reason `useOverlayUrlState`'s
+  // non-owning close documents (C2-S13).
+  const endSuppressed = !hasSession || sheetActive;
+  useEffect(() => {
+    if (!hydrated || !endOverlayOpen || !endSuppressed) return;
+    // #687 C2 F2 round 3 (REQUIRED 1, `f2-review-r2-corrections.txt`): the
+    // two suppression reasons are NOT the same claim about ownership. `
+    // !hasSession` means there is no real form at all — a stale link, a
+    // fresh browser, or Forward after Save already cleared the session — so
+    // this hook never legitimately pushed anything for it, and explicitly
+    // disclaiming via `adoptOverlayFromUrl(false)` is correct: it clears
+    // `pushedEntryIdRef` because there is genuinely nothing to remember.
+    // `sheetActive`, by contrast, only means a DIFFERENT entry (the sheet's
+    // own push) needs its `end` param stripped right now — the form's own
+    // entry (this tab's own earlier `openOverlay` push, if there was one) is
+    // untouched by that strip and is still, in truth, ours. Calling
+    // `adoptEndFromUrl(false)` here anyway (the pre-round-3 bug) zeroed that
+    // memory unconditionally, so a LATER Cancel or Save — once the sheet
+    // closes and the user is back on the form's own entry — could no longer
+    // tell it owns that entry, and stripped `end` from it in place instead of
+    // `back()`ing off it: a real entry left content-identical to the one
+    // beneath it, sitting there unconsumed, so the very next Back moved onto
+    // it and looked like nothing happened (a dead press exactly matching
+    // useOverlayUrlState.ts's own C2-S11 pattern), and a second Back was
+    // needed to reach a genuinely different screen. Routing this case through
+    // `closeEndOverlay()` (this hook's own `closeOverlay`) instead reuses its
+    // existing, already-correct ownership check: it strips the CURRENT
+    // entry's `end` in place exactly as before (ids won't match while the
+    // sheet's entry is current, so it never mistakenly `back()`s off the
+    // sheet's own push), but it does not touch `pushedEntryIdRef` — so if
+    // this hook really did push the form's entry, that memory survives the
+    // sheet detour, and the next Cancel/Save correctly consumes it with a
+    // real `back()`.
+    if (!hasSession) {
+      adoptEndFromUrl(false);
+      if (new URLSearchParams(window.location.search).has("end")) {
+        historyReplaceState(urlWithOverlay(window.location, "end", false), {
+          resyncNextRouter: true,
+        });
+      }
+      return;
+    }
+    closeEndOverlay();
+  }, [
+    hydrated,
+    endOverlayOpen,
+    endSuppressed,
+    hasSession,
+    adoptEndFromUrl,
+    closeEndOverlay,
+  ]);
+
+  // Render-time, not only via the effect above: a selected sheet and the
+  // form are never both on screen, not even for one frame.
+  const endSessionOpen = endOverlayOpen && !endSuppressed;
+
+  // #687 C2 F2 round 2: ONE submission per session, across navigation. The
+  // form can be closed and reopened (Back/Forward) while its save is still
+  // settling, and every open re-primes the form — so the in-flight marker
+  // lives here, not in the sheet. The ref is the synchronous guard (two
+  // Saves in one tick); the state drives the sheet's "Saving…".
+  const saveInFlightRef = useRef(false);
+  const [savePending, setSavePending] = useState(false);
 
   const finishFocus = useCallback(() => {
     if (session.activeTaskId === null && session.total === 0) return;
-    setEndSessionOpen(true);
-  }, [session.activeTaskId, session.total]);
+    openEndOverlay();
+  }, [session.activeTaskId, session.total, openEndOverlay]);
 
   const endSessionElapsedMinutes =
     session.total > 0
@@ -378,29 +487,41 @@ export function useFlowFocusSession({
       // State truth (#551/#563): await the save before resetting the
       // session/closing the sheet, so no verdict copy claims a save that
       // hasn't resolved yet.
-      const result = await runEndSessionPolicy(
-        {
-          outcome,
-          actualMinutes,
-          note,
-          capReached: session.remaining <= 0,
-          task: focusedTask
-            ? {
-                id: focusedTask.id,
-                definitionOfDone: focusedTask.definition_of_done,
-                taskType: focusedTask.task_type,
-              }
-            : null,
-        },
-        {
-          prompt: (message, defaultValue) =>
-            defaultValue === undefined
-              ? window.prompt(message)
-              : window.prompt(message, defaultValue),
-          markSession,
-          deferTaskWithSession,
-        },
-      );
+      if (saveInFlightRef.current) return;
+      saveInFlightRef.current = true;
+      setSavePending(true);
+      const generation = sessionGenerationRef.current;
+      let result: EndSessionResult;
+      try {
+        result = await runEndSessionPolicy(
+          {
+            outcome,
+            actualMinutes,
+            note,
+            capReached: session.remaining <= 0,
+            task: focusedTask
+              ? {
+                  id: focusedTask.id,
+                  definitionOfDone: focusedTask.definition_of_done,
+                  taskType: focusedTask.task_type,
+                }
+              : null,
+          },
+          {
+            prompt: (message, defaultValue) =>
+              defaultValue === undefined
+                ? window.prompt(message)
+                : window.prompt(message, defaultValue),
+            markSession,
+            deferTaskWithSession,
+          },
+        );
+      } finally {
+        // Released on EVERY settle path — closed, split, aborted, or thrown —
+        // so an aborted save can be retried and nothing stays locked.
+        saveInFlightRef.current = false;
+        setSavePending(false);
+      }
       if (result.status === "aborted") {
         showToast(
           result.reason === "missing_cut_scope"
@@ -413,13 +534,21 @@ export function useFlowFocusSession({
         );
         return;
       }
-      setSession({
-        activeTaskId: null,
-        running: false,
-        remaining: 0,
-        total: 0,
-      });
-      setEndSessionOpen(false);
+      // Only if no newer session started while this save was settling: its
+      // late settle reports its own result below, but never erases the
+      // session the user is in now.
+      if (sessionGenerationRef.current === generation) {
+        setSession({
+          activeTaskId: null,
+          running: false,
+          remaining: 0,
+          total: 0,
+        });
+        // Clears `?end=1` too: steps back off the entry this tab pushed, or
+        // strips the param if the form was adopted from the URL (a reload)
+        // or Back already left its entry while the save was in flight.
+        closeEndOverlay();
+      }
       showToast(endSessionToast(outcome, result));
     },
     [
@@ -428,6 +557,7 @@ export function useFlowFocusSession({
       markSession,
       session.remaining,
       showToast,
+      closeEndOverlay,
     ],
   );
 
@@ -497,7 +627,10 @@ export function useFlowFocusSession({
     startFocus,
     finishFocus,
     endSessionOpen,
-    setEndSessionOpen,
+    /** A save for this session is still settling (survives Back/Forward). */
+    endSessionPending: savePending,
+    /** Cancel: closes the form and its `?end=1` entry; the session keeps running. */
+    closeEndSession: closeEndOverlay,
     endSessionElapsedMinutes,
     handleEndSessionSave,
     pauseFocus,

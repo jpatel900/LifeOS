@@ -157,4 +157,50 @@ describe("EndSessionSheet", () => {
     expect(screen.getByTestId("end-session-minutes")).toHaveValue(31);
     expect(screen.getByTestId("end-session-note")).toHaveValue("");
   });
+
+  // #687 C2 F2 round 2: the form can be closed and reopened (Back/Forward)
+  // while the parent's save is still settling. The open effect re-primes
+  // the local form, so the parent owns "a save is in flight" and the sheet
+  // must show it truthfully even on a fresh open.
+  it("a parent-owned pending save shows Saving… and disables every control, even on a fresh open", () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const onCancel = vi.fn();
+    render(
+      <EndSessionSheet
+        open
+        pending
+        taskTitle="Task"
+        elapsedMinutes={12}
+        onCancel={onCancel}
+        onSave={onSave}
+      />,
+    );
+
+    const save = screen.getByTestId("end-session-save");
+    expect(save).toBeDisabled();
+    expect(save).toHaveTextContent("Saving…");
+    expect(screen.getByTestId("end-session-note")).toBeDisabled();
+    expect(screen.getByTestId("end-session-minutes")).toBeDisabled();
+    expect(screen.getByTestId("end-session-outcome-partial")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+
+    fireEvent.click(save);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("without a parent pending save, a fresh open is editable", () => {
+    render(
+      <EndSessionSheet
+        open
+        pending={false}
+        taskTitle="Task"
+        elapsedMinutes={12}
+        onCancel={vi.fn()}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    expect(screen.getByTestId("end-session-save")).not.toBeDisabled();
+    expect(screen.getByTestId("end-session-save")).toHaveTextContent("Save");
+  });
 });

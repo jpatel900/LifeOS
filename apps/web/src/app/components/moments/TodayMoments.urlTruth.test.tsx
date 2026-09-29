@@ -24,11 +24,42 @@ vi.mock("@/lib/reEntry/briefView", () => ({
   createBriefViewRecorder: () => ({ recordIfNeeded: vi.fn() }),
 }));
 
+// #687 C2 F2 round 2: a pass-through seam on the end-session policy. Every
+// call runs the REAL `runEndSessionPolicy` unless a test sets `override`
+// (and resets it after), so the rest of this file is unaffected. Only the
+// pending-save describe below uses it, to hold a save deterministically
+// unsettled; the real-persistence boundary test there uses no override.
+const endPolicy = vi.hoisted(() => ({
+  calls: 0,
+  override: null as
+    | null
+    | typeof import("./endSessionPolicy").runEndSessionPolicy,
+}));
+vi.mock("./endSessionPolicy", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./endSessionPolicy")>();
+  return {
+    ...actual,
+    runEndSessionPolicy: (
+      ...args: Parameters<typeof actual.runEndSessionPolicy>
+    ) => {
+      endPolicy.calls += 1;
+      return (endPolicy.override ?? actual.runEndSessionPolicy)(...args);
+    },
+  };
+});
+
 import {
   pressCaptureShortcut,
   renderToday,
   resetTodayMomentsMountTracking,
 } from "@/__tests__/helpers/todayMomentsHarness";
+import { stubParseCaptureFetch } from "@/__tests__/helpers/parseCaptureFetch";
+import {
+  clearPendingWrites,
+  listPendingWrites,
+} from "@/lib/durability/pendingWriteJournal";
+import { clearStoredTaskDrafts } from "@/lib/durability/draftStore";
+import type { EndSessionResult } from "./endSessionPolicy";
 
 // C2-S13 (#687 round-7): FILE-LEVEL, applies regardless of describe nesting
 // — every split file that mounts TodayMoments more than once needs this
@@ -491,5 +522,739 @@ describe("TodayMoments — URL and deep-link parameter truth (#687 finding 1)", 
         new URL(window.location.href).searchParams.get("sheet"),
       ).toBeNull();
     });
+  });
+});
+
+/**
+ * #687 C2 gap-1 (F2): the End session form is an in-app state change, so it
+ * is URL-visible like every other overlay (`?end=1`, owned by
+ * `useOverlayUrlState`). The running session itself lives only on this
+ * device, so the form only ever exists over a real running session: a
+ * stale `?end=1` is stripped, never rendered.
+ *
+ * Close-via-`back()` is asserted with a mocked `history.back`, the same
+ * pattern this file's header explains (jsdom's async popstate would leak
+ * into later tests); the real Back button is pinned in
+ * `tests/e2e/session-truth.spec.ts`.
+ */
+describe("TodayMoments — End session form URL truth (#687 C2 F2)", () => {
+  function seedRunningSession() {
+    const nowMs = Date.now();
+    window.localStorage.setItem(
+      "lifeos.running-session",
+      JSON.stringify({
+        task_id: "seeded-running-task",
+        running: true,
+        remaining: 1500,
+        total: 1500,
+        saved_at_ms: nowMs,
+        started_at_ms: nowMs,
+      }),
+    );
+  }
+
+  function endParam() {
+    return new URL(window.location.href).searchParams.get("end");
+  }
+
+  async function openEndForm() {
+    await waitFor(() => {
+      expect(screen.getByTestId("current-block-hero-done")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+  }
+
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState(null, "", "/?moment=flow");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("Done writes ?end=1, keeps ?moment=flow, and adds exactly one history entry", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await waitFor(() => {
+      expect(screen.getByTestId("current-block-hero-done")).toBeInTheDocument();
+    });
+    const lengthBefore = window.history.length;
+
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    expect(endParam()).toBe("1");
+    expect(new URL(window.location.href).searchParams.get("moment")).toBe(
+      "flow",
+    );
+    expect(window.history.length).toBe(lengthBefore + 1);
+  });
+
+  it("Cancel on a form this tab opened steps back off its own entry", async () => {
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await openEndForm();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(endParam()).toBeNull();
+  });
+
+  it("Back (popstate without ?end) closes the form and leaves the session running", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await openEndForm();
+
+    act(() => {
+      window.history.replaceState(null, "", "/?moment=flow");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(screen.getByTestId("current-block-hero")).toBeInTheDocument();
+    expect(window.localStorage.getItem("lifeos.running-session")).toBeTruthy();
+  });
+
+  it("a reload on ?end=1 with a running session reopens the form once the device session loads", async () => {
+    seedRunningSession();
+    window.history.replaceState(null, "", "/?moment=flow&end=1");
+
+    renderToday({ initialMoment: "flow", deepLink: { moment: "flow" } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    });
+    expect(endParam()).toBe("1");
+    // A fresh form: nothing typed survives a reload (no draft storage).
+    expect(screen.getByTestId("end-session-note")).toHaveValue("");
+  });
+
+  it("a stale ?end=1 with no running session is stripped in place — no form, no new entry", async () => {
+    window.history.replaceState(null, "", "/?moment=flow&end=1");
+    const lengthBefore = window.history.length;
+
+    renderToday({ initialMoment: "flow", deepLink: { moment: "flow" } });
+
+    await waitFor(() => {
+      expect(endParam()).toBeNull();
+    });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(window.history.length).toBe(lengthBefore);
+    expect(new URL(window.location.href).searchParams.get("moment")).toBe(
+      "flow",
+    );
+  });
+
+  it("Forward onto ?end=1 after the session is gone shows no form and strips the param", async () => {
+    renderToday({ initialMoment: "flow" });
+    await waitFor(() => {
+      expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
+    });
+
+    act(() => {
+      window.history.replaceState(null, "", "/?moment=flow&end=1");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    await waitFor(() => {
+      expect(endParam()).toBeNull();
+    });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+  });
+
+  it("a palette named beside ?end=1 loses exactly as it loses to a sheet", async () => {
+    seedRunningSession();
+    window.history.replaceState(null, "", "/?moment=flow&end=1&palette=1");
+
+    renderToday({
+      initialMoment: "flow",
+      deepLink: { moment: "flow", endSession: true },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        new URL(window.location.href).searchParams.get("palette"),
+      ).toBeNull();
+    });
+    expect(endParam()).toBe("1");
+  });
+
+  it("an invalid ?end= value is scrubbed like any other overlay flag", async () => {
+    seedRunningSession();
+    window.history.replaceState(null, "", "/?moment=flow&end=bogus");
+
+    renderToday({ initialMoment: "flow", deepLink: { moment: "flow" } });
+
+    await waitFor(() => {
+      expect(endParam()).toBeNull();
+    });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+  });
+
+  it("C from the form opens capture IN FRONT: the end sheet goes inert, both states stay in the URL", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await openEndForm();
+
+    fireEvent.keyDown(window, { key: "c" });
+
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+    const endShell = screen
+      .getByTestId("end-session-sheet")
+      .closest('[data-testid="moment-sheet"]');
+    expect(endShell).toHaveAttribute("inert");
+    const endDialog = screen
+      .getByTestId("end-session-sheet")
+      .closest('[role="dialog"]');
+    expect(endDialog).not.toHaveAttribute("aria-modal");
+    const params = new URL(window.location.href).searchParams;
+    expect(params.get("capture")).toBe("1");
+    expect(params.get("end")).toBe("1");
+  });
+
+  it("Cmd/Ctrl+K from the form says why instead of stacking the palette on it", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await openEndForm();
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+    expect(
+      new URL(window.location.href).searchParams.get("palette"),
+    ).toBeNull();
+    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+      "Close the sheet to open the command palette",
+    );
+  });
+
+  it("moment keys do nothing behind the open form (no moment switch under it)", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await openEndForm();
+
+    fireEvent.keyDown(window, { key: "1" });
+
+    expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    expect(new URL(window.location.href).searchParams.get("moment")).toBe(
+      "flow",
+    );
+  });
+
+  it("the palette's Done hand-off opens the form and the palette steps out of the URL", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await waitFor(() => {
+      expect(screen.getByTestId("current-block-hero-done")).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.click(screen.getByTestId("command-palette-option-focus-done"));
+
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    const params = new URL(window.location.href).searchParams;
+    expect(params.get("end")).toBe("1");
+    expect(params.get("palette")).toBeNull();
+  });
+});
+
+/**
+ * #687 C2 F2 round 2 (root review of 647aa68a, finding 1): a Save that is
+ * still settling survives Back/Forward as ONE submission. The form reopened
+ * by Forward must say "Saving…" instead of offering a fresh editable form,
+ * and the settle of an old session must never erase a newer one.
+ */
+describe("TodayMoments — End session form: a pending save across navigation (#687 C2 F2)", () => {
+  function deferredResult() {
+    let resolve!: (value: EndSessionResult) => void;
+    const promise = new Promise<EndSessionResult>((res) => {
+      resolve = res;
+    });
+    return { promise, resolve };
+  }
+
+  async function drainJournal(done: () => boolean) {
+    for (let attempt = 0; attempt < 50 && !done(); attempt += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setImmediate(resolve));
+      });
+    }
+  }
+
+  function goto(url: string) {
+    act(() => {
+      window.history.replaceState(null, "", url);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+  }
+
+  /** The real capture -> sort -> accept -> Start path: a real live session. */
+  async function startRealSession() {
+    renderToday({ initialMoment: "start" });
+    fireEvent.click(screen.getByTestId("seed-submit"));
+    await waitFor(() => {
+      expect(screen.getByTestId("seed-draft-count")).toHaveTextContent("1");
+    });
+    fireEvent.click(screen.getByTestId("seed-accept"));
+    await waitFor(() => {
+      expect(screen.getByTestId("first-move-card")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("first-move-start"));
+    expect(screen.getByTestId("current-block-hero")).toBeInTheDocument();
+  }
+
+  let restoreFetch: () => void = () => {};
+
+  beforeEach(async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState(null, "", "/");
+    await clearPendingWrites();
+    await clearStoredTaskDrafts();
+    endPolicy.calls = 0;
+    endPolicy.override = null;
+    restoreFetch = stubParseCaptureFetch();
+    vi.spyOn(window.history, "back").mockImplementation(() => {});
+  });
+
+  afterEach(async () => {
+    endPolicy.override = null;
+    restoreFetch();
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState(null, "", "/");
+    await clearPendingWrites();
+    await clearStoredTaskDrafts();
+  });
+
+  it("REAL persistence: a second Save while the first write is unsettled records exactly one outcome and never closes early", async () => {
+    await startRealSession();
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    fireEvent.click(screen.getByTestId("end-session-outcome-partial"));
+    fireEvent.click(screen.getByTestId("end-session-save"));
+    // The journal write is awaited on fake-indexeddb, which only settles on
+    // `setImmediate` — everything below runs before it can.
+
+    goto("/?moment=flow");
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    goto("/?moment=flow&end=1");
+
+    // Truthful: the reopened form is the SAME unsettled save, not a new one.
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    expect(screen.getByTestId("end-session-save")).toBeDisabled();
+    expect(screen.getByTestId("end-session-save")).toHaveTextContent("Saving…");
+    fireEvent.click(screen.getByTestId("end-session-save"));
+    expect(endPolicy.calls).toBe(1);
+
+    await drainJournal(
+      () =>
+        (screen.getByTestId("today-moments-toast").textContent ?? "") !== "",
+    );
+
+    const writes = await listPendingWrites("execution_session");
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.payload).toMatchObject({ outcome: "partial" });
+    expect(screen.getByTestId("today-moments-toast")).not.toHaveTextContent(
+      "Nothing was running",
+    );
+    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+      "Partial progress saved",
+    );
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+  });
+
+  /**
+   * #687 C2 F2 round 3, REQUIRED 2 (`f2-review-r2-corrections.txt`): the
+   * second click in the test above lands on an ALREADY re-rendered, disabled
+   * button — `EndSessionSheet`'s own `if (busy) return;` (busy = saving ||
+   * parent `pending`) blocks it before it ever calls `onSave`, so the hook's
+   * own guard (`useFlowFocusSession.ts` ~451, `if (saveInFlightRef.current)
+   * return;`) is never actually reached by that test; deleting the hook
+   * guard still passes it. This test dispatches BOTH clicks inside one `act`
+   * batch, before React commits the first click's `setSavePending(true)` to
+   * the DOM or to `EndSessionSheet`'s own closure — the real race a rapid
+   * double-click (or a click racing an Enter-key submit) can produce. Both
+   * dispatches reach `EndSessionSheet.handleSave` with the SAME stale
+   * `busy === false` closure, so its own guard does not fire either — only
+   * `saveInFlightRef`, set synchronously (not batched) by the first call
+   * before the second one checks it, blocks the second `onSave`.
+   */
+  it("REQUIRED 2: two Saves dispatched in the same tick reach the hook's in-flight guard — exactly one policy call, one write", async () => {
+    await startRealSession();
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    fireEvent.click(screen.getByTestId("end-session-outcome-partial"));
+
+    const saveButton = screen.getByTestId(
+      "end-session-save",
+    ) as HTMLButtonElement;
+    expect(saveButton).not.toBeDisabled();
+
+    act(() => {
+      saveButton.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      saveButton.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    // The guard, not a disabled DOM button or EndSessionSheet's own stale
+    // closure, is what kept this at exactly one call.
+    expect(endPolicy.calls).toBe(1);
+
+    await drainJournal(
+      () =>
+        (screen.getByTestId("today-moments-toast").textContent ?? "") !== "",
+    );
+
+    const writes = await listPendingWrites("execution_session");
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.payload).toMatchObject({ outcome: "partial" });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+  });
+
+  it("a deferred policy is launched once across Back, Forward and a second Save", async () => {
+    const pending = deferredResult();
+    endPolicy.override = () => pending.promise;
+    await startRealSession();
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    fireEvent.click(screen.getByTestId("end-session-save"));
+    expect(endPolicy.calls).toBe(1);
+
+    goto("/?moment=flow");
+    goto("/?moment=flow&end=1");
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("end-session-save"));
+    expect(endPolicy.calls).toBe(1);
+
+    await act(async () => {
+      pending.resolve({
+        status: "closed",
+        resolution: "ordinary",
+        save: "local-only",
+      });
+    });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+  });
+
+  it("an aborted save releases the lock: the form stays open and Save can run again", async () => {
+    const first = deferredResult();
+    endPolicy.override = () => first.promise;
+    await startRealSession();
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    fireEvent.click(screen.getByTestId("end-session-save"));
+
+    await act(async () => {
+      first.resolve({ status: "aborted", reason: "missing_decision" });
+    });
+
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    expect(screen.getByTestId("end-session-save")).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId("end-session-save"));
+    expect(endPolicy.calls).toBe(2);
+  });
+
+  it("a failed deferral settles once: the form closes with the split truth, and Forward cannot reopen it", async () => {
+    const first = deferredResult();
+    endPolicy.override = () => first.promise;
+    await startRealSession();
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    fireEvent.click(screen.getByTestId("end-session-save"));
+
+    await act(async () => {
+      first.resolve({ status: "split", resolution: "defer_failed" });
+    });
+
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+      "Session saved — deferral failed",
+    );
+    goto("/?moment=flow&end=1");
+    await waitFor(() => {
+      expect(new URL(window.location.href).searchParams.get("end")).toBeNull();
+    });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(endPolicy.calls).toBe(1);
+  });
+
+  it("an old session's late settle never erases a newer running session", async () => {
+    const first = deferredResult();
+    endPolicy.override = () => first.promise;
+    await startRealSession();
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    fireEvent.click(screen.getByTestId("end-session-save"));
+
+    // Leave the unsettled form and start a new session from Start.
+    goto("/?moment=flow");
+    fireEvent.keyDown(window, { key: "1" });
+    await waitFor(() => {
+      expect(screen.getByTestId("first-move-start")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("first-move-start"));
+    expect(screen.getByTestId("current-block-hero")).toBeInTheDocument();
+
+    await act(async () => {
+      first.resolve({
+        status: "closed",
+        resolution: "ordinary",
+        save: "local-only",
+      });
+    });
+
+    // The old save's result is still reported truthfully...
+    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+      "Session complete",
+    );
+    // ...but the newer session is untouched.
+    expect(screen.getByTestId("current-block-hero")).toBeInTheDocument();
+    expect(window.localStorage.getItem("lifeos.running-session")).toBeTruthy();
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * #687 C2 F2 round 2 (finding 2): ONE parser decides `?end=`. A direct link,
+ * the mount scrub and Back/Forward all honor only "1"/"true" — an empty or
+ * other value never opens the form on one path while being rejected on
+ * another. Capture/palette keep their own (unchanged) popstate parser.
+ */
+describe("TodayMoments — End session form: one ?end= parser on every path (#687 C2 F2)", () => {
+  function seedRunningSession() {
+    const nowMs = Date.now();
+    window.localStorage.setItem(
+      "lifeos.running-session",
+      JSON.stringify({
+        task_id: "seeded-running-task",
+        running: true,
+        remaining: 1500,
+        total: 1500,
+        saved_at_ms: nowMs,
+        started_at_ms: nowMs,
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState(null, "", "/?moment=flow");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it.each(["", "0", "false", "bogus"])(
+    "Back/Forward onto ?end=%s does not open the form",
+    async (value) => {
+      seedRunningSession();
+      renderToday({ initialMoment: "flow" });
+      await waitFor(() => {
+        expect(screen.getByTestId("current-block-hero")).toBeInTheDocument();
+      });
+
+      act(() => {
+        window.history.replaceState(null, "", `/?moment=flow&end=${value}`);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
+
+      expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(["", "0", "false", "bogus"])(
+    "a direct ?end=%s link opens no form and is scrubbed",
+    async (value) => {
+      seedRunningSession();
+      window.history.replaceState(null, "", `/?moment=flow&end=${value}`);
+
+      renderToday({ initialMoment: "flow", deepLink: { moment: "flow" } });
+
+      await waitFor(() => {
+        expect(new URL(window.location.href).searchParams.has("end")).toBe(
+          false,
+        );
+      });
+      expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    },
+  );
+
+  it("Back/Forward onto ?end=true (the other affirmative value) does open it", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await waitFor(() => {
+      expect(screen.getByTestId("current-block-hero")).toBeInTheDocument();
+    });
+
+    act(() => {
+      window.history.replaceState(null, "", "/?moment=flow&end=true");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+  });
+});
+
+/**
+ * #687 C2 F2 round 2 (finding 3): ONE active sheet. `useSheetUrlState` holds
+ * a single `activeSheet`, and the End session form is treated as a sheet.
+ * When a valid `?sheet=` is selected (a composed link, a traversal, or
+ * capture's "Open triage"), that destination is the active sheet: the form
+ * closes and only `end` is removed in place — no `back()`, the running
+ * session keeps running, nothing is recorded. Capture still composes over
+ * the selected sheet.
+ */
+describe("TodayMoments — End session form: one active sheet (#687 C2 F2)", () => {
+  function seedRunningSession() {
+    const nowMs = Date.now();
+    window.localStorage.setItem(
+      "lifeos.running-session",
+      JSON.stringify({
+        task_id: "seeded-running-task",
+        running: true,
+        remaining: 1500,
+        total: 1500,
+        saved_at_ms: nowMs,
+        started_at_ms: nowMs,
+      }),
+    );
+  }
+
+  function activeModalCount() {
+    return document.querySelectorAll('[role="dialog"][aria-modal="true"]')
+      .length;
+  }
+
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState(null, "", "/?moment=flow");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("a direct ?moment=flow&sheet=triage&end=1 selects the sheet: one modal, end removed in place", async () => {
+    seedRunningSession();
+    window.history.replaceState(null, "", "/?moment=flow&sheet=triage&end=1");
+    const lengthBefore = window.history.length;
+
+    renderToday({
+      initialMoment: "flow",
+      deepLink: { moment: "flow", sheet: "triage", endSession: true },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("triage-sheet-empty")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(new URL(window.location.href).searchParams.get("end")).toBeNull();
+    });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(activeModalCount()).toBe(1);
+    const params = new URL(window.location.href).searchParams;
+    expect(params.get("sheet")).toBe("triage");
+    expect(params.get("moment")).toBe("flow");
+    expect(window.history.length).toBe(lengthBefore);
+    expect(window.localStorage.getItem("lifeos.running-session")).toBeTruthy();
+  });
+
+  it("Back/Forward onto a composed sheet+end entry selects the sheet the same way", async () => {
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await waitFor(() => {
+      expect(screen.getByTestId("current-block-hero")).toBeInTheDocument();
+    });
+
+    act(() => {
+      window.history.replaceState(null, "", "/?moment=flow&sheet=triage&end=1");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("triage-sheet-empty")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(new URL(window.location.href).searchParams.get("end")).toBeNull();
+    });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(activeModalCount()).toBe(1);
+  });
+
+  it("capture's Open triage from the end form selects Triage: the form closes without back(), the session keeps running", async () => {
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    seedRunningSession();
+    renderToday({ initialMoment: "flow" });
+    await waitFor(() => {
+      expect(screen.getByTestId("current-block-hero-done")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "c" });
+    fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
+      target: { value: "Call the plumber back" },
+    });
+    fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
+      key: "Enter",
+    });
+    const openTriage = await screen.findByTestId(
+      "today-moments-toast-undo",
+      {},
+      { timeout: 5000 },
+    );
+    expect(openTriage).toHaveTextContent("Open triage");
+    back.mockClear();
+
+    fireEvent.click(openTriage);
+
+    expect(screen.getByRole("dialog", { name: "Triage" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    });
+    expect(activeModalCount()).toBe(1);
+    await waitFor(() => {
+      expect(new URL(window.location.href).searchParams.get("end")).toBeNull();
+    });
+    expect(new URL(window.location.href).searchParams.get("sheet")).toBe(
+      "triage",
+    );
+    expect(back).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("lifeos.running-session")).toBeTruthy();
   });
 });

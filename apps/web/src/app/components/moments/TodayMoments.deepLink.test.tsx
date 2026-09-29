@@ -337,3 +337,65 @@ describe("TodayMoments — P6 deep-link shims", () => {
     restoreFetch();
   });
 });
+
+/**
+ * #687 C2 F2: the End session form is decided from the LIVE address bar
+ * after the device session is restored — never from the `deepLink` prop,
+ * which a Back/Forward walk across a real route change can serve stale
+ * (`deepLinkTargetFromSearch`'s own doc comment has the red-first repro).
+ */
+describe("TodayMoments — End session form reads the live URL, not the deepLink prop (#687 C2 F2)", () => {
+  function seedRunningSession() {
+    const nowMs = Date.now();
+    window.localStorage.setItem(
+      "lifeos.running-session",
+      JSON.stringify({
+        task_id: "seeded-running-task",
+        running: true,
+        remaining: 1500,
+        total: 1500,
+        saved_at_ms: nowMs,
+        started_at_ms: nowMs,
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("a stale deepLink.endSession prop does not open the form when the live URL has no ?end", async () => {
+    seedRunningSession();
+    window.history.replaceState(null, "", "/?moment=flow");
+
+    renderToday({
+      initialMoment: "flow",
+      deepLink: { moment: "flow", endSession: true },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-block-hero")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(new URL(window.location.href).searchParams.get("end")).toBeNull();
+  });
+
+  it("the live ?end=1 opens the form even when the deepLink prop does not name it", async () => {
+    seedRunningSession();
+    window.history.replaceState(null, "", "/?moment=flow&end=1");
+
+    renderToday({ initialMoment: "flow", deepLink: { moment: "flow" } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    });
+    expect(new URL(window.location.href).searchParams.get("end")).toBe("1");
+  });
+});
