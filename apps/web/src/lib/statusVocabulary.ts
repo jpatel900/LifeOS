@@ -336,12 +336,12 @@ export const SORT_ON_THIS_DEVICE_ACTION = "Sort on this device";
  * separating them in copy would mean adding that branch — this slice
  * deliberately does not. Tracked on #692.
  */
-const THOUGHT_STILL_SAVED_SORT_HERE =
-  "Your thought is still saved, exactly as you wrote it. You can sort it on this device instead.";
+const THOUGHT_STILL_SAVED_SORT_REQUIRES_SIGN_IN =
+  "Your thought is still saved, exactly as you wrote it. Sorting requires you to be signed in.";
 
-export const AI_SORTING_UNAVAILABLE_NOT_SORTED = `AI sorting is unavailable right now, so this one hasn't been sorted. ${THOUGHT_STILL_SAVED_SORT_HERE}`;
+export const AI_SORTING_UNAVAILABLE_NOT_SORTED = `AI sorting is unavailable right now, so this one hasn't been sorted. ${THOUGHT_STILL_SAVED_SORT_REQUIRES_SIGN_IN}`;
 
-export const AI_SORTING_FAILED_NOT_SORTED = `LifeOS couldn't sort this one just now. ${THOUGHT_STILL_SAVED_SORT_HERE}`;
+export const AI_SORTING_FAILED_NOT_SORTED = `LifeOS couldn't sort this one just now. ${THOUGHT_STILL_SAVED_SORT_REQUIRES_SIGN_IN}`;
 
 export function aiSortingAvailabilityLabel(status: AiSortingAvailability) {
   switch (status) {

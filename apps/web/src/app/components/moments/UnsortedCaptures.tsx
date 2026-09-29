@@ -155,7 +155,7 @@ export function UnsortedCaptures({
                     className={cn(HIT_TARGET_MIN, "touch-manipulation")}
                     data-testid={`triage-sheet-sort-basic-${item.id}`}
                   >
-                    Sort it the simple way
+                    Try basic sorting
                   </Button>
                 ) : null}
               </div>
