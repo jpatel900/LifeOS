@@ -1719,11 +1719,17 @@ function TodayMomentsContent({
     (taskId: string) => {
       const task = state.tasks.find((item) => item.id === taskId);
       const wasBacklog = task ? task.status === "backlog" : false;
-      if (wasBacklog) {
-        promoteBacklogTask(taskId);
-      }
+      const next = wasBacklog ? promoteBacklogTask(taskId) : null;
+      const promoted =
+        wasBacklog &&
+        next?.tasks.find((item) => item.id === taskId)?.status === "active";
       ritual.complete();
       setMoment("start");
+      if (next?.wipRefusal?.refused_task_id === taskId) {
+        showToast("Today is full. Finish or put off a task first.");
+        return;
+      }
+      if (wasBacklog && !promoted) return;
       // SP-6: `deferTask` genuinely reverses `promoteBacklogTask` here — it
       // returns the task to backlog exactly where it started, cancelling no
       // blocks that didn't already exist (a backlog task has none). Only
@@ -1731,9 +1737,7 @@ function TodayMomentsContent({
       // nothing to reverse and Undo would be a lie.
       showToast(
         "Welcome back — first move queued",
-        wasBacklog
-          ? { label: "Undo", run: () => deferTask(taskId) }
-          : undefined,
+        promoted ? { label: "Undo", run: () => deferTask(taskId) } : undefined,
       );
     },
     [state.tasks, promoteBacklogTask, deferTask, ritual, showToast, setMoment],
