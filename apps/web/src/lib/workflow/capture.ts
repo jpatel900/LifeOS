@@ -13,7 +13,7 @@ import {
   type WorkflowState,
 } from "./shared";
 
-function inferAreaId(rawText: string, requestedAreaId?: string | null) {
+function inferMockAreaId(rawText: string, requestedAreaId?: string | null) {
   if (requestedAreaId) {
     return requestedAreaId;
   }
@@ -26,6 +26,13 @@ function inferAreaId(rawText: string, requestedAreaId?: string | null) {
     return "area-personal";
   }
   return "area-main-job";
+}
+
+export function resolveRawCaptureAreaId(
+  areas: readonly { id: string }[],
+  requestedAreaId?: string | null,
+): string | null {
+  return areas.find((area) => area.id === requestedAreaId)?.id ?? null;
 }
 
 function makeTitle(rawText: string) {
@@ -67,7 +74,7 @@ export function mockParseCapture(
   }
 
   const createdAt = nowIso();
-  const areaId = inferAreaId(rawText, input.areaId);
+  const areaId = inferMockAreaId(rawText, input.areaId);
   const captureItemId = nextId("capture");
   const taskDraftId = nextId("task-draft");
   const projectDraftId = shouldCreateProjectDraft(rawText)
@@ -288,14 +295,15 @@ export function submitRawCapture(
     throw new Error("Capture text is required.");
   }
 
+  const areaId = resolveRawCaptureAreaId(state.areas, input.areaId);
   const captureItem: Phase2CaptureItem = {
     id: nextId("capture"),
     user_id: MOCK_USER_ID,
-    area_id: inferAreaId(rawText, input.areaId),
+    area_id: areaId,
     raw_text: rawText,
     return_hook: input.returnHook?.trim() || null,
     capture_mode: "text",
-    inferred_area_confidence: input.areaId ? 1 : 0.74,
+    inferred_area_confidence: areaId === null ? null : 1,
     status: "new",
     created_at: nowIso(),
   };

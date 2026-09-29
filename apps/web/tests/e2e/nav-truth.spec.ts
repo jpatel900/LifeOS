@@ -241,10 +241,9 @@ test("legacy bookmark /plan?area= carries the area through, matching the canonic
 // C2-S6 RE-ANCHOR of "cockpit stage rail's Capture node lands on the moments
 // home, not a legacy shell": the old version proved a REDIRECT never landed
 // on the legacy shell. Now there is no redirect to prove — the pipeline
-// rail's OWN Capture node opens the overlay directly (Criterion 1, item 9:
-// no control may promise a shell that no longer exists). This proves the
-// direct path instead of the now-impossible indirect one.
-test("moments home pipeline rail: Capture node opens the capture overlay directly, in one interaction", async ({
+// rail's OWN Capture node opens the overlay directly when its count is zero
+// (Criterion 1, item 9: no control may promise a shell that no longer exists).
+test("moments home pipeline rail: zero-count Capture opens the composer directly", async ({
   page,
 }) => {
   await page.goto("/");
@@ -258,6 +257,135 @@ test("moments home pipeline rail: Capture node opens the capture overlay directl
     page.getByRole("dialog", { name: "Capture a thought" }),
   ).toBeVisible();
   await expect(page.getByTestId("lifeos-cockpit")).toHaveCount(0);
+});
+
+test("All areas Capture count opens its thoughts and the capture box shows its true destination", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?area=all&moment=start");
+  await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+    "All areas",
+  );
+  await page.getByTestId("capture-affordance").click();
+  const dialog = page.getByRole("dialog", { name: "Capture a thought" });
+  await expect(dialog).toBeVisible();
+  const textarea = dialog.getByLabel("Capture thought");
+  await expect(textarea).toBeFocused();
+  const captureUrl = page.url();
+  await dialog
+    .getByLabel("Save to area (optional)")
+    .selectOption("area-personal");
+  expect(page.url()).toBe(captureUrl);
+  await expect(dialog.getByTestId("capture-save-destination")).toHaveText(
+    "Will save to Personal.",
+  );
+  await textarea.fill("Synthetic personal thought for capture review");
+  await expect(dialog.getByTestId("capture-overlay-save")).toBeEnabled();
+  await page.screenshot({
+    path: testInfo.outputPath("capture-review-desktop.png"),
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(dialog).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("capture-review-390.png"),
+  });
+  await textarea.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("pipeline-overview-count-capture")).toHaveText(
+    "1",
+  );
+  await page.getByTestId("pipeline-overview-stage-capture").click();
+  await expect(page.getByRole("dialog", { name: "Triage" })).toBeVisible();
+  await expect(page.getByTestId("triage-sheet-captures")).toContainText(
+    "Synthetic personal thought for capture review",
+  );
+});
+
+test("capture area choice leaves the page filter alone and Back closes the box", async ({
+  page,
+}) => {
+  await page.goto("/?area=all&moment=start");
+  await page.getByTestId("capture-affordance").click();
+  const dialog = page.getByRole("dialog", { name: "Capture a thought" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("Capture thought")).toBeFocused();
+  const captureUrl = page.url();
+  await dialog
+    .getByLabel("Save to area (optional)")
+    .selectOption("area-personal");
+  expect(page.url()).toBe(captureUrl);
+  await page.goBack();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+    "All areas",
+  );
+});
+
+test("Escape from the focused capture area picker closes the box", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByTestId("capture-affordance").click();
+  const dialog = page.getByRole("dialog", { name: "Capture a thought" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("Capture thought")).toBeFocused();
+  const picker = dialog.getByLabel("Save to area (optional)");
+  await picker.focus();
+  await picker.press("Escape");
+  await expect(dialog).toHaveCount(0);
+});
+
+test("first Escape dismisses the opened native capture area picker before closing the box", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await page.getByTestId("capture-affordance").click();
+  const dialog = page.getByRole("dialog", { name: "Capture a thought" });
+  await expect(dialog).toBeVisible();
+  const textarea = dialog.getByLabel("Capture thought");
+  await expect(textarea).toBeFocused();
+  await textarea.fill("Synthetic unsaved draft");
+  const picker = dialog.getByLabel("Save to area (optional)");
+  await picker.click();
+  await expect(picker).toBeFocused();
+  const reportsOpen = await picker.evaluate(() =>
+    CSS.supports("selector(select:open)"),
+  );
+  const observedOpen = reportsOpen
+    ? await picker.evaluate((element) => element.matches(":open"))
+    : null;
+  await page.screenshot({
+    path: testInfo.outputPath("capture-review-native-open.png"),
+  });
+  const openedUrl = page.url();
+  await page.keyboard.press("Escape");
+  const dialogVisibleAfterFirstEscape = await dialog.isVisible();
+  const observedClosed =
+    reportsOpen && dialogVisibleAfterFirstEscape
+      ? await picker.evaluate((element) => element.matches(":open"))
+      : null;
+  await testInfo.attach("native-picker-observation", {
+    body: JSON.stringify({
+      reportsOpen,
+      observedOpen,
+      observedClosed,
+      dialogVisibleAfterFirstEscape,
+    }),
+    contentType: "application/json",
+  });
+  console.log(
+    `capture native picker: reportsOpen=${reportsOpen} observedOpen=${observedOpen} observedClosed=${observedClosed} dialogVisibleAfterFirstEscape=${dialogVisibleAfterFirstEscape}`,
+  );
+  if (reportsOpen) {
+    expect(observedOpen).toBe(true);
+    expect(observedClosed).toBe(false);
+  }
+  await expect(dialog).toBeVisible();
+  await expect(textarea).toHaveValue("Synthetic unsaved draft");
+  expect(page.url()).toBe(openedUrl);
+  await picker.press("Escape");
+  await expect(dialog).toHaveCount(0);
 });
 
 // C2-S6 HISTORY-WALK PIN (lane contract, Criterion 2): every step of a

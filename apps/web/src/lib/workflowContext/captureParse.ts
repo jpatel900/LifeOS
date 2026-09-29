@@ -67,6 +67,18 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
   ) {
     activeParseCaptureIdRef.current = capture.id;
     setCaptureParse({ phase: "parsing", captureId: capture.id, parserMode });
+    const failIfNoAreas = () => {
+      if (stateRef.current.areas.length > 0) return false;
+      setCaptureParse({
+        phase: "failed",
+        captureId: capture.id,
+        status: "unknown",
+        message: "Add an area before sorting. Your thought remains in Capture.",
+        canRetryWithMock: false,
+      });
+      return true;
+    };
+    if (failIfNoAreas()) return;
 
     // Best-effort: attach the signed-in user's access token so the parse route
     // can write a user-scoped, fire-and-forget AI call trace row (issue #288).
@@ -142,10 +154,13 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
     });
 
     if (result.ok) {
+      if (activeParseCaptureIdRef.current !== capture.id) return;
+      if (failIfNoAreas()) return;
       const parsed = buildParsedWorkflowResult({
         response: result.response,
         capture,
         workflowAreaId: capture.area_id,
+        areas: stateRef.current.areas,
       });
       applyWorkflowState(appendParsedWorkflowResult(stateRef.current, parsed));
 
