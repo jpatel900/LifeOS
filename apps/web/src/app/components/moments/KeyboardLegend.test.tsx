@@ -87,18 +87,11 @@ describe("KeyboardLegend", () => {
     expect(legend).toHaveClass("sm:flex");
   });
 
-  it("keeps the default legend in flow until the wide desktop breakpoint", () => {
+  it("keeps the default legend fixed on the left beside the compact capture button", () => {
     render(<KeyboardLegend onOpenPalette={vi.fn()} />);
     const legend = screen.getByTestId("keyboard-legend");
-    expect(legend).toHaveClass(
-      "py-2.5",
-      "xl:fixed",
-      "xl:bottom-6",
-      "xl:left-6",
-      "xl:z-30",
-      "xl:py-0",
-    );
-    expect(legend).not.toHaveClass("fixed");
+    expect(legend).toHaveClass("fixed", "bottom-6", "left-6", "z-30");
+    expect(legend).not.toHaveClass("py-2.5");
   });
 
   it("keeps explicit inFlow placement and its palette button usable at every width", () => {

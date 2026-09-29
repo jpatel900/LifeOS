@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 // #1044: the native seeded project supplies its real sample-data server and
-// browser channel. Below 1280px the pointer legend follows content; Ctrl+K
-// stays useful at the top. Check top and bottom only, without claiming every
-// scroll position. Preserve September 28 noon and evening layout inputs.
+// browser channel. Below 1280px the fixed legend and compact capture button
+// occupy separate horizontal space. Check top and bottom only, without
+// claiming every scroll position. Preserve September 28 noon/evening inputs.
 test.use({ timezoneId: "UTC" });
 test.describe("Start and Flow overlay clearance (#1044)", () => {
   for (const width of [640, 768, 800, 900, 1024, 1280]) {
@@ -72,6 +72,7 @@ test.describe("Start and Flow overlay clearance (#1044)", () => {
               );
             }, position);
             await expectUsefulTarget(capture);
+            await expectUsefulTarget(palette);
             await expect(legend).toBeVisible();
             const pillBox = (await capture.boundingBox())!;
             const legendBox = (await legend.boundingBox())!;
