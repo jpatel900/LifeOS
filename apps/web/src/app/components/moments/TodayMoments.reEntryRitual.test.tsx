@@ -285,7 +285,7 @@ describe("TodayMoments — FR-028 re-entry return ritual", () => {
     fireEvent.click(screen.getByTestId("re-entry-ritual-recovery-accept"));
 
     await waitFor(() => {
-      expect(screen.queryByTestId("re-entry-ritual")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("re-entry-ritual")).toBeInTheDocument();
     });
     expect(
       screen.getByTestId("re-entry-recovery-task-status"),

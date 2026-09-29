@@ -1,6 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { WhileYouWereOutSummary } from "@/lib/reEntry/summary";
@@ -26,6 +28,7 @@ export interface RecoveryCandidate {
   taskId: string;
   title: string;
   why: string;
+  firstStep: string;
 }
 
 export interface ReEntryRitualProps {
@@ -36,6 +39,7 @@ export interface ReEntryRitualProps {
   recovery: RecoveryCandidate | null;
   onAcceptRecovery(taskId: string): void;
   onSwapRecovery(): void;
+  onEditRecovery(taskId: string, step: string): void;
   onDismiss(): void;
 }
 
@@ -67,9 +71,24 @@ export function ReEntryRitual({
   recovery,
   onAcceptRecovery,
   onSwapRecovery,
+  onEditRecovery,
   onDismiss,
 }: ReEntryRitualProps) {
   const hasApprovals = plan.requiresApproval.length > 0;
+  const [editing, setEditing] = useState(false);
+  const [draftStep, setDraftStep] = useState("");
+  const movedCount =
+    plan.taskDeferrals.reduce(
+      (count, item) =>
+        count +
+        (findOutcome(outcomes, "task_to_backlog", item.taskId)?.ok
+          ? item.blockIds.length
+          : 0),
+      0,
+    ) +
+    plan.blockUnplans.filter(
+      (item) => findOutcome(outcomes, "block_unplanned", item.blockId)?.ok,
+    ).length;
   const containerRef = useRef<HTMLDivElement>(null);
 
   // SP-1: the ritual has no explicit "opener" — it appears in place of the
@@ -107,7 +126,7 @@ export function ReEntryRitual({
           style={{ color: "var(--state-watch)" }}
           data-testid="re-entry-ritual-count-lapsed"
         >
-          {summary.counts.lapsedBlocks} moved to backlog for you
+          {movedCount} moved to backlog for you
         </li>
         <li
           className="rounded-full border border-border bg-card px-3 py-1 text-xs tabular-nums text-muted-foreground"
@@ -152,7 +171,7 @@ export function ReEntryRitual({
                       <span className="text-xs text-muted-foreground">
                         not saved in demo mode
                       </span>
-                    ) : outcome?.ok === false ? (
+                    ) : outcome?.ok !== true ? (
                       <span className="text-xs text-muted-foreground">
                         needs a hand
                       </span>
@@ -185,7 +204,7 @@ export function ReEntryRitual({
                       <span className="text-xs text-muted-foreground">
                         not saved in demo mode
                       </span>
-                    ) : outcome?.ok === false ? (
+                    ) : outcome?.ok !== true ? (
                       <span className="text-xs text-muted-foreground">
                         needs a hand
                       </span>
@@ -243,11 +262,56 @@ export function ReEntryRitual({
               {recovery.title}
             </h2>
             <p className="text-sm text-muted-foreground">{recovery.why}</p>
+            {editing ? (
+              <form
+                className="grid gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!draftStep.trim()) return;
+                  onEditRecovery(recovery.taskId, draftStep.trim());
+                  setEditing(false);
+                }}
+              >
+                <Label htmlFor="recovery-first-step">First step</Label>
+                <Input
+                  id="recovery-first-step"
+                  value={draftStep}
+                  onChange={(event) => setDraftStep(event.target.value)}
+                  maxLength={1000}
+                  className="min-h-[44px]"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={!draftStep.trim()}
+                    className="min-h-[44px] touch-manipulation"
+                  >
+                    Save first step
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setEditing(false)}
+                    className="min-h-[44px] touch-manipulation"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <p className="text-sm" data-testid="re-entry-first-step">
+                  {recovery.firstStep || "Choose one small first step."}
+                </p>
+              </>
+            )}
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="default"
                 onClick={() => onAcceptRecovery(recovery.taskId)}
+                disabled={editing || !recovery.firstStep.trim()}
                 className="min-h-[44px] touch-manipulation"
                 data-testid="re-entry-ritual-recovery-accept"
               >
@@ -256,8 +320,23 @@ export function ReEntryRitual({
               <Button
                 type="button"
                 variant="ghost"
+                disabled={editing}
+                className="min-h-[44px] touch-manipulation"
+                onClick={() => {
+                  setDraftStep(recovery.firstStep);
+                  setEditing(true);
+                }}
+              >
+                Edit first step
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
                 size="sm"
-                onClick={onSwapRecovery}
+                onClick={() => {
+                  setEditing(false);
+                  onSwapRecovery();
+                }}
                 className="min-h-[44px] touch-manipulation"
                 data-testid="re-entry-ritual-recovery-swap"
               >
