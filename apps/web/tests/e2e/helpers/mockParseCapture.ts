@@ -102,7 +102,11 @@ export function buildMockParseCaptureBody(rawText: string) {
 }
 
 /** Stubs POST /api/parse-capture with the deterministic mock-parser payload. */
-export async function stubParseCaptureRoute(page: Page) {
+export async function stubParseCaptureRoute(
+  page: Page,
+  options: { stallFirstRawText?: string } = {},
+) {
+  let stalled = false;
   await page.route("**/api/parse-capture", async (route) => {
     if (route.request().method() !== "POST") {
       await route.fallback();
@@ -110,6 +114,11 @@ export async function stubParseCaptureRoute(page: Page) {
     }
     const rawText =
       (route.request().postDataJSON() as { rawText?: string })?.rawText ?? "";
+    if (!stalled && rawText === options.stallFirstRawText) {
+      stalled = true;
+      // Deliberately leave this request unanswered. The client owns cancellation.
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",

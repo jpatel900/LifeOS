@@ -4,6 +4,10 @@ import {
 } from "@lifeos/schemas";
 import { AI_SORTING_FAILED_NOT_SORTED } from "../statusVocabulary";
 import type { ParseCaptureRuntimeStatus } from "./parseCaptureService";
+import {
+  PARSE_CAPTURE_CLIENT_DEADLINE_MS,
+  withRequestDeadline,
+} from "./requestDeadline";
 
 /**
  * Browser-safe client for POST /api/parse-capture. Imports only shared schemas
@@ -82,21 +86,33 @@ export async function requestParseCapture(input: {
   let body: Record<string, unknown>;
   let httpOk: boolean;
   try {
-    const httpResponse = await fetchImpl("/api/parse-capture", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(input.authorization ? { Authorization: input.authorization } : {}),
+    const result = await withRequestDeadline(
+      PARSE_CAPTURE_CLIENT_DEADLINE_MS,
+      async (signal) => {
+        const httpResponse = await fetchImpl("/api/parse-capture", {
+          signal,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(input.authorization
+              ? { Authorization: input.authorization }
+              : {}),
+          },
+          body: JSON.stringify({
+            rawText: input.rawText,
+            areaContext: input.areaContext,
+            operatorProfile: input.operatorProfile ?? undefined,
+            parserMode: input.parserMode,
+          }),
+        });
+        return {
+          httpOk: httpResponse.ok,
+          body: (await httpResponse.json()) as Record<string, unknown>,
+        };
       },
-      body: JSON.stringify({
-        rawText: input.rawText,
-        areaContext: input.areaContext,
-        operatorProfile: input.operatorProfile ?? undefined,
-        parserMode: input.parserMode,
-      }),
-    });
-    httpOk = httpResponse.ok;
-    body = (await httpResponse.json()) as Record<string, unknown>;
+    );
+    httpOk = result.httpOk;
+    body = result.body;
   } catch {
     return {
       ok: false,
