@@ -44,18 +44,17 @@ function resolveWorkflowAreaId(
   workflowAreaId: string | null,
   areas: readonly { id: string; name: string }[] = [],
 ) {
-  if (workflowAreaId !== null) return workflowAreaId;
-  if (suggestedSlug) {
-    if (Object.hasOwn(WORKFLOW_AREA_BY_SLUG, suggestedSlug)) {
-      return WORKFLOW_AREA_BY_SLUG[suggestedSlug];
-    }
+  if (suggestedSlug && Object.hasOwn(WORKFLOW_AREA_BY_SLUG, suggestedSlug)) {
+    return WORKFLOW_AREA_BY_SLUG[suggestedSlug];
+  }
+  if (suggestedSlug && workflowAreaId === null) {
     const matchingArea = areas.find(
       (area) => area.name.toLowerCase().replace(/\s+/g, "-") === suggestedSlug,
     );
     if (matchingArea) return matchingArea.id;
   }
 
-  return "area-main-job";
+  return workflowAreaId ?? "area-main-job";
 }
 
 export function buildParsedWorkflowResult(

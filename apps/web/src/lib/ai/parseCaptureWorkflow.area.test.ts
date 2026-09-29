@@ -46,6 +46,23 @@ describe("capture draft area mapping", () => {
     });
     expect(parsed.taskDrafts[0]?.area_id).toBe(customArea.id);
     expect(parsed.timeBlockProposalDrafts[0]?.area_id).toBe(customArea.id);
+    const projectResponse = {
+      ...parseCaptureRegressionFixtures.ambiguousProject,
+      drafts: parseCaptureRegressionFixtures.ambiguousProject.drafts.map(
+        (draft) => ({
+          ...draft,
+          area_slug_suggestion: "garden-planning",
+        }),
+      ),
+    };
+    expect(
+      buildParsedWorkflowResult({
+        response: projectResponse,
+        capture,
+        workflowAreaId: null,
+        areas: [customArea],
+      }).projectDrafts[0]?.area_id,
+    ).toBe(customArea.id);
   });
 
   it("keeps explicit scope, starter suggestions, and unknown-slug fallback", () => {
@@ -62,6 +79,13 @@ describe("capture draft area mapping", () => {
         ...input,
         response: responseWithSlug("volunteer-work"),
         workflowAreaId: null,
+      }).taskDrafts[0]?.area_id,
+    ).toBe("area-volunteer");
+    expect(
+      buildParsedWorkflowResult({
+        ...input,
+        response: responseWithSlug("volunteer-work"),
+        workflowAreaId: "area-personal",
       }).taskDrafts[0]?.area_id,
     ).toBe("area-volunteer");
     expect(
