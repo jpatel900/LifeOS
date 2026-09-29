@@ -1,4 +1,4 @@
-import { nowIso, type WorkflowState } from "./shared";
+import { acceptedTaskDueAt, nowIso, type WorkflowState } from "./shared";
 
 function cancelOpenBlocksForTask(state: WorkflowState, taskId: string) {
   return state.calendarBlocks.map((block) =>
@@ -22,7 +22,12 @@ export function carryForwardTask(
     calendarBlocks: cancelOpenBlocksForTask(state, taskId),
     tasks: state.tasks.map((item) =>
       item.id === taskId
-        ? { ...item, status: "active", updated_at: nowIso() }
+        ? {
+            ...item,
+            status: "active",
+            due_at: acceptedTaskDueAt(item.task_type, item.due_at),
+            updated_at: nowIso(),
+          }
         : item,
     ),
     reviewLog: [`Carried forward: ${task.title}`, ...state.reviewLog],
