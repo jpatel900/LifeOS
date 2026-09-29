@@ -87,6 +87,43 @@ describe("KeyboardLegend", () => {
     expect(legend).toHaveClass("sm:flex");
   });
 
+  it("keeps the default legend in flow until the wide desktop breakpoint", () => {
+    render(<KeyboardLegend onOpenPalette={vi.fn()} />);
+    const legend = screen.getByTestId("keyboard-legend");
+    expect(legend).toHaveClass(
+      "py-2.5",
+      "xl:fixed",
+      "xl:bottom-6",
+      "xl:left-6",
+      "xl:z-30",
+      "xl:py-0",
+    );
+    expect(legend).not.toHaveClass("fixed");
+  });
+
+  it("keeps explicit inFlow placement and its palette button usable at every width", () => {
+    const onOpenPalette = vi.fn();
+    render(<KeyboardLegend inFlow onOpenPalette={onOpenPalette} />);
+    const legend = screen.getByTestId("keyboard-legend");
+    expect(legend).toHaveClass(
+      "py-2.5",
+      "hidden",
+      "sm:flex",
+      "pointer-events-none",
+    );
+    expect(legend).not.toHaveClass("fixed");
+    expect(legend).not.toHaveClass("xl:fixed");
+    const button = screen.getByTestId("keyboard-legend-palette-button");
+    expect(button).toHaveAccessibleName("Open command palette");
+    expect(button).toHaveClass(
+      "min-h-[44px]",
+      "min-w-[44px]",
+      "-m-2.5",
+      "pointer-events-auto",
+    );
+    fireEvent.click(button);
+    expect(onOpenPalette).toHaveBeenCalledTimes(1);
+  });
   it("keeps the group itself non-interactive; only the palette button opts back into pointer events", () => {
     render(<KeyboardLegend onOpenPalette={vi.fn()} />);
     expect(screen.getByTestId("keyboard-legend")).toHaveClass(
