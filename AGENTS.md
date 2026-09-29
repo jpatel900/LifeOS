@@ -38,7 +38,7 @@ RLS policies, OAuth scopes, calendar write logic, service-role usage, AI schema 
 3. **Surgical changes.** No bundling of unrelated refactors, docs, dependencies, or features. Preserve mock/demo paths, raw-save-first capture, server-only boundaries, and approval gates.
 4. **Surface conflicts.** When instructions, docs, and repo state disagree, STOP and surface the contradiction — never average it away or silently pick a side.
 5. **Stop thrashing.** After repeated failed attempts, change approach or ask for direction.
-6. **Status hygiene.** Update `docs/PROJECT_STATE.md` only when shipped behavior, status, or governance materially changes (replace, don't append). At every campaign close (or monthly), run a system review: triage undecided `docs/KNOWN_ISSUES.md` rows and prune process weight that stopped earning its keep. (The former per-update triage coupling was dropped 2026-08-05 — weak payoff per the friction audit; the periodic review owns it now.)
+6. **Status hygiene.** Update `docs/PROJECT_STATE.md` only when shipped behavior, status, or governance materially changes (replace, don't append). At every campaign close (or monthly), run a system review: triage undecided `docs/KNOWN_ISSUES.md` rows and prune process weight that stopped earning its keep.
 7. **No session-note files.** Durable decisions → ADRs; status → PROJECT_STATE; program state → `docs/program/`; everything else → git history and PR text. (Guard: `docRegistry.test.ts`.)
 8. **Worktrees only.** Never edit the primary checkout's working tree — concurrent agents switch its branches. Work in a dedicated `git worktree`, commit by explicit pathspec, and check `git branch --show-current` before every commit.
 9. **Public repo.** Never write production identifiers (user/row UUIDs, project IDs, tokens), capture text, or personal life details into issues, PRs, commits, or docs. Reference production evidence abstractly.
@@ -93,7 +93,7 @@ Monorepo: pnpm workspaces + Turborepo. Node: 22.13.0. App: Next.js 15 in `apps/w
 
 For structure questions — who calls X, what imports X, what breaks if X changes — use the Graphify code graph instead of broad grepping:
 
-- Build once at worktree start (~95s, fully local, no API cost): `graphify update .` (CLI installed at `C:\Users\jaypa\.local\bin`; if missing: `uv tool install graphifyy`).
+- Build once at worktree start (~95s, fully local, no API cost): `graphify update .` (if `graphify` is not on PATH: `uv tool install graphifyy`).
 - Use SYMBOL commands only: `graphify explain "X()"`, `graphify affected "X()"`, `graphify path "A" "B"`, `graphify god-nodes`. The natural-language `graphify query "..."` mode is unreliable — do not use it.
 - You must already know the identifier: one targeted grep to find the symbol name, then the graph for its relationships.
 - Trust edges tagged EXTRACTED; spot-check INFERRED edges (they can mis-resolve same-named symbols across files).
