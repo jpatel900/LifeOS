@@ -27,7 +27,9 @@ export function createFutureDateReservation() {
           `Could not reserve a ${table} fixture date: ${error.message}`,
         );
       }
-      const latest = data?.[0]?.[column];
+      const row: { viewed_on?: unknown; checked_on?: unknown } | undefined =
+        data?.[0];
+      const latest = row?.[column];
       if (typeof latest === "string") {
         reservedThrough = Math.max(
           reservedThrough,
