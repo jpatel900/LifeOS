@@ -34,6 +34,11 @@ import { scanAxeViolationNodes } from "./helpers/axeScan";
  * different page entirely (no `today-moments` node to seed) and are already
  * covered, unaffected by the seed, by the non-seeded pins.
  */
+// The 28th includes the purpose-gauge card. Keep this sampled-day layout
+// covered; moving the date to avoid a real overlap would hide a defect.
+test.use({ timezoneId: "UTC" });
+const PINNED_NOW = "2026-09-28T12:00:00.000Z";
+
 const SEEDED_MOMENT_SURFACE_IDS = [
   "start-moment",
   "flow-moment",
@@ -57,6 +62,7 @@ test.describe("demo seed additive pin — hit-target + axe over the REAL seeded 
       test(`${surface.id} @ ${viewport.id} (${viewport.width}x${viewport.height}): 0 sub-44px target(s), 0 overlap(s), 0 AA violation node(s), seeded`, async ({
         page,
       }) => {
+        await page.clock.setFixedTime(new Date(PINNED_NOW));
         await pinMomentPreference(page, "start");
         await page.setViewportSize({
           width: viewport.width,

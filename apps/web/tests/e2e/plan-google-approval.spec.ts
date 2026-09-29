@@ -29,6 +29,10 @@ import { pinMomentPreference } from "./helpers/momentPreference";
  * tried, not about what the network allowed.
  */
 
+// Keep local acceptance inside the hour rail on every host and CI clock.
+test.use({ timezoneId: "UTC" });
+const PINNED_NOW = "2026-09-28T12:00:00.000Z";
+
 // Each viewport opens capture from the control it actually shows: the bottom
 // navigator on mobile, the floating affordance on desktop.
 const VIEWPORTS = [
@@ -122,6 +126,7 @@ for (const viewport of VIEWPORTS) {
     test("a drafted block's Google approval is disabled with the honest reason, and local accept still works", async ({
       page,
     }) => {
+      await page.clock.setFixedTime(new Date(PINNED_NOW));
       const external = await watchExternalRequests(page);
       await stubParseCaptureRoute(page);
       await pinMomentPreference(page, "start");

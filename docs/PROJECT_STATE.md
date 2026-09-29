@@ -9,15 +9,15 @@ stale — check docs/program/final-ux-loop.md §6 and recent merged PRs before t
 
 ## Current objective
 
-**The Final UX Loop is the governing program** (`docs/program/final-ux-loop.md`, owner directive 2026-07-26): while it runs, the board's priority order comes from it, and new feature work is frozen (program rule R8) except 737-A durability slices (issue #737's device-durability work — the Trust campaign's follow-through) and P0 production incidents. The program ends only when a full re-audit scores every dimension at or above its ratified target (`docs/program/target-cards.md`) AND the owner's U3 hour of real use confirms it feels right.
+**Real use first owns priority** (owner decision 2026-09-29, Option A). Prepare the 10-day trial, then use LifeOS before more campaign work. The [Final UX Loop](program/final-ux-loop.md) keeps its rules and history but gives up the serial queue. Campaign implementation C2–C6 is parked and resumes only from trial findings. New feature work stays frozen; FR-049 is the sole exception. Narrow repairs to trial blockers remain allowed.
 
-State as of 2026-09-14: **Campaign C1 (Trust & state truth) closed 2026-07-30 at 10/10** with every criterion pinned in CI. **Campaign C2 (Structure): all implementation slices are merged; the fresh-eyes C2 re-score remains in flight.** C2 is not closed until that re-score reaches its ratified target and receives the owner's campaign-close sign-off. The moments home is the single shell; all four legacy screens are now ported into it (owner-ratified). **Campaign C3:** PR #999 adds automated technical proof that a fresh browser profile reaches onboarding after real sign-in; the owner's experience and adoption gate remains unverified.
+State as of 2026-09-29: **The trial has not started.** FR-049 is merged and deployed; production capture/Sort truth remains unverified (Part of #1026, test correction PR #1036). Live readiness is recorded in the program's §6. **C1** remains closed at 10/10. **C2** has its implementation slices merged and awaits only the owner's five-minute glance (§5.2); no implementation or re-score is active, and C2 is not closed. **C3** has technical onboarding proof in PR #999; the owner's experience and adoption gate remains unverified.
 
 The shipped product baseline: areas, capture, optional AI/mock parse, triage, local-first planning, explicit approval-gated Google Calendar event creation, execution tracking, review logging, deterministic health checks, audit-oriented persistence, and a versioned headless client surface (`/api/v1` + `@lifeos/cli`) alongside the web app.
 
 ## Decisions in effect
 
-- **Program governance (owner 2026-07-26):** the Final UX Loop owns priority; campaigns close only by fresh-eyes re-score against ratified Target Cards; every passed criterion ships a CI pin in the same PR.
+- **Program priority (owner 2026-09-29):** the 10-day real-use trial replaces the serial campaign queue. C2 awaits the owner's five-minute glance, with no further re-score rounds. Other campaigns resume only from trial findings; independent acceptance and existing guards still apply. See program §3 and §7.
 - **Merge lanes live (ADR 0008, owner-ratified; amended 2026-08-05):** program-doc auto-merge, additive-tests auto-merge, and the instant Telegram-notified self-merge lane (`selfmerge:auto`) are all live and lane-tested; the veto window is the CI runtime. Demotion: one-line `SELFMERGE_WINDOW.enabled` flip.
 - **Owner decisions 2026-08-05 (parked calls cleared):** onboarding ritual content = the existing plan (`docs/implementation-planning/plan-onboarding-ritual.md`) is ratified as-is; the owner judges the built result at C3's experience gate. The #764 fake-"partial" session-rows gate closed as a **no-op** — prod verified 2026-08-05: zero such rows exist (2 total sessions, none `partial`). `KNOWN_ISSUES` triage runs at campaign close or monthly review, as governed by AGENTS.md rule 6.
 - **Plain language for humans (owner 2026-08-04):** anything shown to a human — UI copy, reports, owner options — uses simple, easy-to-understand language. Technical density belongs in agent-to-agent docs only.
@@ -45,7 +45,7 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 ## Next action
 
-Follow `docs/program/final-ux-loop.md` §6: complete the fresh-eyes C2 re-score and its owner campaign-close gate. C3's real-sign-in onboarding pin is technical proof only; it does not satisfy the owner's experience or adoption gate. Cross-lane work follows `docs/agent/LANES.md`; check for pending CLAIM/BLOCKER/HANDOFF comments on open issues first.
+Prove that a real production capture appears on Start and Sort makes a next step; the production rerun and account-save warning are still unverified. Then begin the trial in program §7. C2's five-minute owner glance remains pending alongside preparation; do not start another re-score round. Cross-lane work follows `docs/agent/LANES.md`.
 
 ## Do-not-repeat
 
@@ -53,5 +53,5 @@ Follow `docs/program/final-ux-loop.md` §6: complete the fresh-eyes C2 re-score 
 - Do not re-add archived design-handoff guidance as active UI authority.
 - Do not hide integration failures behind optimistic copy; degrade honestly to local/demo-safe behavior.
 - Do not bypass guard tests by weakening schemas, validators, RLS, server-only boundaries, or plain-language UX checks.
-- Do not close a campaign by checklist — only a fresh-eyes re-score at/above target closes it (that failure mode is why the program exists).
+- Do not restart the campaign queue from scores alone. Use trial findings; C2's pending owner glance follows program §5.2.
 - Do not append long running histories to this file; replace stale facts with current concise truth.
