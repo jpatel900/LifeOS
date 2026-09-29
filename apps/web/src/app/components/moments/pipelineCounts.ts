@@ -56,7 +56,15 @@ export function buildPipelineCounts(
 ): Record<PipelineOverviewStage, number> {
   const areaId = scopeAreaId(state, selectedAreaId);
   if (state.areas.length === 0) {
-    return { capture: 0, triage: 0, plan: 0, execute: 0, review: 0 };
+    return {
+      capture: selectUnsortedCaptures(state, null).filter(
+        (item) => item.status === "new",
+      ).length,
+      triage: 0,
+      plan: 0,
+      execute: 0,
+      review: 0,
+    };
   }
   /** `null` scope counts every area; a resolved scope counts only that one. */
   const inScope = (rowAreaId: string | null | undefined) =>

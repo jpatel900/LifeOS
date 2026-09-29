@@ -114,7 +114,7 @@ describe("Capture destination and return path", () => {
     expect(dialog.getByLabelText("Save to area (optional)")).toBeDisabled();
   });
 
-  it("keeps area choice optional and explains how to control the destination", async () => {
+  it("keeps area choice optional with one clear destination sentence", async () => {
     await renderCaptureContext(null);
     fireEvent.click(screen.getByTestId("capture-affordance"));
     const dialog = within(
@@ -128,10 +128,10 @@ describe("Capture destination and return path", () => {
       target: { value: "" },
     });
     expect(
-      dialog.getByText(
+      dialog.queryByText(
         "No area selected. Choose one to control where this thought goes.",
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
     expect(dialog.getByText("Will save without an area.")).toBeInTheDocument();
     fireEvent.change(dialog.getByLabelText("Capture thought"), {
       target: { value: "Synthetic thought" },
@@ -140,6 +140,34 @@ describe("Capture destination and return path", () => {
       key: "Enter",
     });
     expect(screen.getByTestId("saved-capture-area")).toBeEmptyDOMElement();
+  });
+
+  it("opens an unassigned waiting thought from Capture when no areas exist", async () => {
+    const state = submitRawCapture(
+      { ...createInitialWorkflowState(), areas: [] },
+      { rawText: "Synthetic thought without an area", areaId: null },
+    );
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.history.replaceState(null, "", "/?area=all");
+    await act(async () => {
+      render(
+        <WorkflowProvider>
+          <TodayMoments
+            now={NOW}
+            initialMoment="start"
+            deepLink={{ area: "all" }}
+          />
+        </WorkflowProvider>,
+      );
+    });
+    expect(
+      screen.getByTestId("pipeline-overview-count-capture"),
+    ).toHaveTextContent("1");
+    fireEvent.click(screen.getByTestId("pipeline-overview-stage-capture"));
+    expect(screen.getByRole("dialog", { name: "Triage" })).toBeInTheDocument();
+    expect(screen.getByTestId("triage-sheet-captures")).toHaveTextContent(
+      "Synthetic thought without an area",
+    );
   });
 
   it("opens the counted capture in Triage instead of a new composer", async () => {

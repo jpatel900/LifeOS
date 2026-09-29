@@ -280,8 +280,45 @@ test("All areas Capture count opens its thoughts and the capture box shows its t
   await expect(dialog.getByTestId("capture-save-destination")).toHaveText(
     "Will save to Personal.",
   );
+  const captureButton = dialog.getByTestId("capture-overlay-save");
+  await expect(captureButton).toBeDisabled();
+  const mutedBackground = await captureButton.evaluate(
+    (button) => getComputedStyle(button).backgroundColor,
+  );
   await textarea.fill("Synthetic personal thought for capture review");
-  await expect(dialog.getByTestId("capture-overlay-save")).toBeEnabled();
+  await expect(captureButton).toBeEnabled();
+  await expect(captureButton).toHaveClass(/bg-primary/);
+  const expectedPrimaryBackground = await captureButton.evaluate((button) => {
+    const probe = document.createElement("div");
+    probe.style.backgroundColor = "var(--primary)";
+    if (!button.parentElement) throw new Error("Capture button has no parent.");
+    button.parentElement.append(probe);
+    const color = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return color;
+  });
+  await expect
+    .poll(() =>
+      captureButton.evaluate(
+        (button) => getComputedStyle(button).backgroundColor,
+      ),
+    )
+    .toBe(expectedPrimaryBackground);
+  const primaryBackground = await captureButton.evaluate(
+    (button) => getComputedStyle(button).backgroundColor,
+  );
+  await testInfo.attach("capture-button-colors", {
+    body: JSON.stringify({
+      mutedBackground,
+      expectedPrimaryBackground,
+      primaryBackground,
+    }),
+    contentType: "application/json",
+  });
+  console.log(
+    `capture button colors: muted=${mutedBackground} expectedPrimary=${expectedPrimaryBackground} actualPrimary=${primaryBackground}`,
+  );
+  expect(primaryBackground).not.toBe(mutedBackground);
   await page.screenshot({
     path: testInfo.outputPath("capture-review-desktop.png"),
   });

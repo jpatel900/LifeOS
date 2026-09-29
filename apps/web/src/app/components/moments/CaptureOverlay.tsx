@@ -104,6 +104,9 @@ export function CaptureOverlay({
               <select
                 value={selectedAreaId ?? ""}
                 onChange={(event) => onAreaChange(event.target.value || null)}
+                // Native picker Escape is browser-owned while the menu is open.
+                // :open keeps this box open where supported; CI proves Edge's
+                // behavior, not every engine or older browser.
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {
                     event.stopPropagation();
@@ -131,11 +134,6 @@ export function CaptureOverlay({
                 ))}
               </select>
             </label>
-            {selectedAreaId === null ? (
-              <p className="text-xs text-muted-foreground">
-                No area selected. Choose one to control where this thought goes.
-              </p>
-            ) : null}
           </div>
         ) : null}
 

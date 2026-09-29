@@ -51,6 +51,19 @@ describe("CaptureCore", () => {
     expect(screen.queryByTestId("capture-save-raw")).not.toBeInTheDocument();
   });
 
+  it("changes Capture from muted and disabled to the primary action when text is ready", () => {
+    render(<Harness />);
+    const save = screen.getByTestId("capture-save");
+    expect(save).toBeDisabled();
+    expect(save).toHaveClass("bg-muted", "text-muted-foreground");
+
+    fireEvent.change(screen.getByTestId("capture-textarea"), {
+      target: { value: "A thought to capture" },
+    });
+    expect(save).toBeEnabled();
+    expect(save).toHaveClass("bg-primary", "text-primary-foreground");
+  });
+
   it("never shows a parse wait or a degraded-parse offer (#703)", () => {
     const onSubmit = vi.fn();
     render(<Harness onSubmit={onSubmit} />);

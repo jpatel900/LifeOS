@@ -97,7 +97,7 @@ describe("capture draft area mapping", () => {
         workflowAreaId: customArea.id,
         areas: [customArea, volunteerArea],
       }).taskDrafts[0]?.area_id,
-    ).toBe(volunteerArea.id);
+    ).toBe(customArea.id);
     expect(
       buildParsedWorkflowResult({
         response: responseWithSlug("volunteer-work"),
@@ -105,7 +105,7 @@ describe("capture draft area mapping", () => {
         workflowAreaId: customArea.id,
         areas: [customArea, { id: "other-custom-id", name: "Volunteer Work" }],
       }).taskDrafts[0]?.area_id,
-    ).toBe("other-custom-id");
+    ).toBe(customArea.id);
     expect(
       buildParsedWorkflowResult({
         response: responseWithSlug("garden-planning"),

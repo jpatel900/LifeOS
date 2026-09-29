@@ -56,13 +56,6 @@ function resolveWorkflowAreaId(
   const matchingArea = areas.find(
     (area) => area.name.toLowerCase().replace(/\s+/g, "-") === suggestedSlug,
   );
-  if (
-    matchingArea &&
-    suggestedSlug &&
-    Object.hasOwn(WORKFLOW_AREA_BY_SLUG, suggestedSlug)
-  ) {
-    return matchingArea.id;
-  }
   const scopedArea = areas.find((area) => area.id === workflowAreaId);
   return scopedArea?.id ?? matchingArea?.id ?? areas[0].id;
 }
