@@ -106,10 +106,8 @@ function RawCaptureSeedBridge() {
     <button
       type="button"
       data-testid="seed-submit-raw"
-      // Seeded into the first area explicitly: the sheet resolves an "All
-      // areas" selection to `areas[0]` (same fallback as
-      // buildPipelineCounts), while a null areaId here would let
-      // `inferAreaId` route the text to some other area.
+      // Seed into a real area explicitly so this read-path test also proves
+      // the thought keeps that area when All areas is selected.
       onClick={() =>
         submitCaptureText(
           "Buy milk and call the dentist",
@@ -124,10 +122,8 @@ function RawCaptureSeedBridge() {
 
 /**
  * Seeds a capture in each of two distinct (already-seeded demo) areas, so
- * the "All areas" fallback-to-first-area behavior (shared with
- * buildPipelineCounts / buildCockpitViewModel's `activeArea ?? areas[0]`)
- * can be exercised. The demo WorkflowProvider ships with several areas
- * pre-seeded, so no addArea call is needed here.
+ * All areas can show both drafts while an explicit area remains scoped. The
+ * demo WorkflowProvider ships with several areas, so no addArea call is needed.
  */
 function TwoAreaCaptureSeedBridge() {
   const { state, submitCaptureText } = useWorkflow();
@@ -575,9 +571,9 @@ describe("TriageSheet", () => {
   // same failure mode triage.test.tsx documents for JOURNEY_TEST_TIMEOUT_MS.
   // The explicit 15s timeout below is the ceiling raised to match; no
   // assertion is relaxed or removed.
-  it("in 'All areas' mode (selectedAreaId=null), scopes to the first area — matching the badge's activeArea-fallback resolution — so a second area's draft is not shown", async () => {
+  it("shows both drafts in All areas and only the selected area when scoped", async () => {
     const restoreFetch = stubParseCaptureFetch();
-    render(
+    const { rerender } = render(
       <WorkflowProvider>
         <TwoAreaCaptureSeedBridge />
         <TriageSheet open selectedAreaId={null} onClose={vi.fn()} />
@@ -595,14 +591,21 @@ describe("TriageSheet", () => {
 
     fireEvent.click(screen.getByTestId("seed-submit-second-area"));
 
-    // Wait for the second area's capture to actually land as a pending
-    // draft (two drafts total across both areas), then assert the sheet
-    // still shows exactly the first area's one draft.
+    // Wait for the second area's capture to become a pending draft, then
+    // assert the All areas sheet shows both drafts.
     await waitFor(
       () => {
         expect(screen.getByTestId("seed-draft-count")).toHaveTextContent("2");
       },
       { timeout: 5000 },
+    );
+    expect(screen.getAllByTestId(/^triage-sheet-item-/)).toHaveLength(2);
+
+    rerender(
+      <WorkflowProvider>
+        <TwoAreaCaptureSeedBridge />
+        <TriageSheet open selectedAreaId="area-main-job" onClose={vi.fn()} />
+      </WorkflowProvider>,
     );
     expect(screen.getAllByTestId(/^triage-sheet-item-/)).toHaveLength(1);
 

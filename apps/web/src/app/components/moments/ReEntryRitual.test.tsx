@@ -69,9 +69,11 @@ function renderRitual(
         taskId: "t1",
         title: "Draft the proposal",
         why: "Just moved to backlog",
+        firstStep: "Open the draft",
       }}
       onAcceptRecovery={onAcceptRecovery}
       onSwapRecovery={onSwapRecovery}
+      onEditRecovery={vi.fn()}
       onDismiss={onDismiss}
       {...overrides}
     />,
@@ -81,6 +83,72 @@ function renderRitual(
 }
 
 describe("ReEntryRitual", () => {
+  it("edits one restart step, saves it, and cancels a later edit", () => {
+    const onEditRecovery = vi.fn();
+    renderRitual({
+      recovery: {
+        taskId: "t1",
+        title: "Draft the proposal",
+        why: "Oldest waiting",
+        firstStep: "Open the draft",
+      },
+      onEditRecovery,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Edit first step" }));
+    expect(screen.getByLabelText("First step")).toHaveFocus();
+    fireEvent.change(screen.getByLabelText("First step"), {
+      target: { value: "Write one sentence" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save first step" }));
+    expect(onEditRecovery).toHaveBeenCalledWith("t1", "Write one sentence");
+    expect(
+      screen.getByRole("button", { name: "Edit first step" }),
+    ).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Edit first step" }));
+    fireEvent.change(screen.getByLabelText("First step"), {
+      target: { value: "Discard this edit" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onEditRecovery).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", { name: "Edit first step" }),
+    ).toHaveFocus();
+    expect(screen.getAllByTestId("re-entry-ritual-recovery")).toHaveLength(1);
+  });
+
+  it("blank first step disables acceptance and cannot save an edit", () => {
+    const onEditRecovery = vi.fn();
+    renderRitual({
+      recovery: {
+        taskId: "t1",
+        title: "Draft",
+        why: "Oldest waiting",
+        firstStep: "",
+      },
+      onEditRecovery,
+    });
+    expect(
+      screen.getByTestId("re-entry-ritual-recovery-accept"),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Edit first step" }));
+    fireEvent.change(screen.getByLabelText("First step"), {
+      target: { value: "  " },
+    });
+    expect(
+      screen.getByRole("button", { name: "Save first step" }),
+    ).toBeDisabled();
+    expect(onEditRecovery).not.toHaveBeenCalled();
+  });
+
+  it("does not claim missing outcomes were successfully moved", () => {
+    renderRitual();
+    expect(
+      screen.getByTestId("re-entry-ritual-deferral-task-t1"),
+    ).toHaveTextContent("needs a hand");
+    expect(
+      screen.getByTestId("re-entry-ritual-count-lapsed"),
+    ).toHaveTextContent("0 moved to backlog for you");
+  });
   it("renders the headline with absence days and calm subline", () => {
     renderRitual();
 
@@ -337,6 +405,7 @@ describe("ReEntryRitual", () => {
                 recovery={null}
                 onAcceptRecovery={vi.fn()}
                 onSwapRecovery={vi.fn()}
+                onEditRecovery={vi.fn()}
                 onDismiss={vi.fn()}
               />
             ) : null}

@@ -25,6 +25,7 @@ interface BuildParsedWorkflowResultInput {
     "id" | "user_id" | "raw_text" | "return_hook" | "created_at"
   >;
   workflowAreaId: string | null;
+  areas?: readonly { id: string; name: string }[];
 }
 
 const WORKFLOW_AREA_BY_SLUG: Record<string, string> = {
@@ -41,12 +42,29 @@ function makeId(prefix: string) {
 function resolveWorkflowAreaId(
   suggestedSlug: string | null,
   workflowAreaId: string | null,
+  areas?: readonly { id: string; name: string }[],
 ) {
-  if (suggestedSlug && WORKFLOW_AREA_BY_SLUG[suggestedSlug]) {
-    return WORKFLOW_AREA_BY_SLUG[suggestedSlug];
+  if (areas === undefined) {
+    if (suggestedSlug && Object.hasOwn(WORKFLOW_AREA_BY_SLUG, suggestedSlug)) {
+      return WORKFLOW_AREA_BY_SLUG[suggestedSlug];
+    }
+    return workflowAreaId ?? "area-main-job";
   }
-
-  return workflowAreaId ?? "area-main-job";
+  if (areas.length === 0) {
+    throw new Error("No area is available for parsed drafts.");
+  }
+  const matchingArea = areas.find(
+    (area) => area.name.toLowerCase().replace(/\s+/g, "-") === suggestedSlug,
+  );
+  if (
+    matchingArea &&
+    suggestedSlug &&
+    Object.hasOwn(WORKFLOW_AREA_BY_SLUG, suggestedSlug)
+  ) {
+    return matchingArea.id;
+  }
+  const scopedArea = areas.find((area) => area.id === workflowAreaId);
+  return scopedArea?.id ?? matchingArea?.id ?? areas[0].id;
 }
 
 export function buildParsedWorkflowResult(
@@ -81,6 +99,7 @@ export function buildParsedWorkflowResult(
       area_id: resolveWorkflowAreaId(
         draft.area_slug_suggestion,
         input.workflowAreaId,
+        input.areas,
       ),
       title: draft.title,
       description: draft.description,
@@ -110,6 +129,7 @@ export function buildParsedWorkflowResult(
       area_id: resolveWorkflowAreaId(
         draft.area_slug_suggestion,
         input.workflowAreaId,
+        input.areas,
       ),
       title: draft.title,
       description: draft.description,
