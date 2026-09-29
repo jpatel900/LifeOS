@@ -8,8 +8,8 @@
 // vitest harness for scripts/agent/*.mjs). Run directly:
 //   node scripts/agent/trusted-context-paths.test.mjs
 // Same convention as scripts/agent/status.test.mjs and
-// scripts/agent/provider-canary.test.mjs. Also runs as an early step in
-// .github/workflows/codex-ci-autofix.yml, the workflow this guard protects.
+// scripts/agent/provider-canary.test.mjs. Checks the current workflows and
+// their prompt paths as well as document references.
 
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -48,8 +48,10 @@ const scannedRelative = scannedFiles.map((file) =>
 for (const required of [
   ".github/AGENT_AUTOMATION_POLICY.md",
   ".github/ISSUE_TEMPLATE/agent-task.yml",
-  ".github/workflows/codex-ci-autofix.yml",
-  ".github/codex/prompts/ci-autofix.md",
+  ".github/workflows/codex-low-risk-issue-to-pr.yml",
+  ".github/codex/prompts/low-risk-implementation.md",
+  ".github/workflows/codex-issue-plan.yml",
+  ".github/codex/prompts/issue-plan.md",
 ]) {
   assert.ok(
     scannedRelative.includes(required),
@@ -76,19 +78,21 @@ assert.deepEqual(
   `Stale docs references in .github:\n${missing.join("\n")}`,
 );
 
-// Regression pin for the specific #640 breakage: the autofix workflow's
-// trusted-context step must only `git show` paths that exist.
-const autofixWorkflow = readFileSync(
-  join(githubRoot, "workflows", "codex-ci-autofix.yml"),
-  "utf8",
-);
-for (const match of autofixWorkflow.matchAll(
-  /git show HEAD:([A-Za-z0-9_/.-]+)/g,
-)) {
-  assert.ok(
-    existsSync(join(repoRoot, match[1])),
-    `codex-ci-autofix.yml exports missing trusted context: ${match[1]}`,
-  );
+// Keep the #640 missing-context check on current workflows. Check direct
+// prompt paths too; these workflows load their prompts without `git show`.
+for (const file of scannedFiles.filter((file) => /\.ya?ml$/.test(file))) {
+  const content = readFileSync(file, "utf8");
+  for (const pattern of [
+    /git show HEAD:([A-Za-z0-9_/.-]+)/g,
+    /prompt-file:\s*([.]github\/[A-Za-z0-9_/.-]+)/g,
+  ]) {
+    for (const match of content.matchAll(pattern)) {
+      assert.ok(
+        existsSync(join(repoRoot, match[1])),
+        `${relative(repoRoot, file)} references missing context: ${match[1]}`,
+      );
+    }
+  }
 }
 
 console.log("trusted-context-paths guard: OK");

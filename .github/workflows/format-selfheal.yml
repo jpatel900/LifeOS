@@ -12,9 +12,8 @@ name: Format Self-heal
 # lane). This workflow automates exactly that recovery so it doesn't need a
 # human to notice.
 #
-# Scope discipline (deliberately narrow, unlike the retired LLM-based
-# `codex-ci-autofix.yml`): this workflow does NOT parse CI logs to decide
-# what broke. It re-runs `pnpm format:check` against current main itself.
+# Scope discipline: this workflow does NOT parse CI logs to decide what
+# broke. It re-runs `pnpm format:check` against current main itself.
 #   - If that check PASSES, whatever failed CI was not a formatting problem
 #     -- log "not my department" and exit 0. No other repair is attempted.
 #   - If it FAILS, run `pnpm format`, confirm the diff is non-empty AND that
