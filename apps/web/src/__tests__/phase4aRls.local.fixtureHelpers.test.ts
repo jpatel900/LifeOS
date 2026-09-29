@@ -1,6 +1,6 @@
 import { RollupSummaryContentSchema } from "@lifeos/schemas";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createFutureDateReservation,
   rollupReplaySummary,
@@ -28,8 +28,6 @@ function clientWithLatestDate(
 }
 
 describe("Phase 4A database fixture contracts", () => {
-  afterEach(() => vi.restoreAllMocks());
-
   it("keeps replay summaries readable by the real account schema", () => {
     expect(
       RollupSummaryContentSchema.parse(rollupReplaySummary("Replay fixture")),
@@ -37,8 +35,6 @@ describe("Phase 4A database fixture contracts", () => {
   });
 
   it("reserves distinct dates beyond rows already held by either user", async () => {
-    // Reproduce the old collision deterministically instead of waiting for luck.
-    vi.spyOn(Math, "random").mockReturnValue(0);
     const userA = clientWithLatestDate("viewed_on", "2080-01-01");
     const userB = clientWithLatestDate("viewed_on", "2080-01-05");
     const reserve = createFutureDateReservation();
