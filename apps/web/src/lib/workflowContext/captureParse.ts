@@ -146,6 +146,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
         response: result.response,
         capture,
         workflowAreaId: capture.area_id,
+        areas: stateRef.current.areas,
       });
       applyWorkflowState(appendParsedWorkflowResult(stateRef.current, parsed));
 

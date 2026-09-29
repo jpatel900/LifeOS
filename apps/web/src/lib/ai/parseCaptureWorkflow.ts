@@ -25,6 +25,7 @@ interface BuildParsedWorkflowResultInput {
     "id" | "user_id" | "raw_text" | "return_hook" | "created_at"
   >;
   workflowAreaId: string | null;
+  areas?: readonly { id: string; name: string }[];
 }
 
 const WORKFLOW_AREA_BY_SLUG: Record<string, string> = {
@@ -41,12 +42,20 @@ function makeId(prefix: string) {
 function resolveWorkflowAreaId(
   suggestedSlug: string | null,
   workflowAreaId: string | null,
+  areas: readonly { id: string; name: string }[] = [],
 ) {
-  if (suggestedSlug && WORKFLOW_AREA_BY_SLUG[suggestedSlug]) {
-    return WORKFLOW_AREA_BY_SLUG[suggestedSlug];
+  if (workflowAreaId !== null) return workflowAreaId;
+  if (suggestedSlug) {
+    if (Object.hasOwn(WORKFLOW_AREA_BY_SLUG, suggestedSlug)) {
+      return WORKFLOW_AREA_BY_SLUG[suggestedSlug];
+    }
+    const matchingArea = areas.find(
+      (area) => area.name.toLowerCase().replace(/\s+/g, "-") === suggestedSlug,
+    );
+    if (matchingArea) return matchingArea.id;
   }
 
-  return workflowAreaId ?? "area-main-job";
+  return "area-main-job";
 }
 
 export function buildParsedWorkflowResult(
@@ -81,6 +90,7 @@ export function buildParsedWorkflowResult(
       area_id: resolveWorkflowAreaId(
         draft.area_slug_suggestion,
         input.workflowAreaId,
+        input.areas,
       ),
       title: draft.title,
       description: draft.description,
@@ -110,6 +120,7 @@ export function buildParsedWorkflowResult(
       area_id: resolveWorkflowAreaId(
         draft.area_slug_suggestion,
         input.workflowAreaId,
+        input.areas,
       ),
       title: draft.title,
       description: draft.description,
