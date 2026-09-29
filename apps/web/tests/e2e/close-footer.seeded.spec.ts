@@ -106,10 +106,14 @@ for (const viewport of VIEWPORTS) {
         await palette.click();
       }
       await expect(page.getByTestId("command-palette")).toBeVisible();
+      // Visibility precedes the palette's animation-frame autofocus.
+      await expect(page.getByTestId("command-palette-input")).toBeFocused();
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("command-palette")).toHaveCount(0);
       await page.keyboard.press("Control+k");
       await expect(page.getByTestId("command-palette")).toBeVisible();
+      // Visibility precedes the palette's animation-frame autofocus.
+      await expect(page.getByTestId("command-palette-input")).toBeFocused();
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("command-palette")).toHaveCount(0);
       await close.focus();
