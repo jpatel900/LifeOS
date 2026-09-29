@@ -1,5 +1,5 @@
 import type { Task } from "@lifeos/schemas";
-import { localDayStamp } from "../reEntry/briefView";
+import { localDayStamp } from "../time/localDay";
 
 /**
  * FR-049 (#1025) — "bring a put-off task back on a chosen day".
@@ -11,7 +11,7 @@ import { localDayStamp } from "../reEntry/briefView";
  * `lib/compost/compostPolicy.ts`'s existing pattern for this exact shape of
  * rule (a caller-supplied `now`, no `Date.now()` inside).
  *
- * `localDayStamp` (from `lib/reEntry/briefView.ts`) is reused rather than
+ * `localDayStamp` (from `lib/time/localDay.ts`) is reused rather than
  * copied — it already turns a `Date` into a local `YYYY-MM-DD` stamp using
  * the same local-getter convention (`getFullYear`/`getMonth`/`getDate`),
  * which is exactly the "local calendar day" FR-049 requires. Two stamps
