@@ -142,9 +142,14 @@ function paletteKeyLabel(mounted: boolean): string {
 export interface KeyboardLegendProps {
   /** Opens the command palette — the legend's one clickable affordance. */
   onOpenPalette(): void;
+  /** Close puts the legend after its content so the palette cannot cover actions. */
+  inFlow?: boolean;
 }
 
-export function KeyboardLegend({ onOpenPalette }: KeyboardLegendProps) {
+export function KeyboardLegend({
+  onOpenPalette,
+  inFlow = false,
+}: KeyboardLegendProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -154,7 +159,11 @@ export function KeyboardLegend({ onOpenPalette }: KeyboardLegendProps) {
     <div
       role="group"
       aria-label="Keyboard shortcuts"
-      className="pointer-events-none fixed bottom-6 left-6 z-30 hidden items-center gap-3 text-xs text-muted-foreground sm:flex"
+      className={cn(
+        "pointer-events-none hidden items-center gap-3 text-xs text-muted-foreground sm:flex",
+        // The padding contains the existing negative-margin 44px hit target.
+        inFlow ? "py-2.5" : "fixed bottom-6 left-6 z-30",
+      )}
       data-testid="keyboard-legend"
     >
       {LEGEND_GROUPS.map((group) => {
