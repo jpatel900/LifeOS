@@ -171,6 +171,12 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
   await expect(page.getByTestId("capture-overlay")).toHaveCount(0, {
     timeout: 30_000,
   });
+  // Capture preserves the current moment; evening runs can still be on Close.
+  // Select Start before checking its pending-thought card, just as below.
+  await page.keyboard.press("1");
+  await expect(page.getByTestId("start-moment")).toBeVisible({
+    timeout: 30_000,
+  });
   // #719: the pending-triage state has TWO truthful homes, and which one
   // renders depends on the account's data, not on the app being healthy. With
   // nothing queued (an empty account) the pending item is PROMOTED into the
