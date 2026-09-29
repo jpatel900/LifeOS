@@ -234,7 +234,12 @@ test.describe("#1025 — Back today, signed in", () => {
           const [row] = await account.rows<TaskRow>(
             `tasks?id=eq.${before.id}&select=due_at`,
           );
-          return row.due_at ? row.due_at.slice(0, 10) : null;
+          return page.evaluate((dueAt) => {
+            if (!dueAt) return null;
+            const day = new Date(dueAt);
+            const pad = (value: number) => String(value).padStart(2, "0");
+            return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+          }, row.due_at);
         },
         { timeout: 30_000 },
       )
@@ -261,12 +266,24 @@ test.describe("#1025 — Back today, signed in", () => {
       .poll(
         async () => {
           const [row] = await account.rows<TaskRow>(
-            `tasks?id=eq.${before.id}&select=status`,
+            `tasks?id=eq.${before.id}&select=status,due_at`,
           );
-          return row.status;
+          return { status: row.status, due_at: row.due_at };
         },
         { timeout: 30_000 },
       )
-      .not.toBe("backlog");
+      .toEqual({ status: "active", due_at: null });
+
+    // Putting it off again must not revive the consumed return day, even
+    // after a fresh account readback.
+    await page.getByTestId("pipeline-overview-stage-review").click();
+    await expect(page.getByTestId("review-sheet")).toBeVisible();
+    await page.getByTestId(`review-sheet-defer-${before.id}`).click();
+    const deferredAgain = await confirmedBacklogTask(account, seededTitle);
+    expect(deferredAgain.due_at).toBeNull();
+    await page.getByTestId("moment-sheet-close").click();
+    await reloadWithAccountSync(page);
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await expect(page.getByTestId("start-back-today")).toHaveCount(0);
   });
 });

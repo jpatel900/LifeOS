@@ -197,7 +197,7 @@ export interface WorkflowContextValue {
   // never a background call.
   acceptTaskDraft: (draftId: string) => string | null;
   backlogTaskDraft: (draftId: string) => void;
-  promoteBacklogTask: (taskId: string) => void;
+  promoteBacklogTask: (taskId: string) => WorkflowState;
   /**
    * Issue #984 — edit an accepted backlog task's title/description/area.
    * `expected_updated_at` is the task's `updated_at` as of when the editor

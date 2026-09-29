@@ -2228,8 +2228,16 @@ function TodayMomentsContent({
                  backlog list already uses for "Move to today" — no second
                  promote path. */
                 onMoveToToday={(taskId) => {
-                  promoteBacklogTask(taskId);
-                  showToast("Moved to today");
+                  const next = promoteBacklogTask(taskId);
+                  if (next === state) return;
+                  if (
+                    next.tasks.find((task) => task.id === taskId)?.status ===
+                    "active"
+                  ) {
+                    showToast("Moved to today");
+                  } else if (next.wipRefusal?.refused_task_id === taskId) {
+                    showToast("Today is full. Finish or put off a task first.");
+                  }
                 }}
               />
             ) : null}

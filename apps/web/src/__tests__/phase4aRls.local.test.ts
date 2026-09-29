@@ -7,6 +7,10 @@ import {
   type MinimalSupabaseClient,
 } from "@/lib/data/workflow";
 import { deriveWinClientWriteId } from "@/lib/durability/durableWrites";
+import {
+  localNoonIsoForDay,
+  selectBackTodayTasks,
+} from "@/lib/workflow/backToday";
 
 const runLocalRlsTests = process.env.RUN_SUPABASE_RLS_TESTS === "1";
 // QA doctrine #269: deliberate local RLS opt-in gate; default runs skip until RUN_SUPABASE_RLS_TESTS=1 provides local Supabase proof.
@@ -2356,6 +2360,157 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     }
   });
 
+  it.each(["task", null] as const)(
+    "FR-049 consumes an ordinary %s return day atomically and denies another user",
+    async (taskType) => {
+      const userAClient = await signIn(userA.email, userA.password);
+      const userBClient = await signIn(userB.email, userB.password);
+      const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const taskTitle = `rls-rpc-return-day-${suffix}`;
+      const now = new Date(2026, 8, 30, 12);
+      const returnDay = localNoonIsoForDay("2026-09-30");
+      let taskId = "";
+
+      try {
+        const { data: task, error: taskError } = await userAClient
+          .from("tasks")
+          .insert({
+            user_id: userA.id,
+            area_id: userA.areaId,
+            title: taskTitle,
+            status: "backlog",
+            task_type: taskType,
+            due_at: returnDay,
+            first_tiny_step: "Open the old notes.",
+          })
+          .select("*")
+          .single();
+        expect(taskError).toBeNull();
+        taskId = task!.id;
+        expect(selectBackTodayTasks([task!], null, now)).toHaveLength(1);
+        const { data: block, error: blockError } = await userAClient
+          .from("calendar_blocks")
+          .insert({
+            user_id: userA.id,
+            area_id: userA.areaId,
+            task_id: taskId,
+            start_at: "2026-09-30T19:00:00.000Z",
+            end_at: "2026-09-30T20:00:00.000Z",
+            status: "scheduled",
+          })
+          .select("id")
+          .single();
+        expect(blockError).toBeNull();
+
+        const { error: denied } = await userBClient.rpc(
+          "apply_task_review_transition",
+          { p_task_id: taskId, p_target_status: "active" },
+        );
+        expect(denied?.message).toMatch(/was not found/i);
+        const { data: unchanged, error: unchangedError } = await userAClient
+          .from("tasks")
+          .select("*")
+          .eq("id", taskId)
+          .single();
+        expect(unchangedError).toBeNull();
+        expect(unchanged!.status).toBe("backlog");
+        expect(new Date(unchanged!.due_at).toISOString()).toBe(returnDay);
+        const { data: unchangedBlock, error: unchangedBlockError } =
+          await userAClient
+            .from("calendar_blocks")
+            .select("status")
+            .eq("id", block!.id)
+            .single();
+        expect(unchangedBlockError).toBeNull();
+        expect(unchangedBlock!.status).toBe("scheduled");
+
+        const { data: promoted, error: promoteError } = await userAClient.rpc(
+          "apply_task_review_transition",
+          { p_task_id: taskId, p_target_status: "active" },
+        );
+        expect(promoteError).toBeNull();
+        expect(promoted.task.status).toBe("active");
+        expect(promoted.blocks).toHaveLength(1);
+        expect(promoted.blocks[0].id).toBe(block!.id);
+        expect(promoted.blocks[0].status).toBe("cancelled");
+        const { data: deferred, error: deferError } = await userAClient.rpc(
+          "apply_task_review_transition",
+          { p_task_id: taskId, p_target_status: "backlog" },
+        );
+        expect(deferError).toBeNull();
+        expect(deferred.task.status).toBe("backlog");
+        expect(deferred.blocks).toHaveLength(0);
+        const { data: readback, error: readbackError } = await userAClient
+          .from("tasks")
+          .select("*")
+          .eq("id", taskId)
+          .single();
+        expect(readbackError).toBeNull();
+        expect(readback!.status).toBe("backlog");
+        expect(selectBackTodayTasks([readback!], null, now)).toHaveLength(0);
+        expect(promoted.task.due_at).toBeNull();
+        expect(deferred.task.due_at).toBeNull();
+        expect(readback!.due_at).toBeNull();
+        const { data: blockReadback, error: blockReadbackError } =
+          await userAClient
+            .from("calendar_blocks")
+            .select("status")
+            .eq("id", block!.id)
+            .single();
+        expect(blockReadbackError).toBeNull();
+        expect(blockReadback!.status).toBe("cancelled");
+      } finally {
+        if (taskId) await deleteBlockByTaskId(userAClient, taskId);
+        await deleteTaskByTitle(userAClient, taskTitle);
+      }
+    },
+  );
+
+  it("FR-049 retains the FR-024 decision deadline through promotion and deferral", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const taskTitle = `rls-rpc-decision-deadline-${suffix}`;
+    const now = new Date(2026, 8, 30, 12);
+    const deadline = localNoonIsoForDay("2026-09-30");
+    try {
+      const { data: task, error: taskError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: taskTitle,
+          status: "backlog",
+          task_type: "decision",
+          is_reversible: true,
+          due_at: deadline,
+        })
+        .select("*")
+        .single();
+      expect(taskError).toBeNull();
+      expect(selectBackTodayTasks([task!], null, now)).toHaveLength(1);
+      for (const targetStatus of ["active", "backlog"] as const) {
+        const { data: transitioned, error: transitionError } =
+          await userAClient.rpc("apply_task_review_transition", {
+            p_task_id: task!.id,
+            p_target_status: targetStatus,
+          });
+        expect(transitionError).toBeNull();
+        expect(transitioned.task.status).toBe(targetStatus);
+        expect(new Date(transitioned.task.due_at).toISOString()).toBe(deadline);
+      }
+      const { data: readback, error: readbackError } = await userAClient
+        .from("tasks")
+        .select("*")
+        .eq("id", task!.id)
+        .single();
+      expect(readbackError).toBeNull();
+      expect(readback!.status).toBe("backlog");
+      expect(new Date(readback!.due_at).toISOString()).toBe(deadline);
+      expect(selectBackTodayTasks([readback!], null, now)).toHaveLength(1);
+    } finally {
+      await deleteTaskByTitle(userAClient, taskTitle);
+    }
+  });
   it("applies review task transitions atomically and refuses Google-backed blocks", async () => {
     const userAClient = await signIn(userA.email, userA.password);
     const userBClient = await signIn(userB.email, userB.password);

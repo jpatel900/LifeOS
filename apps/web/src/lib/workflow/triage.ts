@@ -469,7 +469,13 @@ export function promoteBacklogTask(
     ...state,
     tasks: state.tasks.map((item) =>
       item.id === taskId
-        ? { ...item, status: "active", updated_at: nowIso() }
+        ? {
+            ...item,
+            status: "active",
+            // Moving to today consumes an ordinary return day; decision deadlines stay.
+            due_at: acceptedTaskDueAt(item.task_type, item.due_at),
+            updated_at: nowIso(),
+          }
         : item,
     ),
     reviewLog: [`Moved to today: ${task.title}`, ...state.reviewLog],

@@ -2975,6 +2975,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             markPersistedSaveFailure(error);
           });
       }
+      return next;
     },
     editBacklogTask: editBacklogTaskWithPersistence,
     acceptProjectDraft: (draftId) =>

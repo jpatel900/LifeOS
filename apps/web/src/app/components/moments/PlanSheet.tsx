@@ -1084,8 +1084,20 @@ export function PlanSheet({
                         variant="outline"
                         disabled={!hasFirstMove(task)}
                         onClick={() => {
-                          promoteBacklogTask(task.id);
-                          onToast?.("Moved to today");
+                          const next = promoteBacklogTask(task.id);
+                          if (next === state) return;
+                          if (
+                            next.tasks.find((item) => item.id === task.id)
+                              ?.status === "active"
+                          ) {
+                            onToast?.("Moved to today");
+                          } else if (
+                            next.wipRefusal?.refused_task_id === task.id
+                          ) {
+                            onToast?.(
+                              "Today is full. Finish or put off a task first.",
+                            );
+                          }
                         }}
                         className={cn(
                           HIT_TARGET_MIN,
