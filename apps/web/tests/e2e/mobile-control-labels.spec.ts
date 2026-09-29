@@ -361,12 +361,15 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
     const palette = page.getByTestId("command-palette");
     await page.getByTestId("bottom-navigator-more").click();
     await expect(palette).toBeVisible();
+    // CommandPalette also hands keyboard focus over on the next frame.
+    await expect(page.getByTestId("command-palette-input")).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(palette).not.toBeVisible();
 
     await page.getByTestId("bottom-navigator-more").focus();
     await page.keyboard.press("Enter");
     await expect(palette).toBeVisible();
+    await expect(page.getByTestId("command-palette-input")).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(palette).not.toBeVisible();
   });
