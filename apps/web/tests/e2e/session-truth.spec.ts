@@ -435,3 +435,83 @@ test.describe("#737 C1 card 1 — session truth", () => {
     expect(await sessionWrites(page)).toHaveLength(0);
   });
 });
+
+/**
+ * #687 C2 gap-1 (F1): Back then Forward with the end sheet open remounts the
+ * Flow moment under the sheet, and its autofocusing First-move input used to
+ * take focus from behind the scrim — Escape went dead, Tab walked the page
+ * underneath, and typing landed in the hidden input. Navigation must still
+ * be no outcome: the session keeps running and nothing is journaled until
+ * the user presses Save.
+ */
+async function focusIsInEndSheet(page: Page): Promise<boolean> {
+  return page.evaluate(
+    () =>
+      document.activeElement
+        ?.closest('[role="dialog"]')
+        ?.getAttribute("aria-label") === "End session",
+  );
+}
+
+for (const viewport of [
+  { width: 390, height: 844 },
+  { width: 1280, height: 800 },
+]) {
+  test.describe(`#687 C2 gap-1 — end sheet keeps focus across Back/Forward at ${viewport.width}px`, () => {
+    test.use({ viewport });
+
+    test("Back and Forward with the end sheet open keep focus, typing, Tab and Escape in the sheet, and record nothing", async ({
+      page,
+    }) => {
+      await openHome(page, { scheduled: true, blockless: false });
+
+      await page.getByTestId("first-move-start").click();
+      await expect(page.getByTestId("current-block-hero")).toBeVisible();
+
+      await page.getByTestId("current-block-hero-done").click();
+      await expect(page.getByTestId("end-session-sheet")).toBeVisible();
+      await page.getByTestId("end-session-outcome-partial").click();
+      await page.getByTestId("end-session-note").fill("unsaved draft");
+
+      await page.goBack();
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await page.goForward();
+      await expect(page.getByTestId("flow-moment")).toBeVisible();
+      await expect(page.getByTestId("first-tiny-step-input")).toBeVisible();
+      await expect(page.getByTestId("end-session-sheet")).toBeVisible();
+
+      // Focus came back to the field it left, caret included.
+      await expect.poll(() => focusIsInEndSheet(page)).toBe(true);
+      await page.keyboard.type(" more");
+      await expect(page.getByTestId("end-session-note")).toHaveValue(
+        "unsaved draft more",
+      );
+      await expect(page.getByTestId("first-tiny-step-input")).toHaveValue("");
+
+      // Tab walks the sheet, never the page behind it.
+      for (let step = 0; step < 4; step += 1) {
+        await page.keyboard.press("Tab");
+        expect(await focusIsInEndSheet(page)).toBe(true);
+      }
+
+      // Escape closes the sheet — and closing is not an outcome either.
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("end-session-sheet")).toBeHidden();
+      await expect(page.getByTestId("current-block-hero")).toBeVisible();
+      expect(
+        await page.evaluate(
+          (key) => window.localStorage.getItem(key),
+          RUNNING_SESSION_KEY,
+        ),
+      ).toBeTruthy();
+      expect(await sessionWrites(page)).toHaveLength(0);
+
+      // The user's own choice is still the one and only record.
+      await endSessionAs(page, "skipped", 3, "Came back to it later");
+      await expect.poll(async () => (await sessionWrites(page)).length).toBe(1);
+      const [write] = await sessionWrites(page);
+      expect(write!.payload.outcome).toBe("skipped");
+      expect(write!.payload.notes).toBe("Came back to it later");
+    });
+  });
+}
