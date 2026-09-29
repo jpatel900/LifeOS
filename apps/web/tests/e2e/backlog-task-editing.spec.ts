@@ -292,6 +292,14 @@ test("edit details: reachable, fully in-view, and usable end to end at a 390px m
     page.getByTestId(/^plan-sheet-edit-area-input-/),
     "Area select",
   );
+  // FR-049 (#1025): the "Bring it back on" date field is a control this
+  // form gained after the original clipping bug was fixed — checked here
+  // rather than assumed to have inherited the same `min-w-0` fix.
+  await expectWithinViewportWidth(
+    page,
+    page.getByTestId(/^plan-sheet-edit-due-at-input-/),
+    "Bring it back on date input",
+  );
   const saveLocator = page.getByTestId(/^plan-sheet-edit-save-/);
   const cancelLocator = page.getByTestId(/^plan-sheet-edit-cancel-/);
   await expectWithinViewportWidth(page, saveLocator, "Save button");
@@ -328,11 +336,21 @@ test("edit details: reachable, fully in-view, and usable end to end at a 390px m
   await expect(form).toHaveCount(0, { timeout: 20_000 });
 });
 
-/** The five field "kinds" the form's Tab order must visit, in this order. */
+/**
+ * The field "kinds" the form's Tab order must visit, in this order.
+ *
+ * FR-049 (#1025): "due-at-input" (the "Bring it back on" date field) was
+ * added between area and Save. Without naming it here, `editFormKindOf`
+ * below silently ignores its tab stop — the walk below would still land on
+ * exactly this same five-kind sequence with the new control invisibly
+ * skipped in between, passing without ever proving the new field is
+ * actually reachable by keyboard. Naming it makes that stop count.
+ */
 const EDIT_FORM_TAB_KINDS = [
   "title-input",
   "description-input",
   "area-input",
+  "due-at-input",
   "save",
   "cancel",
 ] as const;
@@ -342,7 +360,7 @@ function editFormKindOf(testId: string | null): string | undefined {
   return EDIT_FORM_TAB_KINDS.find((kind) => testId.includes(`edit-${kind}-`));
 }
 
-test("edit details: reachable and operable with keyboard only, in the exact Title -> Description -> Area -> Save -> Cancel order", async ({
+test("edit details: reachable and operable with keyboard only, in the exact Title -> Description -> Area -> Bring it back on -> Save -> Cancel order", async ({
   page,
 }) => {
   await page.goto("/");
@@ -365,8 +383,8 @@ test("edit details: reachable and operable with keyboard only, in the exact Titl
   await expect(form).toBeVisible();
 
   // Walk Tab forward, typing into each field AS it is reached (never moving
-  // focus away to do so), until all five kinds have been observed once —
-  // this is the real, continuous keyboard path a user would take.
+  // focus away to do so), until every kind has been observed once — this
+  // is the real, continuous keyboard path a user would take.
   const observedKinds: string[] = [];
   for (
     let i = 0;
@@ -391,7 +409,7 @@ test("edit details: reachable and operable with keyboard only, in the exact Titl
 
   expect(
     observedKinds,
-    "the Tab order must visit all five controls, in this exact order",
+    "the Tab order must visit every control, in this exact order",
   ).toEqual([...EDIT_FORM_TAB_KINDS]);
 
   // Focus is now past Cancel; Shift+Tab once returns to it, and once more

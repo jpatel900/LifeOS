@@ -144,6 +144,13 @@ test("Back today: not shown the day before, shown with details on the return day
     /overdue|late|behind/,
   );
 
+  // No horizontal overflow at 1280px — the whole document, not just one
+  // control (see the 390px test below for the case a single long,
+  // unbroken word actually stresses).
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(1280);
+
   const moveButton = page.getByTestId(/^start-back-today-move-/);
   await expect(moveButton).toBeEnabled();
   await moveButton.click();
@@ -155,14 +162,18 @@ test("Back today: not shown the day before, shown with details on the return day
   });
 });
 
-test("Back today at a 390px mobile viewport: reachable, in view, and Move to today works", async ({
+test("Back today at a 390px mobile viewport: no overflow from a long unbroken title, reachable, in view, and Move to today works", async ({
   page,
 }) => {
   await page.clock.setFixedTime(new Date(SEED_NOW));
   await page.goto("/");
   await expect(page.getByTestId("today-moments")).toBeVisible();
 
-  const title = "Label the seasonal storage bins";
+  // A single long, unbroken word (no spaces) is the real stress case for
+  // `min-w-0`/`break-words`: PlanSheet's own backlog row (#1011) was found
+  // clipped at 390px this exact way, via a long wrapped task title.
+  const title =
+    "Reorganizethewholegarageshelvingunitsbeforethewinterstorageseasonstarts";
   await seedBacklogTask(page, title);
   await setReturnDay(page);
 
@@ -174,6 +185,15 @@ test("Back today at a 390px mobile viewport: reachable, in view, and Move to tod
   const backToday = page.getByTestId("start-back-today");
   await expect(backToday).toBeVisible({ timeout: 20_000 });
   await expect(backToday).toContainText(title);
+
+  // No horizontal overflow anywhere on the document — a clipped/overflowed
+  // row would still often pass a single-element bounding-box check (the
+  // element itself can report a legal box while forcing the PAGE wider),
+  // which is exactly how #1011 slipped through until the whole-document
+  // check existed.
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
 
   const moveButton = page.getByTestId(/^start-back-today-move-/);
   await moveButton.scrollIntoViewIfNeeded();

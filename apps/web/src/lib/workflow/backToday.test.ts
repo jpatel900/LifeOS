@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Task } from "@lifeos/schemas";
 import {
   localDayStampFromDueAt,
@@ -106,21 +106,64 @@ describe("selectBackTodayTasks", () => {
     expect(selectBackTodayTasks([t], null, now)).toEqual([t]);
   });
 
-  it("is correct across a DST-change day (local noon storage survives the shift)", () => {
-    // 2026-03-08 is the US/Canada spring-forward date. A task put off to
-    // "the day after" the change should still read back as that same local
-    // day, and the rule should still say "arrived" once `now` reaches it —
-    // exercised here with the host's own local time zone (whatever it is),
-    // which is the same environment the stored/read pair both run in.
-    const dueDay = "2026-03-09";
-    const t = task({ due_at: localNoonIsoForDay(dueDay) });
-    expect(localDayStampFromDueAt(t.due_at)).toBe(dueDay);
+  describe("DST-change days (local noon storage survives the shift)", () => {
+    // These assertions need a host time zone that actually observes DST —
+    // pinned to America/Toronto (the owner's zone) so they hold on any CI
+    // runner, not only a developer machine that happens to be in one.
+    // Reassigning `process.env.TZ` changes what `Date`'s local-time methods
+    // read on Node (confirmed empirically on this host/Node build); if a
+    // future runtime stops honoring a reassigned `TZ`, these tests would
+    // start passing vacuously (no zone ever crosses the jump) rather than
+    // failing loudly — that risk is accepted here for CI portability.
+    const originalTz = process.env.TZ;
 
-    const dayBefore = new Date(2026, 2, 8, 12, 0, 0);
-    expect(selectBackTodayTasks([t], null, dayBefore)).toEqual([]);
+    beforeEach(() => {
+      process.env.TZ = "America/Toronto";
+    });
 
-    const dayOf = new Date(2026, 2, 9, 3, 0, 0);
-    expect(selectBackTodayTasks([t], null, dayOf)).toEqual([t]);
+    afterEach(() => {
+      // Assigning `undefined` would store the string "undefined".
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    });
+
+    it("spring-forward, 2026-03-08 (clocks jump 2:00am -> 3:00am EDT)", () => {
+      const dueDay = "2026-03-08";
+      const t = task({ due_at: localNoonIsoForDay(dueDay) });
+      // Local noon survives the day's own 1-hour gap: read back as the
+      // exact same local day the person picked.
+      expect(localDayStampFromDueAt(t.due_at)).toBe(dueDay);
+
+      // The day before: not arrived yet.
+      const dayBefore = new Date(2026, 2, 7, 23, 59, 59, 999);
+      expect(selectBackTodayTasks([t], null, dayBefore)).toEqual([]);
+
+      // The transition day itself, just after local midnight (still
+      // standard time, before the 2am jump) — arrived.
+      const justAfterMidnight = new Date(2026, 2, 8, 0, 0, 0, 1);
+      expect(selectBackTodayTasks([t], null, justAfterMidnight)).toEqual([t]);
+
+      // The transition day, just after the 2am jump (now daylight time) —
+      // still arrived, same local day.
+      const justAfterTheJump = new Date(2026, 2, 8, 3, 0, 0);
+      expect(selectBackTodayTasks([t], null, justAfterTheJump)).toEqual([t]);
+    });
+
+    it("fall-back, 2026-11-01 (clocks repeat 1:00am-2:00am EST, the extra hour)", () => {
+      const dueDay = "2026-11-01";
+      const t = task({ due_at: localNoonIsoForDay(dueDay) });
+      expect(localDayStampFromDueAt(t.due_at)).toBe(dueDay);
+
+      const dayBefore = new Date(2026, 9, 31, 23, 59, 59, 999);
+      expect(selectBackTodayTasks([t], null, dayBefore)).toEqual([]);
+
+      const justAfterMidnight = new Date(2026, 10, 1, 0, 0, 0, 1);
+      expect(selectBackTodayTasks([t], null, justAfterMidnight)).toEqual([t]);
+
+      // Well past the repeated hour, same local day — still arrived.
+      const laterThatDay = new Date(2026, 10, 1, 12, 0, 0);
+      expect(selectBackTodayTasks([t], null, laterThatDay)).toEqual([t]);
+    });
   });
 
   it("never includes a non-backlog task, whatever its due_at", () => {

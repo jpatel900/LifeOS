@@ -333,27 +333,49 @@ export function StartMoment({
               today". */}
           {vm.backToday.length > 0 ? (
             <Card
-              className="workflow-support-card moments-card"
+              className="workflow-support-card moments-card min-w-0"
               data-testid="start-back-today"
             >
-              <CardContent className="grid gap-3 p-4 sm:p-5">
+              <CardContent className="grid min-w-0 gap-3 p-4 sm:p-5">
                 <h2 className="workflow-page-eyebrow m-0">Back today</h2>
-                <ul className="grid gap-2" data-testid="start-back-today-list">
+                <ul
+                  className="grid min-w-0 gap-2"
+                  data-testid="start-back-today-list"
+                >
                   {vm.backToday.map((item) => (
                     <li
                       key={item.taskId}
-                      className="workflow-compact-item moments-row grid gap-2 p-3"
+                      // `min-w-0`: the same PlanSheet backlog-row fix
+                      // (#1011) applies here — a grid item's default
+                      // `min-width: auto` sizes it to its content's
+                      // min-content width, and an unbroken long title would
+                      // force this row (and the card around it) wider than
+                      // a narrow viewport. `break-words` on the text spans
+                      // below is the other half: it lets a single long
+                      // word actually wrap once the row can shrink.
+                      className="workflow-compact-item moments-row grid min-w-0 gap-2 p-3"
                       data-testid={`start-back-today-row-${item.taskId}`}
                     >
-                      <div className="grid gap-1">
-                        <span className="text-sm font-semibold">
+                      {/* Every grid ITEM below also needs its own `min-w-0`,
+                           not only its ancestors: a CSS grid track sizes to
+                           at least an item's "automatic minimum size" (its
+                           min-content — which, per spec, ignores
+                           `overflow-wrap`/`break-words` for ONE unbroken
+                           word), so a long single-word title can force the
+                           SPAN ITSELF wider than its own track even while
+                           every ancestor stays correctly constrained.
+                           `break-words` alone (no `min-w-0` on the item)
+                           measurably still overflowed at 390px — proven by
+                           `back-today.spec.ts`'s long-unbroken-title case. */}
+                      <div className="grid min-w-0 gap-1">
+                        <span className="min-w-0 break-words text-sm font-semibold">
                           {item.title}
                         </span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="min-w-0 break-words text-xs text-muted-foreground">
                           {item.areaLabel}
                         </span>
                         {item.description ? (
-                          <span className="text-xs text-muted-foreground">
+                          <span className="min-w-0 break-words text-xs text-muted-foreground">
                             {item.description}
                           </span>
                         ) : null}
