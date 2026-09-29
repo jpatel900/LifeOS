@@ -1561,7 +1561,11 @@ function TodayMomentsContent({
         return;
       }
       if (stage === "capture") {
-        openCapture();
+        if (pipelineCounts.capture > 0) {
+          openSheet("triage");
+        } else {
+          openCapture();
+        }
         return;
       }
       if (stage === "execute") {
@@ -1569,7 +1573,7 @@ function TodayMomentsContent({
         return;
       }
     },
-    [openSheet, setMoment, openCapture],
+    [openSheet, setMoment, openCapture, pipelineCounts.capture],
   );
 
   // #588: the only close-day path in this shell. "Day closed" is reported
@@ -2473,6 +2477,9 @@ function TodayMomentsContent({
           not mutual exclusion). */}
         <CaptureOverlay
           open={captureOpen && showingMastheadAndMoments}
+          areas={state.areas}
+          selectedAreaId={selectedAreaId}
+          onAreaChange={setArea}
           initialText={captureDraft}
           onDraftChange={(text) => {
             setCaptureDraft(text);
