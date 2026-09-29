@@ -39,7 +39,7 @@ test(`${SIGNED_IN_TAG} an explicitly unassigned capture reaches the account and 
   watchPage(page);
   const account = await accountClient(page, user, env);
   await purgeOwnRows(account);
-  await gotoWithAccountSync(page, "/?area=all");
+  await gotoWithAccountSync(page, "/?area=all&moment=start");
   await expect(page.getByTestId("today-moments")).toBeVisible();
 
   const text = "Synthetic volunteer sponsor follow-up";

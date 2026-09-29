@@ -263,7 +263,7 @@ test("All areas Capture count opens its thoughts and the capture box shows its t
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/?area=all");
+  await page.goto("/?area=all&moment=start");
   await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
     "All areas",
   );
@@ -304,7 +304,7 @@ test("All areas Capture count opens its thoughts and the capture box shows its t
 test("capture area choice leaves the page filter alone and Back closes the box", async ({
   page,
 }) => {
-  await page.goto("/?area=all");
+  await page.goto("/?area=all&moment=start");
   await page.getByTestId("capture-affordance").click();
   const dialog = page.getByRole("dialog", { name: "Capture a thought" });
   await expect(dialog).toBeVisible();
