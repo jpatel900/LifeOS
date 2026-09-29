@@ -49,10 +49,24 @@ import {
   workflowSeed,
 } from "@/__tests__/helpers/workflowReachability";
 
-function RecoveryStateProbe({ taskId }: { taskId: string }) {
-  const { state } = useWorkflow();
+function RecoveryStateProbe({
+  taskId,
+  releaseTaskId,
+}: {
+  taskId: string;
+  releaseTaskId?: string;
+}) {
+  const { state, deferTask } = useWorkflow();
   return (
     <div>
+      {releaseTaskId ? (
+        <button
+          data-testid="re-entry-release-slot"
+          onClick={() => deferTask(releaseTaskId)}
+        >
+          Put off synthetic work
+        </button>
+      ) : null}
       <span data-testid="re-entry-recovery-task-status">
         {state.tasks.find((task) => task.id === taskId)?.status}
       </span>
@@ -274,7 +288,12 @@ describe("TodayMoments — FR-028 re-entry return ritual", () => {
 
     render(
       <WorkflowProvider>
-        <RecoveryStateProbe taskId={backlog.id} />
+        <RecoveryStateProbe
+          taskId={backlog.id}
+          releaseTaskId={
+            state.tasks.find((task) => task.status === "active")!.id
+          }
+        />
         <TodayMoments now={now} initialMoment="flow" />
       </WorkflowProvider>,
     );
@@ -302,6 +321,79 @@ describe("TodayMoments — FR-028 re-entry return ritual", () => {
     expect(
       screen.queryByTestId("today-moments-toast-undo"),
     ).not.toBeInTheDocument();
+    expect(
+      Object.keys(window.localStorage).filter((key) =>
+        key.endsWith(".lastResolution"),
+      ),
+    ).toHaveLength(0);
+    fireEvent.click(screen.getByTestId("re-entry-release-slot"));
+    fireEvent.click(screen.getByTestId("re-entry-ritual-recovery-accept"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("re-entry-ritual")).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getByTestId("re-entry-recovery-task-status"),
+    ).toHaveTextContent("active");
+    expect(
+      screen.getByTestId("re-entry-recovery-refused-task").textContent,
+    ).toBe("");
+    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+      "first move queued on this device",
+    );
+  });
+
+  it("multiple recovery candidates still show one proposal and edit/cancel survives reload", async () => {
+    let state = acceptLatestDraft(
+      captureWorkflow(workflowSeed(), "Prepare first synthetic draft"),
+    );
+    state = acceptLatestDraft(
+      captureWorkflow(state, "Prepare second synthetic draft"),
+    );
+    const now = new Date(
+      Date.parse(latestActivityTimestamp(state)!) +
+        RE_ENTRY_ABSENCE_DAYS * 86400_000,
+    );
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const mounted = render(
+      <WorkflowProvider>
+        <TodayMoments now={now} />
+      </WorkflowProvider>,
+    );
+    await screen.findByTestId("re-entry-ritual-recovery");
+    expect(screen.getAllByTestId("re-entry-ritual-recovery")).toHaveLength(1);
+    const firstTitle = screen
+      .getByTestId("re-entry-ritual-recovery")
+      .querySelector("h2")!.textContent;
+    fireEvent.click(screen.getByTestId("re-entry-ritual-recovery-swap"));
+    expect(screen.getAllByTestId("re-entry-ritual-recovery")).toHaveLength(1);
+    expect(
+      screen.getByTestId("re-entry-ritual-recovery").querySelector("h2")!
+        .textContent,
+    ).not.toBe(firstTitle);
+    fireEvent.click(screen.getByRole("button", { name: "Edit first step" }));
+    fireEvent.change(screen.getByLabelText("First step"), {
+      target: { value: "Write one opening line" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save first step" }));
+    expect(screen.getByTestId("re-entry-first-step")).toHaveTextContent(
+      "Write one opening line",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Edit first step" }));
+    fireEvent.change(screen.getByLabelText("First step"), {
+      target: { value: "Discard this change" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    mounted.unmount();
+    render(
+      <WorkflowProvider>
+        <TodayMoments now={now} />
+      </WorkflowProvider>,
+    );
+    await screen.findByTestId("re-entry-ritual-recovery");
+    expect(screen.getByTestId("re-entry-first-step")).toHaveTextContent(
+      "Write one opening line",
+    );
+    expect(screen.getAllByTestId("re-entry-ritual-recovery")).toHaveLength(1);
   });
 
   it("swap recovery cycles to the next candidate without changing task state", async () => {

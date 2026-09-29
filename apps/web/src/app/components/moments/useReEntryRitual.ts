@@ -103,6 +103,7 @@ export function useReEntryRitual(
   const scope = client ? identity.userId : reEntryScope(state);
   const entities = [
     ...state.areas,
+    ...state.projects,
     ...state.tasks,
     ...state.captureItems,
     ...state.taskDrafts,

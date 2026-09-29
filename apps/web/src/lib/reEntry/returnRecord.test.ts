@@ -16,10 +16,10 @@ const event = {
   userId: USER,
 };
 function fixture(fail = false) {
-  const insert = vi.fn(() => ({
+  const insert = vi.fn((row: Record<string, unknown>) => ({
     select: () => ({
       single: async () => ({
-        data: {},
+        data: row,
         error: fail ? { message: "synthetic denial" } : null,
       }),
     }),
@@ -41,7 +41,7 @@ describe("return event records", () => {
         new Promise((resolve) => {
           finish = resolve;
         }),
-    ) as typeof client.auth.getUser;
+    ) as NonNullable<MinimalSupabaseClient["auth"]>["getUser"];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       recordReturnOpened(client, event);

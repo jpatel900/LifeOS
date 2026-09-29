@@ -95,17 +95,24 @@ describe("ReEntryRitual", () => {
       onEditRecovery,
     });
     fireEvent.click(screen.getByRole("button", { name: "Edit first step" }));
+    expect(screen.getByLabelText("First step")).toHaveFocus();
     fireEvent.change(screen.getByLabelText("First step"), {
       target: { value: "Write one sentence" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save first step" }));
     expect(onEditRecovery).toHaveBeenCalledWith("t1", "Write one sentence");
+    expect(
+      screen.getByRole("button", { name: "Edit first step" }),
+    ).toHaveFocus();
     fireEvent.click(screen.getByRole("button", { name: "Edit first step" }));
     fireEvent.change(screen.getByLabelText("First step"), {
       target: { value: "Discard this edit" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onEditRecovery).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", { name: "Edit first step" }),
+    ).toHaveFocus();
     expect(screen.getAllByTestId("re-entry-ritual-recovery")).toHaveLength(1);
   });
 
@@ -398,6 +405,7 @@ describe("ReEntryRitual", () => {
                 recovery={null}
                 onAcceptRecovery={vi.fn()}
                 onSwapRecovery={vi.fn()}
+                onEditRecovery={vi.fn()}
                 onDismiss={vi.fn()}
               />
             ) : null}

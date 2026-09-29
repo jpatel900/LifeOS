@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -77,6 +77,14 @@ export function ReEntryRitual({
   const hasApprovals = plan.requiresApproval.length > 0;
   const [editing, setEditing] = useState(false);
   const [draftStep, setDraftStep] = useState("");
+  const stepInput = useRef<HTMLInputElement>(null);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (editing) stepInput.current?.focus();
+    else if (wasEditing.current) editButton.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
   const movedCount =
     plan.taskDeferrals.reduce(
       (count, item) =>
@@ -274,6 +282,7 @@ export function ReEntryRitual({
               >
                 <Label htmlFor="recovery-first-step">First step</Label>
                 <Input
+                  ref={stepInput}
                   id="recovery-first-step"
                   value={draftStep}
                   onChange={(event) => setDraftStep(event.target.value)}
@@ -321,6 +330,7 @@ export function ReEntryRitual({
                 type="button"
                 variant="ghost"
                 disabled={editing}
+                ref={editButton}
                 className="min-h-[44px] touch-manipulation"
                 onClick={() => {
                   setDraftStep(recovery.firstStep);

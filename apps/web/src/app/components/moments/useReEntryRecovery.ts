@@ -11,6 +11,7 @@ export function useReEntryRecovery(input: {
   ritual: UseReEntryRitualResult;
   updateTaskFirstTinyStep(taskId: string, step: string): void;
   promoteBacklogTask(taskId: string): WorkflowState;
+  clearWipRefusal(): void;
   showToast(message: string, action?: { label: string; run(): void }): void;
   deferTask(taskId: string): void;
   setMoment(moment: "start"): void;
@@ -60,18 +61,18 @@ export function useReEntryRecovery(input: {
     )
       return;
     input.updateTaskFirstTinyStep(taskId, recovery.firstStep);
+    if (task.status === "backlog") input.clearWipRefusal();
     const next =
       task.status === "backlog" ? input.promoteBacklogTask(taskId) : state;
-    if (next.wipRefusal?.refused_task_id === taskId) {
+    const activated = ["active", "scheduled"].includes(
+      next.tasks.find((item) => item.id === taskId)?.status ?? "",
+    );
+    // Resolve only from the ordinary transition's actual task result.
+    if (!activated && next.wipRefusal?.refused_task_id === taskId) {
       input.showToast("Today is full. Finish or put off a task first.");
       return;
     }
-    if (
-      !["active", "scheduled"].includes(
-        next.tasks.find((item) => item.id === taskId)?.status ?? "",
-      )
-    )
-      return;
+    if (!activated) return;
     ritual.complete({
       decision: "accepted",
       taskId,
