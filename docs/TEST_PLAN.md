@@ -316,7 +316,7 @@ Named families, not a file inventory — `apps/web/tests/e2e/` is the truth if t
 - plan-, review-, health-, areas-port-truth (signed-in tier): drive each ported sheet, check it against what the account holds, and check refresh/Back/Forward agree with the URL (C2 ports)
 - a11y-axe-pin: axe at AA on the covered surfaces
 
-Legacy cockpit specs (`cockpit-google-approval`, `cockpit-flow-repair`, `handoff-cockpit`, `capture-parse-mock`, `taskmap-lifecycle`, and the legacy-route cases in `hit-targets-390`) skip unless `NEXT_PUBLIC_MOMENTS_HOME=false`. CI runs with the flag on, so they are not standing pins. The Plan sheet's Google approval gate is held by a unit test in `PlanSheet.test.tsx`.
+Legacy cockpit specs (`cockpit-google-approval`, `cockpit-flow-repair`, `handoff-cockpit`, `capture-parse-mock`, `taskmap-lifecycle`, and the legacy-route cases in `hit-targets-390`) skip unless `NEXT_PUBLIC_MOMENTS_HOME=false`. CI runs with the flag on, so they are not standing pins. The Plan sheet's Google approval gate is covered by `PlanSheet.test.tsx` and the `plan-google-approval` browser pin at 390px and 1280px. The browser pin checks that demo mode disables Google approval with an explanation, makes no calendar request, and still allows local acceptance. It does not prove real-account or live Google writes.
 
 ## 8. AI Contract Tests
 
