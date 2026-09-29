@@ -5,7 +5,7 @@
   "trial": {
     "start": "UNSET",
     "start_gate": "Claude confirms the first real production capture appears on Start and sorts into a next step",
-    "development": "Trial blockers first; other bug and truth repairs continue; FR-049 is the sole feature exception",
+    "development": "Trial blockers first; other bug and truth repairs continue; FR-049 and FR-028 are the only feature exceptions",
     "main_merge_batch_limit": "at most once per day",
     "daily_note": "Record the production SHA with date, opened, first move, and friction"
   },
