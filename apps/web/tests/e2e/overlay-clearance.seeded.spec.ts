@@ -6,7 +6,7 @@ import { expect, test } from "@playwright/test";
 // claiming every scroll position. Preserve September 28 noon/evening inputs.
 test.use({ timezoneId: "UTC" });
 test.describe("Start and Flow overlay clearance (#1044)", () => {
-  for (const width of [640, 768, 800, 900, 1024, 1280]) {
+  for (const width of [640, 768, 800, 900, 1024, 1152, 1280]) {
     for (const moment of ["start", "flow"] as const) {
       for (const clock of [
         { id: "noon", iso: "2026-09-28T12:00:00.000Z", hour: 12 },
@@ -106,6 +106,16 @@ test.describe("Start and Flow overlay clearance (#1044)", () => {
               ),
               contentType: "application/json",
             });
+
+            if ([768, 1024, 1152, 1280].includes(width)) {
+              const screenshotName = `overlay-review-${moment}-${width}-${clock.id}-${position}.png`;
+              const screenshot = testInfo.outputPath(screenshotName);
+              await page.screenshot({ path: screenshot, fullPage: false });
+              await testInfo.attach(screenshotName, {
+                path: screenshot,
+                contentType: "image/png",
+              });
+            }
 
             if (position === "bottom") {
               await expectUsefulTarget(palette);
