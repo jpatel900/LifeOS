@@ -606,6 +606,7 @@ function TodayMomentsContent({
   const ritual = useReEntryRitual({
     state,
     now,
+    workflowAreaIdByPersistedId,
     enabled:
       !onboardingOwnsScreen &&
       areasReadbackSettled &&

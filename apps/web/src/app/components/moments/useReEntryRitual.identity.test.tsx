@@ -227,6 +227,46 @@ describe("return identity and ready-visit boundaries", () => {
     expect(mocks.opened).toHaveBeenCalledTimes(1);
   });
 
+  it("maps normalized workflow areas back to account UUIDs for edits and resolution", async () => {
+    authFixture();
+    const state = accountState(A);
+    const task = state.tasks[0];
+    const areaId = "00000000-0000-4000-8000-000000000101";
+    const hook = renderHook(() =>
+      useReEntryRitual({
+        state,
+        now: NOW,
+        workflowAreaIdByPersistedId: { [areaId]: task.area_id },
+      }),
+    );
+    await waitFor(() => expect(hook.result.current.status).toBe("ready"));
+    act(() =>
+      hook.result.current.editRecovery(task.id, "Open", "Write one line"),
+    );
+    expect(mocks.edited).toHaveBeenCalledWith(
+      mocks.client,
+      expect.any(Object),
+      task.id,
+      "Open",
+      "Write one line",
+      areaId,
+    );
+    act(() =>
+      hook.result.current.complete({
+        decision: "accepted",
+        taskId: task.id,
+        areaId: task.area_id,
+        firstStep: "Write one line",
+        edited: true,
+      }),
+    );
+    expect(mocks.resolved).toHaveBeenCalledWith(
+      mocks.client,
+      expect.any(Object),
+      expect.objectContaining({ areaId }),
+    );
+  });
+
   it("demo resolution records edited local metadata once without claiming account delivery", async () => {
     const state = accountState(A);
     const hook = renderHook(() => useReEntryRitual({ state, now: NOW }));

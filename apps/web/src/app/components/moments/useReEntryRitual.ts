@@ -45,6 +45,7 @@ export interface UseReEntryRitualInput {
   now: Date;
   enabled?: boolean;
   refreshPersistedWorkflow?: () => Promise<void>;
+  workflowAreaIdByPersistedId?: Readonly<Record<string, string>>;
 }
 export interface UseReEntryRitualResult {
   status: ReEntryRitualStatus;
@@ -61,7 +62,27 @@ export interface UseReEntryRitualResult {
 export function useReEntryRitual(
   input: UseReEntryRitualInput,
 ): UseReEntryRitualResult {
-  const { state, now, enabled = true, refreshPersistedWorkflow } = input;
+  const {
+    state,
+    now,
+    enabled = true,
+    refreshPersistedWorkflow,
+    workflowAreaIdByPersistedId,
+  } = input;
+  const accountAreaId = useCallback(
+    (areaId: string | null | undefined) => {
+      if (!areaId) return null;
+      if (uuidPattern.test(areaId)) return areaId;
+      // Use the provider's live bridge; normalized workflow IDs are not UUIDs.
+      return (
+        Object.entries(workflowAreaIdByPersistedId ?? {}).find(
+          ([persistedId, workflowId]) =>
+            workflowId === areaId && uuidPattern.test(persistedId),
+        )?.[0] ?? null
+      );
+    },
+    [workflowAreaIdByPersistedId],
+  );
   const client = createSupabaseBrowserClient();
   const [identity, setIdentity] = useState({
     userId: null as string | null,
@@ -274,6 +295,7 @@ export function useReEntryRitual(
         firstStep: null,
         edited: false,
         ...resolution,
+        areaId: accountAreaId(resolution?.areaId),
         resolvedAt: now.toISOString(),
       };
       recordLocalReturnResolution(checkpoint, result);
@@ -304,7 +326,7 @@ export function useReEntryRitual(
       }
       setStatus("done");
     },
-    [client, now],
+    [client, now, accountAreaId],
   );
   const editRecovery = useCallback(
     (taskId: string, before: string, after: string) => {
@@ -334,10 +356,10 @@ export function useReEntryRitual(
         taskId,
         before,
         firstStep,
-        state.tasks.find((task) => task.id === taskId)?.area_id ?? null,
+        accountAreaId(state.tasks.find((task) => task.id === taskId)?.area_id),
       );
     },
-    [client, save, state.tasks],
+    [client, save, state.tasks, accountAreaId],
   );
   const selectRecovery = useCallback(
     (taskId: string) => {
