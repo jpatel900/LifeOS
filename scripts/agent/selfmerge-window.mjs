@@ -181,7 +181,10 @@ function postNotification(prNumber, headSha) {
 
 // Best-effort by owner decision 2026-08-05 (no-fallback chosen knowingly):
 // a failed send logs a warning and the merge proceeds regardless.
-function sendTelegram(prNumber) {
+function sendTelegram(
+  prNumber,
+  { execute = execFileSync, readPr = ghJson } = {},
+) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) {
@@ -191,10 +194,10 @@ function sendTelegram(prNumber) {
     return;
   }
   try {
-    const pr = ghJson(["pr", "view", String(prNumber), "--json", "title,url"]);
+    const pr = readPr(["pr", "view", String(prNumber), "--json", "title,url"]);
     const text = `LifeOS PR #${prNumber} — ${pr.title}
 Merges when tests pass. Stop it: add needs:human-decision or close ${pr.url}`;
-    execFileSync(
+    execute(
       "curl",
       [
         "-s",
@@ -206,12 +209,12 @@ Merges when tests pass. Stop it: add needs:human-decision or close ${pr.url}`;
         "--data-urlencode",
         `text=${text}`,
       ],
-      { encoding: "utf8" },
+      { encoding: "utf8", stdio: "pipe" },
     );
     console.log("telegram: notice sent.");
-  } catch (error) {
+  } catch {
     console.log(
-      `telegram: send failed (${String(error).slice(0, 120)}); instant mode continues per owner decision.`,
+      "telegram: send failed; instant mode continues per owner decision.",
     );
   }
 }
@@ -605,7 +608,63 @@ function runSelfTest() {
     }
   }
 
-  console.log(`Self-test passed (${cases.length} cases).`);
+  const savedEnv = process.env;
+  const savedStdoutWrite = process.stdout.write;
+  const savedStderrWrite = process.stderr.write;
+  const output = [];
+  const captureWrite = (chunk) => {
+    output.push(String(chunk));
+    return true;
+  };
+  const syntheticToken = "SYNTHETIC_NOTIFIER_MARKER";
+  let calls = 0;
+  let executeOptions;
+  const failSend = (command, _args, options) => {
+    calls += 1;
+    assert.equal(command, "curl");
+    executeOptions = options;
+    throw Object.assign(new Error(syntheticToken), {
+      stdout: Buffer.from(syntheticToken),
+      stderr: Buffer.from(syntheticToken),
+    });
+  };
+  try {
+    process.env = {};
+    process.stdout.write = captureWrite;
+    process.stderr.write = captureWrite;
+    const readPr = () => ({
+      title: "Synthetic notice",
+      url: "https://example.invalid/pr/1",
+    });
+    assert.equal(sendTelegram(1, { execute: failSend, readPr }), undefined);
+    assert.equal(calls, 0, "missing credentials never execute curl");
+    assert.match(output.join(""), /secrets not set/);
+    output.length = 0;
+    process.env = {
+      TELEGRAM_BOT_TOKEN: syntheticToken,
+      TELEGRAM_CHAT_ID: "SYNTHETIC_CHAT",
+    };
+    assert.equal(sendTelegram(1, { execute: failSend, readPr }), undefined);
+    assert.equal(
+      output.join("").includes(syntheticToken),
+      false,
+      "safe output",
+    );
+    assert.match(output.join(""), /send failed.*instant mode continues/);
+    assert.equal(executeOptions.stdio, "pipe", "child output is captured");
+    assert.equal(calls, 1, "injected send only; no network");
+    output.length = 0;
+    assert.equal(sendTelegram(1, { execute: () => "ok", readPr }), undefined);
+    assert.match(output.join(""), /notice sent/);
+  } finally {
+    process.env = savedEnv;
+    process.stdout.write = savedStdoutWrite;
+    process.stderr.write = savedStderrWrite;
+  }
+
+  console.log(
+    `Self-test passed (${cases.length} policy cases; 3 notifier cases).`,
+  );
 }
 
 function main() {
