@@ -71,6 +71,45 @@ test.describe("Start and Flow overlay clearance (#1044)", () => {
                 where === "top" ? 0 : document.documentElement.scrollHeight,
               );
             }, position);
+            // Short Flow pages used to add a second viewport floor below
+            // the demo banner. At scroll-end this hid the tops of the tabs.
+            // Long pages can scroll their normal-flow masthead away.
+            let mastheadGeometry;
+            if (moment === "flow" && width === 768) {
+              const banner = page.getByTestId("demo-mode-banner");
+              await expect(banner).toBeVisible();
+              const bannerBox = (await banner.boundingBox())!;
+              const tabBoxes = [];
+              for (const value of ["start", "flow", "close"]) {
+                const tab = page.getByTestId(`moment-switcher-${value}`);
+                await expectUsefulTarget(tab);
+                const box = (await tab.boundingBox())!;
+                expect(box.y).toBeGreaterThanOrEqual(
+                  bannerBox.y + bannerBox.height,
+                );
+                tabBoxes.push({ value, box });
+              }
+              const sizing = await page
+                .getByTestId("moments-home-shell")
+                .evaluate((shell) => ({
+                  shellHeight: shell.getBoundingClientRect().height,
+                  contentHeight:
+                    shell.firstElementChild!.getBoundingClientRect().height,
+                  viewportHeight: window.innerHeight,
+                  scrollHeight: document.documentElement.scrollHeight,
+                  scrollY: window.scrollY,
+                }));
+              expect(sizing.shellHeight + bannerBox.height).toBeLessThanOrEqual(
+                sizing.viewportHeight + 1,
+              );
+              expect(
+                sizing.contentHeight + bannerBox.height,
+              ).toBeLessThanOrEqual(sizing.viewportHeight + 1);
+              expect(sizing.scrollHeight).toBeLessThanOrEqual(
+                sizing.viewportHeight + 1,
+              );
+              mastheadGeometry = { bannerBox, tabBoxes, sizing };
+            }
             await expectUsefulTarget(capture);
             await expectUsefulTarget(palette);
             await expect(legend).toBeVisible();
@@ -95,6 +134,7 @@ test.describe("Start and Flow overlay clearance (#1044)", () => {
               body: JSON.stringify(
                 {
                   observedClock,
+                  mastheadGeometry,
                   pillBox,
                   legendBox,
                   paletteBox,
