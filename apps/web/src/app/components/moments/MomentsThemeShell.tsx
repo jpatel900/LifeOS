@@ -21,18 +21,39 @@ import type { ReactNode } from "react";
 export function MomentsThemeShell({ children }: { children: ReactNode }) {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [demoBannerHeight, setDemoBannerHeight] = useState<number | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    // The banner already occupies flow space. A second full viewport below
+    // it creates needless scrolling on short moments pages and moves the
+    // masthead underneath the sticky banner. Measure its actual wrapping;
+    // account pages have no banner and keep their existing viewport floors.
+    const banner = document.querySelector('[data-testid="demo-mode-banner"]');
+    if (!banner) return;
+    const measure = () =>
+      setDemoBannerHeight(banner.getBoundingClientRect().height);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(banner);
+    return () => observer.disconnect();
   }, []);
 
   const dataTheme = mounted && resolvedTheme === "light" ? "light" : undefined;
+  const viewportStyle =
+    demoBannerHeight === null
+      ? undefined
+      : {
+          minHeight: `calc(100dvh - ${demoBannerHeight}px)`,
+        };
 
   return (
     <main
       className="lifeos-cockpit moments-home"
       data-theme={dataTheme}
       data-testid="moments-home-shell"
+      style={viewportStyle}
     >
       {/* #553/#593/#1011: below `sm` the fixed BottomNavigator is the only
           bottom obstruction; this padding clears it with a buffer, scoped to
@@ -51,7 +72,10 @@ export function MomentsThemeShell({ children }: { children: ReactNode }) {
           where the navigator doesn't render and the pill floats at its own
           #553 offset instead. Pinned by mobile-control-labels.spec.ts's
           breakpoint-hinge and scroll-end clearance tests. */}
-      <div className="mx-auto flex min-h-dvh w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-[calc(env(safe-area-inset-bottom)+9.5rem)] pt-4 min-[384px]:pb-[calc(env(safe-area-inset-bottom)+7rem)] sm:px-6 sm:pb-[calc(env(safe-area-inset-bottom)+8rem)] sm:pt-6">
+      <div
+        className="mx-auto flex min-h-dvh w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-[calc(env(safe-area-inset-bottom)+9.5rem)] pt-4 min-[384px]:pb-[calc(env(safe-area-inset-bottom)+7rem)] sm:px-6 sm:pb-[calc(env(safe-area-inset-bottom)+8rem)] sm:pt-6"
+        style={viewportStyle}
+      >
         {/* This div used to open with its own `#stage-content` skip link
             (`--btn`/`--btn-fg` tokens, scoped to the `.lifeos-cockpit` class
             this shell applies) — SUPERSEDED by #974: the true root

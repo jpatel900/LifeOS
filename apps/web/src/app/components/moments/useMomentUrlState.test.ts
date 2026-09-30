@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createElement, StrictMode } from "react";
 import { urlWithMoment, useMomentUrlState } from "./useMomentUrlState";
 
 /**
@@ -42,6 +43,41 @@ describe("urlWithMoment", () => {
 describe("useMomentUrlState (C2 Target Card 2)", () => {
   beforeEach(() => {
     goto("/");
+  });
+
+  it("waits for clock resolution, writes only the final moment once in StrictMode, and keeps user and Back choices", () => {
+    const replace = vi.spyOn(window.history, "replaceState");
+    const push = vi.spyOn(window.history, "pushState");
+    try {
+      const { result, rerender } = renderHook(
+        ({ ready }) => useMomentUrlState("start", ready),
+        {
+          initialProps: { ready: false },
+          wrapper: ({ children }) => createElement(StrictMode, null, children),
+        },
+      );
+      expect(window.location.search).toBe("");
+      expect(replace).not.toHaveBeenCalled();
+      act(() => result.current.adoptMomentFromUrl("close"));
+      rerender({ ready: true });
+      expect(window.location.search).toBe("?moment=close");
+      expect(replace).toHaveBeenCalledTimes(1);
+      expect(push).not.toHaveBeenCalled();
+      act(() => result.current.setMoment("flow"));
+      rerender({ ready: true });
+      expect(result.current.moment).toBe("flow");
+      expect(push).toHaveBeenCalledTimes(1);
+      act(() => {
+        goto("/?moment=close");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
+      rerender({ ready: true });
+      expect(result.current.moment).toBe("close");
+      expect(replace).toHaveBeenCalledTimes(2); // One hook write, one simulated Back.
+    } finally {
+      replace.mockRestore();
+      push.mockRestore();
+    }
   });
 
   it("reconciles the resolved initial moment into the URL at mount, via replaceState (no history growth)", () => {
