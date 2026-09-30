@@ -315,9 +315,7 @@ test("All areas Capture count opens its thoughts and the capture box shows its t
     }),
     contentType: "application/json",
   });
-  console.log(
-    `capture button colors: muted=${mutedBackground} expectedPrimary=${expectedPrimaryBackground} actualPrimary=${primaryBackground}`,
-  );
+
   expect(primaryBackground).not.toBe(mutedBackground);
   await page.screenshot({
     path: testInfo.outputPath("capture-review-desktop.png"),

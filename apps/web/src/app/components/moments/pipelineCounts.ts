@@ -42,7 +42,7 @@ export interface PipelineCountOptions {
  * one picks an accent *colour*, and a colour genuinely needs some value to
  * fall back to. Only the resolvers that scope *data* must refuse to guess.
  */
-function scopeAreaId(
+export function scopeAreaId(
   state: WorkflowState,
   selectedAreaId: string | null,
 ): string | null {
@@ -57,9 +57,7 @@ export function buildPipelineCounts(
   const areaId = scopeAreaId(state, selectedAreaId);
   if (state.areas.length === 0) {
     return {
-      capture: selectUnsortedCaptures(state, null).filter(
-        (item) => item.status === "new",
-      ).length,
+      capture: selectUnsortedCaptures(state, areaId).length,
       triage: 0,
       plan: 0,
       execute: 0,
@@ -71,14 +69,10 @@ export function buildPipelineCounts(
     areaId === null ? true : rowAreaId === areaId;
 
   const now = options.now ?? new Date();
-  // C1 Target Card 4: routed through the shared "not sorted yet" definition so
-  // the Capture badge can never count a thought an accepted task already came
-  // from (audit P0#3). The extra `status === "new"` narrowing is this badge's
-  // own long-standing semantics and is deliberately preserved: once a capture
-  // has been sorted it is counted by the Triage stage instead, never twice.
-  const actionableCapture = selectUnsortedCaptures(state, areaId).filter(
-    (item) => item.status === "new",
-  );
+  // Count the same unsorted rows that Triage lists: new and triage_required.
+  // The shared selector excludes captures already represented by a draft or
+  // accepted task, so the badge never counts that same decision twice.
+  const actionableCapture = selectUnsortedCaptures(state, areaId);
   const pendingDrafts = state.taskDrafts.filter(
     (draft) => inScope(draft.area_id) && draft.status === "pending",
   );

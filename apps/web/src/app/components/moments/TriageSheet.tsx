@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { Button } from "@/components/ui/button";
 import { MomentSheet } from "./MomentSheet";
+import { scopeAreaId } from "./pipelineCounts";
 import { TaskMapDraftReview } from "./TaskMapDraftReview";
 import { UnsortedCaptures } from "./UnsortedCaptures";
 import { HIT_TARGET_MIN } from "./hitTarget";
@@ -109,8 +110,8 @@ export function TriageSheet({
     }
   }, [open]);
 
-  // The pipeline count spans every area when the page shows All areas.
-  const resolvedAreaId = selectedAreaId;
+  // Match the pipeline scope: All areas and an unknown area both stay unscoped.
+  const resolvedAreaId = scopeAreaId(state, selectedAreaId);
 
   const pendingDrafts = state.taskDrafts.filter(
     (draft) =>
@@ -124,8 +125,7 @@ export function TriageSheet({
   // item first (stageAndPersistRawCapture), and only a parse turns it into a
   // task draft — so until it is sorted the thought lives ONLY in
   // `captureItems`. Same area scoping as the pipeline "Capture" badge
-  // (`buildPipelineCounts`'s actionableCapture filter plus
-  // `triage_required`, the parse-later status).
+  // (new and triage_required, excluding captures with a triage decision).
   // #703: the sheet still needs the *count* so the empty state stays honest;
   // the rows themselves (and the Sort action) live in the shared
   // UnsortedCaptures component below. C1 Target Card 4: both now read the one
