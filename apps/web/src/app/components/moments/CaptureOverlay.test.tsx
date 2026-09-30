@@ -70,6 +70,23 @@ describe("CaptureOverlay", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("closes on Escape when the area picker has focus", () => {
+    const onClose = vi.fn();
+    render(
+      <CaptureOverlay
+        open
+        onSave={vi.fn()}
+        onClose={onClose}
+        areas={[{ id: "custom-area", name: "Example area" }]}
+        onAreaChange={vi.fn()}
+      />,
+    );
+    fireEvent.keyDown(screen.getByLabelText("Save to area (optional)"), {
+      key: "Escape",
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   // SP-5: unsaved text must survive an accidental close/reopen within the
   // session. These cover the CaptureOverlay half of the contract in
   // isolation (seeding, hint, cursor position, reporting keystrokes
