@@ -156,7 +156,7 @@ describe("buildPipelineCounts", () => {
     });
   });
 
-  it("counts only raw captures not yet parsed or dispatched", () => {
+  it("counts both unsorted statuses, excluding parsed and resolved captures", () => {
     const state = stateWith({
       captureItems: [
         makeCaptureItem({ id: "cap-new", status: "new" }),
@@ -166,9 +166,111 @@ describe("buildPipelineCounts", () => {
       ],
     });
 
-    expect(buildPipelineCounts(state, "area-1", { now: NOW }).capture).toBe(1);
+    expect(buildPipelineCounts(state, "area-1", { now: NOW }).capture).toBe(2);
   });
 
+  it.each([
+    ["area-1", 2],
+    ["area-2", 2],
+    [null, 6],
+    ["area-deleted", 6],
+  ] as const)(
+    "counts the listed unsorted captures for scope %s",
+    (scope, expected) => {
+      const state = stateWith({
+        areas: [makeArea({ id: "area-1" }), makeArea({ id: "area-2" })],
+        captureItems: [
+          ...["area-1", "area-2", null].flatMap((area_id, index) => [
+            makeCaptureItem({ id: `new-${index}`, area_id, status: "new" }),
+            makeCaptureItem({
+              id: `waiting-${index}`,
+              area_id,
+              status: "triage_required",
+            }),
+          ]),
+          makeCaptureItem({ id: "sorted", status: "triage_required" }),
+          makeCaptureItem({ id: "accepted", status: "triage_required" }),
+          makeCaptureItem({ id: "parsed", status: "parsed" }),
+          makeCaptureItem({ id: "resolved", status: "resolved" }),
+          makeCaptureItem({ id: "archived", status: "archived" }),
+          makeCaptureItem({ id: "composted", status: "composted" }),
+        ],
+        taskDrafts: [
+          makeTaskDraft({ id: "draft-sorted", capture_item_id: "sorted" }),
+        ],
+        tasks: [
+          makeTask({
+            id: "task-accepted",
+            title: "Accepted",
+            source_capture_item_id: "accepted",
+          }),
+        ],
+      });
+      expect(buildPipelineCounts(state, scope, { now: NOW }).capture).toBe(
+        expected,
+      );
+    },
+  );
+
+  it.each([null, "area-deleted"])(
+    "counts both unassigned unsorted statuses with zero areas and scope %s",
+    (scope) => {
+      const state = stateWith({
+        areas: [],
+        captureItems: [
+          makeCaptureItem({ id: "new", area_id: null, status: "new" }),
+          makeCaptureItem({
+            id: "waiting",
+            area_id: null,
+            status: "triage_required",
+          }),
+          makeCaptureItem({
+            id: "sorted",
+            area_id: null,
+            status: "triage_required",
+          }),
+          makeCaptureItem({
+            id: "accepted",
+            area_id: null,
+            status: "triage_required",
+          }),
+          makeCaptureItem({ id: "parsed", area_id: null, status: "parsed" }),
+          makeCaptureItem({
+            id: "resolved",
+            area_id: null,
+            status: "resolved",
+          }),
+          makeCaptureItem({
+            id: "archived",
+            area_id: null,
+            status: "archived",
+          }),
+          makeCaptureItem({
+            id: "composted",
+            area_id: null,
+            status: "composted",
+          }),
+        ],
+        taskDrafts: [
+          makeTaskDraft({ id: "draft-sorted", capture_item_id: "sorted" }),
+        ],
+        tasks: [
+          makeTask({
+            id: "task-accepted",
+            title: "Accepted",
+            source_capture_item_id: "accepted",
+          }),
+        ],
+      });
+      expect(buildPipelineCounts(state, scope, { now: NOW })).toEqual({
+        capture: 2,
+        triage: 0,
+        plan: 0,
+        execute: 0,
+        review: 0,
+      });
+    },
+  );
   it("counts pending drafts and excludes accepted/rejected historical drafts", () => {
     const state = stateWith({
       taskDrafts: [

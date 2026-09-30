@@ -9,6 +9,7 @@ import {
   AI_SORTING_UNAVAILABLE_NOT_SORTED,
 } from "@/lib/statusVocabulary";
 import { TriageSheet } from "./TriageSheet";
+import { buildPipelineCounts } from "./pipelineCounts";
 
 const validTaskMapDraft = {
   schema_version: "1.0" as const,
@@ -153,6 +154,24 @@ function TwoAreaCaptureSeedBridge() {
   );
 }
 
+function CaptureScopeProbe({
+  selectedAreaId,
+}: {
+  selectedAreaId: string | null;
+}) {
+  const { state, syncPersistedAreas } = useWorkflow();
+  return (
+    <>
+      <button data-testid="clear-areas" onClick={() => syncPersistedAreas([])}>
+        Clear synthetic areas
+      </button>
+      <output data-testid="scope-area-count">{state.areas.length}</output>
+      <output data-testid="scope-capture-count">
+        {buildPipelineCounts(state, selectedAreaId).capture}
+      </output>
+    </>
+  );
+}
 function renderSheet(open = true) {
   return render(
     <WorkflowProvider>
@@ -205,6 +224,36 @@ describe("TriageSheet", () => {
     expect(screen.queryByTestId("triage-sheet-empty")).not.toBeInTheDocument();
   });
 
+  it.each([false, true])(
+    "lists captures for a stale area scope with zero areas=%s",
+    async (zeroAreas) => {
+      const staleAreaId = "area-deleted";
+      render(
+        <WorkflowProvider>
+          <CaptureScopeProbe selectedAreaId={staleAreaId} />
+          <RawCaptureSeedBridge />
+          <TriageSheet open selectedAreaId={staleAreaId} onClose={vi.fn()} />
+        </WorkflowProvider>,
+      );
+      if (zeroAreas) {
+        fireEvent.click(screen.getByTestId("clear-areas"));
+        expect(screen.getByTestId("scope-area-count")).toHaveTextContent("0");
+      }
+      fireEvent.click(screen.getByTestId("seed-submit-raw"));
+      await waitFor(() =>
+        expect(screen.getByTestId("scope-capture-count")).toHaveTextContent(
+          "1",
+        ),
+      );
+      expect(
+        screen.queryByTestId("triage-sheet-empty"),
+      ).not.toBeInTheDocument();
+      expect(screen.getByTestId("triage-sheet-captures")).toHaveTextContent(
+        "Buy milk and call the dentist",
+      );
+      expect(screen.getByRole("button", { name: "Sort" })).toBeEnabled();
+    },
+  );
   it("renders nothing when closed", () => {
     renderSheet(false);
     expect(screen.queryByTestId("moment-sheet")).not.toBeInTheDocument();

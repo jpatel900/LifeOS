@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createBriefViewRecorder,
-  localDayStamp,
   recordBriefViewFireAndForget,
 } from "./briefView";
+import { localDayStamp } from "../time/localDay";
 import type { MinimalSupabaseClient } from "@/lib/data/workflow";
 
 /**

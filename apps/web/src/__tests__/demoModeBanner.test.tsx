@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
+import { useState } from "react";
+import { hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 
 vi.mock("@/lib/supabase/config", () => ({
   isSupabaseConfigured: vi.fn(),
@@ -12,6 +15,19 @@ vi.mock("next/navigation", () => ({
 
 import { DemoModeBanner } from "@/app/components/DemoModeBanner";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import {
+  createEmptyWorkflowState,
+  createInitialWorkflowState,
+  STORAGE_KEY,
+  workflowStateHasDemoSeed,
+} from "@/lib/workflow/shared";
+
+// Matches the provider's first-render seed decision without mounting unrelated
+// persistence effects. Both renders use the real initializer and seed detector.
+function InitialWorkflowBanner() {
+  const [state] = useState(createInitialWorkflowState);
+  return <DemoModeBanner hasSeedData={workflowStateHasDemoSeed(state)} />;
+}
 
 describe("DemoModeBanner (FR-029 loud non-persistence)", () => {
   beforeEach(() => {
@@ -187,4 +203,123 @@ describe("DemoModeBanner (FR-029 loud non-persistence)", () => {
     );
     expect(banner).not.toHaveTextContent(/sample data/i);
   });
+
+  it("keeps the copy truthful when seed data or the route changes after mount", () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    const { rerender } = render(<DemoModeBanner hasSeedData />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/sample data/i);
+
+    rerender(<DemoModeBanner hasSeedData={false} />);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "there is no account to save to here",
+    );
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/sample data/i);
+
+    rerender(<DemoModeBanner hasSeedData />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/sample data/i);
+
+    navigationMock.pathname = "/login";
+    rerender(<DemoModeBanner hasSeedData />);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "there is no account to save to here",
+    );
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/sample data/i);
+  });
+
+  it.each([
+    { scenario: "fresh seeded tab", seeded: true, pathname: "/" },
+    { scenario: "seed disabled", seeded: false, pathname: "/" },
+    { scenario: "sample cleared", seeded: false, pathname: "/" },
+    { scenario: "existing empty snapshot", seeded: false, pathname: "/" },
+    {
+      scenario: "login with seeded workflow",
+      seeded: false,
+      pathname: "/login",
+    },
+  ])(
+    "hydrates $scenario without replacing the server banner",
+    async ({ scenario, seeded, pathname }) => {
+      vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+      navigationMock.pathname = pathname;
+      const previousSeedFlag = process.env.NEXT_PUBLIC_DEMO_SEED;
+      const previousSnapshot = sessionStorage.getItem(STORAGE_KEY);
+      const clearedKey = "lifeos.demoSeed.cleared";
+      const previousCleared = localStorage.getItem(clearedKey);
+      const container = document.createElement("div");
+      const onRecoverableError = vi.fn();
+      let root: Root | undefined;
+
+      try {
+        process.env.NEXT_PUBLIC_DEMO_SEED =
+          scenario === "seed disabled" ? "false" : "true";
+        sessionStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(clearedKey);
+        if (scenario === "sample cleared")
+          localStorage.setItem(clearedKey, "true");
+        if (scenario === "existing empty snapshot") {
+          sessionStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(createEmptyWorkflowState()),
+          );
+        }
+
+        // The server cannot inspect this browser's storage. Restore window before
+        // hydration so the client makes its real fresh-tab/cleared-tab decision.
+        const browserWindow = window;
+        let serverMarkup: string;
+        vi.stubGlobal("window", undefined);
+        try {
+          serverMarkup = renderToString(<InitialWorkflowBanner />);
+        } finally {
+          vi.stubGlobal("window", browserWindow);
+        }
+        container.innerHTML = serverMarkup;
+        document.body.appendChild(container);
+        const serverBanner = container.querySelector('[role="alert"]');
+        expect(serverBanner).toHaveTextContent(
+          "there is no account to save to here",
+        );
+
+        await act(async () => {
+          root = hydrateRoot(container, <InitialWorkflowBanner />, {
+            onRecoverableError,
+          });
+        });
+
+        expect(onRecoverableError).not.toHaveBeenCalled();
+        const banner = container.querySelector('[role="alert"]');
+        expect(banner).toBe(serverBanner);
+        expect(banner).toHaveTextContent(
+          seeded
+            ? "this is sample data"
+            : "there is no account to save to here",
+        );
+        expect(banner).toHaveTextContent(
+          "Nothing you do leaves this browser, and clearing its data ends it.",
+        );
+        if (!seeded) expect(banner).not.toHaveTextContent(/sample data/i);
+        const link = container.querySelector(
+          '[data-testid="demo-banner-signin-link"]',
+        );
+        expect(link).toHaveAttribute("href", "/login?next=%2F");
+        expect(link).toHaveClass(
+          "min-h-[44px]",
+          "min-w-[44px]",
+          "absolute",
+          "whitespace-nowrap",
+        );
+      } finally {
+        if (root) await act(async () => root?.unmount());
+        container.remove();
+        vi.unstubAllGlobals();
+        if (previousSeedFlag === undefined)
+          delete process.env.NEXT_PUBLIC_DEMO_SEED;
+        else process.env.NEXT_PUBLIC_DEMO_SEED = previousSeedFlag;
+        if (previousSnapshot === null) sessionStorage.removeItem(STORAGE_KEY);
+        else sessionStorage.setItem(STORAGE_KEY, previousSnapshot);
+        if (previousCleared === null) localStorage.removeItem(clearedKey);
+        else localStorage.setItem(clearedKey, previousCleared);
+      }
+    },
+  );
 });
