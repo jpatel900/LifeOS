@@ -333,14 +333,28 @@ describe("Today capture before account area hydration", () => {
   });
 
   it("keeps a deliberate real-area capture queued through account failure and sends that area on retry", async () => {
+    const chosenArea = {
+      ...customArea,
+      id: "44444444-4444-4444-8444-444444444444",
+      name: "Synthetic second area",
+      slug: "synthetic-second-area",
+      sort_order: 1,
+    };
+    listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [customArea, chosenArea],
+    });
     mountToday();
     await waitFor(() =>
-      expect(providerState().map[customArea.id]).toBe(customArea.id),
+      expect(providerState().map[chosenArea.id]).toBe(chosenArea.id),
     );
     pressCaptureShortcut();
+    expect(
+      screen.getByRole("combobox", { name: "Save to area (optional)" }),
+    ).toHaveValue(customArea.id);
     fireEvent.change(
       screen.getByRole("combobox", { name: "Save to area (optional)" }),
-      { target: { value: customArea.id } },
+      { target: { value: chosenArea.id } },
     );
     save("Synthetic chosen-area thought");
     await waitFor(async () =>
@@ -351,14 +365,14 @@ describe("Today capture before account area hydration", () => {
     );
     const pending = (await listPendingWrites("capture"))[0];
     expect(pending.payload).toMatchObject({
-      workflow_area_id: customArea.id,
-      persisted_area_id: customArea.id,
+      workflow_area_id: chosenArea.id,
+      persisted_area_id: chosenArea.id,
     });
     expect(account.captures).toHaveLength(0);
     account.available = true;
     fireEvent.click(screen.getByRole("button", { name: "Retry account" }));
     await waitFor(() => expect(account.captures).toHaveLength(1));
-    expect(account.captures[0].area_id).toBe(customArea.id);
+    expect(account.captures[0].area_id).toBe(chosenArea.id);
     await waitFor(async () =>
       expect(await listPendingWrites("capture")).toEqual([]),
     );
