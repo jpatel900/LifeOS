@@ -80,15 +80,23 @@ export function CaptureParseNotice({
   onRetryWithMock: () => void;
 }) {
   if (state.phase === "idle") return null;
-  if (state.phase === "parsed" && state.parser === "ai") return null;
+  if (state.phase === "parsed" && state.parser === "ai" && !state.warning)
+    return null;
 
   const message =
     state.phase === "parsing"
       ? "Parsing capture into drafts…"
       : state.phase === "parsed"
-        ? state.status === "ai_unavailable"
-          ? AI_SORTING_UNAVAILABLE_SORTED_HERE
-          : AI_SORTING_OFF_SORTED_HERE
+        ? [
+            state.parser === "mock"
+              ? state.status === "ai_unavailable"
+                ? AI_SORTING_UNAVAILABLE_SORTED_HERE
+                : AI_SORTING_OFF_SORTED_HERE
+              : null,
+            state.warning,
+          ]
+            .filter(Boolean)
+            .join(" ")
         : state.message;
 
   return (
