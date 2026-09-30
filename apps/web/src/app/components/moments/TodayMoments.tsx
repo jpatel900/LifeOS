@@ -2023,14 +2023,9 @@ function TodayMomentsContent({
     <div
       className="grid gap-6"
       data-testid="today-moments"
-      // #687 demo-seed round 2 — a settled marker a test can wait on, not a
-      // sleep. `createInitialWorkflowState` (lib/workflow/shared.ts)
-      // decides seeded-vs-empty SYNCHRONOUSLY inside the client's own first
-      // render (no window on the server, so SSR always renders empty; the
-      // client's hydration render is the first and only render that can
-      // know the answer) — this attribute reflects that same render's
-      // result, so waiting for it means waiting for exactly the render that
-      // matters, not an arbitrary delay.
+      // Waitable sample marker: the first client render matches empty SSR.
+      // The provider's existing mount restore then adopts saved or fresh
+      // demo data. Waiting for "true" observes that settled seeded state.
       data-demo-seeded={workflowStateHasDemoSeed(state) ? "true" : "false"}
       style={accentStyle}
     >
