@@ -8,7 +8,7 @@ import { HIT_TARGET_ROW } from "./hitTarget";
 /**
  * Moments pass P2 — packet: presentation primitives (dev-preview only).
  *
- * Fixed bottom-center capture pill. Always-available affordance mirroring
+ * Fixed bottom capture pill. Always-available affordance mirroring
  * useMomentKeyboard's "c"/"C" mapping (UX-INV-2 single-key capture).
  *
  * G1 floor follow-up: when `unsyncedCount > 0`, a queue badge surfaces how many
@@ -18,15 +18,11 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  * phrase is `SAVED_ON_THIS_DEVICE_SHORT` (#692 Slice C): every surface reporting
  * this state uses the same words, so do not re-phrase it here.
  *
- * D-6 (#483): the full prototype microcopy ("Something on your mind? Capture
- * it — don't hold it.") only shows at `sm` and up, where the pill has room to
- * stay on one line. Below that it falls back to the original short label —
- * owner feedback on #483 (2026-07-10) was to keep density in check rather
- * than port clutter, and the longer sentence wrapping to extra lines on
- * narrow viewports would grow the pill's footprint past the clearance
- * `MomentsHomeShell`'s bottom padding reserves (see page.tsx) and risk
- * crowding the Pipeline row the #477 e2e guard checks. The shortcut hint and
- * all click/disabled behavior are unchanged.
+ * #1044: at 640–1279px the existing short label sits on the right, leaving
+ * horizontal space for KeyboardLegend's fixed controls on the left. At
+ * 1280px and up the pill keeps its centered placement and full prototype
+ * microcopy ("Something on your mind? Capture it — don't hold it."). The
+ * shortcut hint and all click/disabled behavior are unchanged.
  *
  * #553 (2026-07-13 owner-lens audit): two fixes.
  *
@@ -65,7 +61,7 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  * replace #574's breakpoint-split offset; the zero-intersection contract at
  * 375x667/390x844 (scroll 0 AND end) is proven by the #593 e2e guards in
  * tests/e2e/moments-home-parity.spec.ts. Desktop behavior is pixel-identical
- * to #553.
+ * to #553 at 1280px and above; #1044 changes the narrower desktop band.
  */
 
 export interface CaptureAffordanceProps {
@@ -90,7 +86,7 @@ export function CaptureAffordance({
       aria-disabled={captureLocked}
       className={cn(
         HIT_TARGET_ROW,
-        "fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] z-40 mx-auto hidden w-fit items-center gap-2 rounded-full border border-border bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:hover:scale-100 sm:flex",
+        "fixed right-[calc(env(safe-area-inset-right)+1.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] z-40 hidden w-fit items-center gap-2 rounded-full border border-border bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:hover:scale-100 sm:flex xl:left-0 xl:right-0 xl:mx-auto",
       )}
       data-testid="capture-affordance"
     >
@@ -98,11 +94,11 @@ export function CaptureAffordance({
         "Capture resolving…"
       ) : (
         <>
-          <span className="hidden sm:inline">
+          <span className="hidden xl:inline">
             Something on your mind? <b className="font-bold">Capture it</b> —
             don&apos;t hold it.
           </span>
-          <span className="sm:hidden">Capture a thought</span>
+          <span className="xl:hidden">Capture a thought</span>
         </>
       )}
       <kbd className="rounded border border-primary-foreground/40 bg-black/10 px-1.5 py-0.5 text-[0.7rem] font-semibold">

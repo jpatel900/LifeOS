@@ -50,7 +50,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
           fetch-depth: 0
@@ -66,7 +66,7 @@ jobs:
             "+refs/pull/$PR_NUMBER/head"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22.13.0
           package-manager-cache: false
@@ -95,7 +95,7 @@ jobs:
       - name: Sync GitHub auto-merge setting
         id: sync
         if: always()
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           ELIGIBLE: ${{ steps.eligibility.outputs.eligible }}
           PR_NODE_ID: ${{ github.event.pull_request.node_id }}

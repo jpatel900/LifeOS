@@ -20,6 +20,24 @@ const base = {
 };
 
 describe("meta-learning record schemas", () => {
+  it.each(["re_entry_return", "re_entry_recovery"])(
+    "accepts the distinct FR-028 event name %s",
+    (suggestion_type) => {
+      expect(
+        CreateSuggestionRecordInputSchema.safeParse({
+          area_id: null,
+          policy_identifier: "re_entry.v1",
+          suggestion_type,
+          subject_type: "return_ritual",
+          subject_id: null,
+          suggestion_json: {
+            instance_id: "return-1",
+            scope: "device_activation",
+          },
+        }).success,
+      ).toBe(true);
+    },
+  );
   it("validates versioned suggestion records with stable policy identifiers", () => {
     expect(
       SuggestionRecordSchema.parse({

@@ -23,6 +23,7 @@ import {
 export async function createSuggestionRecord(
   client: MinimalSupabaseClient | null,
   input: CreateSuggestionRecordInput,
+  expectedUserId?: string,
 ) {
   const parsedInput = CreateSuggestionRecordInputSchema.parse(input);
 
@@ -32,6 +33,11 @@ export async function createSuggestionRecord(
     client,
     "Sign in before recording learning suggestions.",
   );
+  if (expectedUserId && user.id !== expectedUserId) {
+    throw new Error(
+      "The account changed before the learning record could be saved.",
+    );
+  }
 
   const query = client.from("suggestion_records") as {
     insert: (row: Record<string, unknown>) => {
@@ -67,6 +73,7 @@ export async function createSuggestionRecord(
 export async function createOverrideRecord(
   client: MinimalSupabaseClient | null,
   input: CreateOverrideRecordInput,
+  expectedUserId?: string,
 ) {
   const parsedInput = CreateOverrideRecordInputSchema.parse(input);
 
@@ -76,6 +83,11 @@ export async function createOverrideRecord(
     client,
     "Sign in before recording learning overrides.",
   );
+  if (expectedUserId && user.id !== expectedUserId) {
+    throw new Error(
+      "The account changed before the learning record could be saved.",
+    );
+  }
 
   const query = client.from("override_records") as {
     insert: (row: Record<string, unknown>) => {
@@ -109,8 +121,9 @@ export async function createOverrideRecord(
 export function recordSuggestionFireAndForget(
   client: MinimalSupabaseClient | null,
   input: CreateSuggestionRecordInput,
+  expectedUserId?: string,
 ) {
-  void createSuggestionRecord(client, input).catch((error) => {
+  void createSuggestionRecord(client, input, expectedUserId).catch((error) => {
     logLearningWriteFailure(error, {
       table: "suggestion_records",
       policy_identifier: input.policy_identifier,
@@ -122,8 +135,9 @@ export function recordSuggestionFireAndForget(
 export function recordOverrideFireAndForget(
   client: MinimalSupabaseClient,
   input: CreateOverrideRecordInput,
+  expectedUserId?: string,
 ) {
-  void createOverrideRecord(client, input).catch((error) => {
+  void createOverrideRecord(client, input, expectedUserId).catch((error) => {
     logLearningWriteFailure(error, {
       table: "override_records",
       policy_identifier: input.policy_identifier,

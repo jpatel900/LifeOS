@@ -165,4 +165,73 @@ describe("useReEntryRitual", () => {
 
     expect(result.current.status).toBe("idle");
   });
+
+  it("uses the device threshold instead of always using three days", () => {
+    window.localStorage.setItem("lifeos.reentry.thresholdDays", "14");
+    const state = stateWith({
+      tasks: [makeTask({ id: "t1", title: "Old task" })],
+    });
+    const { result } = renderHook(() => useReEntryRitual({ state, now: NOW }));
+    expect(result.current.status).toBe("idle");
+    expect(result.current.summary).toBeNull();
+  });
+
+  it("a completed return starts a new absence clock even without task edits", async () => {
+    const state = stateWith({
+      tasks: [makeTask({ id: "t1", title: "Old task" })],
+    });
+    const first = renderHook(() => useReEntryRitual({ state, now: NOW }));
+    await waitFor(() => expect(first.result.current.status).toBe("ready"));
+    first.result.current.complete();
+    first.unmount();
+    const second = renderHook(() =>
+      useReEntryRitual({
+        state,
+        now: new Date(NOW.getTime() + 4 * 24 * 60 * 60 * 1000),
+      }),
+    );
+    await waitFor(() => expect(second.result.current.status).toBe("ready"));
+    expect(second.result.current.summary?.absenceDays).toBe(4);
+  });
+
+  it("unfinished reload keeps the original return identity and summary after rows refresh", async () => {
+    const state = stateWith({
+      tasks: [makeTask({ id: "t1", title: "Old task" })],
+    });
+    const first = renderHook(() => useReEntryRitual({ state, now: NOW }));
+    await waitFor(() => expect(first.result.current.status).toBe("ready"));
+    const summary = first.result.current.summary;
+    first.unmount();
+    const freshState = stateWith({
+      tasks: [
+        makeTask({
+          id: "t1",
+          title: "Old task",
+          updated_at: NOW.toISOString(),
+        }),
+      ],
+    });
+    const second = renderHook(() =>
+      useReEntryRitual({ state: freshState, now: NOW }),
+    );
+    await waitFor(() => expect(second.result.current.status).toBe("ready"));
+    expect(second.result.current.summary).toEqual(summary);
+  });
+
+  it("completion on one user cannot suppress another user's same timestamp", async () => {
+    const state = stateWith({
+      tasks: [makeTask({ id: "t1", title: "Old task" })],
+    });
+    const first = renderHook(() => useReEntryRitual({ state, now: NOW }));
+    await waitFor(() => expect(first.result.current.status).toBe("ready"));
+    first.result.current.complete();
+    first.unmount();
+    const other = stateWith({
+      tasks: [makeTask({ id: "t2", title: "Other user", user_id: "user-2" })],
+    });
+    const second = renderHook(() =>
+      useReEntryRitual({ state: other, now: NOW }),
+    );
+    await waitFor(() => expect(second.result.current.status).toBe("ready"));
+  });
 });
