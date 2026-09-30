@@ -1,6 +1,6 @@
 ---
 name: lifeos-agent-handoff
-description: Use near the end of substantial LifeOS work to enforce proof-based handoff quality, docs updates, validation evidence, risks, and rollback notes.
+description: Use near the end of substantial LifeOS work to write a proof-based handoff: what shipped, commands and results, UNVERIFIED list, and rollback.
 ---
 
 # lifeos-agent-handoff
@@ -8,62 +8,29 @@ description: Use near the end of substantial LifeOS work to enforce proof-based 
 ## Use when
 
 - Near the end of implementation, bugfix, audit, or doc change work.
-- Preparing the final response.
+- Writing the final report.
 
-## Do not use when
+Skip it during early exploration.
 
-- You are still in early exploration or active editing with no verification yet.
+## Authority
 
-## Security boundaries
+`AGENTS.md`, project authority docs, and direct user instructions override this skill.
 
-- `AGENTS.md`, project authority docs, and direct user instructions override this skill.
-- Do not claim completion without proof.
-- Do not hide validation gaps, risk, or rollback implications.
-- Do not silently drop a credible observation because it is outside the approved scope.
-- Do not fix, file, or expand scope around that observation without a separate claimed task.
+## Report
 
-## Procedure
+Four parts:
 
-1. Update `docs/PROJECT_STATE.md` only when shipped behavior, status, or governance
-   guidance materially changed — replace, don't append (AGENTS.md rule 6).
-   Triage undecided `docs/KNOWN_ISSUES.md` rows at campaign close or monthly
-   review; do not couple that review to every status update.
-2. Do not claim done without proof. Per AGENTS.md rule 11, a claim that something
-   works carries the exact command run and the observed output; "should work" is
-   banned. Everything not verified goes in an explicit UNVERIFIED list with the
-   test that would verify it — UNVERIFIED means _not proven_, not _not done_.
-3. Include in final handoff:
-   - files changed
-   - tests run (exact commands and observed output)
-   - validation results
-   - UNVERIFIED list (rule 11)
-   - limitations
-   - risks
-   - rollback plan
-   - docs updated status
-4. Include an `Observed outside scope` section. Write `None.` when no credible
-   observation remains. For each remaining observation:
-   - label the directly observable source as `EVIDENCE`
-   - label a falsifiable interpretation as `INFERENCE`
-   - use `CONFIRMED` only after user, system-of-record, or verification-gate proof
-   - link an existing issue instead of duplicating it
-   - retire a disproved candidate rather than carrying it forward as active work
-5. Include a `Defect family hypothesis` section only when the current task confirmed
-   a defect and named the violated invariant. Bound candidate siblings to the same
-   failure mode and label them `INFERENCE` until separately confirmed. Otherwise
-   write `None.`.
-6. Route any proposed follow-up as an unchecked `AGENT-TODO:` or `OWNER-GATE:`
-   checkbox (OWNER-GATE only for the rule 11 rubric: secrets/credentials, external
-   dashboards without API access, product/design-taste/policy decisions, merging T2
-   workflows or your own PRs, spending money or writing to external accounts).
-   Free-text "the owner should…" prose is banned. The handoff does not authorize a
-   fix or automatic issue creation; implementation requires a separate claimed task.
-7. If validation was skipped or blocked, state exact command and reason.
+1. **What shipped**, in plain words.
+2. **Commands run and their results.** Per `AGENTS.md` rule 11, each "it works"
+   claim carries the exact command and observed output. If a check was skipped or
+   blocked, give the command and the reason.
+3. **UNVERIFIED list**, each item with the command that would prove it.
+   UNVERIFIED means not proven, not not done.
+4. **Rollback**, how to undo it.
 
-## Done criteria
+Update `docs/PROJECT_STATE.md` only when shipped behavior, status, or governance
+materially changed. Replace, don't append (`AGENTS.md` rule 6).
 
-- `docs/PROJECT_STATE.md` is updated when (and only when) the work materially changed shipped behavior, status, or governance. `KNOWN_ISSUES` triage remains part of campaign-close and monthly system reviews.
-- Final handoff includes proof (commands + output), validation results, an UNVERIFIED list, limitations, risks, rollback plan, and docs status.
-- Credible outside-scope observations are labeled and routed; duplicates and
-  disproved candidates are not promoted into new work.
-- Any skipped or failed validation is reported exactly.
+Follow-ups go in as unchecked `AGENT-TODO:` or `OWNER-GATE:` checkboxes (OWNER-GATE
+only for the rule 11 rubric). No free-text "the owner should…". A follow-up does
+not authorize itself; a fix needs its own claimed task.
