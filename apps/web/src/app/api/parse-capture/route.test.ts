@@ -359,7 +359,7 @@ describe("parse-capture route", () => {
     expect(body).toEqual({
       ok: false,
       error:
-        "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. You can sort it on this device instead.",
+        "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. Try again, or use basic sorting.",
       can_retry_with_mock: true,
       status: "ai_configured",
     });
@@ -395,7 +395,7 @@ describe("parse-capture route", () => {
 
     expect(response.status).toBe(502);
     expect(body.error).toBe(
-      "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. You can sort it on this device instead.",
+      "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. Try again, or use basic sorting.",
     );
     expect(body.can_retry_with_mock).toBe(true);
     expect(body.status).toBe("ai_configured");
@@ -408,5 +408,31 @@ describe("parse-capture route", () => {
         route_pattern: "/api/parse-capture",
       },
     });
+  });
+});
+
+describe("basic Sort still uses the authenticated route", () => {
+  it("rejects signed-out basic sorting before the provider or mock service", async () => {
+    mocks.parseCaptureWithFallback.mockClear();
+    mocks.getParseCaptureStatus.mockReturnValue({
+      status: "ai_configured",
+      preferredParser: "ai",
+    });
+    const response = await POST(
+      new Request("http://localhost/api/parse-capture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rawText: "Synthetic basic sorting",
+          parserMode: "mock",
+        }),
+      }),
+    );
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      ok: false,
+      errorCategory: "auth_rejected",
+    });
+    expect(mocks.parseCaptureWithFallback).not.toHaveBeenCalled();
   });
 });

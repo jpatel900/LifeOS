@@ -284,12 +284,12 @@ export const BLOCK_NOT_IN_ACCOUNT_FOR_GOOGLE = `This block is ${SAVED_ON_THIS_DE
  * `api/parse-capture`. It should import these instead of writing its own.
  */
 export const AI_SORTING_UNAVAILABLE_SORTED_HERE =
-  "AI sorting is unavailable right now, so LifeOS sorted this capture on your device.";
+  "AI sorting is unavailable right now, so LifeOS used basic sorting.";
 
 export const AI_SORTING_OFF_SORTED_HERE =
-  "AI sorting is turned off, so LifeOS sorted this capture on your device.";
+  "AI sorting is turned off, so LifeOS used basic sorting.";
 
-export const SORT_ON_THIS_DEVICE_ACTION = "Sort on this device";
+export const SORT_ON_THIS_DEVICE_ACTION = "Try basic sorting";
 
 /**
  * WHEN A SORT DOES NOT PRODUCE DRAFTS (#692 Slice D).
@@ -336,12 +336,28 @@ export const SORT_ON_THIS_DEVICE_ACTION = "Sort on this device";
  * separating them in copy would mean adding that branch — this slice
  * deliberately does not. Tracked on #692.
  */
-const THOUGHT_STILL_SAVED_SORT_HERE =
-  "Your thought is still saved, exactly as you wrote it. You can sort it on this device instead.";
+const THOUGHT_STILL_SAVED_AFTER_SORT_FAILURE =
+  "Your thought is still saved, exactly as you wrote it.";
+const SORT_RETRY_RECOVERY = "Try again, or use basic sorting.";
+const SORT_SIGN_IN_RECOVERY = "Sorting requires you to be signed in.";
 
-export const AI_SORTING_UNAVAILABLE_NOT_SORTED = `AI sorting is unavailable right now, so this one hasn't been sorted. ${THOUGHT_STILL_SAVED_SORT_HERE}`;
+// The route reaches these failures only after authentication. The client also
+// uses them for transport/timeouts; renderers adapt that recovery to live auth.
+export const AI_SORTING_UNAVAILABLE_NOT_SORTED = `AI sorting is unavailable right now, so this one hasn't been sorted. ${THOUGHT_STILL_SAVED_AFTER_SORT_FAILURE} ${SORT_RETRY_RECOVERY}`;
 
-export const AI_SORTING_FAILED_NOT_SORTED = `LifeOS couldn't sort this one just now. ${THOUGHT_STILL_SAVED_SORT_HERE}`;
+export const AI_SORTING_FAILED_NOT_SORTED = `LifeOS couldn't sort this one just now. ${THOUGHT_STILL_SAVED_AFTER_SORT_FAILURE} ${SORT_RETRY_RECOVERY}`;
+
+export function sortFailureMessage(message: string, signedIn: boolean) {
+  // Preserve useful specific errors, such as a missing area or an auth-check
+  // failure. Only the shared generic messages offer basic sorting.
+  if (
+    signedIn ||
+    (message !== AI_SORTING_FAILED_NOT_SORTED &&
+      message !== AI_SORTING_UNAVAILABLE_NOT_SORTED)
+  )
+    return message;
+  return message.replace(SORT_RETRY_RECOVERY, SORT_SIGN_IN_RECOVERY);
+}
 
 export function aiSortingAvailabilityLabel(status: AiSortingAvailability) {
   switch (status) {
