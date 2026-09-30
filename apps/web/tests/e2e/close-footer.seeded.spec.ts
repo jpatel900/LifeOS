@@ -15,7 +15,10 @@ const closeSurface = PINNED_SURFACES.find(
   (surface) => surface.id === "close-moment",
 )!;
 
-for (const viewport of VIEWPORTS) {
+for (const viewport of [
+  ...VIEWPORTS,
+  { id: "desktop", width: 1024, height: 900 },
+]) {
   for (const clock of CLOCKS) {
     test(`Close footer @ ${viewport.id} (${viewport.width}x${viewport.height}), ${clock.id}: seeded actions stay clear and usable`, async ({
       page,
@@ -80,12 +83,17 @@ for (const viewport of VIEWPORTS) {
         contentType: "application/json",
       });
       if (viewport.id === "desktop") {
-        const screenshot = testInfo.outputPath(`close-footer-${clock.id}.png`);
+        const screenshot = testInfo.outputPath(
+          `close-footer-${viewport.width}x${viewport.height}-${clock.id}.png`,
+        );
         await page.screenshot({ path: screenshot, fullPage: false });
-        await testInfo.attach(`Close footer ${clock.id} 1440x1000`, {
-          path: screenshot,
-          contentType: "image/png",
-        });
+        await testInfo.attach(
+          `Close footer ${clock.id} ${viewport.width}x${viewport.height}`,
+          {
+            path: screenshot,
+            contentType: "image/png",
+          },
+        );
       }
       expect(intersects, "Close and palette targets must not overlap").toBe(
         false,

@@ -1,0 +1,30 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    # Small groups keep each review focused. Other actions update individually.
+    groups:
+      runner-actions:
+        patterns:
+          - actions/checkout
+          - actions/setup-node
+      artifact-actions:
+        patterns:
+          - actions/upload-artifact
+          - actions/download-artifact
+      agent-actions:
+        patterns:
+          - openai/codex-action
+          - anthropics/claude-code-action
+      tool-actions:
+        patterns:
+          - pnpm/action-setup
+          - supabase/setup-cli
+      security-actions:
+        patterns:
+          - github/codeql-action*
+          - gitleaks/gitleaks-action
+          - google/osv-scanner-action*

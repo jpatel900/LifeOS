@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { ModuleKind, transpileModule } from "typescript";
 import type { Task } from "@lifeos/schemas";
 import {
   localDayStampFromDueAt,
@@ -6,6 +9,47 @@ import {
   selectBackTodayTasks,
 } from "./backToday";
 
+// Threads can ignore runtime TZ changes. Start a fresh process in Toronto and
+// load the real production modules; only their import location is rewritten.
+function runInToronto(assertions: string): void {
+  const compile = (path: string) =>
+    transpileModule(readFileSync(new URL(path, import.meta.url), "utf8"), {
+      compilerOptions: { module: ModuleKind.ESNext },
+    }).outputText;
+  const moduleUrl = (source: string) =>
+    `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
+  const dayUrl = moduleUrl(compile("../time/localDay.ts"));
+  const workflowSource = compile("./backToday.ts");
+  expect(workflowSource).toContain('from "../time/localDay"');
+  const workflowUrl = moduleUrl(
+    workflowSource.replace('"../time/localDay"', JSON.stringify(dayUrl)),
+  );
+  const output = execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `
+        import assert from "node:assert/strict";
+        import { localDayStamp } from ${JSON.stringify(dayUrl)};
+        import { localDayStampFromDueAt, localNoonIsoForDay, selectBackTodayTasks }
+          from ${JSON.stringify(workflowUrl)};
+        assert.equal(new Date("2026-03-08T06:59:59.000Z").getTimezoneOffset(), 300);
+        assert.equal(new Date("2026-03-08T07:00:00.000Z").getTimezoneOffset(), 240);
+        assert.equal(new Date("2026-11-01T05:59:59.000Z").getTimezoneOffset(), 240);
+        assert.equal(new Date("2026-11-01T06:00:00.000Z").getTimezoneOffset(), 300);
+        ${assertions}
+        console.log("Toronto DST verified");
+      `,
+    ],
+    {
+      env: { ...process.env, TZ: "America/Toronto" },
+      encoding: "utf8",
+      timeout: 10000,
+    },
+  );
+  expect(output.trim()).toBe("Toronto DST verified");
+}
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const AREA_A = "22222222-2222-4222-8222-222222222222";
 const AREA_B = "33333333-3333-4333-8333-333333333333";
@@ -107,65 +151,39 @@ describe("selectBackTodayTasks", () => {
   });
 
   describe("DST-change days (local noon storage survives the shift)", () => {
-    // These assertions need a host time zone that actually observes DST —
-    // pinned to America/Toronto (the owner's zone) so they hold on any CI
-    // runner, not only a developer machine that happens to be in one.
-    // Reassigning `process.env.TZ` changes what `Date`'s local-time methods
-    // read on Node (confirmed empirically on this host/Node build); if a
-    // future runtime stops honoring a reassigned `TZ`, these tests would
-    // start passing vacuously (no zone ever crosses the jump) rather than
-    // failing loudly — that risk is accepted here for CI portability.
-    const originalTz = process.env.TZ;
-
-    beforeEach(() => {
-      process.env.TZ = "America/Toronto";
-    });
-
-    afterEach(() => {
-      // Assigning `undefined` would store the string "undefined".
-      if (originalTz === undefined) delete process.env.TZ;
-      else process.env.TZ = originalTz;
-    });
-
     it("spring-forward, 2026-03-08 (clocks jump 2:00am -> 3:00am EDT)", () => {
-      const dueDay = "2026-03-08";
-      const t = task({ due_at: localNoonIsoForDay(dueDay) });
-      // Local noon survives the day's own 1-hour gap: read back as the
-      // exact same local day the person picked.
-      expect(localDayStampFromDueAt(t.due_at)).toBe(dueDay);
-
-      // The day before: not arrived yet.
-      const dayBefore = new Date(2026, 2, 7, 23, 59, 59, 999);
-      expect(selectBackTodayTasks([t], null, dayBefore)).toEqual([]);
-
-      // The transition day itself, just after local midnight (still
-      // standard time, before the 2am jump) — arrived.
-      const justAfterMidnight = new Date(2026, 2, 8, 0, 0, 0, 1);
-      expect(selectBackTodayTasks([t], null, justAfterMidnight)).toEqual([t]);
-
-      // The transition day, just after the 2am jump (now daylight time) —
-      // still arrived, same local day.
-      const justAfterTheJump = new Date(2026, 2, 8, 3, 0, 0);
-      expect(selectBackTodayTasks([t], null, justAfterTheJump)).toEqual([t]);
+      runInToronto(`
+        const dueDay = "2026-03-08";
+        const t = ${JSON.stringify(task())};
+        t.due_at = localNoonIsoForDay(dueDay);
+        assert.equal(t.due_at, "2026-03-08T16:00:00.000Z");
+        assert.equal(localDayStampFromDueAt(t.due_at), dueDay);
+        assert.equal(localDayStamp(new Date("2026-03-08T04:59:59.999Z")), "2026-03-07");
+        assert.equal(localDayStamp(new Date("2026-03-08T05:00:00.001Z")), dueDay);
+        assert.deepEqual(selectBackTodayTasks([t], null, new Date(2026, 2, 7, 23, 59, 59, 999)), []);
+        assert.deepEqual(selectBackTodayTasks([t], null, new Date(2026, 2, 8, 0, 0, 0, 1)), [t]);
+        assert.deepEqual(selectBackTodayTasks([t], null, new Date(2026, 2, 8, 3, 0, 0)), [t]);
+        assert.equal(localDayStamp(new Date("2026-03-08T07:00:00.000Z")), dueDay);
+      `);
     });
 
     it("fall-back, 2026-11-01 (clocks repeat 1:00am-2:00am EST, the extra hour)", () => {
-      const dueDay = "2026-11-01";
-      const t = task({ due_at: localNoonIsoForDay(dueDay) });
-      expect(localDayStampFromDueAt(t.due_at)).toBe(dueDay);
-
-      const dayBefore = new Date(2026, 9, 31, 23, 59, 59, 999);
-      expect(selectBackTodayTasks([t], null, dayBefore)).toEqual([]);
-
-      const justAfterMidnight = new Date(2026, 10, 1, 0, 0, 0, 1);
-      expect(selectBackTodayTasks([t], null, justAfterMidnight)).toEqual([t]);
-
-      // Well past the repeated hour, same local day — still arrived.
-      const laterThatDay = new Date(2026, 10, 1, 12, 0, 0);
-      expect(selectBackTodayTasks([t], null, laterThatDay)).toEqual([t]);
+      runInToronto(`
+        const dueDay = "2026-11-01";
+        const t = ${JSON.stringify(task())};
+        t.due_at = localNoonIsoForDay(dueDay);
+        assert.equal(t.due_at, "2026-11-01T17:00:00.000Z");
+        assert.equal(localDayStampFromDueAt(t.due_at), dueDay);
+        assert.equal(localDayStamp(new Date("2026-11-01T03:59:59.999Z")), "2026-10-31");
+        assert.equal(localDayStamp(new Date("2026-11-01T04:00:00.001Z")), dueDay);
+        assert.deepEqual(selectBackTodayTasks([t], null, new Date(2026, 9, 31, 23, 59, 59, 999)), []);
+        assert.deepEqual(selectBackTodayTasks([t], null, new Date(2026, 10, 1, 0, 0, 0, 1)), [t]);
+        assert.deepEqual(selectBackTodayTasks([t], null, new Date(2026, 10, 1, 12, 0, 0)), [t]);
+        assert.equal(localDayStamp(new Date("2026-11-01T05:30:00.000Z")), dueDay);
+        assert.equal(localDayStamp(new Date("2026-11-01T06:30:00.000Z")), dueDay);
+      `);
     });
   });
-
   it("never includes a non-backlog task, whatever its due_at", () => {
     const now = new Date(2026, 8, 30, 9, 0, 0);
     const due = localNoonIsoForDay("2026-09-20");

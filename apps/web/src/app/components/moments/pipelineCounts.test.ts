@@ -345,5 +345,35 @@ describe("buildPipelineCounts", () => {
         buildPipelineCounts(stateWith({ areas: [] }), null, { now: NOW }),
       ).toEqual({ capture: 0, triage: 0, plan: 0, execute: 0, review: 0 });
     });
+
+    it("counts an unassigned waiting thought without areas, but not sorted or accepted thoughts", () => {
+      const state = stateWith({
+        areas: [],
+        captureItems: [
+          makeCaptureItem({ id: "capture-waiting", area_id: null }),
+          makeCaptureItem({
+            id: "capture-parsed",
+            area_id: null,
+            status: "parsed",
+          }),
+          makeCaptureItem({ id: "capture-accepted", area_id: null }),
+        ],
+        tasks: [
+          makeTask({
+            id: "task-accepted",
+            title: "Already accepted",
+            area_id: "area-1",
+            source_capture_item_id: "capture-accepted",
+          }),
+        ],
+      });
+      expect(buildPipelineCounts(state, null, { now: NOW })).toEqual({
+        capture: 1,
+        triage: 0,
+        plan: 0,
+        execute: 0,
+        review: 0,
+      });
+    });
   });
 });

@@ -87,6 +87,36 @@ describe("KeyboardLegend", () => {
     expect(legend).toHaveClass("sm:flex");
   });
 
+  it("keeps the default legend fixed on the left beside the compact capture button", () => {
+    render(<KeyboardLegend onOpenPalette={vi.fn()} />);
+    const legend = screen.getByTestId("keyboard-legend");
+    expect(legend).toHaveClass("fixed", "bottom-6", "left-6", "z-30");
+    expect(legend).not.toHaveClass("py-2.5");
+  });
+
+  it("keeps explicit inFlow placement and its palette button usable at every width", () => {
+    const onOpenPalette = vi.fn();
+    render(<KeyboardLegend inFlow onOpenPalette={onOpenPalette} />);
+    const legend = screen.getByTestId("keyboard-legend");
+    expect(legend).toHaveClass(
+      "py-2.5",
+      "hidden",
+      "sm:flex",
+      "pointer-events-none",
+    );
+    expect(legend).not.toHaveClass("fixed");
+    expect(legend).not.toHaveClass("xl:fixed");
+    const button = screen.getByTestId("keyboard-legend-palette-button");
+    expect(button).toHaveAccessibleName("Open command palette");
+    expect(button).toHaveClass(
+      "min-h-[44px]",
+      "min-w-[44px]",
+      "-m-2.5",
+      "pointer-events-auto",
+    );
+    fireEvent.click(button);
+    expect(onOpenPalette).toHaveBeenCalledTimes(1);
+  });
   it("keeps the group itself non-interactive; only the palette button opts back into pointer events", () => {
     render(<KeyboardLegend onOpenPalette={vi.fn()} />);
     expect(screen.getByTestId("keyboard-legend")).toHaveClass(

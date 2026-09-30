@@ -70,25 +70,29 @@ describe("CaptureAffordance", () => {
     );
   });
 
-  // D-6 (#483): the prototype's microcopy at sm+, a compact fallback below
-  // it so the pill doesn't wrap to extra lines and outgrow the shell's
-  // reserved bottom clearance on narrow viewports.
+  // #1044: compact copy leaves room for the keyboard legend at 640–1279px.
+  // Wide desktop retains the prototype's full copy and centered placement.
   it("carries the prototype's capture microcopy for wider viewports", () => {
     render(<CaptureAffordance onOpen={vi.fn()} />);
     const button = screen.getByTestId("capture-affordance");
     expect(button).toHaveTextContent(
       "Something on your mind? Capture it — don't hold it.",
     );
+    expect(screen.getByText(/Something on your mind/)).toHaveClass(
+      "hidden",
+      "xl:inline",
+    );
   });
 
-  it("falls back to the short label below the sm breakpoint", () => {
+  it("uses the short label below the wide desktop breakpoint", () => {
     render(<CaptureAffordance onOpen={vi.fn()} />);
     const button = screen.getByTestId("capture-affordance");
     const shortLabel = Array.from(button.querySelectorAll("span")).find(
       (span) => span.textContent === "Capture a thought",
     );
     expect(shortLabel).toBeDefined();
-    expect(shortLabel).toHaveClass("sm:hidden");
+    expect(shortLabel).toHaveClass("xl:hidden");
+    expect(shortLabel).not.toHaveClass("sm:hidden");
   });
 
   it("still renders the open-capture shortcut hint from the keymap", () => {
@@ -101,9 +105,8 @@ describe("CaptureAffordance", () => {
   // and this suite's #553 addition in tests/e2e/moments-home-parity.spec.ts
   // for the real-layout intersection proof — jsdom does not compute real
   // layout, so this checks the classes that encode the contract instead).
-  // `inset-x-0 mx-auto w-fit` (not `left-1/2 -translate-x-1/2`) is the
-  // centering technique — see CaptureAffordance.tsx's #553 comment for the
-  // shrink-to-fit width bug that technique caused.
+  // #1044: the compact pill sits on the right below xl; wide desktop keeps
+  // the full-width centering technique from #553.
   //
   // #593 (supersedes the #574 offset split): the pill is desktop-only
   // (`hidden sm:flex`) at the plain #553 24px safe-area offset — the mobile
@@ -119,8 +122,13 @@ describe("CaptureAffordance", () => {
     );
     expect(button).toHaveClass("hidden");
     expect(button).toHaveClass("sm:flex");
-    expect(button).toHaveClass("inset-x-0");
-    expect(button).toHaveClass("mx-auto");
+    expect(button).toHaveClass(
+      "right-[calc(env(safe-area-inset-right)+1.5rem)]",
+      "xl:left-0",
+      "xl:right-0",
+      "xl:mx-auto",
+    );
+    expect(button).not.toHaveClass("inset-x-0", "mx-auto");
     expect(button).toHaveClass("w-fit");
     expect(button).toHaveClass("z-40");
   });

@@ -26,7 +26,7 @@ jobs:
       docs_only: ${{ steps.detect.outputs.docs_only }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
       - name: Detect docs-only diff
@@ -58,7 +58,7 @@ jobs:
       already_reviewed: ${{ steps.check.outputs.already_reviewed }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -76,7 +76,7 @@ jobs:
           echo "Three-dot diff patch-id: ${fingerprint:-empty}"
       - name: Check for an existing review of this exact diff
         id: check
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           DIFF_FINGERPRINT: ${{ steps.fingerprint.outputs.fingerprint }}
         with:
@@ -108,7 +108,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -124,7 +124,7 @@ jobs:
             "+refs/pull/$PR_NUMBER/head"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22.13.0
 
@@ -180,7 +180,7 @@ jobs:
           done
 
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -209,7 +209,7 @@ jobs:
 
       - name: Run Codex baseline PR review
         id: run_codex
-        uses: openai/codex-action@v1
+        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e # v1
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -243,7 +243,7 @@ jobs:
 
     steps:
       - name: Publish baseline pull request review
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           CODEX_FINAL_MESSAGE: ${{ needs.baseline-review.outputs.final_message }}
           PR_RISK_LEVEL: ${{ needs.classify-risk.outputs.risk_level }}
@@ -321,7 +321,7 @@ jobs:
           done
 
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -350,7 +350,7 @@ jobs:
 
       - name: Run Codex escalated PR review
         id: run_codex
-        uses: openai/codex-action@v1
+        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e # v1
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -389,7 +389,7 @@ jobs:
 
     steps:
       - name: Publish escalated pull request review
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           CODEX_FINAL_MESSAGE: ${{ needs.escalated-review.outputs.final_message }}
           PR_ESCALATION_REASONS: ${{ needs.classify-risk.outputs.escalation_reasons }}
