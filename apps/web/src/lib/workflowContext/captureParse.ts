@@ -10,6 +10,11 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { Area, Person } from "@lifeos/schemas";
 import { getOperatorProfile, listPeople } from "../data/workflow";
+import { AI_SORTING_FAILED_NOT_SORTED } from "../statusVocabulary";
+import {
+  PARSE_CAPTURE_CLIENT_DEADLINE_MS,
+  withRequestDeadline,
+} from "../ai/requestDeadline";
 import { normalizePersonName, resolvePersonMention } from "../data/personLinks";
 import {
   recordCommitmentProposal,
@@ -65,161 +70,205 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
     capture: WorkflowState["captureItems"][number],
     parserMode: ParseCaptureParserMode,
   ) {
-    activeParseCaptureIdRef.current = capture.id;
-    setCaptureParse({ phase: "parsing", captureId: capture.id, parserMode });
-    const failIfNoAreas = () => {
-      if (stateRef.current.areas.length > 0) return false;
+    // This ref identifies an attempt, not just a capture: a retry may use the
+    // same capture id while an older, uncancellable lookup is still pending.
+    const attemptId = `${capture.id}:${crypto.randomUUID()}`;
+    activeParseCaptureIdRef.current = attemptId;
+    try {
+      await withRequestDeadline(
+        PARSE_CAPTURE_CLIENT_DEADLINE_MS,
+        async (signal) => {
+          setCaptureParse({
+            phase: "parsing",
+            captureId: capture.id,
+            parserMode,
+          });
+          const ensureCurrentAttempt = () => {
+            signal.throwIfAborted();
+            if (activeParseCaptureIdRef.current !== attemptId) {
+              throw new Error("Parse attempt was replaced.");
+            }
+          };
+          const failIfNoAreas = () => {
+            if (stateRef.current.areas.length > 0) return false;
+            setCaptureParse({
+              phase: "failed",
+              captureId: capture.id,
+              status: "unknown",
+              message:
+                "Add an area before sorting. Your thought remains in Capture.",
+              canRetryWithMock: false,
+            });
+            return true;
+          };
+          if (failIfNoAreas()) return;
+
+          // Best-effort: attach the signed-in user's access token so the parse route
+          // can write a user-scoped, fire-and-forget AI call trace row (issue #288).
+          // Parsing itself never requires this token, so any failure here is ignored.
+          let authorization: string | undefined;
+          try {
+            const authClient = createSupabaseBrowserClient();
+            if (authClient) {
+              const { data } = await authClient.auth.getSession();
+              const accessToken = data.session?.access_token?.trim();
+              if (accessToken) {
+                authorization = `Bearer ${accessToken}`;
+              }
+            }
+          } catch {
+            // Tracing is optional; a missing/failed session must never block parsing.
+          }
+
+          ensureCurrentAttempt();
+          // S3 (#255): live charter/profile read path. S2 landed the context-assembly
+          // module, storage, and injection; the request-time read was deferred to
+          // this slice. Read persisted charters + the operator profile and forward
+          // them through the S2 plumbing. An empty charter/profile leaves the prompt
+          // byte-identical to baseline (S2 parity), and any read failure degrades to
+          // the pre-S3 name-only context — personalization must never block parsing.
+          const persistedAreas = persistedAreasRef.current;
+          const charterBySlug = new Map(
+            persistedAreas.map((area) => [
+              area.slug,
+              typeof area.charter_text === "string" ? area.charter_text : null,
+            ]),
+          );
+
+          let operatorProfileContext:
+            | ParseCaptureOperatorProfileContext
+            | undefined;
+          try {
+            const profileClient = createSupabaseBrowserClient();
+            if (profileClient) {
+              const profile = await getOperatorProfile(profileClient);
+              if (profile) {
+                operatorProfileContext = {
+                  profileText: profile.profile_text,
+                  compensationRules: profile.compensation_rules,
+                };
+              }
+            }
+          } catch {
+            // Personalization is best-effort; a failed profile read must never block
+            // parsing. Fall through with no operator profile (S2 empty-profile parity).
+          }
+
+          ensureCurrentAttempt();
+          // S3 (#255): load existing people so a proposed mention can resolve against
+          // one (normalized_name matching) instead of always proposing a new person.
+          // Best-effort — a failed read degrades resolution to "new", never blocks.
+          let peopleForResolution: Person[] = [];
+          try {
+            peopleForResolution = await listPeople(
+              createSupabaseBrowserClient(),
+            );
+          } catch {
+            // People read is best-effort; fall through with no candidates.
+          }
+
+          ensureCurrentAttempt();
+          const result = await requestParseCapture({
+            signal,
+            rawText: capture.raw_text,
+            areaContext: stateRef.current.areas.map((area) => {
+              const slug = area.name.toLowerCase().replace(/\s+/g, "-");
+              return {
+                slug,
+                name: area.name,
+                charterText: charterBySlug.get(slug) ?? null,
+              };
+            }),
+            operatorProfile: operatorProfileContext,
+            parserMode,
+            authorization,
+          });
+
+          ensureCurrentAttempt();
+          if (result.ok) {
+            if (activeParseCaptureIdRef.current !== attemptId) return;
+            if (failIfNoAreas()) return;
+            const parsed = buildParsedWorkflowResult({
+              response: result.response,
+              capture,
+              workflowAreaId: capture.area_id,
+              areas: stateRef.current.areas,
+            });
+            applyWorkflowState(
+              appendParsedWorkflowResult(stateRef.current, parsed),
+            );
+
+            // Born instrumented (NS-INV-3): record person/commitment proposals as
+            // pending suggestions. Fire-and-forget — a learning-write failure must
+            // never affect parsing or triage. Nothing is persisted to `people` here;
+            // approval happens in triage (NS-INV-4).
+            const learningClient = createSupabaseBrowserClient();
+            for (const draft of parsed.taskDrafts) {
+              const area_id = persistedAreaIdForWorkflowId(
+                draft.area_id,
+                persistedAreasRef.current,
+              );
+              for (const mention of draft.person_mentions) {
+                // Resolve against existing people by normalized name; a match records
+                // the linked person id, otherwise the proposal is a new-person one.
+                const resolution = resolvePersonMention(
+                  mention,
+                  peopleForResolution,
+                );
+                recordPersonMentionProposal(learningClient, {
+                  area_id,
+                  draft_id: draft.id,
+                  name: mention.name,
+                  role: mention.role,
+                  confidence: mention.confidence,
+                  match: resolution.kind === "matched" ? "matched" : "new",
+                  matched_person_id:
+                    resolution.kind === "matched" ? resolution.person.id : null,
+                });
+              }
+              if (draft.is_commitment) {
+                recordCommitmentProposal(learningClient, {
+                  area_id,
+                  draft_id: draft.id,
+                  title: draft.title,
+                  confidence: draft.confidence,
+                });
+              }
+            }
+          }
+
+          if (activeParseCaptureIdRef.current !== attemptId) {
+            return;
+          }
+
+          setCaptureParse(
+            result.ok
+              ? {
+                  phase: "parsed",
+                  captureId: capture.id,
+                  parser: result.parser,
+                  status: result.status,
+                }
+              : {
+                  phase: "failed",
+                  captureId: capture.id,
+                  status: result.status,
+                  message: result.error,
+                  canRetryWithMock: result.canRetryWithMock,
+                },
+          );
+        },
+      );
+    } catch {
+      if (activeParseCaptureIdRef.current !== attemptId) return;
       setCaptureParse({
         phase: "failed",
         captureId: capture.id,
         status: "unknown",
-        message: "Add an area before sorting. Your thought remains in Capture.",
-        canRetryWithMock: false,
+        message: AI_SORTING_FAILED_NOT_SORTED,
+        canRetryWithMock: true,
       });
-      return true;
-    };
-    if (failIfNoAreas()) return;
-
-    // Best-effort: attach the signed-in user's access token so the parse route
-    // can write a user-scoped, fire-and-forget AI call trace row (issue #288).
-    // Parsing itself never requires this token, so any failure here is ignored.
-    let authorization: string | undefined;
-    try {
-      const authClient = createSupabaseBrowserClient();
-      if (authClient) {
-        const { data } = await authClient.auth.getSession();
-        const accessToken = data.session?.access_token?.trim();
-        if (accessToken) {
-          authorization = `Bearer ${accessToken}`;
-        }
-      }
-    } catch {
-      // Tracing is optional; a missing/failed session must never block parsing.
     }
-
-    // S3 (#255): live charter/profile read path. S2 landed the context-assembly
-    // module, storage, and injection; the request-time read was deferred to
-    // this slice. Read persisted charters + the operator profile and forward
-    // them through the S2 plumbing. An empty charter/profile leaves the prompt
-    // byte-identical to baseline (S2 parity), and any read failure degrades to
-    // the pre-S3 name-only context — personalization must never block parsing.
-    const persistedAreas = persistedAreasRef.current;
-    const charterBySlug = new Map(
-      persistedAreas.map((area) => [
-        area.slug,
-        typeof area.charter_text === "string" ? area.charter_text : null,
-      ]),
-    );
-
-    let operatorProfileContext: ParseCaptureOperatorProfileContext | undefined;
-    try {
-      const profileClient = createSupabaseBrowserClient();
-      if (profileClient) {
-        const profile = await getOperatorProfile(profileClient);
-        if (profile) {
-          operatorProfileContext = {
-            profileText: profile.profile_text,
-            compensationRules: profile.compensation_rules,
-          };
-        }
-      }
-    } catch {
-      // Personalization is best-effort; a failed profile read must never block
-      // parsing. Fall through with no operator profile (S2 empty-profile parity).
-    }
-
-    // S3 (#255): load existing people so a proposed mention can resolve against
-    // one (normalized_name matching) instead of always proposing a new person.
-    // Best-effort — a failed read degrades resolution to "new", never blocks.
-    let peopleForResolution: Person[] = [];
-    try {
-      peopleForResolution = await listPeople(createSupabaseBrowserClient());
-    } catch {
-      // People read is best-effort; fall through with no candidates.
-    }
-
-    const result = await requestParseCapture({
-      rawText: capture.raw_text,
-      areaContext: stateRef.current.areas.map((area) => {
-        const slug = area.name.toLowerCase().replace(/\s+/g, "-");
-        return {
-          slug,
-          name: area.name,
-          charterText: charterBySlug.get(slug) ?? null,
-        };
-      }),
-      operatorProfile: operatorProfileContext,
-      parserMode,
-      authorization,
-    });
-
-    if (result.ok) {
-      if (activeParseCaptureIdRef.current !== capture.id) return;
-      if (failIfNoAreas()) return;
-      const parsed = buildParsedWorkflowResult({
-        response: result.response,
-        capture,
-        workflowAreaId: capture.area_id,
-        areas: stateRef.current.areas,
-      });
-      applyWorkflowState(appendParsedWorkflowResult(stateRef.current, parsed));
-
-      // Born instrumented (NS-INV-3): record person/commitment proposals as
-      // pending suggestions. Fire-and-forget — a learning-write failure must
-      // never affect parsing or triage. Nothing is persisted to `people` here;
-      // approval happens in triage (NS-INV-4).
-      const learningClient = createSupabaseBrowserClient();
-      for (const draft of parsed.taskDrafts) {
-        const area_id = persistedAreaIdForWorkflowId(
-          draft.area_id,
-          persistedAreasRef.current,
-        );
-        for (const mention of draft.person_mentions) {
-          // Resolve against existing people by normalized name; a match records
-          // the linked person id, otherwise the proposal is a new-person one.
-          const resolution = resolvePersonMention(mention, peopleForResolution);
-          recordPersonMentionProposal(learningClient, {
-            area_id,
-            draft_id: draft.id,
-            name: mention.name,
-            role: mention.role,
-            confidence: mention.confidence,
-            match: resolution.kind === "matched" ? "matched" : "new",
-            matched_person_id:
-              resolution.kind === "matched" ? resolution.person.id : null,
-          });
-        }
-        if (draft.is_commitment) {
-          recordCommitmentProposal(learningClient, {
-            area_id,
-            draft_id: draft.id,
-            title: draft.title,
-            confidence: draft.confidence,
-          });
-        }
-      }
-    }
-
-    if (activeParseCaptureIdRef.current !== capture.id) {
-      return;
-    }
-
-    setCaptureParse(
-      result.ok
-        ? {
-            phase: "parsed",
-            captureId: capture.id,
-            parser: result.parser,
-            status: result.status,
-          }
-        : {
-            phase: "failed",
-            captureId: capture.id,
-            status: result.status,
-            message: result.error,
-            canRetryWithMock: result.canRetryWithMock,
-          },
-    );
   }
 
   // FR-027: offline → save the raw capture to the durable device queue with NO

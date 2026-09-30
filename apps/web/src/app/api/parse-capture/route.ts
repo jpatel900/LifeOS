@@ -10,6 +10,9 @@ import {
 } from "@/lib/statusVocabulary";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+// Leave the 30-second provider deadline time to return a controlled error.
+export const maxDuration = 60;
+
 function readBearerToken(request: Request) {
   const authorization = request.headers.get("authorization");
 

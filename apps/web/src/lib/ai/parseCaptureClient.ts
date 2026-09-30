@@ -80,37 +80,49 @@ export async function requestParseCapture(input: {
   // trace row (issue #288); parsing itself never requires it.
   authorization?: string;
   fetchImpl?: typeof fetch;
+  // When supplied, the full Sort flow owns the single deadline.
+  signal?: AbortSignal;
 }): Promise<ParseCaptureRequestResult> {
   const fetchImpl = input.fetchImpl ?? fetch;
 
   let body: Record<string, unknown>;
   let httpOk: boolean;
   try {
-    const result = await withRequestDeadline(
-      PARSE_CAPTURE_CLIENT_DEADLINE_MS,
-      async (signal) => {
-        const httpResponse = await fetchImpl("/api/parse-capture", {
-          signal,
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(input.authorization
-              ? { Authorization: input.authorization }
-              : {}),
-          },
-          body: JSON.stringify({
-            rawText: input.rawText,
-            areaContext: input.areaContext,
-            operatorProfile: input.operatorProfile ?? undefined,
-            parserMode: input.parserMode,
-          }),
-        });
-        return {
-          httpOk: httpResponse.ok,
-          body: (await httpResponse.json()) as Record<string, unknown>,
-        };
-      },
-    );
+    const readResponse = async (signal: AbortSignal) => {
+      signal.throwIfAborted();
+      const httpResponse = await fetchImpl("/api/parse-capture", {
+        signal,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(input.authorization
+            ? { Authorization: input.authorization }
+            : {}),
+        },
+        body: JSON.stringify({
+          rawText: input.rawText,
+          areaContext: input.areaContext,
+          operatorProfile: input.operatorProfile ?? undefined,
+          parserMode: input.parserMode,
+        }),
+      });
+      signal.throwIfAborted();
+      const responseBody = (await httpResponse.json()) as Record<
+        string,
+        unknown
+      >;
+      signal.throwIfAborted();
+      return {
+        httpOk: httpResponse.ok,
+        body: responseBody,
+      };
+    };
+    const result = input.signal
+      ? await readResponse(input.signal)
+      : await withRequestDeadline(
+          PARSE_CAPTURE_CLIENT_DEADLINE_MS,
+          readResponse,
+        );
     httpOk = result.httpOk;
     body = result.body;
   } catch {
