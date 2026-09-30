@@ -74,7 +74,7 @@ jobs:
       github.event.workflow_run.run_attempt >= 2
     steps:
       - name: Checkout main history
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -89,7 +89,7 @@ jobs:
 
       - name: Skip if a guard revert PR is already open
         id: dedupe
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           github-token: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
           script: |
@@ -110,7 +110,7 @@ jobs:
       - name: Find last green main commit
         if: steps.dedupe.outputs.skip != 'true'
         id: green
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           github-token: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
           script: |
@@ -184,7 +184,7 @@ jobs:
       - name: Set up Node.js for the diagnosis step
         if: steps.dedupe.outputs.skip != 'true' && steps.revert.outputs.pr_url != ''
         continue-on-error: true
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22.13.0
           # dependency-free script, same as the policy self-test job
@@ -225,7 +225,7 @@ jobs:
       startsWith(github.event.pull_request.head.ref, 'guard/revert-main-')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           # Run the guard's script from main, never from the PR merge ref: a
           # guard revert that touches the guard's own files DELETES this script
@@ -234,7 +234,7 @@ jobs:
           ref: main
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22.13.0
           package-manager-cache: false
@@ -259,14 +259,14 @@ jobs:
       startsWith(github.event.workflow_run.head_branch, 'guard/revert-main-')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           # Explicit for the same reason as confirm-to-arm: the guard's script
           # always runs from main's trusted, present copy.
           ref: main
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22.13.0
           package-manager-cache: false
@@ -301,7 +301,7 @@ jobs:
       github.event.workflow_run.run_attempt >= 2
     steps:
       - name: Checkout main history
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -325,7 +325,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout main history
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
