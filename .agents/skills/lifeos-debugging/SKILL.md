@@ -5,58 +5,44 @@ description: Use for LifeOS debugging so failures are classified, reproduced, fi
 
 # lifeos-debugging
 
-## Overview / purpose
+## Purpose
 
-Provide a repeatable debugging workflow for LifeOS failures so fixes are evidence-driven instead of guess-driven.
+A repeatable debugging workflow so fixes are driven by evidence, not guesses.
 
 ## When to use
 
 - A command, route, workflow, or test is failing.
-- A user reports behavior that seems broken, misleading, or inconsistent.
-- A regression or flaky-looking surface needs disciplined triage.
+- Behavior seems broken, misleading, or inconsistent.
+- A regression or flaky-looking surface needs triage.
 
-## Do not use when
-
-- The work is a new feature with no failure to diagnose.
-- The task is only docs planning or repo governance with no concrete malfunction.
+Skip it for new features with no failure, or pure docs/governance work.
 
 ## Process
 
-1. Capture the exact failing command, error text, or user-reported behavior.
-2. Classify the failure: code bug, test bug, workflow/control-plane bug, dependency/install issue, env/config issue, flaky external, expected safety block, or unclear.
-3. Read the smallest relevant authority docs and source files before patching.
-4. Reproduce the failure or reason from trustworthy evidence when reproduction is unavailable.
-5. Patch the smallest surface that resolves the confirmed cause.
+1. Capture the exact failing command, error text, or reported behavior.
+2. Classify it: code bug, test bug, workflow/control-plane bug, dependency/install issue, env/config issue, flaky external, expected safety block, or unclear.
+3. Read the smallest relevant authority docs and source before patching.
+4. Reproduce it, or reason from trustworthy evidence when you can't.
+5. Patch the smallest surface that fixes the confirmed cause.
 6. Add or update regression proof when the touched surface warrants it.
-7. If the same approach fails twice, stop and change approach instead of thrashing.
-8. Report what was checked, what was not checked, and remaining risk.
-
-## Common rationalizations
-
-- "I can patch first and understand later." No. Diagnose before editing.
-- "The test is probably wrong." Prove that before changing it.
-- "I already tried twice; a third attempt might work." Change approach instead.
+7. If the same approach fails twice, change approach.
+8. Report what was checked, what wasn't, and remaining risk.
 
 ## Red flags
 
+- "Patch first, understand later." Diagnose before editing.
+- "The test is probably wrong." Prove it before changing it.
 - Broad refactors justified as debugging.
 - Weakened assertions used to hide uncertainty.
-- Missing exact error text or reproduction steps in the handoff.
+- Missing exact error text or repro steps in the handoff.
 
-## Verification
+## Done when
 
-- The original failure mode is named precisely.
-- The chosen fix maps to a verified cause, not a guess.
-- Regression proof exists when appropriate for the touched surface.
-
-## Done criteria
-
-- Failure type is classified.
-- Root cause or best-supported cause is documented.
-- Smallest viable fix is applied or a blocker is surfaced plainly.
+- The failure is classified and the cause (or best-supported cause) is written down.
+- The fix maps to a verified cause, with regression proof where it fits.
 - Validation and remaining risk are reported exactly.
 
-## Authority / safety boundaries
+## Authority
 
-- `AGENTS.md`, issue scope, and repo validation rules override this skill.
-- This skill does not authorize schema weakening, risky shortcuts, or broad cleanup.
+`AGENTS.md`, issue scope, and repo validation rules override this skill. It does
+not authorize schema weakening or risky shortcuts.
