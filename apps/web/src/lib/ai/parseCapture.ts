@@ -1,3 +1,4 @@
+import { PARSE_CAPTURE_PROVIDER_DEADLINE_MS } from "./requestDeadline";
 import type { ParseCaptureResponse } from "@lifeos/schemas";
 import {
   parseCaptureResponseFormat,
@@ -98,6 +99,7 @@ export async function parseCaptureDetailed(
 
   const provider = options.provider ?? resolveStructuredOutputProvider();
   const { outputText, telemetry } = await provider.generateStructuredOutput({
+    deadlineMs: PARSE_CAPTURE_PROVIDER_DEADLINE_MS,
     model,
     apiKey,
     fetchImpl: options.fetchImpl,
