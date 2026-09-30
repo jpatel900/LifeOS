@@ -385,7 +385,7 @@ export function evaluateStandDown({
 }
 
 // ---------------------------------------------------------------------------
-// Side-effecting helpers (never reached by the self-test)
+// Side-effecting helpers (self-tests inject local substitutes)
 // ---------------------------------------------------------------------------
 
 function gh(args) {
@@ -481,14 +481,14 @@ function collectAttempts(repo, runId) {
 // Best-effort, mirroring scripts/agent/selfmerge-window.mjs (owner decision
 // 2026-08-05, no-fallback chosen knowingly): a failed send is reported in the
 // PR comment and the guard continues without a notice.
-function sendTelegram(text) {
+function sendTelegram(text, execute = execFileSync) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) {
     return "telegram: secrets not set; no notice was sent.";
   }
   try {
-    execFileSync(
+    execute(
       "curl",
       [
         "-s",
@@ -500,15 +500,18 @@ function sendTelegram(text) {
         "--data-urlencode",
         `text=${text}`,
       ],
-      { encoding: "utf8" },
+      { encoding: "utf8", stdio: "pipe" },
     );
     return null;
-  } catch (error) {
-    return `telegram: send failed (${String(error).slice(0, 120)}); no notice was sent.`;
+  } catch {
+    return "telegram: send failed; no notice was sent.";
   }
 }
 
-function runDiagnose(argv) {
+function runDiagnose(
+  argv,
+  { collect = collectAttempts, notify = sendTelegram, post = gh } = {},
+) {
   const repo = repoSlug(argv);
   const pr = String(argv.pr ?? "");
   const runId = String(argv["run-id"] ?? "");
@@ -518,7 +521,7 @@ function runDiagnose(argv) {
   let runUrl = "";
   let collectError = null;
   try {
-    ({ attempts, runUrl } = collectAttempts(repo, runId));
+    ({ attempts, runUrl } = collect(repo, runId));
   } catch (error) {
     collectError = String(error).slice(0, 200);
   }
@@ -539,7 +542,7 @@ function runDiagnose(argv) {
   });
 
   const prNumber = pr.split("/").pop();
-  const telegramProblem = sendTelegram(
+  const telegramProblem = notify(
     renderTelegramNotice({ prNumber, prUrl: pr, classification }),
   );
 
@@ -551,7 +554,7 @@ function runDiagnose(argv) {
   });
   if (telegramProblem) body += `\n\n_${telegramProblem}_`;
 
-  gh(["pr", "comment", pr, "--body", body]);
+  post(["pr", "comment", pr, "--body", body]);
   console.log(`Diagnosis posted on ${pr}: ${classification.verdict}`);
 }
 
@@ -930,6 +933,88 @@ export function runSelfTest() {
   });
   assert.equal(unknown.standDown, false);
   assert.match(unknown.reason, /unknown/);
+
+  const savedEnv = process.env;
+  const savedStdoutWrite = process.stdout.write;
+  const savedStderrWrite = process.stderr.write;
+  const output = [];
+  const captureWrite = (chunk) => {
+    output.push(String(chunk));
+    return true;
+  };
+  const syntheticToken = "SYNTHETIC_NOTIFIER_MARKER";
+  let calls = 0;
+  let executeOptions;
+  const failSend = (command, _args, options) => {
+    calls += 1;
+    assert.equal(command, "curl");
+    executeOptions = options;
+    throw Object.assign(new Error(syntheticToken), {
+      stdout: Buffer.from(syntheticToken),
+      stderr: Buffer.from(syntheticToken),
+    });
+  };
+  try {
+    process.env = {};
+    process.stdout.write = captureWrite;
+    process.stderr.write = captureWrite;
+    assert.equal(
+      sendTelegram("Synthetic notice", failSend),
+      "telegram: secrets not set; no notice was sent.",
+    );
+    assert.equal(calls, 0, "missing credentials never execute curl");
+    process.env = {
+      TELEGRAM_BOT_TOKEN: syntheticToken,
+      TELEGRAM_CHAT_ID: "SYNTHETIC_CHAT",
+    };
+    const problem = sendTelegram("Synthetic notice", failSend);
+    assert.equal(problem.includes(syntheticToken), false, "safe send result");
+    assert.equal(
+      problem === "telegram: send failed; no notice was sent.",
+      true,
+      "fixed failure message",
+    );
+    assert.equal(executeOptions.stdio, "pipe", "child output is captured");
+    let diagnosisBody;
+    runDiagnose(
+      {
+        repo: "synthetic/repo",
+        pr: "https://example.invalid/pr/1",
+        "run-id": "1",
+      },
+      {
+        collect: () => ({
+          attempts: [a1, a2],
+          runUrl: "https://example.invalid/run",
+        }),
+        notify: (text) => sendTelegram(text, failSend),
+        post: (args) => {
+          diagnosisBody = args[args.indexOf("--body") + 1];
+        },
+      },
+    );
+    assert.equal(
+      diagnosisBody.includes(syntheticToken),
+      false,
+      "safe diagnosis body",
+    );
+    assert.ok(diagnosisBody.includes(problem), "diagnosis renders send result");
+    assert.match(diagnosisBody, /This revert is HELD/);
+    assert.equal(calls, 2, "injected sends only; no network");
+    assert.equal(
+      sendTelegram("Synthetic notice", () => "ok"),
+      null,
+    );
+    assert.equal(
+      output.join("").includes(syntheticToken),
+      false,
+      "safe output",
+    );
+  } finally {
+    process.env = savedEnv;
+    process.stdout.write = savedStdoutWrite;
+    process.stderr.write = savedStderrWrite;
+  }
 
   console.log("red-guard-diagnose self-tests passed.");
 }
