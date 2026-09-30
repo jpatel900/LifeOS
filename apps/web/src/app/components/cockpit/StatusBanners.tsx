@@ -6,12 +6,14 @@ import {
   AI_SORTING_OFF_SORTED_HERE,
   AI_SORTING_UNAVAILABLE_SORTED_HERE,
   SORT_ON_THIS_DEVICE_ACTION,
+  sortFailureMessage,
 } from "@/lib/statusVocabulary";
 import type {
   CaptureParseState,
   useWorkflow,
   WorkflowSyncStatus,
 } from "@/lib/WorkflowContext";
+import { useAuthPresence } from "../moments/useAuthPresence";
 import { HIT_TARGET_MIN } from "../moments/hitTarget";
 
 // Shell-level status banners (extracted from LifeOSCockpit.tsx, issue #590
@@ -79,6 +81,8 @@ export function CaptureParseNotice({
   state: CaptureParseState;
   onRetryWithMock: () => void;
 }) {
+  const { presence } = useAuthPresence();
+  const signedIn = presence.status === "signed-in";
   if (state.phase === "idle") return null;
   if (state.phase === "parsed" && state.parser === "ai") return null;
 
@@ -89,7 +93,7 @@ export function CaptureParseNotice({
         ? state.status === "ai_unavailable"
           ? AI_SORTING_UNAVAILABLE_SORTED_HERE
           : AI_SORTING_OFF_SORTED_HERE
-        : state.message;
+        : sortFailureMessage(state.message, signedIn);
 
   return (
     <div
@@ -104,7 +108,7 @@ export function CaptureParseNotice({
       )}
     >
       <span>{message}</span>
-      {state.phase === "failed" && state.canRetryWithMock ? (
+      {state.phase === "failed" && state.canRetryWithMock && signedIn ? (
         <button
           type="button"
           onClick={onRetryWithMock}

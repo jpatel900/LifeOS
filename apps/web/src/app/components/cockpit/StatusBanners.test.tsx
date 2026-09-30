@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CaptureParseNotice,
   SyncNotice,
@@ -9,6 +9,32 @@ import type {
   CaptureParseState,
   WorkflowSyncStatus,
 } from "@/lib/workflowContext/types";
+
+import {
+  AI_SORTING_FAILED_NOT_SORTED,
+  AI_SORTING_UNAVAILABLE_NOT_SORTED,
+} from "@/lib/statusVocabulary";
+const sortAuth = vi.hoisted(() => ({ getUser: vi.fn(), configured: vi.fn() }));
+vi.mock("@/lib/supabase/config", () => ({
+  isSupabaseConfigured: sortAuth.configured,
+}));
+vi.mock("@/lib/supabase/browser", () => ({
+  createSupabaseBrowserClient: () => ({
+    auth: {
+      getUser: sortAuth.getUser,
+      onAuthStateChange: () => ({
+        data: { subscription: { unsubscribe: vi.fn() } },
+      }),
+    },
+  }),
+}));
+beforeEach(() => {
+  sortAuth.configured.mockReturnValue(true);
+  sortAuth.getUser.mockResolvedValue({
+    data: { user: { email: "synthetic@example.test" } },
+    error: null,
+  });
+});
 
 // #688: SyncNotice reads the current path for its sign-in link's ?next=.
 vi.mock("next/navigation", () => ({
@@ -59,7 +85,7 @@ describe("StatusBanners 44px hit targets (#615)", () => {
     },
   );
 
-  it("the capture-parse-failed retry button carries the 44px hit-target class", () => {
+  it("the capture-parse-failed retry button carries the 44px hit-target class", async () => {
     const state: CaptureParseState = {
       phase: "failed",
       captureId: "capture-1",
@@ -71,7 +97,8 @@ describe("StatusBanners 44px hit targets (#615)", () => {
     render(<CaptureParseNotice state={state} onRetryWithMock={() => {}} />);
 
     expect(
-      screen.getByRole("button", { name: "Try basic sorting" }).className,
+      (await screen.findByRole("button", { name: "Try basic sorting" }))
+        .className,
     ).toContain("min-h-[44px]");
   });
 
@@ -348,5 +375,83 @@ describe("SyncNotice tone (#734)", () => {
       expect(banner).toHaveAttribute("data-tone", "alarm");
       expect(banner).toHaveTextContent(DEVICE_STORAGE_BLOCKED);
     });
+  });
+});
+
+describe("legacy Sort recovery follows current sign-in state", () => {
+  it.each(["unknown", "ai_configured", "ai_unavailable"] as const)(
+    "offers signed-in recovery for %s",
+    async (status) => {
+      const state: CaptureParseState = {
+        phase: "failed",
+        captureId: "synthetic-capture",
+        status,
+        message:
+          status === "ai_unavailable"
+            ? AI_SORTING_UNAVAILABLE_NOT_SORTED
+            : AI_SORTING_FAILED_NOT_SORTED,
+        canRetryWithMock: true,
+      };
+      render(<CaptureParseNotice state={state} onRetryWithMock={() => {}} />);
+      await waitFor(() =>
+        expect(screen.getByRole("status")).toHaveTextContent(
+          "Try again, or use basic sorting.",
+        ),
+      );
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Your thought is still saved, exactly as you wrote it.",
+      );
+      expect(screen.getByRole("status")).not.toHaveTextContent(
+        "Sorting requires you to be signed in.",
+      );
+      expect(
+        await screen.findByRole("button", { name: "Try basic sorting" }),
+      ).toBeInTheDocument();
+    },
+  );
+  it.each(["unknown", "ai_configured", "ai_unavailable"] as const)(
+    "hides signed-out basic recovery for %s",
+    async (status) => {
+      sortAuth.getUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: null,
+      });
+      const state: CaptureParseState = {
+        phase: "failed",
+        captureId: "synthetic-capture",
+        status,
+        message:
+          status === "ai_unavailable"
+            ? AI_SORTING_UNAVAILABLE_NOT_SORTED
+            : AI_SORTING_FAILED_NOT_SORTED,
+        canRetryWithMock: true,
+      };
+      render(<CaptureParseNotice state={state} onRetryWithMock={() => {}} />);
+      await waitFor(() =>
+        expect(screen.getByRole("status")).toHaveTextContent(
+          "Sorting requires you to be signed in.",
+        ),
+      );
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Your thought is still saved, exactly as you wrote it.",
+      );
+      expect(
+        screen.queryByRole("button", { name: "Try basic sorting" }),
+      ).not.toBeInTheDocument();
+    },
+  );
+  it("keeps useful missing-area recovery without an unavailable basic retry", () => {
+    const state: CaptureParseState = {
+      phase: "failed",
+      captureId: "synthetic-capture",
+      status: "unknown",
+      message: "Add an area before sorting. Your thought remains in Capture.",
+      canRetryWithMock: false,
+    };
+    render(<CaptureParseNotice state={state} onRetryWithMock={() => {}} />);
+    expect(screen.getByRole("status")).toHaveTextContent(state.message);
+    expect(
+      screen.queryByRole("button", { name: "Try basic sorting" }),
+    ).not.toBeInTheDocument();
   });
 });
