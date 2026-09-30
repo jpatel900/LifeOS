@@ -12,6 +12,13 @@ import {
   selectBackTodayTasks,
 } from "@/lib/workflow/backToday";
 
+import {
+  createFutureDateReservation,
+  rollupReplaySummary,
+} from "./phase4aRls.fixtureHelpers";
+
+const reserveFutureDate = createFutureDateReservation();
+
 const runLocalRlsTests = process.env.RUN_SUPABASE_RLS_TESTS === "1";
 // QA doctrine #269: deliberate local RLS opt-in gate; default runs skip until RUN_SUPABASE_RLS_TESTS=1 provides local Supabase proof.
 const describeLocalRls = runLocalRlsTests ? describe : describe.skip;
@@ -855,7 +862,7 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
         period_type: "week",
         period_start: periodStart,
         period_end: periodStart,
-        summary: { headline: `rls-rollup-${suffix}`, counts: {} },
+        summary: rollupReplaySummary(`rls-rollup-${suffix}`),
         client_write_id: clientWriteId,
       };
 
@@ -910,7 +917,7 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
         period_type: "week",
         period_start: periodStart,
         period_end: periodStart,
-        summary: { headline: `rls-rollup-dup-${suffix}`, counts: {} },
+        summary: rollupReplaySummary(`rls-rollup-dup-${suffix}`),
       };
 
       const { error: firstError } = await userAClient
@@ -3418,15 +3425,17 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
   });
 
   // #292 Stage-2 entry gate instrumentation: brief_views. Append-only by
-  // design (no update/delete policy, see 20260718120000_add_brief_views.sql)
-  // so these tests use a unique per-run viewed_on date instead of the usual
-  // insert/cleanup-by-marker pattern — there is no delete policy to clean up
-  // with, and the (user_id, viewed_on) primary key means a fixed date would
-  // collide across repeated local runs.
+  // design (no update/delete policy, see 20260718120000_add_brief_views.sql).
+  // Reserve viewed_on beyond existing rows and this run's earlier fixtures:
+  // cleanup is denied, and the (user_id, viewed_on) primary key must stay unique.
   it("lets user A read own brief_views but not user B's", async () => {
     const userAClient = await signIn(userA.email, userA.password);
     const userBClient = await signIn(userB.email, userB.password);
-    const viewedOn = randomFutureDateStamp();
+    const viewedOn = await reserveFutureDate(
+      [userAClient, userBClient],
+      "brief_views",
+      "viewed_on",
+    );
 
     const { error: insertAError } = await userAClient
       .from("brief_views")
@@ -3449,7 +3458,11 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
   it("prevents user A from inserting brief_views for user B", async () => {
     const userAClient = await signIn(userA.email, userA.password);
-    const viewedOn = randomFutureDateStamp();
+    const viewedOn = await reserveFutureDate(
+      [userAClient],
+      "brief_views",
+      "viewed_on",
+    );
 
     const { error } = await userAClient
       .from("brief_views")
@@ -3460,7 +3473,11 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
   it("re-inserting the same (user, day) brief_view is a harmless conflict, not a leak", async () => {
     const userAClient = await signIn(userA.email, userA.password);
-    const viewedOn = randomFutureDateStamp();
+    const viewedOn = await reserveFutureDate(
+      [userAClient],
+      "brief_views",
+      "viewed_on",
+    );
 
     const { error: firstError } = await userAClient
       .from("brief_views")
@@ -3485,7 +3502,11 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
   it("denies update and delete on brief_views for both owner and cross-user", async () => {
     const userAClient = await signIn(userA.email, userA.password);
-    const viewedOn = randomFutureDateStamp();
+    const viewedOn = await reserveFutureDate(
+      [userAClient],
+      "brief_views",
+      "viewed_on",
+    );
 
     const { error: insertError } = await userAClient
       .from("brief_views")
@@ -3528,7 +3549,11 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
   it("lets user A read own purpose_gauge_checkins but not user B's", async () => {
     const userAClient = await signIn(userA.email, userA.password);
     const userBClient = await signIn(userB.email, userB.password);
-    const checkedOn = randomFutureDateStamp();
+    const checkedOn = await reserveFutureDate(
+      [userAClient, userBClient],
+      "purpose_gauge_checkins",
+      "checked_on",
+    );
 
     const { error: insertAError } = await userAClient
       .from("purpose_gauge_checkins")
@@ -3561,7 +3586,11 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
   it("prevents user A from inserting purpose_gauge_checkins for user B", async () => {
     const userAClient = await signIn(userA.email, userA.password);
-    const checkedOn = randomFutureDateStamp();
+    const checkedOn = await reserveFutureDate(
+      [userAClient],
+      "purpose_gauge_checkins",
+      "checked_on",
+    );
 
     const { error } = await userAClient
       .from("purpose_gauge_checkins")
@@ -3572,7 +3601,11 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
   it("rejects a response outside the three FR-033 values", async () => {
     const userAClient = await signIn(userA.email, userA.password);
-    const checkedOn = randomFutureDateStamp();
+    const checkedOn = await reserveFutureDate(
+      [userAClient],
+      "purpose_gauge_checkins",
+      "checked_on",
+    );
 
     const { error } = await userAClient
       .from("purpose_gauge_checkins")
@@ -3583,7 +3616,11 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
   it("re-tapping the same day is a no-op that never revises the first response", async () => {
     const userAClient = await signIn(userA.email, userA.password);
-    const checkedOn = randomFutureDateStamp();
+    const checkedOn = await reserveFutureDate(
+      [userAClient],
+      "purpose_gauge_checkins",
+      "checked_on",
+    );
 
     const { error: firstError } = await userAClient
       .from("purpose_gauge_checkins")
@@ -3614,7 +3651,11 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
   it("overwrites a client-forged created_at with the server clock", async () => {
     const userAClient = await signIn(userA.email, userA.password);
-    const checkedOn = randomFutureDateStamp();
+    const checkedOn = await reserveFutureDate(
+      [userAClient],
+      "purpose_gauge_checkins",
+      "checked_on",
+    );
 
     const { error: insertError } = await userAClient
       .from("purpose_gauge_checkins")
@@ -3641,7 +3682,11 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
   it("denies update and delete on purpose_gauge_checkins for the owner", async () => {
     const userAClient = await signIn(userA.email, userA.password);
-    const checkedOn = randomFutureDateStamp();
+    const checkedOn = await reserveFutureDate(
+      [userAClient],
+      "purpose_gauge_checkins",
+      "checked_on",
+    );
 
     const { error: insertError } = await userAClient
       .from("purpose_gauge_checkins")
@@ -4042,15 +4087,6 @@ async function deleteHealthIncidentsByCode(
       `Could not clean up health_incidents '${incidentCode}': ${error.message}`,
     );
   }
-}
-
-function randomFutureDateStamp(): string {
-  // Far enough in the future to never collide with real usage data, random
-  // enough per test run to never collide with a previous local RLS run.
-  const base = Date.UTC(2080, 0, 1);
-  const offsetDays = Math.floor(Math.random() * 3650);
-  const stamp = new Date(base + offsetDays * 24 * 60 * 60 * 1000);
-  return stamp.toISOString().slice(0, 10);
 }
 
 function expectDenied(data: unknown[] | null, error: { code?: string } | null) {

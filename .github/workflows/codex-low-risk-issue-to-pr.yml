@@ -38,14 +38,14 @@ jobs:
 
     steps:
       - name: Checkout approval policy
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Load issue details and eligibility
         id: resolve
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           github-token: ${{ github.token }}
           script: |
@@ -170,19 +170,19 @@ jobs:
 
     steps:
       - name: Checkout main
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: main
           fetch-depth: 0
           persist-credentials: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22.13.0
           cache: pnpm
@@ -197,7 +197,7 @@ jobs:
         run: git switch --create "$BRANCH_NAME"
 
       - name: Write issue context for Codex
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.resolve-issue.outputs.issue_title }}
@@ -233,7 +233,7 @@ jobs:
 
       - name: Run Codex low-risk implementation
         id: run_codex
-        uses: openai/codex-action@v1
+        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e # v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-5.4-mini
@@ -329,7 +329,7 @@ jobs:
 
       - name: Upload Codex patch artifact
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: codex-low-risk-issue-${{ needs.resolve-issue.outputs.issue_number }}
           path: |
@@ -352,20 +352,20 @@ jobs:
 
     steps:
       - name: Checkout main
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: main
           fetch-depth: 0
 
       - name: Download Codex patch artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           name: codex-low-risk-issue-${{ needs.resolve-issue.outputs.issue_number }}
           path: ${{ runner.temp }}/codex-low-risk
 
       - name: Parse Codex result
         id: codex_result
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           CODEX_FINAL_MESSAGE: ${{ needs.codex-generate.outputs.final_message }}
         with:
@@ -398,7 +398,7 @@ jobs:
 
       - name: Comment when human review is required
         if: steps.codex_result.outputs.codex_result == 'needs_human_review'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           ISSUE_COMMENT: ${{ steps.codex_result.outputs.issue_comment }}
@@ -419,7 +419,7 @@ jobs:
 
       - name: Comment when no changes are needed
         if: steps.codex_result.outputs.codex_result == 'no_changes'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           ISSUE_COMMENT: ${{ steps.codex_result.outputs.issue_comment }}
@@ -463,7 +463,7 @@ jobs:
 
       - name: Comment when Codex produced no repository changes
         if: steps.changed_files.outputs.has_changes == 'false'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           ISSUE_COMMENT: ${{ steps.codex_result.outputs.issue_comment }}
@@ -485,7 +485,7 @@ jobs:
 
       - name: Comment when forbidden paths were touched
         if: steps.guard_paths.outputs.blocked == 'true'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           SUMMARY: ${{ steps.codex_result.outputs.summary }}
@@ -516,13 +516,13 @@ jobs:
 
       - name: Set up pnpm
         if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           run_install: false
 
       - name: Set up Node.js
         if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22.13.0
           cache: pnpm
@@ -579,7 +579,7 @@ jobs:
       - name: Create or update pull request
         id: create_pr
         if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.resolve-issue.outputs.issue_title }}

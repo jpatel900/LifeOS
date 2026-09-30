@@ -34,7 +34,7 @@ jobs:
     steps:
       - name: Load issue details and planning eligibility
         id: resolve
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           github-token: ${{ github.token }}
           script: |
@@ -90,14 +90,14 @@ jobs:
 
     steps:
       - name: Checkout main
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: main
           fetch-depth: 0
           persist-credentials: false
 
       - name: Write issue context
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.resolve-issue.outputs.issue_title }}
@@ -130,7 +130,7 @@ jobs:
         id: run_codex
         env:
           ISSUE_CONTEXT_PATH: ${{ runner.temp }}/issue-plan-context.md
-        uses: openai/codex-action@v1
+        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e # v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-5.4-mini
@@ -206,7 +206,7 @@ jobs:
           safety-strategy: drop-sudo
 
       - name: Post planning packet comment
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           SOURCE_LABELS: ${{ needs.resolve-issue.outputs.source_labels }}
