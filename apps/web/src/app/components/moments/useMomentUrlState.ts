@@ -31,13 +31,15 @@ import type { MomentValue } from "./MomentSwitcher";
  *   mount-time deep link from a redirect shim, e.g. `/execute` ->
  *   `/?moment=flow`) — writes no history, matching
  *   `useSheetUrlState.adoptSheetFromUrl`.
- * - **Mount** takes `resolvedInitialMoment` as already fully resolved by the
+ * - **Mount** takes `resolvedInitialMoment` as resolved by the
  *   caller — `initialMoment` prop (test-only override) -> the URL's own
  *   `?moment=` param -> the `cookieMoment` prop (the remembered moment,
  *   resolved server-side from the `lifeos_moments_prefs` cookie — C2-S14,
  *   #687 round-8) -> clock heuristic, in that order (`TodayMoments.tsx`
  *   computes it; this hook does not re-derive it, so there is exactly one
- *   place that order lives). It then `replaceState`s
+ *   place that order lives). When a browser-only choice is pending, the
+ *   caller keeps `initialResolutionReady` false until it adopts the final
+ *   value; the temporary hydration view never reaches history. It then `replaceState`s
  *   the resolved value into the URL — a no-op whenever the URL already
  *   agreed, which is always true on the redirect-shim path (`/execute` ->
  *   `/?moment=flow`) and self-healing whenever it does not (a stale
@@ -90,29 +92,29 @@ export interface MomentUrlState {
 
 export function useMomentUrlState(
   resolvedInitialMoment: MomentValue,
+  initialResolutionReady = true,
 ): MomentUrlState {
   const [moment, setMomentState] = useState<MomentValue>(resolvedInitialMoment);
 
-  // Mount only: make the URL agree with the already-resolved initial moment,
-  // via `replaceState` (never `pushState`) so a plain `/` visit still leaves
+  // Resolve once: make the URL agree with the actual initial moment,
+  // after a browser-only clock/preference choice is ready. Never publish
+  // a temporary hydration value as navigation or remembered state.
+  // Use `replaceState` (never `pushState`) so a plain `/` visit still leaves
   // exactly one history entry behind it. A no-op whenever the URL already
   // agreed (the redirect-shim path); self-healing otherwise (a stale
   // `?moment=` param left by a previous navigation is corrected to match
   // what the caller actually resolved and rendered).
   const mountedRef = useRef(false);
   useEffect(() => {
-    if (mountedRef.current) return;
+    if (!initialResolutionReady || mountedRef.current) return;
     mountedRef.current = true;
     if (typeof window === "undefined") return;
     const fromUrl = parseMomentParam(
       new URLSearchParams(window.location.search).get("moment"),
     );
-    if (fromUrl === resolvedInitialMoment) return;
-    historyReplaceState(urlWithMoment(window.location, resolvedInitialMoment));
-    // Deliberately empty deps: this mirrors the old `useState` lazy
-    // initializer it replaces — the resolved value is read once, at mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (fromUrl === moment) return;
+    historyReplaceState(urlWithMoment(window.location, moment));
+  }, [initialResolutionReady, moment]);
 
   useEffect(() => {
     function handlePopState() {

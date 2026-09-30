@@ -75,11 +75,7 @@ import { CaptureOverlayOpenContext } from "./MomentSheet";
 import { useSheetUrlState } from "./useSheetUrlState";
 import { useOverlayUrlState, parseOverlayParam } from "./useOverlayUrlState";
 import { isSheetValue, type SheetValue } from "./sheetValues";
-import {
-  parseMomentParam,
-  urlWithMoment,
-  useMomentUrlState,
-} from "./useMomentUrlState";
+import { parseMomentParam, useMomentUrlState } from "./useMomentUrlState";
 import {
   parseAreaParam,
   urlWithArea,
@@ -739,26 +735,21 @@ function TodayMomentsContent({
   // it. A browser that remembered a moment BEFORE this fix shipped still has
   // it in `localStorage`, not yet in the cookie — the migration effect below
   // (`legacyMomentMigrationRef`) is the one-time bridge: on a browser with no
-  // cookie yet, it reads the OLD `localStorage` value, adopts it (exactly
-  // the way the retired post-hydration effect used to, `replaceState` only,
-  // never `pushState`), and writes it into the new cookie so every
+  // cookie yet, it reads the OLD `localStorage` value and adopts it. The
+  // existing URL hook and cookie effect then save only that final choice,
+  // without growing history, so every
   // subsequent visit resolves through the (now server-visible) cookie tier
   // instead. This is a ONE-TIME event per browser: once the cookie exists,
   // this migration effect finds `cookieMoment` already set and no-ops.
   //
   // Captured in the SAME lazy evaluation as `resolvedInitialMoment` below,
-  // before `useMomentUrlState`'s own mount effect gets a chance to
-  // `replaceState` the URL to match whatever that resolved to (its
-  // self-heal, documented in useMomentUrlState.ts, runs first — hooks
-  // called earlier in this render register their effects earlier). The
-  // migration effect further down needs to know whether
+  // before any effect can change the URL. The URL hook waits for the
+  // migration/clock fallback when this ref is false; explicit choices can
+  // self-heal immediately. The migration effect needs to know whether
   // `initialMoment`/`deepLink.moment`/the URL's `?moment=`/`cookieMoment`
-  // were the reason — re-reading `window.location.search` from THAT effect
-  // instead would see the self-heal's OWN echo (e.g. `?moment=close` the
-  // hook just wrote for the heuristic fallback) and misread it as a genuine
-  // explicit signal, permanently blocking the legacy migration from ever
-  // running. This ref is the one place that "was it already resolved" fact
-  // is captured before anything can overwrite the evidence.
+  // were the reason. This ref keeps the original evidence, independent of
+  // later URL writes, and prevents a remembered or explicit choice from
+  // being replaced by the browser clock fallback.
   //
   // Part of #687 (stale-deep-link-moment fix — the soft-nav Back regression):
   // the `deepLink?.moment` tier below used to trust the prop unconditionally,
@@ -806,10 +797,18 @@ function TodayMomentsContent({
       explicitMomentRef.current = true;
       return cookieMoment;
     }
-    return heuristicMoment(now, flowVM.currentBlock !== null);
+    // The browser clock/timezone can differ from SSR. Keep one stable
+    // initial view until the existing mount adoption resolves that fallback.
+    return nowProp
+      ? heuristicMoment(now, flowVM.currentBlock !== null)
+      : "start";
   });
+  const [initialMomentReady, setInitialMomentReady] = useState(
+    explicitMomentRef.current,
+  );
   const { moment, setMoment, adoptMomentFromUrl } = useMomentUrlState(
     resolvedInitialMoment,
+    initialMomentReady,
   );
   // C2-S14: the one-time legacy migration bridge described above — adopts a
   // PRE-COOKIE `localStorage` moment preference exactly once, right after
@@ -818,8 +817,9 @@ function TodayMomentsContent({
   // `replaceState`, not `setMoment`'s `pushState`: this is finishing the SAME
   // initial resolution a beat late, not a user-initiated switch, so it must
   // not grow history (Back from a freshly-loaded `/` must still leave the
-  // site, not step through a phantom entry). Writes the cookie too, so this
-  // bridge fires at most once per browser.
+  // site, not step through a phantom entry). The existing cookie effect
+  // saves the adopted value after readiness, so the legacy bridge is no
+  // longer needed on the next visit.
   const legacyMomentMigrationRef = useRef(false);
   useEffect(() => {
     if (legacyMomentMigrationRef.current) return;
@@ -828,11 +828,12 @@ function TodayMomentsContent({
     if (explicitMomentRef.current) return;
 
     const stored = readStoredPreferences();
-    if (!stored?.moment || stored.moment === resolvedInitialMoment) return;
-
-    adoptMomentFromUrl(stored.moment);
-    historyReplaceState(urlWithMoment(window.location, stored.moment));
-    writeMomentsPrefsCookieClient({ moment: stored.moment });
+    const next =
+      stored?.moment ?? heuristicMoment(now, flowVM.currentBlock !== null);
+    if (next !== resolvedInitialMoment) adoptMomentFromUrl(next);
+    // The existing URL hook publishes this resolved value once. The cookie
+    // effect waits for readiness too, so neither can save temporary Start.
+    setInitialMomentReady(true);
     // Deliberately empty deps, matching every other mount-once effect in
     // this file: `initialMoment`/`deepLink`/`resolvedInitialMoment` are all
     // read from the closure of the FIRST render only, which is exactly what
@@ -1090,9 +1091,10 @@ function TodayMomentsContent({
   // device-local and never URL-visible (C2-S8 finding 4), so it has no
   // server-side first-paint defect to fix.
   useEffect(() => {
+    if (!initialMomentReady) return;
     writeMomentsPrefsCookieClient({ moment });
     writeStoredPreferences({ timeDisplay });
-  }, [moment, timeDisplay]);
+  }, [initialMomentReady, moment, timeDisplay]);
 
   // #292 Stage-2 entry gate instrumentation: "brief viewed >= 4 days/week"
   // needs a signal on the surface a returning user actually sees daily —
@@ -2075,7 +2077,9 @@ function TodayMomentsContent({
               className="truncate text-sm text-muted-foreground"
               data-testid="today-moments-date"
             >
-              {formatMastheadDate(now)}
+              {nowProp || accentThemeMounted
+                ? formatMastheadDate(now)
+                : "\u00a0"}
             </span>
           </div>
 
@@ -2209,7 +2213,11 @@ function TodayMomentsContent({
 
             {moment === "start" ? (
               <StartMoment
-                vm={startVM}
+                vm={
+                  nowProp || accentThemeMounted
+                    ? startVM
+                    : { ...startVM, greeting: "\u00a0" }
+                }
                 timeDisplay={timeDisplay}
                 now={now}
                 onStartMove={handleStartMove}

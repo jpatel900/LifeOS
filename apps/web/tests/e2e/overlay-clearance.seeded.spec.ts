@@ -15,6 +15,17 @@ test.describe("Start and Flow overlay clearance (#1044)", () => {
         test(`${moment} ${width}px ${clock.id}: top shortcut and bottom pointer actions stay usable`, async ({
           page,
         }, testInfo) => {
+          const runtimeErrors: { source: string; message: string }[] = [];
+          page.on("pageerror", (error) =>
+            runtimeErrors.push({ source: "pageerror", message: error.message }),
+          );
+          page.on("console", (message) => {
+            if (message.type() === "error")
+              runtimeErrors.push({
+                source: "console.error",
+                message: message.text(),
+              });
+          });
           await page.setViewportSize({ width, height: 900 });
           await page.clock.setFixedTime(new Date(clock.iso));
           await page.goto(`/?moment=${moment}`);
@@ -176,6 +187,18 @@ test.describe("Start and Flow overlay clearance (#1044)", () => {
           await expect(page.getByTestId("capture-overlay")).toBeVisible();
           await page.getByTestId("capture-overlay-close").click();
           await expect(page.getByTestId("capture-overlay")).toHaveCount(0);
+          await testInfo.attach("pinned-runtime-errors", {
+            body: JSON.stringify(
+              { moment, width, clock, runtimeErrors },
+              null,
+              2,
+            ),
+            contentType: "application/json",
+          });
+          expect(
+            runtimeErrors,
+            "pinned overlay journeys must have no runtime errors",
+          ).toEqual([]);
         });
       }
     }
