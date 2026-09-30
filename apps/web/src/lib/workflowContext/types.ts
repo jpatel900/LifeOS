@@ -49,6 +49,7 @@ export type CaptureParseState =
       captureId: string;
       parser: "ai" | "mock";
       status: ParseCaptureClientStatus;
+      warning?: string;
     }
   | {
       phase: "failed";

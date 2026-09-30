@@ -3,6 +3,7 @@ import {
   parseCaptureWithFallback,
   type ParseCaptureRuntimeStatus,
 } from "@/lib/ai/parseCaptureService";
+import { withRequestDeadline } from "@/lib/ai/requestDeadline";
 import { captureError } from "@/lib/observability";
 import {
   AI_SORTING_FAILED_NOT_SORTED,
@@ -10,7 +11,8 @@ import {
 } from "@/lib/statusVocabulary";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-// Leave the 30-second provider deadline time to return a controlled error.
+// Bound authentication separately, leaving room for the 30-second provider deadline.
+const AUTH_DEADLINE_MS = 5_000;
 export const maxDuration = 60;
 
 function readBearerToken(request: Request) {
@@ -197,7 +199,25 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!(await verifyBearerToken(accessToken))) {
+  let authenticated: boolean;
+  try {
+    authenticated = await withRequestDeadline(AUTH_DEADLINE_MS, () =>
+      verifyBearerToken(accessToken),
+    );
+  } catch {
+    // Auth transport may settle late; only the deadline's winner can continue.
+    // Never return or log token/provider details, or offer an auth-free fallback.
+    return Response.json(
+      {
+        ok: false,
+        errorCategory: "auth_unavailable",
+        error: "Sign-in could not be checked. Try sorting again.",
+        can_retry_with_mock: false,
+      },
+      { status: 503 },
+    );
+  }
+  if (!authenticated) {
     return Response.json(
       { ok: false, errorCategory: "auth_rejected" },
       { status: 401 },
@@ -210,8 +230,7 @@ export async function POST(request: Request) {
       input.parserMode === "mock" || status.status === "ai_unavailable";
     const result = await parseCaptureWithFallback(input, {
       forceMock,
-      // Optional caller token: used only for fire-and-forget Postgres AI
-      // call tracing (issue #288); parsing works without it.
+      // The verified caller token also scopes fire-and-forget AI call tracing.
       traceContext: { accessToken },
     });
 
