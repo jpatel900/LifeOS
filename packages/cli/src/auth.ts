@@ -47,7 +47,7 @@ function readSessionFile(sessionFile: string): StoredSession | null {
 
 function writeSessionFile(sessionFile: string, session: Session) {
   const dir = path.dirname(sessionFile);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const stored: StoredSession = {
     access_token: session.access_token,
     refresh_token: session.refresh_token,
@@ -57,6 +57,7 @@ function writeSessionFile(sessionFile: string, session: Session) {
   fs.writeFileSync(sessionFile, JSON.stringify(stored, null, 2), {
     mode: 0o600,
   });
+  fs.chmodSync(sessionFile, 0o600);
 }
 
 function makeAuthClient(config: CliConfig): SupabaseClient {
