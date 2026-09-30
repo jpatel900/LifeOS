@@ -9,11 +9,18 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
-import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
+import {
+  clearPendingWrites,
+  enqueuePendingWrite,
+  listPendingWrites,
+} from "@/lib/durability/pendingWriteJournal";
+import * as durableWrites from "@/lib/durability/durableWrites";
+import { listPendingCaptures } from "@/lib/capture/offlineQueue";
 import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
 import {
   ACCOUNT_SAVE_FAILED,
+  ACCOUNT_SAVED_DEVICE_STORAGE_BLOCKED,
   DEVICE_STORAGE_BLOCKED,
 } from "@/lib/statusVocabulary";
 
@@ -115,6 +122,9 @@ function Harness() {
       <span data-testid="sync-account">{syncStatus.account}</span>
       <span data-testid="areas-settled">{String(areasReadbackSettled)}</span>
       <span data-testid="sync-message">{syncStatus.message ?? ""}</span>
+      <span data-testid="sync-pending">
+        {String(syncStatus.pendingLocalChanges)}
+      </span>
       <span data-testid="sync-storage">{syncStatus.storage ?? ""}</span>
       <span data-testid="notice-tone">{notice?.tone ?? ""}</span>
       <span data-testid="notice-message">{notice?.message ?? ""}</span>
@@ -266,6 +276,73 @@ function expectMemoryAndSnapshot(savedInSession: boolean) {
 }
 
 describe("capture storage and account notice truth (#967)", () => {
+  it("D: failed journal plus account success/readback keeps storage truth without inventing pending work", async () => {
+    await renderSettled();
+    const restore = makeIndexedDbUnavailable();
+    const readsBefore = mockListCaptureItems.mock.calls.length;
+    try {
+      mockCreateCaptureItem.mockResolvedValueOnce({
+        provider: "supabase",
+        capture: { id: PERSISTED_CAPTURE_ID },
+      });
+      fireEvent.click(screen.getByText("Capture"));
+      await waitFor(() =>
+        expect(screen.getByTestId("capture-alias").textContent).toBe(
+          PERSISTED_CAPTURE_ID,
+        ),
+      );
+      await act(async () => {});
+      expect(screen.getByTestId("sync-account").textContent).toBe("synced");
+      expect(screen.getByTestId("sync-storage").textContent).toBe("blocked");
+      expect(screen.getByTestId("sync-pending").textContent).toBe("false");
+      expect(mockCreateCaptureItem).toHaveBeenCalledTimes(1);
+      expect(mockListCaptureItems).toHaveBeenCalledTimes(readsBefore + 1);
+      expect(await listPendingWrites()).toEqual([]);
+      expect(await listPendingCaptures()).toEqual([]);
+      expectMemoryAndSnapshot(true);
+      expect(screen.getByTestId("notice-tone").textContent).toBe("alarm");
+      expect(screen.getByTestId("notice-message").textContent).toBe(
+        ACCOUNT_SAVED_DEVICE_STORAGE_BLOCKED,
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("E: account fallback preserves unrelated queued work and its pending status", async () => {
+    await renderSettled();
+    const queued = await enqueuePendingWrite({
+      clientWriteId: "unrelated-review-967",
+      entity: "review",
+      payload: { synthetic: true },
+    });
+    vi.spyOn(durableWrites, "journalCaptureWrite").mockRejectedValueOnce(
+      new Error("Synthetic capture journal write refused"),
+    );
+    mockCreateCaptureItem.mockResolvedValueOnce({
+      provider: "supabase",
+      capture: { id: PERSISTED_CAPTURE_ID },
+    });
+    fireEvent.click(screen.getByText("Capture"));
+    await waitFor(() =>
+      expect(screen.getByTestId("capture-alias").textContent).toBe(
+        PERSISTED_CAPTURE_ID,
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("sync-pending").textContent).toBe("true"),
+    );
+    expect(screen.getByTestId("sync-account").textContent).toBe("synced");
+    expect(screen.getByTestId("sync-storage").textContent).toBe("blocked");
+    expect(await listPendingWrites()).toEqual([queued]);
+    expect(await listPendingCaptures()).toEqual([]);
+    expectMemoryAndSnapshot(true);
+    expect(screen.getByTestId("notice-tone").textContent).toBe("alarm");
+    expect(screen.getByTestId("notice-message").textContent).toBe(
+      DEVICE_STORAGE_BLOCKED,
+    );
+  });
+
   it("A: failed account write leaves a real session copy and the account-failure notice", async () => {
     await renderSettled();
     const restore = makeIndexedDbUnavailable();
@@ -319,7 +396,7 @@ describe("capture storage and account notice truth (#967)", () => {
     }
   });
 
-  it("C: account success plus failed readback preserves alias/session copy; failed readback shows the load warning", async () => {
+  it("C: account success plus failed readback preserves alias/session copy and load classification while storage warning stays visible", async () => {
     await renderSettled();
     const restore = makeIndexedDbUnavailable();
     const readsBefore = mockListCaptureItems.mock.calls.length;
@@ -338,9 +415,7 @@ describe("capture storage and account notice truth (#967)", () => {
         ),
       );
       await waitFor(() =>
-        expect(screen.getByTestId("sync-storage").textContent).toBe(
-          "available",
-        ),
+        expect(screen.getByTestId("sync-storage").textContent).toBe("blocked"),
       );
       expect(mockCreateCaptureItem).toHaveBeenCalledTimes(1);
       expect(mockListCaptureItems).toHaveBeenCalledTimes(readsBefore + 1);
@@ -355,12 +430,12 @@ describe("capture storage and account notice truth (#967)", () => {
       );
       expectMemoryAndSnapshot(true);
       // An acknowledged account write must not be called a save failure.
-      // The failed refresh still remains visible; the account boundary is mocked.
+      // The load-failure classification survives beneath the storage notice.
       expect(screen.getByTestId("sync-message").textContent).toBe(
         persistedLoadFailureMessage,
       );
       expect(screen.getByTestId("notice-message").textContent).toBe(
-        persistedLoadFailureMessage,
+        DEVICE_STORAGE_BLOCKED,
       );
       expect(screen.getByTestId("notice-tone").textContent).toBe("alarm");
     } finally {
