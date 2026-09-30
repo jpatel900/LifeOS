@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Settings as SettingsIcon } from "lucide-react";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { workflowStateHasDemoSeed } from "@/lib/workflow";
 import { resolveRawCaptureAreaId } from "@/lib/workflow/capture";
 import { historyReplaceState } from "@/lib/rawHistory";
@@ -992,10 +993,18 @@ function TodayMomentsContent({
   const [captureAreaChoice, setCaptureAreaChoice] = useState<
     string | null | undefined
   >(undefined);
+  // Account areas can arrive after capture opens. Only offer destinations
+  // learned from a successful account read; an implicit demo ID cannot replay.
+  // The attempt-settled flag also covers failures and is not an inventory.
+  const captureAreas = useMemo(() => {
+    if (!isSupabaseConfigured()) return state.areas;
+    const accountAreaIds = new Set(Object.values(workflowAreaIdByPersistedId));
+    return state.areas.filter((area) => accountAreaIds.has(area.id));
+  }, [state.areas, workflowAreaIdByPersistedId]);
   const captureAreaId =
     captureAreaChoice === undefined
-      ? (resolveRawCaptureAreaId(state.areas, selectedAreaId) ??
-        state.areas[0]?.id ??
+      ? (resolveRawCaptureAreaId(captureAreas, selectedAreaId) ??
+        captureAreas[0]?.id ??
         null)
       : resolveRawCaptureAreaId(state.areas, captureAreaChoice);
   useEffect(() => {
@@ -2444,7 +2453,7 @@ function TodayMomentsContent({
           not mutual exclusion). */}
         <CaptureOverlay
           open={captureOpen && showingMastheadAndMoments}
-          areas={state.areas}
+          areas={captureAreas}
           selectedAreaId={captureAreaId}
           onAreaChange={setCaptureAreaChoice}
           initialText={captureDraft}
