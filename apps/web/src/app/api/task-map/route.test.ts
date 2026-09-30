@@ -27,7 +27,7 @@ vi.mock("@/lib/observability", () => ({
   captureError: mocks.captureError,
 }));
 
-import { GET, POST } from "./route";
+import { GET, POST, maxDuration } from "./route";
 
 const validDraft = {
   schema_version: "1.0",
@@ -450,4 +450,8 @@ describe("task-map route", () => {
       },
     });
   });
+});
+
+it("allows 60 seconds for the route and its 50-second provider budget", () => {
+  expect(maxDuration).toBe(60);
 });

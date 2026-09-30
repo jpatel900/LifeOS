@@ -15,7 +15,7 @@ vi.mock("@/lib/supabase/server", () => ({
     createSupabaseServerClient(...args),
 }));
 
-import { POST } from "./route";
+import { POST, maxDuration } from "./route";
 
 const draft = {
   highlights: ["Shipped the parser fix"],
@@ -125,4 +125,8 @@ describe("POST /api/rollup-prose", () => {
       degraded: true,
     });
   });
+});
+
+it("allows 60 seconds for the route and its 50-second provider budget", () => {
+  expect(maxDuration).toBe(60);
 });

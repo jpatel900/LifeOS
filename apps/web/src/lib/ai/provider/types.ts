@@ -4,6 +4,8 @@ export interface StructuredOutputMessage {
 }
 
 export interface StructuredOutputRequest {
+  /** Caller-owned budget for the full provider request, including body reading. */
+  deadlineMs: number;
   model: string;
   messages: StructuredOutputMessage[];
   /** Provider-enforced JSON schema response format (vendor-shaped). */
