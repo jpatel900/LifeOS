@@ -16,6 +16,7 @@ import {
 import {
   journalCaptureWrite,
   replayDurableWrites,
+  type DurableWriteServerOps,
 } from "@/lib/durability/durableWrites";
 import { TodayMoments } from "./TodayMoments";
 import {
@@ -391,8 +392,16 @@ describe("Today capture before account area hydration", () => {
       provider: "supabase" as const,
       captureId: "capture-account",
     }));
-    const unresolved = await replayDurableWrites({
+    const unusedWrite = vi.fn(async () => {
+      throw new Error("Capture-only replay must not send wins or reviews.");
+    });
+    const serverOps: DurableWriteServerOps = {
+      syncWin: unusedWrite,
+      syncReview: unusedWrite,
       syncCapture,
+    };
+    const unresolved = await replayDurableWrites({
+      ...serverOps,
       resolveCaptureAreaId: () => null,
     });
     expect(unresolved.failed).toBe(1);
@@ -401,9 +410,10 @@ describe("Today capture before account area hydration", () => {
       (await listPendingWrites("capture"))[0].payload.workflow_area_id,
     ).toBe("area-real-choice");
     await replayDurableWrites({
-      syncCapture,
+      ...serverOps,
       resolveCaptureAreaId: () => customArea.id,
     });
+    expect(unusedWrite).not.toHaveBeenCalled();
     expect(syncCapture).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ area_id: customArea.id }),
     );
