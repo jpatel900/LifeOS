@@ -28,6 +28,11 @@ import { HIT_TARGET_INVISIBLE } from "./hitTarget";
  * viewports (owner feedback on #483, 2026-07-10) and to stay clear of the
  * fixed capture pill, which also centers itself in that space.
  *
+ * #1044: the default legend stays fixed on the left. At 640–1279px the
+ * capture pill uses its compact label on the right, leaving room for both
+ * controls regardless of content height. Wide desktop keeps its centered
+ * capture pill. Explicit inFlow stays in flow at every width.
+ *
  * `DISPLAYED_ACTION_IDS` narrows to the three shortcuts a first-time user
  * would not otherwise guess (moment switching, capture, the command
  * palette) — Enter/Escape are standard UI conventions the ratified prototype

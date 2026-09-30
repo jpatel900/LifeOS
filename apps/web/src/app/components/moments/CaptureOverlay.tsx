@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { useReturnFocus } from "./useReturnFocus";
 import { useFocusTrap } from "./useFocusTrap";
 import { CaptureCore } from "./CaptureCore";
-import { HIT_TARGET_MIN } from "./hitTarget";
+import { HIT_TARGET_MIN, HIT_TARGET_ROW } from "./hitTarget";
 
 /**
  * Moments pass P2 — packet: presentation primitives (dev-preview only).
@@ -30,6 +30,9 @@ export interface CaptureOverlayProps {
   // they collapsed into this single save.
   onSave(text: string, returnHook: string | null): void;
   onClose(): void;
+  areas?: { id: string; name: string }[];
+  selectedAreaId?: string | null;
+  onAreaChange?(areaId: string | null): void;
   initialText?: string;
   onDraftChange?(text: string): void;
   onResolved?(): void;
@@ -39,6 +42,9 @@ export function CaptureOverlay({
   open,
   onSave,
   onClose,
+  areas = [],
+  selectedAreaId = null,
+  onAreaChange,
   initialText,
   onDraftChange,
   onResolved,
@@ -54,6 +60,9 @@ export function CaptureOverlay({
   useFocusTrap(open, dialogRef);
 
   if (!open) return null;
+  const destinationName = areas.find(
+    (area) => area.id === selectedAreaId,
+  )?.name;
 
   // Containment: the scrim/Close only abandon the dialog while idle. Once a
   // parse is in flight (or its degraded/conclusion tail is showing), the
@@ -88,6 +97,55 @@ export function CaptureOverlay({
           transitionTimingFunction: "var(--motion-ease)",
         }}
       >
+        {areas.length > 0 && onAreaChange ? (
+          <div className="grid gap-1">
+            <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+              Save to area (optional)
+              <select
+                value={selectedAreaId ?? ""}
+                onChange={(event) => onAreaChange(event.target.value || null)}
+                // Native picker Escape is browser-owned while the menu is open.
+                // :open keeps this box open where supported; CI proves Edge's
+                // behavior, not every engine or older browser.
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.stopPropagation();
+                    if (
+                      typeof CSS !== "undefined" &&
+                      CSS.supports?.("selector(select:open)") &&
+                      event.currentTarget.matches(":open")
+                    ) {
+                      return;
+                    }
+                    handleCancel();
+                  }
+                }}
+                disabled={locked}
+                className={cn(
+                  HIT_TARGET_ROW,
+                  "rounded-md border border-input bg-background px-3 py-2 text-sm font-normal text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+                )}
+              >
+                <option value="">No area selected</option>
+                {areas.map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {area.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
+
+        <p
+          className="text-xs text-muted-foreground"
+          data-testid="capture-save-destination"
+        >
+          {destinationName
+            ? `Will save to ${destinationName}.`
+            : "Will save without an area."}
+        </p>
+
         <CaptureCore
           mode="full"
           testIdPrefix="capture-overlay"

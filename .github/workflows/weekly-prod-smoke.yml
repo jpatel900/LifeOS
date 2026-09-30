@@ -77,17 +77,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22.13.0
           cache: pnpm
@@ -339,7 +339,7 @@ jobs:
 
       - name: Upload Playwright report on failure
         if: steps.smoke.outputs.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: prod-smoke-report
           path: |
@@ -349,7 +349,7 @@ jobs:
 
       - name: Reconcile prod-smoke GitHub issue
         if: steps.smoke.outputs.outcome == 'success' || steps.smoke.outputs.outcome == 'failure'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           # Plain-language failing-step detail from the "Extract failing
           # smoke detail" step above (refs #856). Empty on a success run --

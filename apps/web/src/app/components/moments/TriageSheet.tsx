@@ -19,13 +19,8 @@ import { momentKeyLabel } from "@/lib/keys/keymap";
  * Pipeline rail (UX-INV-5: at most 2 interactions from Today — D-3 (#483)
  * made this a single click on the rail's Triage node, since the rail is no
  * longer behind a collapsed disclosure). Lists pending capture drafts,
- * area-scoped the
- * same way the pipeline "Triage" badge counts them
- * (`buildPipelineCounts`/`buildCockpitViewModel`'s `inbox` filter): when no
- * area is selected ("All areas"), both the badge and this list resolve to
- * the first area (`state.areas[0]`), mirroring `buildCockpitViewModel`'s own
- * `activeArea ?? areas[0]` fallback — so the node's count and the sheet's
- * row count always agree, in every area-selection state.
+ * area-scoped the same way the pipeline badge counts them: when no area
+ * is selected ("All areas"), both the badge and this list include every area.
  *
  * U-audit P0-2 (#552): each row now surfaces the parse's substance (area
  * dot + name, task type, first move, estimate range when present) instead
@@ -114,10 +109,8 @@ export function TriageSheet({
     }
   }, [open]);
 
-  // Mirrors buildCockpitViewModel's `activeArea ?? areas[0]` fallback so an
-  // "All areas" selection resolves to the same area the pipeline badge used
-  // to compute its count.
-  const resolvedAreaId = selectedAreaId ?? state.areas[0]?.id ?? null;
+  // The pipeline count spans every area when the page shows All areas.
+  const resolvedAreaId = selectedAreaId;
 
   const pendingDrafts = state.taskDrafts.filter(
     (draft) =>

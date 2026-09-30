@@ -18,6 +18,7 @@ import { CreateAreaForm } from "./CreateAreaForm";
 import { AreaRegistryCards } from "./AreaRegistryCards";
 import { LocalResetPanel } from "./LocalResetPanel";
 import { useAreasLoadState } from "./useAreasLoadState";
+import { ReEntrySettingsPanel } from "./ReEntrySettingsPanel";
 
 export default function AreasSettingsPage() {
   const { selectedAreaId, state: workflowState } = useWorkflow();
@@ -313,6 +314,13 @@ export default function AreasSettingsPage() {
           to `variant="flat"` (no per-item card surface) and a hairline
           divider marks the seam between items instead. */}
       <div className="settings-disclosure-group divide-y divide-border">
+        <DiagnosticsDisclosure
+          title="Coming back after time away"
+          variant="flat"
+          contentClassName="mt-4"
+        >
+          <ReEntrySettingsPanel />
+        </DiagnosticsDisclosure>
         <DiagnosticsDisclosure
           title="Area charters"
           variant="flat"

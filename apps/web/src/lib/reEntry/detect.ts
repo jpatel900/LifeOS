@@ -61,6 +61,7 @@ export function latestActivityTimestamp(state: WorkflowState): string | null {
     consider(task.created_at);
     consider(task.updated_at);
   }
+  for (const session of state.executionSessions) consider(session.created_at);
 
   return latestIso;
 }
