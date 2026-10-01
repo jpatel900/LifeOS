@@ -1518,7 +1518,7 @@ export function normalizeScanTargets(primaryTargets, projectCwd) {
   return ordered;
 }
 
-export function expandScanTargets(primaryTargets, projectCwd) {
+export function expandScanTargets(primaryTargets, projectCwd, config = DEFAULT_CONFIG) {
   const ordered = normalizeScanTargets(primaryTargets, projectCwd);
   if (ordered.length === 0) return [];
   const seen = new Set(ordered);
@@ -1537,12 +1537,24 @@ export function expandScanTargets(primaryTargets, projectCwd) {
 
   for (const p of normalizedPrimaries) {
     if (ordered.length >= MAX_SCAN_TARGETS) break;
-    if (!isInsideProject(p, baseCwd)) continue;
+    if (hasPathTraversal(p) || SENSITIVE_PATH.test(p) || GENERATED_PATH.test(p)) continue;
+    if (!isScanTargetInsideProject(p, baseCwd)) continue;
     const ext = path.extname(p).toLowerCase();
     if (STYLE_EXTS.has(ext) || !UI_CODE_EXTS.has(ext)) continue;
 
+    const relForMatch = relativize(p, baseCwd);
+    let canRead = !matchesAnyGlob(relForMatch, config.ignoreFiles)
+      && !matchesAnyGlob(p, config.ignoreFiles);
+    const maxFileBytes = config.limits?.maxFileBytes ?? DEFAULT_CONFIG.limits.maxFileBytes;
+    if (canRead && maxFileBytes > 0) {
+      try { canRead = fs.statSync(p).size <= maxFileBytes; } catch { canRead = false; }
+    }
     let content = '';
-    try { content = fs.readFileSync(p, 'utf-8'); } catch { /* unreadable primary */ }
+    if (canRead) {
+      try { content = fs.readFileSync(p, 'utf-8'); } catch { /* unreadable primary */ }
+    }
+    // Keep metadata-only discovery of nearby styles even when this primary
+    // is ignored, oversized or unreadable. Their own scan guards still apply.
 
     for (const imp of parseStaticStyleImports(content, p, projectCwd)) {
       add(imp);
@@ -1817,11 +1829,10 @@ export async function runHook({ stdinJson, env = {}, cwd = process.cwd(), now = 
     const projectCwd = resolveCacheCwd(primaryFiles[0], sessionCwd);
     audit.cwd = projectCwd;
     const primaryFileSet = new Set(primaryFiles);
-    const targetFiles = expandScanTargets(primaryFiles, projectCwd);
     audit.session = event.session_id || null;
     if (event.tool_name) audit.tool = event.tool_name;
 
-    if (targetFiles.length === 0) {
+    if (primaryFiles.length === 0) {
       return result({ skipped: 'no-file-path', durationMs: Date.now() - started });
     }
 
@@ -1835,6 +1846,7 @@ export async function runHook({ stdinJson, env = {}, cwd = process.cwd(), now = 
       return result({ skipped: 'native-platform', platform, durationMs: Date.now() - started });
     }
 
+    const targetFiles = expandScanTargets(primaryFiles, projectCwd, config);
     const cache = readCache(projectCwd);
     const sessionId = event.session_id || 'unknown';
     const tiered = perEditTieringActive(config, harness);
@@ -2258,6 +2270,15 @@ export async function runStopHook({ stdinJson, env = {}, cwd = process.cwd(), no
       // paths, so the Stop pass re-checks containment rather than trusting
       // the per-edit pass to have filtered them.
       if (!isScanTargetInsideProject(filePath, projectCwd)) continue;
+
+      // Apply the same configured size ceiling as the per-edit pass. A
+      // touched file may have grown since its last edit-time scan.
+      const maxFileBytes = config.limits?.maxFileBytes ?? DEFAULT_CONFIG.limits.maxFileBytes;
+      if (maxFileBytes > 0) {
+        let size = 0;
+        try { size = fs.statSync(filePath).size; } catch { size = 0; }
+        if (size > maxFileBytes) continue;
+      }
 
       scanned += 1;
       let content = '';
