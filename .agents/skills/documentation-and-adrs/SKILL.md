@@ -278,11 +278,11 @@ Special consideration for AI agent context:
 
 ## Verification
 
-After documenting:
+After documenting, check the affected surfaces below and follow mandatory project checks. A narrow documentation edit does not require auditing unrelated decisions, APIs, source comments, or rules files. For a requested full documentation audit, cover the full agreed scope.
 
-- [ ] ADRs exist for all significant architectural decisions
-- [ ] README covers quick start, commands, and architecture overview
-- [ ] API functions have parameter and return type documentation
-- [ ] Known gotchas are documented inline where they matter
-- [ ] No commented-out code remains
-- [ ] Rules files (CLAUDE.md etc.) are current and accurate
+- [ ] Significant architectural decisions introduced or changed by the work have a rationale in the existing authoritative record
+- [ ] Affected README instructions and links are accurate
+- [ ] Changed public API parameters, return types, and behavior are documented
+- [ ] Newly found relevant gotchas are recorded at their existing point of use
+- [ ] Changed code does not leave obsolete commented-out implementations
+- [ ] Affected rules files reflect the intended conventions
