@@ -218,7 +218,7 @@ jobs:
           PR_ESCALATION_REASONS: ${{ needs.classify-risk.outputs.escalation_reasons }}
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          model: gpt-5.4-mini
+          model: gpt-6-luna
           effort: medium
           prompt-file: .github/codex/prompts/pr-review-baseline.md
           output-file: codex-pr-review-baseline.md
@@ -254,7 +254,7 @@ jobs:
           script: |
             const body = [
               '## Codex Baseline Review',
-              `Model: gpt-5.4-mini`,
+              `Model: gpt-6-luna`,
               `Effort: medium`,
               `Classifier risk level: ${process.env.PR_RISK_LEVEL}`,
               `Classifier escalation reasons: ${process.env.PR_ESCALATION_REASONS}`,
@@ -360,7 +360,7 @@ jobs:
           BASELINE_FINAL_MESSAGE: ${{ needs.baseline-review.outputs.final_message }}
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          model: gpt-5.4
+          model: gpt-6.1-sol
           effort: high
           prompt-file: .github/codex/prompts/pr-review-escalated.md
           output-file: codex-pr-review-escalated.md
@@ -415,7 +415,7 @@ jobs:
 
             const body = [
               '## Codex Escalated Review',
-              'Model: gpt-5.4',
+              'Model: gpt-6.1-sol',
               'Effort: high',
               `Escalation trigger: ${triggerReasons.length > 0 ? triggerReasons.join(' | ') : 'manual risk escalation'}`,
               '',
