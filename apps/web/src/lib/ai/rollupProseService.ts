@@ -1,3 +1,4 @@
+import { ROLLUP_PROSE_PROVIDER_DEADLINE_MS } from "./requestDeadline";
 import type { RollupSummaryContent } from "@lifeos/schemas";
 import { recordAiCallTrace } from "@/lib/observability";
 import {
@@ -160,6 +161,7 @@ export async function enhanceRollupProse(
   try {
     const provider = options.provider ?? resolveStructuredOutputProvider(env);
     const { outputText, telemetry } = await provider.generateStructuredOutput({
+      deadlineMs: ROLLUP_PROSE_PROVIDER_DEADLINE_MS,
       model,
       messages: buildRollupProseMessages({
         areaLabel: input.areaLabel,

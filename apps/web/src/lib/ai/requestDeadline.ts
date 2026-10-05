@@ -1,5 +1,7 @@
 // Leave the route time to turn a provider timeout into its existing safe error.
-export const AI_PROVIDER_DEADLINE_MS = 30_000;
+export const PARSE_CAPTURE_PROVIDER_DEADLINE_MS = 30_000;
+export const TASK_MAP_DRAFT_PROVIDER_DEADLINE_MS = 50_000;
+export const ROLLUP_PROSE_PROVIDER_DEADLINE_MS = 50_000;
 export const PARSE_CAPTURE_CLIENT_DEADLINE_MS = 35_000;
 
 /** Bounds the whole request, including body reading, and cancels its transport. */
