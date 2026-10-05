@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogIn, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { useAuthPresence } from "./useAuthPresence";
 import { HIT_TARGET_MIN } from "./hitTarget";
 
 /**
@@ -39,78 +38,18 @@ import { HIT_TARGET_MIN } from "./hitTarget";
  * Copy follows #692: plain language, no vendor/technical words.
  */
 
-type AuthPresence =
-  | { status: "loading" }
-  | { status: "unconfigured" }
-  | { status: "signed-out" }
-  | { status: "signed-in"; label: string };
-
 const PILL_CLASS =
   "inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 text-xs font-semibold text-muted-foreground outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0";
 
-function shortLabel(email: string | null | undefined): string {
-  if (!email) return "Signed in";
-  const handle = email.split("@")[0] ?? email;
-  return handle.length > 0 ? handle : "Signed in";
-}
-
 export function AuthAffordance() {
   const pathname = usePathname();
-  const [presence, setPresence] = useState<AuthPresence>({ status: "loading" });
-
-  useEffect(() => {
-    if (!isSupabaseConfigured()) {
-      setPresence({ status: "unconfigured" });
-      return;
-    }
-    const client = createSupabaseBrowserClient();
-    if (!client?.auth) {
-      setPresence({ status: "unconfigured" });
-      return;
-    }
-
-    let active = true;
-    void client.auth
-      .getUser()
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error || !data.user) {
-          setPresence({ status: "signed-out" });
-          return;
-        }
-        setPresence({
-          status: "signed-in",
-          label: shortLabel(data.user.email),
-        });
-      })
-      .catch(() => {
-        if (active) setPresence({ status: "signed-out" });
-      });
-
-    // Keep the door in step if the session changes in another tab or after a
-    // sign-out here — read-only subscription, no auth flow of its own.
-    const { data: subscription } = client.auth.onAuthStateChange(
-      (_event, session) => {
-        if (!active) return;
-        setPresence(
-          session?.user
-            ? { status: "signed-in", label: shortLabel(session.user.email) }
-            : { status: "signed-out" },
-        );
-      },
-    );
-
-    return () => {
-      active = false;
-      subscription?.subscription?.unsubscribe();
-    };
-  }, []);
+  const { presence, markSignedOut } = useAuthPresence();
 
   async function handleSignOut() {
     const client = createSupabaseBrowserClient();
     if (!client?.auth) return;
     await client.auth.signOut();
-    setPresence({ status: "signed-out" });
+    markSignedOut();
   }
 
   if (presence.status === "loading" || presence.status === "unconfigured") {

@@ -4,10 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { stubParseCaptureFetch } from "@/__tests__/helpers/parseCaptureFetch";
 import * as taskMapDraftClient from "@/lib/ai/taskMapDraftClient";
-import {
-  AI_SORTING_FAILED_NOT_SORTED,
-  AI_SORTING_UNAVAILABLE_NOT_SORTED,
-} from "@/lib/statusVocabulary";
 import { TriageSheet } from "./TriageSheet";
 import { buildPipelineCounts } from "./pipelineCounts";
 
@@ -776,20 +772,23 @@ describe("TriageSheet", () => {
       const failure = await screen.findByTestId(/^triage-sheet-sort-failed-/);
       // Glance line: truthful for the unreachable-AI state, reused verbatim
       // from `lib/statusVocabulary.ts` (#739), not a new sentence.
-      expect(failure).toHaveTextContent(AI_SORTING_UNAVAILABLE_NOT_SORTED);
+      expect(failure).toHaveTextContent(
+        "AI sorting is unavailable right now, so this one hasn't been sorted. Your thought is still saved, exactly as you wrote it. Sorting requires you to be signed in.",
+      );
       // Detail layer ("What happened?") still carries the server's literal
       // wording, which this test deliberately made different from the
       // glance line above.
       expect(failure).toHaveTextContent("Parsing is unavailable right now.");
 
-      // Nothing was lost: the capture is still listed, still verbatim, and
-      // the in-band alternative is offered rather than a background retry.
+      // Nothing was lost: the capture is still listed and verbatim.
+      // This demo fixture cannot call an authenticated basic-sorting route.
       expect(screen.getByTestId("triage-sheet-captures")).toHaveTextContent(
         "Draft the proposal",
       );
       expect(screen.getByTestId("raw-draft-count")).toHaveTextContent("0");
-      expect(screen.getAllByTestId(/^triage-sheet-sort-basic-/)).toHaveLength(
-        1,
+      // This fixture has no configured account. Mock parsing still needs auth.
+      expect(screen.queryAllByTestId(/^triage-sheet-sort-basic-/)).toHaveLength(
+        0,
       );
 
       vi.unstubAllGlobals();
@@ -823,22 +822,27 @@ describe("TriageSheet", () => {
       const failure = await screen.findByTestId(/^triage-sheet-sort-failed-/);
       // Glance line: truthful for the reached-but-failed state, reused
       // verbatim from `lib/statusVocabulary.ts` (#739).
-      expect(failure).toHaveTextContent(AI_SORTING_FAILED_NOT_SORTED);
+      expect(failure).toHaveTextContent(
+        "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. Sorting requires you to be signed in.",
+      );
       // It must NOT show the "unavailable" line — that would be the #740 bug.
-      expect(failure).not.toHaveTextContent(AI_SORTING_UNAVAILABLE_NOT_SORTED);
+      expect(failure).not.toHaveTextContent(
+        "AI sorting is unavailable right now",
+      );
       // Detail layer carries the server's literal wording.
       expect(failure).toHaveTextContent(
         "The AI returned something LifeOS couldn't use.",
       );
 
-      // Nothing was lost: the capture is still listed, still verbatim, and
-      // the in-band alternative is offered rather than a background retry.
+      // Nothing was lost: the capture is still listed and verbatim.
+      // This demo fixture cannot call an authenticated basic-sorting route.
       expect(screen.getByTestId("triage-sheet-captures")).toHaveTextContent(
         "Draft the proposal",
       );
       expect(screen.getByTestId("raw-draft-count")).toHaveTextContent("0");
-      expect(screen.getAllByTestId(/^triage-sheet-sort-basic-/)).toHaveLength(
-        1,
+      // This fixture has no configured account. Mock parsing still needs auth.
+      expect(screen.queryAllByTestId(/^triage-sheet-sort-basic-/)).toHaveLength(
+        0,
       );
 
       vi.unstubAllGlobals();
