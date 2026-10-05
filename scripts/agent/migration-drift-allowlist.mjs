@@ -1,6 +1,7 @@
-// Versions that exist in production's supabase_migrations.schema_migrations
-// ledger with NO matching file under supabase/migrations/, and are KNOWN,
-// expected drift rather than a gap this repo needs to catch up on.
+// Known foreign or historical versions that may appear in production's
+// supabase_migrations.schema_migrations ledger with NO matching file under
+// supabase/migrations/. Reasons distinguish applied history from planned
+// foreign releases; inclusion does not prove a version has been applied.
 //
 // This Supabase project (<prod-project-ref> — see the Supabase dashboard;
 // deliberately not hardcoded here, see AGENTS.md rule 9) is SHARED: the
@@ -134,5 +135,45 @@ export const MIGRATION_DRIFT_ALLOWLIST = [
       "Confirmed against the live ledger's statements column (drift-response, 2026-08-30): " +
       "it only alters public.riseup_feedback (adds the archived flag and rewrites the anon " +
       "read/submit policies) — zero LifeOS surface. Not a LifeOS migration.",
+  },
+  {
+    version: "20261004000100",
+    name: "riseup_shared_learning",
+    reason:
+      "Proposed separate RiseUp release migration for shared learning records; " +
+      "owner-requested readiness work tracked at https://github.com/jpatel900/LifeOS/issues/1075. " +
+      "Not a LifeOS migration. Production application is unverified.",
+  },
+  {
+    version: "20261004000101",
+    name: "riseup_capability_access",
+    reason:
+      "Proposed separate RiseUp release migration for capability access; " +
+      "owner-requested readiness work tracked at https://github.com/jpatel900/LifeOS/issues/1075. " +
+      "Not a LifeOS migration. Production application is unverified.",
+  },
+  {
+    version: "20261004000102",
+    name: "riseup_member_privacy",
+    reason:
+      "Proposed separate RiseUp release migration for member privacy; " +
+      "owner-requested readiness work tracked at https://github.com/jpatel900/LifeOS/issues/1075. " +
+      "Not a LifeOS migration. Production application is unverified.",
+  },
+  {
+    version: "20261004000103",
+    name: "riseup_agent_abuse",
+    reason:
+      "Proposed separate RiseUp release migration for agent abuse controls; " +
+      "owner-requested readiness work tracked at https://github.com/jpatel900/LifeOS/issues/1075. " +
+      "Not a LifeOS migration. Production application is unverified.",
+  },
+  {
+    version: "20261004000104",
+    name: "riseup_security_recovery",
+    reason:
+      "Proposed separate RiseUp release migration for security recovery; " +
+      "owner-requested readiness work tracked at https://github.com/jpatel900/LifeOS/issues/1075. " +
+      "Not a LifeOS migration. Production application is unverified.",
   },
 ];

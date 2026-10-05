@@ -172,8 +172,65 @@ export function report(
 
 function runSelfTest() {
   const entry = (version, name) => ({ version, name });
+  const riseupReadiness = [
+    entry("20261004000100", "riseup_shared_learning"),
+    entry("20261004000101", "riseup_capability_access"),
+    entry("20261004000102", "riseup_member_privacy"),
+    entry("20261004000103", "riseup_agent_abuse"),
+    entry("20261004000104", "riseup_security_recovery"),
+  ];
+
+  for (const expected of riseupReadiness) {
+    assert.deepEqual(
+      MIGRATION_DRIFT_ALLOWLIST.filter(
+        ({ version }) => version === expected.version,
+      ).map(({ version, name }) => ({ version, name })),
+      [expected],
+      `RiseUp readiness version ${expected.version} has exactly one entry with its documented name`,
+    );
+  }
 
   const dataCases = [
+    {
+      name: "the five proposed RiseUp readiness versions are recognized if present",
+      input: {
+        local: [entry("20260101120000", "one")],
+        remote: [entry("20260101120000", "one"), ...riseupReadiness],
+        allowlist: MIGRATION_DRIFT_ALLOWLIST,
+      },
+      expect: { missingFromProd: 0, prodOnlyUnexplained: 0, prodOnlyKnown: 5 },
+    },
+    {
+      name: "proposed foreign versions need not be present in the ledger",
+      input: {
+        local: [entry("20260101120000", "one")],
+        remote: [entry("20260101120000", "one")],
+        allowlist: MIGRATION_DRIFT_ALLOWLIST,
+      },
+      expect: { missingFromProd: 0, prodOnlyUnexplained: 0, prodOnlyKnown: 0 },
+    },
+    {
+      name: "an adjacent unlisted version with a RiseUp name still fails alongside known versions",
+      input: {
+        local: [entry("20260101120000", "one")],
+        remote: [
+          entry("20260101120000", "one"),
+          ...riseupReadiness,
+          entry("20261004000105", "riseup_shared_learning"),
+        ],
+        allowlist: MIGRATION_DRIFT_ALLOWLIST,
+      },
+      expect: { missingFromProd: 0, prodOnlyUnexplained: 1, prodOnlyKnown: 5 },
+    },
+    {
+      name: "known RiseUp readiness versions cannot hide a missing LifeOS migration",
+      input: {
+        local: [entry("20260101120000", "one"), entry("20260102120000", "two")],
+        remote: [entry("20260101120000", "one"), ...riseupReadiness],
+        allowlist: MIGRATION_DRIFT_ALLOWLIST,
+      },
+      expect: { missingFromProd: 1, prodOnlyUnexplained: 0, prodOnlyKnown: 5 },
+    },
     {
       name: "no drift in either direction passes",
       input: {
