@@ -2,6 +2,8 @@ import { enhanceRollupProse } from "@/lib/ai/rollupProseService";
 import { captureError } from "@/lib/observability";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+export const maxDuration = 60;
+
 function readBearerToken(request: Request) {
   const authorization = request.headers.get("authorization");
   if (!authorization) {

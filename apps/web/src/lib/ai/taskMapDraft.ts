@@ -1,3 +1,4 @@
+import { TASK_MAP_DRAFT_PROVIDER_DEADLINE_MS } from "./requestDeadline";
 import type { TaskMapGraphDraft } from "@lifeos/schemas";
 import {
   taskMapDraftResponseFormat,
@@ -91,6 +92,7 @@ export async function taskMapDraftDetailed(
   const title = requireTitle(input.title);
   const provider = options.provider ?? resolveStructuredOutputProvider();
   const { outputText, telemetry } = await provider.generateStructuredOutput({
+    deadlineMs: TASK_MAP_DRAFT_PROVIDER_DEADLINE_MS,
     model,
     apiKey,
     fetchImpl: options.fetchImpl,

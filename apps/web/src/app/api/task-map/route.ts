@@ -11,6 +11,8 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { captureError } from "@/lib/observability";
 
+export const maxDuration = 60;
+
 /**
  * FR-031 slice 4 — on-demand task-map draft generation.
  *

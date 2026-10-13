@@ -1,7 +1,4 @@
-import {
-  AI_PROVIDER_DEADLINE_MS,
-  withRequestDeadline,
-} from "../requestDeadline";
+import { withRequestDeadline } from "../requestDeadline";
 import type {
   StructuredOutputProvider,
   StructuredOutputRequest,
@@ -87,7 +84,7 @@ export const openAiStructuredOutputProvider: StructuredOutputProvider = {
     request: StructuredOutputRequest,
   ): Promise<StructuredOutputResult> {
     const body = await withRequestDeadline(
-      AI_PROVIDER_DEADLINE_MS,
+      request.deadlineMs,
       async (signal) => {
         const response = await (request.fetchImpl ?? fetch)(RESPONSES_API_URL, {
           signal,
