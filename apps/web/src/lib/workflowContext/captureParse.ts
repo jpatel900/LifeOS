@@ -33,6 +33,7 @@ import {
   submitRawCapture,
   type WorkflowState,
 } from "../workflow";
+import { captureHasTriageDecision } from "../workflow/captureStatus";
 import { persistedAreaIdForWorkflowId } from "./reducerCore";
 import type { ApplyWorkflowState } from "./applyWorkflowState";
 import type { CaptureParseState } from "./types";
@@ -103,9 +104,8 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
           };
           if (failIfNoAreas()) return;
 
-          // Best-effort: attach the signed-in user's access token so the parse route
-          // can write a user-scoped, fire-and-forget AI call trace row (issue #288).
-          // Parsing itself never requires this token, so any failure here is ignored.
+          // Attach the signed-in user's token for route authentication and tracing.
+          // Lookup failure reaches the route without a token; the route fails closed.
           let authorization: string | undefined;
           try {
             const authClient = createSupabaseBrowserClient();
@@ -117,7 +117,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
               }
             }
           } catch {
-            // Tracing is optional; a missing/failed session must never block parsing.
+            // The route rejects a missing token without calling a provider.
           }
 
           ensureCurrentAttempt();
@@ -185,6 +185,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
           });
 
           ensureCurrentAttempt();
+          let warning: string | undefined;
           if (result.ok) {
             if (activeParseCaptureIdRef.current !== attemptId) return;
             if (failIfNoAreas()) return;
@@ -194,46 +195,84 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
               workflowAreaId: capture.area_id,
               areas: stateRef.current.areas,
             });
-            applyWorkflowState(
-              appendParsedWorkflowResult(stateRef.current, parsed),
-            );
+            try {
+              applyWorkflowState(
+                appendParsedWorkflowResult(stateRef.current, parsed),
+              );
+            } catch (error) {
+              // The apply helper changes the ref before dispatch. Check the
+              // actual staged result, even if unrelated work arrived meanwhile.
+              const current = stateRef.current;
+              const staged =
+                current.captureItems.includes(parsed.captureItem) &&
+                parsed.taskDrafts.every((draft) =>
+                  current.taskDrafts.includes(draft),
+                ) &&
+                parsed.projectDrafts.every((draft) =>
+                  current.projectDrafts.includes(draft),
+                ) &&
+                parsed.timeBlockProposalDrafts.every((draft) =>
+                  current.timeBlockProposalDrafts.includes(draft),
+                ) &&
+                (!parsed.ambiguityAssessment ||
+                  current.ambiguityAssessments.includes(
+                    parsed.ambiguityAssessment,
+                  ));
+              if (!staged) throw error;
+              // Do not roll back concurrent work or offer a retry that adds duplicates.
+              setCaptureParse({
+                phase: "parsed",
+                captureId: capture.id,
+                parser: result.parser,
+                status: result.status,
+                warning:
+                  "Sorting finished, but the screen may not have updated. Your original thought is kept.",
+              });
+              return;
+            }
 
             // Born instrumented (NS-INV-3): record person/commitment proposals as
             // pending suggestions. Fire-and-forget — a learning-write failure must
             // never affect parsing or triage. Nothing is persisted to `people` here;
             // approval happens in triage (NS-INV-4).
-            const learningClient = createSupabaseBrowserClient();
-            for (const draft of parsed.taskDrafts) {
-              const area_id = persistedAreaIdForWorkflowId(
-                draft.area_id,
-                persistedAreasRef.current,
-              );
-              for (const mention of draft.person_mentions) {
-                // Resolve against existing people by normalized name; a match records
-                // the linked person id, otherwise the proposal is a new-person one.
-                const resolution = resolvePersonMention(
-                  mention,
-                  peopleForResolution,
+            try {
+              const learningClient = createSupabaseBrowserClient();
+              for (const draft of parsed.taskDrafts) {
+                const area_id = persistedAreaIdForWorkflowId(
+                  draft.area_id,
+                  persistedAreasRef.current,
                 );
-                recordPersonMentionProposal(learningClient, {
-                  area_id,
-                  draft_id: draft.id,
-                  name: mention.name,
-                  role: mention.role,
-                  confidence: mention.confidence,
-                  match: resolution.kind === "matched" ? "matched" : "new",
-                  matched_person_id:
-                    resolution.kind === "matched" ? resolution.person.id : null,
-                });
+                for (const mention of draft.person_mentions) {
+                  // Resolve against existing people by normalized name; a match records
+                  // the linked person id, otherwise the proposal is a new-person one.
+                  const resolution = resolvePersonMention(
+                    mention,
+                    peopleForResolution,
+                  );
+                  recordPersonMentionProposal(learningClient, {
+                    area_id,
+                    draft_id: draft.id,
+                    name: mention.name,
+                    role: mention.role,
+                    confidence: mention.confidence,
+                    match: resolution.kind === "matched" ? "matched" : "new",
+                    matched_person_id:
+                      resolution.kind === "matched"
+                        ? resolution.person.id
+                        : null,
+                  });
+                }
+                if (draft.is_commitment) {
+                  recordCommitmentProposal(learningClient, {
+                    area_id,
+                    draft_id: draft.id,
+                    title: draft.title,
+                    confidence: draft.confidence,
+                  });
+                }
               }
-              if (draft.is_commitment) {
-                recordCommitmentProposal(learningClient, {
-                  area_id,
-                  draft_id: draft.id,
-                  title: draft.title,
-                  confidence: draft.confidence,
-                });
-              }
+            } catch {
+              warning = "Sorting finished. Some details could not be updated.";
             }
           }
 
@@ -248,6 +287,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
                   captureId: capture.id,
                   parser: result.parser,
                   status: result.status,
+                  ...(warning ? { warning } : {}),
                 }
               : {
                   phase: "failed",
@@ -368,6 +408,15 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
       return;
     }
 
+    // A stale rendered row must not sort a capture already staged in the ref.
+    if (
+      captureHasTriageDecision(stateRef.current, captureId) ||
+      stateRef.current.projectDrafts.some(
+        (draft) => draft.capture_item_id === captureId,
+      )
+    )
+      return;
+
     void parseCaptureIntoDrafts(capture, parserMode);
   }
 
@@ -376,14 +425,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
       return;
     }
 
-    const capture = stateRef.current.captureItems.find(
-      (item) => item.id === captureParse.captureId,
-    );
-    if (!capture) {
-      return;
-    }
-
-    void parseCaptureIntoDrafts(capture, "mock");
+    sortCaptureIntoDrafts(captureParse.captureId, "mock");
   }
 
   return {
