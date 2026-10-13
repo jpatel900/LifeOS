@@ -3,7 +3,13 @@
 // path would take the "the device refused to hold it" branch.
 import "fake-indexeddb/auto";
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -26,6 +32,7 @@ vi.mock("@/lib/reEntry/briefView", async (importOriginal) => ({
 }));
 
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
+import * as workflowContext from "@/lib/WorkflowContext";
 
 import { stubParseCaptureFetch } from "@/__tests__/helpers/parseCaptureFetch";
 
@@ -255,6 +262,94 @@ describe("TodayMoments — FR-028 re-entry return ritual", () => {
       "Welcome back — first move queued",
     );
   });
+
+  it.each([
+    { firstStep: "", message: "Add a first step, then try again." },
+    {
+      firstStep: "Open the draft",
+      message: "Couldn't make this your first move. Try again.",
+    },
+  ])(
+    "keeps a non-WIP refused return unresolved and shows $message",
+    async ({ firstStep, message }) => {
+      const seeded = backlogLatestDraft(
+        captureWorkflow(workflowSeed(), "Prepare a synthetic return draft"),
+      );
+      const task = seeded.tasks[0];
+      const state = {
+        ...seeded,
+        tasks: seeded.tasks.map((item) => ({
+          ...item,
+          first_tiny_step: "Open the draft",
+        })),
+      };
+      const refused = {
+        ...state,
+        tasks: state.tasks.map((item) => ({
+          ...item,
+          first_tiny_step: firstStep,
+        })),
+      };
+      const promote = vi.fn(() => refused);
+      const startSession = vi.fn();
+      const originalUseWorkflow = workflowContext.useWorkflow;
+      vi.spyOn(workflowContext, "useWorkflow").mockImplementation(() => ({
+        ...originalUseWorkflow(),
+        promoteBacklogTask: promote,
+        startTaskSession: startSession,
+      }));
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const now = new Date(
+        Date.parse(latestActivityTimestamp(state)!) +
+          RE_ENTRY_ABSENCE_DAYS * 86400_000,
+      );
+      render(
+        <WorkflowProvider>
+          <RecoveryStateProbe taskId={task.id} />
+          <TodayMoments now={now} initialMoment="flow" />
+        </WorkflowProvider>,
+      );
+      await screen.findByTestId("re-entry-ritual-recovery");
+      const accept = screen.getByTestId("re-entry-ritual-recovery-accept");
+      accept.focus();
+      await act(async () => fireEvent.click(accept));
+      expect(promote).toHaveBeenCalledOnce();
+      expect(promote).toHaveBeenCalledWith(task.id);
+      expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+        message,
+      );
+      expect(screen.getByTestId("re-entry-ritual-recovery")).toHaveTextContent(
+        task.title,
+      );
+      expect(
+        screen.getByTestId("re-entry-recovery-task-status"),
+      ).toHaveTextContent("backlog");
+      expect(
+        screen.getByTestId("re-entry-recovery-refused-task").textContent,
+      ).toBe("");
+      expect(accept).toHaveFocus();
+      expect(startSession).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("flow-moment")).not.toBeInTheDocument();
+      expect(screen.getByTestId("today-moments-toast")).not.toHaveTextContent(
+        "first move queued",
+      );
+      expect(
+        screen.queryByTestId("today-moments-toast-undo"),
+      ).not.toBeInTheDocument();
+      expect(
+        Object.keys(window.localStorage).filter((key) =>
+          key.endsWith(".lastResolution"),
+        ),
+      ).toHaveLength(0);
+      const unfinished = Object.keys(window.localStorage).find((key) =>
+        key.endsWith(".unfinished"),
+      );
+      expect(unfinished).toBeDefined();
+      expect(
+        JSON.parse(window.localStorage.getItem(unfinished!)!),
+      ).toMatchObject({ selectedTaskId: null, edits: {} });
+    },
+  );
 
   it("shows the WIP refusal instead of queued success when recovery cannot be promoted", async () => {
     let state = workflowSeed();

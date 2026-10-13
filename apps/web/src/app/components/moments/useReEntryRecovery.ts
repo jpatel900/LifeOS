@@ -64,15 +64,23 @@ export function useReEntryRecovery(input: {
     if (task.status === "backlog") input.clearWipRefusal();
     const next =
       task.status === "backlog" ? input.promoteBacklogTask(taskId) : state;
+    const returnedTask = next.tasks.find((item) => item.id === taskId);
     const activated = ["active", "scheduled"].includes(
-      next.tasks.find((item) => item.id === taskId)?.status ?? "",
+      returnedTask?.status ?? "",
     );
     // Resolve only from the ordinary transition's actual task result.
     if (!activated && next.wipRefusal?.refused_task_id === taskId) {
       input.showToast("Today is full. Finish or put off a task first.");
       return;
     }
-    if (!activated) return;
+    if (!activated) {
+      input.showToast(
+        returnedTask && !hasLaunchSequenceStep(returnedTask.first_tiny_step)
+          ? "Add a first step, then try again."
+          : "Couldn't make this your first move. Try again.",
+      );
+      return;
+    }
     ritual.complete({
       decision: "accepted",
       taskId,
