@@ -358,6 +358,14 @@ export interface PersistedWorkflowPayload {
 }
 
 export function createSyncedInitialState() {
+  // Storage is browser-only. The first render must match the empty SSR
+  // state; the existing mount loader below adopts saved or sample data.
+  const initial = createEmptyWorkflowState();
+  syncWorkflowIdCounterFromState(initial);
+  return initial;
+}
+
+function createSyncedBrowserInitialState() {
   const initial = createInitialWorkflowState();
   syncWorkflowIdCounterFromState(initial);
   return initial;
@@ -1113,7 +1121,10 @@ export function loadStoredStateFromSession(): {
   try {
     const stored = window.sessionStorage.getItem(STORAGE_KEY);
     if (!stored) {
-      return { state: null, storageBlocked: false };
+      return {
+        state: createSyncedBrowserInitialState(),
+        storageBlocked: false,
+      };
     }
 
     const parsed = normalizeStoredWorkflowState(JSON.parse(stored));
@@ -1124,7 +1135,10 @@ export function loadStoredStateFromSession(): {
     syncWorkflowIdCounterFromState(parsed);
     return { state: parsed, storageBlocked: false };
   } catch {
-    return { state: null, storageBlocked: true };
+    // Keep the existing demo fallback when storage cannot be read, while
+    // preserving the warning. An existing corrupt snapshot still blocks
+    // reseeding through createInitialWorkflowState's presence check.
+    return { state: createSyncedBrowserInitialState(), storageBlocked: true };
   }
 }
 

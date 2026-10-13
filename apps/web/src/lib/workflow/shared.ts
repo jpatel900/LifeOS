@@ -274,19 +274,14 @@ function hasDemoSeedBeenCleared(): boolean {
 }
 
 /**
- * The reducer's real initial state.
+ * The browser's fresh-state decision, adopted by the mount storage loader.
  *
- * Independent verifier round 1 finding 4 (hydration race): the previous
- * version always returned this same answer regardless of `window`, so the
- * seed-or-not decision only ever became correct once a LATER `useEffect`
- * (`WorkflowContext.tsx`'s sessionStorage-hydrate effect) dispatched a
- * correction — after first paint. A fast reader (or a scan/measurement tool)
- * landing between those two moments saw the WRONG answer: the seed on a
- * surface meant to be measured empty, live and clickable. Fixed at the root
- * instead of papered over with timing: this function now makes the whole
- * decision SYNCHRONOUSLY, inside the same `useReducer` lazy initializer call
- * that produces the very first render (`createSyncedInitialState`,
- * `WorkflowContext.tsx`) — there is no second, later correction to race.
+ * The reducer starts empty on both the server and the first client render.
+ * After hydration, loadStoredStateFromSession adopts a saved snapshot or
+ * calls this decision for a fresh tab. Reading browser storage in the
+ * reducer initializer would give the client sample data against empty SSR
+ * markup and trigger a hydration error. The decision itself remains
+ * synchronous and checks existing storage before allowing any sample rows.
  *
  * - On the server (`typeof window === "undefined"`, every SSR pass) this
  *   ALWAYS returns empty — the server cannot know about this tab's

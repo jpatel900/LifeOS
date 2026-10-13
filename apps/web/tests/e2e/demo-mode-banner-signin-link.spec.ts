@@ -101,6 +101,14 @@ test.describe("demo banner sample-data label never grows the banner (#687 round 
     test(`seeded banner height <= unseeded banner height at ${width}px`, async ({
       page,
     }) => {
+      // #1044 screenshot follow-up: #1043 fixed the seeded banner mismatch.
+      // Keep this check local to these deterministic banner journeys; other
+      // suites deliberately exercise failed requests and their error notices.
+      const runtimeErrors: string[] = [];
+      page.on("pageerror", (error) => runtimeErrors.push(error.message));
+      page.on("console", (message) => {
+        if (message.type() === "error") runtimeErrors.push(message.text());
+      });
       await page.setViewportSize({ width, height: 900 });
 
       await page.goto(`http://127.0.0.1:${mainPort}/`);
@@ -129,6 +137,10 @@ test.describe("demo banner sample-data label never grows the banner (#687 round 
         seededBox!.height,
         `seeded banner height (${seededBox!.height}) must not exceed unseeded (${unseededBox!.height}) at ${width}px`,
       ).toBeLessThanOrEqual(unseededBox!.height);
+      expect(
+        runtimeErrors,
+        "banner journeys must have no runtime errors",
+      ).toEqual([]);
     });
   }
 });
