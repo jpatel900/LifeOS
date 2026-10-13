@@ -2919,6 +2919,27 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function settleTaskReviewTransition(
+    taskId: string,
+    targetStatus: "active" | "backlog",
+  ) {
+    try {
+      const result = await persistenceOps.persistTaskReviewTransition(
+        taskId,
+        targetStatus,
+        { settle: true },
+      );
+      if (result.status === "failed") markPersistedSaveFailure(result.error);
+      if (result.status === "persisted-refresh-failed") {
+        markPersistedLoadFailure(result.error);
+      }
+      return result.status;
+    } catch (error) {
+      markPersistedSaveFailure(error);
+      return "failed" as const;
+    }
+  }
+
   const value: WorkflowContextValue = {
     state,
     selectedAreaId,
@@ -3151,32 +3172,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     startTaskSession: startTaskSessionWithPersistence,
     markSession: markSessionWithPersistence,
-    carryForwardTask: (taskId) => {
+    carryForwardTask: async (taskId) => {
       const previous = stateRef.current;
       const next = carryForwardTask(previous, taskId);
       applyWorkflowState(next);
       recordWipRefusalIfNew(previous, next);
 
-      if (next !== previous && !next.wipRefusal) {
-        void persistenceOps
-          .persistTaskReviewTransition(taskId, "active")
-          .catch((error) => {
-            markPersistedSaveFailure(error);
-          });
-      }
+      if (next === previous) return "unchanged";
+      if (next.wipRefusal) return "refused";
+      return settleTaskReviewTransition(taskId, "active");
     },
-    deferTask: (taskId) => {
+    deferTask: async (taskId) => {
       const previous = stateRef.current;
       const next = deferTask(previous, taskId);
       applyWorkflowState(next);
 
-      if (next !== previous) {
-        void persistenceOps
-          .persistTaskReviewTransition(taskId, "backlog")
-          .catch((error) => {
-            markPersistedSaveFailure(error);
-          });
-      }
+      if (next === previous) return "unchanged";
+      return settleTaskReviewTransition(taskId, "backlog");
     },
     deferTaskWithSession: deferTaskWithSessionWithPersistence,
     dropTask: (taskId) => {

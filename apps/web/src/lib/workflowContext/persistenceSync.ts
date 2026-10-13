@@ -63,6 +63,11 @@ import {
   persistedIdForLocalId,
 } from "./reducerCore";
 
+/** The write and its following refresh settle separately. */
+export type TaskReviewPersistenceResult =
+  | { status: "persisted" | "local-only" }
+  | { status: "failed" | "persisted-refresh-failed"; error: unknown };
+
 export interface PersistenceSyncDeps {
   persistedAreasRef: MutableRefObject<Area[]>;
   persistedCaptureIdByLocalIdRef: MutableRefObject<Map<string, string>>;
@@ -687,7 +692,8 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
   async function persistTaskReviewTransition(
     localTaskId: string,
     targetStatus: ReviewTaskTargetStatus,
-  ) {
+    options?: { settle: true },
+  ): Promise<TaskReviewPersistenceResult> {
     const client = createSupabaseBrowserClient();
     const persistedTaskId = persistedIdForLocalId(
       localTaskId,
@@ -696,11 +702,24 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
 
     if (!client || !persistedTaskId) {
       markLocalOnly(savedOnThisDeviceBanner("Your recovery choice"));
-      return;
+      return { status: "local-only" };
     }
 
-    await applyTaskReviewTransition(client, persistedTaskId, targetStatus);
-    await syncPersistedWorkflowRows(client);
+    // Existing Drop and promotion callers keep their throwing contract.
+    // Review opts into outcomes so a failed refresh cannot undo a write receipt.
+    try {
+      await applyTaskReviewTransition(client, persistedTaskId, targetStatus);
+    } catch (error) {
+      if (!options?.settle) throw error;
+      return { status: "failed", error };
+    }
+    try {
+      await syncPersistedWorkflowRows(client);
+    } catch (error) {
+      if (!options?.settle) throw error;
+      return { status: "persisted-refresh-failed", error };
+    }
+    return { status: "persisted" };
   }
 
   /**

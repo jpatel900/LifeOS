@@ -33,6 +33,15 @@ import type {
 import type { ParsedWorkflowResult } from "../ai/parseCaptureWorkflow";
 import type { PersistenceFailureKind } from "../persistenceFailureKind";
 
+/** Settled Review outcome, separate from the optimistic local task change. */
+export type TaskReviewSaveResult =
+  | "persisted"
+  | "persisted-refresh-failed"
+  | "local-only"
+  | "refused"
+  | "unchanged"
+  | "failed";
+
 /**
  * UI-facing status of the async capture parse round-trip. The raw capture is
  * already saved before this leaves "idle", so a failure never loses input.
@@ -258,8 +267,9 @@ export interface WorkflowContextValue {
     // #737 C1 card 1: resolves with what ACTUALLY happened to the outcome, so
     // the caller's toast can only claim what the browser can back up.
   ) => Promise<SessionSaveResult>;
-  carryForwardTask: (taskId: string) => void;
-  deferTask: (taskId: string) => void;
+  /** Applies locally first, then reports the settled account result. */
+  carryForwardTask: (taskId: string) => Promise<TaskReviewSaveResult>;
+  deferTask: (taskId: string) => Promise<TaskReviewSaveResult>;
   /**
    * #613 (atomic cap-DEFER, upgrades #587's interim split): persists the
    * execution session outcome (blocked/deferred) AND the task deferral

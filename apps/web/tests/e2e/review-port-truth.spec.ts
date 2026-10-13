@@ -538,4 +538,135 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
       )
       .toBeGreaterThan(0);
   });
+  for (const choice of [
+    {
+      action: "defer",
+      initial: "active",
+      target: "backlog",
+      success: "Put off for later",
+      reason: "put off for later",
+    },
+    {
+      action: "carry-forward",
+      initial: "backlog",
+      target: "active",
+      success: "Carried forward",
+      reason: "on today's list",
+    },
+  ]) {
+    test(`${SIGNED_IN_TAG} ${choice.action} waits for its account receipt and survives reload`, async ({
+      page,
+    }) => {
+      test.setTimeout(180_000);
+      const account = await openSignedInToday(page, SEEDED_USERS.a);
+      const title = "Synthetic review save confirmation";
+      await seedDoTodayTask(page, title);
+      const ids = await taskIdsByTitle(account, [title]);
+      const taskId = ids[title]!;
+      await openReviewSheet(page);
+      if (choice.initial === "backlog") {
+        await page.getByTestId(`review-sheet-defer-${taskId}`).click();
+        await expect
+          .poll(async () => (await taskStatuses(account))[title])
+          .toBe("backlog");
+      }
+      // A fresh document clears setup toasts and loads the actual account row.
+      await reloadWithAccountSync(page);
+      await expect(page.getByTestId("review-sheet")).toBeVisible();
+
+      let releaseWrite!: () => void;
+      let sawWrite!: () => void;
+      const heldWrite = new Promise<void>((resolve) => {
+        releaseWrite = resolve;
+      });
+      const writeStarted = new Promise<void>((resolve) => {
+        sawWrite = resolve;
+      });
+      const rpcPattern = "**/rest/v1/rpc/apply_task_review_transition";
+      await page.route(rpcPattern, async (route) => {
+        expect(route.request().postDataJSON()).toEqual({
+          p_task_id: taskId,
+          p_target_status: choice.target,
+        });
+        sawWrite();
+        await heldWrite;
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ message: "Synthetic review refusal" }),
+        });
+      });
+
+      const failedResponse = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/rpc/apply_task_review_transition") &&
+          response.status() === 503,
+      );
+      await page.getByTestId(`review-sheet-${choice.action}-${taskId}`).click();
+      await writeStarted;
+      try {
+        await expect(
+          page.getByText(choice.success, { exact: true }),
+        ).toHaveCount(0);
+        expect((await taskStatuses(account))[title]).toBe(choice.initial);
+      } finally {
+        releaseWrite();
+      }
+      const refusal = await failedResponse;
+      await expect(
+        page.getByText(
+          "Could not save your choice to your account. Try again.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await expect(page.getByText(choice.success, { exact: true })).toHaveCount(
+        0,
+      );
+
+      // Classify exactly the response this test injected. Other failures stay fatal.
+      expect(await refusal.json()).toEqual({
+        message: "Synthetic review refusal",
+      });
+      const expectedFailure = `503 POST ${refusal.url().split("?")[0]}`;
+      const watch = watches.at(-1)!;
+      expect(
+        watch.unexpected.filter((entry) => entry === expectedFailure),
+      ).toHaveLength(1);
+      watch.unexpected.splice(watch.unexpected.indexOf(expectedFailure), 1);
+      await page.unroute(rpcPattern);
+
+      await reloadWithAccountSync(page);
+      expect((await taskStatuses(account))[title]).toBe(choice.initial);
+      await expect(
+        page.getByTestId(`review-sheet-decision-${taskId}`),
+      ).toContainText(title);
+      await expect(
+        page.getByTestId(`review-sheet-decision-${taskId}`),
+      ).toContainText(
+        choice.initial === "backlog" ? "put off for later" : "on today's list",
+      );
+      expect(
+        (
+          await account.rows<{ raw_text: string }>(
+            "capture_items?select=raw_text",
+          )
+        ).map((row) => row.raw_text),
+      ).toContain(title);
+
+      // Successful control: the same UI action now reaches the real account.
+      await page.getByTestId(`review-sheet-${choice.action}-${taskId}`).click();
+      await expect(
+        page.getByText(choice.success, { exact: true }),
+      ).toBeVisible();
+      expect((await taskStatuses(account))[title]).toBe(choice.target);
+      await reloadWithAccountSync(page);
+      expect((await taskStatuses(account))[title]).toBe(choice.target);
+      await expect(
+        page.getByTestId(`review-sheet-decision-${taskId}`),
+      ).toContainText(choice.reason);
+      await expect(
+        page.getByTestId(`review-sheet-decision-${taskId}`),
+      ).toContainText(title);
+    });
+  }
 });
