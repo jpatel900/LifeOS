@@ -3179,7 +3179,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       recordWipRefusalIfNew(previous, next);
 
       if (next === previous) return "unchanged";
-      if (next.wipRefusal) return "refused";
+      if (next.wipRefusal && next.wipRefusal !== previous.wipRefusal) {
+        return "refused";
+      }
       return settleTaskReviewTransition(taskId, "active");
     },
     deferTask: async (taskId) => {

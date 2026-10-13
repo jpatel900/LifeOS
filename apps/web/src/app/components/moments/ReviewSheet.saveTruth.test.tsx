@@ -12,6 +12,7 @@ import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
 import {
+  acceptLatestDraft,
   backlogLatestDraft,
   captureWorkflow,
   workflowSeed,
@@ -461,20 +462,78 @@ describe("ReviewSheet account save truth", () => {
     },
   );
 
-  it("preserves an existing WIP refusal and does not claim account success", async () => {
-    mocks.createClient.mockReturnValue(null);
-    const state = backlogLatestDraft(
-      captureWorkflow(workflowSeed(), "Synthetic blocked review task"),
+  function afterEarlierTriageRefusal(state = workflowSeed()) {
+    for (let index = 0; index < 3; index += 1) {
+      state = acceptLatestDraft(
+        captureWorkflow(state, "Synthetic active task " + index),
+      );
+    }
+    state = acceptLatestDraft(
+      captureWorkflow(state, "Synthetic earlier refused draft"),
     );
-    const task = state.tasks[0]!;
-    state.wipRefusal = {
-      policy_id: "wip_enforcement.v1",
-      refused_task_id: task.id,
-      refused_task_title: task.title,
-      activation_path: "triage_accept_to_today",
-      slot_holders: [],
-      created_at: "2026-09-29T18:00:00.000Z",
-    };
+    expect(state.wipRefusal?.activation_path).toBe("triage_accept_to_today");
+    expect(state.wipRefusal?.slot_holders).toHaveLength(3);
+    return state;
+  }
+
+  it("a stale triage refusal does not block a confirmed carry-forward account write", async () => {
+    storedTask = accountTask("backlog");
+    const state = afterEarlierTriageRefusal();
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const view = mountReview();
+    await waitFor(() =>
+      expect(screen.getByTestId("account-read-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    expect(workflow.state.wipRefusal).toEqual(state.wipRefusal);
+    expect(screen.getByTestId("task-status")).toHaveTextContent("backlog");
+
+    fireEvent.click(
+      screen.getByTestId("review-sheet-carry-forward-" + TASK_ID),
+    );
+    expect(screen.getByTestId("task-status")).toHaveTextContent("active");
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith("apply_task_review_transition", {
+        p_task_id: TASK_ID,
+        p_target_status: "active",
+      }),
+    );
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(storedTask.status).toBe("backlog");
+    expect(toast).not.toHaveBeenCalled();
+    expect(workflow.state.wipRefusal).toEqual(state.wipRefusal);
+
+    storedTask = accountTask("active");
+    await act(async () => {
+      finishAccountWrite({
+        data: { task: storedTask, blocks: [] },
+        error: null,
+      });
+    });
+    expect(toast).toHaveBeenCalledExactlyOnceWith("Carried forward");
+    expect(workflow.state.wipRefusal).toEqual(state.wipRefusal);
+    view.unmount();
+    window.sessionStorage.clear();
+    mountReview();
+    await waitFor(() =>
+      expect(screen.getByTestId("account-read-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    expect(screen.getByTestId("task-status")).toHaveTextContent("active");
+    expect(
+      workflow.state.tasks.find((task) => task.id === TASK_ID)?.title,
+    ).toBe(storedTask.title);
+  });
+
+  it("a stale triage refusal reports the actual local-only carry-forward result", async () => {
+    mocks.createClient.mockReturnValue(null);
+    const initial = backlogLatestDraft(
+      captureWorkflow(workflowSeed(), "Synthetic local review task"),
+    );
+    const task = initial.tasks[0]!;
+    const state = afterEarlierTriageRefusal(initial);
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     mountReview();
     await waitFor(() =>
@@ -482,16 +541,21 @@ describe("ReviewSheet account save truth", () => {
         screen.getByTestId("review-sheet-carry-forward-" + task.id),
       ).toBeVisible(),
     );
+    expect(
+      workflow.state.tasks.find((item) => item.id === task.id)?.status,
+    ).toBe("backlog");
     fireEvent.click(
       screen.getByTestId("review-sheet-carry-forward-" + task.id),
     );
     await waitFor(() =>
-      expect(toast).toHaveBeenCalledWith(
-        "Your choice was not saved. Check the open-work limit notice.",
+      expect(toast).toHaveBeenCalledExactlyOnceWith(
+        "Changed here. Account save is not confirmed.",
       ),
     );
+    expect(
+      workflow.state.tasks.find((item) => item.id === task.id)?.status,
+    ).toBe("active");
     expect(workflow.state.wipRefusal).toEqual(state.wipRefusal);
     expect(rpc).not.toHaveBeenCalled();
-    expect(toast).not.toHaveBeenCalledWith("Carried forward");
   });
 });
