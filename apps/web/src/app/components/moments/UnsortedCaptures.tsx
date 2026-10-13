@@ -7,7 +7,9 @@ import { HIT_TARGET_MIN } from "./hitTarget";
 import {
   AI_SORTING_FAILED_NOT_SORTED,
   AI_SORTING_UNAVAILABLE_NOT_SORTED,
+  sortFailureMessage,
 } from "@/lib/statusVocabulary";
+import { useAuthPresence } from "./useAuthPresence";
 import { selectUnsortedCaptures } from "@/lib/workflow/captureStatus";
 
 /**
@@ -42,6 +44,9 @@ export function UnsortedCaptures({
     sortCaptureIntoDrafts,
     retryCaptureParseWithMock,
   } = useWorkflow();
+
+  const { presence } = useAuthPresence();
+  const signedIn = presence.status === "signed-in";
 
   // C1 Target Card 4: one definition of "not sorted yet", shared with every
   // other surface that counts or names these (see lib/workflow/captureStatus).
@@ -86,6 +91,11 @@ export function UnsortedCaptures({
           );
           const sorting = sortingCaptureId === item.id;
           const failure = failedSort?.captureId === item.id ? failedSort : null;
+          const failureHeadline = failure?.canRetryWithMock
+            ? failure.status === "ai_unavailable"
+              ? AI_SORTING_UNAVAILABLE_NOT_SORTED
+              : AI_SORTING_FAILED_NOT_SORTED
+            : (failure?.message ?? "");
 
           return (
             <li
@@ -107,26 +117,17 @@ export function UnsortedCaptures({
                   className="grid gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-200"
                   data-testid={`triage-sheet-sort-failed-${item.id}`}
                 >
-                  {/* #740: the glance line must match which failure this is —
-                      "AI can't be reached" (ai_unavailable) reads differently
-                      from "AI was reached and this attempt didn't work"
-                      (everything else), and showing the wrong one contradicts
-                      the detail line right below it. Reuses the #739
-                      vocabulary verbatim (statusVocabulary.ts) rather than
-                      inventing a third phrasing; "What happened?" still
-                      exists as its own disclosure because `failure.message`
-                      is the server's literal wording, which callers other
-                      than this component may override in tests. */}
+                  {/* Generic glance follows status and live auth. Specific details stay below. */}
                   <p className="font-semibold">
-                    {failure.status === "ai_unavailable"
-                      ? AI_SORTING_UNAVAILABLE_NOT_SORTED
-                      : AI_SORTING_FAILED_NOT_SORTED}
+                    {sortFailureMessage(failureHeadline, signedIn)}
                   </p>
                   <details>
                     <summary className="cursor-pointer font-semibold underline-offset-2 hover:underline">
                       What happened?
                     </summary>
-                    <p className="mt-1 font-normal">{failure.message}</p>
+                    <p className="mt-1 font-normal">
+                      {sortFailureMessage(failure.message, signedIn)}
+                    </p>
                   </details>
                 </div>
               ) : null}
@@ -142,7 +143,7 @@ export function UnsortedCaptures({
                 >
                   {sorting ? "Sorting…" : "Sort"}
                 </Button>
-                {failure?.canRetryWithMock ? (
+                {failure?.canRetryWithMock && signedIn ? (
                   // The degraded choice moved here with the parse it belongs
                   // to: a synchronous, in-band alternative the person
                   // chooses, never a background retry (FR-026).
@@ -155,7 +156,7 @@ export function UnsortedCaptures({
                     className={cn(HIT_TARGET_MIN, "touch-manipulation")}
                     data-testid={`triage-sheet-sort-basic-${item.id}`}
                   >
-                    Sort it the simple way
+                    Try basic sorting
                   </Button>
                 ) : null}
               </div>

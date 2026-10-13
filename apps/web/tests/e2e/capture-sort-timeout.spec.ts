@@ -52,9 +52,13 @@ test("a stalled sort shows its existing failure, keeps raw text and releases oth
   await expect(failure).toBeVisible();
   await expect(failure).toHaveClass(/border-amber-500/);
   await expect(stalledRow).toContainText(STALLED_TEXT);
-  await expect(
-    stalledRow.getByTestId(/^triage-sheet-sort-basic-/),
-  ).toBeEnabled();
+  // This device-tier fixture stubs parsing, not sign-in. Basic sorting still
+  // needs the auth-only route, so a signed-out recovery cannot offer it.
+  await expect(failure).toContainText("Sorting requires you to be signed in.");
+  await expect(failure).not.toContainText("Try again, or use basic sorting.");
+  await expect(stalledRow.getByTestId(/^triage-sheet-sort-basic-/)).toHaveCount(
+    0,
+  );
   await expect(
     otherRow.getByRole("button", { name: "Sort", exact: true }),
   ).toBeEnabled();
