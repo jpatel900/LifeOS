@@ -18,6 +18,7 @@ import {
   hasCompletedOnboarding,
   isOnboardingRerunRequested,
 } from "@/lib/onboarding/onboarding";
+import { HIT_TARGET_ROW } from "../components/moments/hitTarget";
 
 type LoginState =
   | { status: "idle" }
@@ -209,6 +210,7 @@ function LoginForm() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={state.status === "submitting"}
+                className={HIT_TARGET_ROW}
               />
             </div>
 
@@ -220,10 +222,21 @@ function LoginForm() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 disabled={state.status === "submitting"}
+                className={HIT_TARGET_ROW}
               />
             </div>
 
-            <Button type="submit" disabled={state.status === "submitting"}>
+            {/* #687 C5 (Target Card 8): the two inputs above and this button
+                were the pin's last three sub-44px controls here (shadcn's
+                40px `h-10` default). Sized locally, never in the shared
+                primitives: `HIT_TARGET_ROW` lifts each input to a 44px
+                min-height, and `size="lg"` (`h-11`/44px) is the same size
+                the "Go to Today" link below already uses. */}
+            <Button
+              type="submit"
+              size="lg"
+              disabled={state.status === "submitting"}
+            >
               {state.status === "submitting" ? "Signing in..." : "Sign in"}
             </Button>
           </form>
@@ -258,15 +271,13 @@ function LoginForm() {
               rather than a new header, since this page deliberately has no
               shell of its own. `ghost` variant keeps it visually secondary
               to the primary "Sign in" action above.
-              CI catch (`hit-target-overlap-pin.spec.ts`, `login` is pinned at
-              EXACTLY 3 pre-existing sub-44px controls — email/password/Sign
-              in, all shadcn's 40px default): `Button`'s default `size` is
-              also `h-10`/40px (`components/ui/button.tsx`), so this control
-              would have been a 4th, raising the pinned surface's count —
-              which the ratchet only allows to SHRINK, never grow. `size="lg"`
-              (`h-11`/44px) is the one `Button` size that clears the pin's
-              `>=44px` floor outright, so this link adds zero new debt to an
-              already-imperfect surface instead of quietly making it worse. */}
+              CI catch (`hit-target-overlap-pin.spec.ts`, which pinned `login`
+              at 3 sub-44px controls when this link landed — since cleared to
+              0 by #687 C5, see the form above): `Button`'s default `size` is
+              `h-10`/40px (`components/ui/button.tsx`), so this control would
+              have raised the pinned surface's count — which the ratchet only
+              allows to SHRINK, never grow. `size="lg"` (`h-11`/44px) is the
+              one `Button` size that clears the pin's `>=44px` floor outright. */}
           <Button asChild variant="ghost" size="lg" className="w-full">
             <Link href="/">Go to Today</Link>
           </Button>
