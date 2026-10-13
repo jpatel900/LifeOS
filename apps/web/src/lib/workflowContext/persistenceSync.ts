@@ -83,8 +83,10 @@ export interface PersistenceSyncDeps {
     accountId: string,
   ) => void;
   markLocalOnly: (message: string) => void;
-  /** #737-A slice 2: the device journal refused the write; nothing holds it. */
-  markDeviceStorageBlocked: () => void;
+  /** The device journal refused the write; account delivery is separate. */
+  markDeviceStorageBlocked: (options?: {
+    preservePendingLocalChanges?: boolean;
+  }) => void;
   markPersistedLoadFailure: (error: unknown) => void;
   /** #737-A slice 2: drain the win/review journal to the account. */
   replayJournaledWrites: () => Promise<unknown>;
@@ -222,6 +224,9 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         });
         if (result.provider === "supabase") {
           recordAccountAlias("captures", localCapture.id, result.capture.id);
+          // #967: account acknowledgement cannot repair the failed device
+          // journal. Report both facts without inventing a queued capture.
+          markDeviceStorageBlocked({ preservePendingLocalChanges: true });
           try {
             await syncPersistedWorkflowRows(client);
           } catch (error) {

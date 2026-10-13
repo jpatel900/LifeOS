@@ -3,6 +3,7 @@ import { resolveDeviceSaveNotice } from "./deviceSaveNotice";
 import {
   ACCOUNT_NEEDS_APP_UPDATE,
   ACCOUNT_SAVE_FAILED,
+  ACCOUNT_SAVED_DEVICE_STORAGE_BLOCKED,
   ACCOUNT_UNREACHABLE_NOW,
   DEVICE_STORAGE_BLOCKED,
   SIGNED_OUT_SAVING_ON_THIS_DEVICE,
@@ -116,6 +117,33 @@ describe("resolveDeviceSaveNotice (#734)", () => {
       signedOut: false,
     });
   });
+
+  it("reports blocked device recovery while keeping confirmed account delivery clear", () => {
+    expect(resolveDeviceSaveNotice(status({ storage: "blocked" }))).toEqual({
+      tone: "alarm",
+      message: ACCOUNT_SAVED_DEVICE_STORAGE_BLOCKED,
+      signedOut: false,
+    });
+  });
+
+  it.each([
+    { account: "synced", pendingLocalChanges: true },
+    { account: "synced", pendingSaveFailed: true },
+    { account: "synced", signedOut: true },
+    { account: "sync-error", message: "Readback failed" },
+    { account: "checking" },
+  ] as Partial<WorkflowSyncStatus>[])(
+    "never claims account delivery when work remains or account truth is uncertain: %s",
+    (overrides) => {
+      expect(
+        resolveDeviceSaveNotice(status({ storage: "blocked", ...overrides })),
+      ).toEqual({
+        tone: "alarm",
+        message: DEVICE_STORAGE_BLOCKED,
+        signedOut: false,
+      });
+    },
+  );
 
   it("never dresses an ordinary state as a failure", () => {
     const ordinary: WorkflowSyncStatus[] = [

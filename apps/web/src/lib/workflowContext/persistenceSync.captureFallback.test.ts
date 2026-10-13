@@ -22,8 +22,10 @@ import type { WorkflowState } from "../workflow";
  * id), fall back to the direct `createCaptureItem` call — the exact
  * pre-durability path. Only a capture that is BOTH unresolvable (a chosen
  * area has not synced yet) AND un-journalable still gets the honest
- * "saved on this device" banner, because there is nowhere durable to retry
+ * device-storage-blocked banner, because there is nowhere durable to retry
  * from and no account-side call would even resolve to the right area.
+ * An acknowledged fallback also reports unavailable device recovery, but
+ * preserves the real pending flag rather than inventing a local retry.
  *
  * Mirrors the isolation style of
  * `persistenceSync.deferTaskWithSession.test.ts`: `createPersistenceSync`
@@ -165,8 +167,10 @@ describe("persistCapture falls back to a direct POST when the device journal ref
       PERSISTED_CAPTURE_ID,
     );
     expect(syncPersistedWorkflowRows).toHaveBeenCalledOnce();
-    // Not the "nothing durable" banner — the write actually landed.
-    expect(markDeviceStorageBlocked).not.toHaveBeenCalled();
+    // Both facts survive: account delivery and failed device recovery.
+    expect(markDeviceStorageBlocked).toHaveBeenCalledExactlyOnceWith({
+      preservePendingLocalChanges: true,
+    });
     expect(markPersistedLoadFailure).not.toHaveBeenCalled();
   });
 
@@ -189,7 +193,9 @@ describe("persistCapture falls back to a direct POST when the device journal ref
       expect.anything(),
       expect.objectContaining({ area_id: null }),
     );
-    expect(markDeviceStorageBlocked).not.toHaveBeenCalled();
+    expect(markDeviceStorageBlocked).toHaveBeenCalledExactlyOnceWith({
+      preservePendingLocalChanges: true,
+    });
     expect(markPersistedLoadFailure).not.toHaveBeenCalled();
   });
 
@@ -263,7 +269,9 @@ describe("persistCapture falls back to a direct POST when the device journal ref
     expect(markPersistedLoadFailure).toHaveBeenCalledOnce();
     expect(markPersistedLoadFailure).toHaveBeenCalledWith(readbackError);
     expect(syncPersistedWorkflowRows).toHaveBeenCalledOnce();
-    expect(markDeviceStorageBlocked).not.toHaveBeenCalled();
+    expect(markDeviceStorageBlocked).toHaveBeenCalledExactlyOnceWith({
+      preservePendingLocalChanges: true,
+    });
   });
 
   it("still rejects when the fallback account write fails and does not forward to persisted-load failure", async () => {
