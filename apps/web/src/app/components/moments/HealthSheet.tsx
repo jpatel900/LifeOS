@@ -273,7 +273,6 @@ function OpenHealthSheet({
         pulseTimerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const viewChecks = checks as ViewCheck[];
