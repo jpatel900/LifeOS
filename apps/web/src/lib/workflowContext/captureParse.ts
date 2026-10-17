@@ -306,7 +306,13 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
                   phase: "parsed",
                   captureId: capture.id,
                   parser: result.parser,
-                  status: result.status,
+                  // Bug hunt #10: a request the server auto-degraded to basic
+                  // sorting (AI provider down) reports as AI unavailable, so
+                  // the notice does not claim AI sorting is turned off.
+                  status:
+                    result.parser === "mock" && result.degraded
+                      ? "ai_unavailable"
+                      : result.status,
                   ...(warning ? { warning } : {}),
                 }
               : {

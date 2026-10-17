@@ -11,6 +11,10 @@ import { TaskMapDraftReview } from "./TaskMapDraftReview";
 import { UnsortedCaptures } from "./UnsortedCaptures";
 import { HIT_TARGET_MIN } from "./hitTarget";
 import { countUnsortedCaptures } from "@/lib/workflow/captureStatus";
+import {
+  AI_SORTING_OFF_SORTED_HERE,
+  AI_SORTING_UNAVAILABLE_SORTED_HERE,
+} from "@/lib/statusVocabulary";
 import { hasLaunchSequenceStep } from "@/lib/workflow/shared";
 import { canAdmitWipTask } from "@/lib/workflow/wip";
 
@@ -160,6 +164,33 @@ export function TriageSheet({
   // cannot disagree, and neither can offer back a thought an accepted task
   // already came from.
   const unsortedCaptureCount = countUnsortedCaptures(state, resolvedAreaId);
+
+  // Bug hunt #10: say when basic sorting stood in for AI sorting, so its
+  // placeholder drafts never pass for a real sort. Basic sorting cannot
+  // tell which area a thought belongs to, so it also says to check that.
+  const sortNoticeInScope =
+    captureParse.phase === "parsed" &&
+    (!resolvedAreaId ||
+      state.captureItems.some(
+        (capture) =>
+          capture.id === captureParse.captureId &&
+          capture.area_id === resolvedAreaId,
+      ));
+  const sortNotice =
+    sortNoticeInScope && captureParse.phase === "parsed"
+      ? [
+          captureParse.parser === "mock"
+            ? `${
+                captureParse.status === "ai_unavailable"
+                  ? AI_SORTING_UNAVAILABLE_SORTED_HERE
+                  : AI_SORTING_OFF_SORTED_HERE
+              } Check each draft and its area before you accept it.`
+            : null,
+          captureParse.warning ?? null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : "";
 
   const showMapOfferReady =
     mapOffer !== null &&
@@ -382,20 +413,14 @@ export function TriageSheet({
           surfaces (this sheet and the cockpit TriageView) so they show the
           same rows, the same copy (#689), and the same degraded behavior.
           It renders nothing when there is nothing unsorted. */}
-      {captureParse.phase === "parsed" &&
-      captureParse.warning &&
-      (!resolvedAreaId ||
-        state.captureItems.some(
-          (capture) =>
-            capture.id === captureParse.captureId &&
-            capture.area_id === resolvedAreaId,
-        )) ? (
+      {sortNotice ? (
         <p
           role="status"
           aria-live="polite"
           className="text-sm text-muted-foreground"
+          data-testid="triage-sheet-sort-notice"
         >
-          {captureParse.warning}
+          {sortNotice}
         </p>
       ) : null}
       <UnsortedCaptures areaId={resolvedAreaId} />
