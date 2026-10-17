@@ -2,5 +2,18 @@
   "env": {
     "NEXT_TELEMETRY_DISABLED": "1",
     "MAX_MCP_OUTPUT_TOKENS": "60000"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
   }
 }
