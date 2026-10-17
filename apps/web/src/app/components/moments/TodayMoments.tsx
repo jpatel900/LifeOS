@@ -1272,12 +1272,24 @@ function TodayMomentsContent({
     if (typeof window === "undefined") return;
 
     const params = new URLSearchParams(window.location.search);
-    const shared = params.get("shared_text");
-    if (!shared) return;
+    // Bug hunt #13: the manifest maps the shared title, text AND url all to
+    // `shared_text`, so an Android share arrives as several values (usually
+    // the page title and its link). Keep every distinct one, in order.
+    const sharedParts: string[] = [];
+    for (const value of params.getAll("shared_text")) {
+      const trimmed = value.trim();
+      if (trimmed && !sharedParts.includes(trimmed)) sharedParts.push(trimmed);
+    }
+    if (sharedParts.length === 0) return;
+    const shared = sharedParts.join("\n");
 
     sharedTextAppliedRef.current = true;
-    setCaptureDraft(shared);
-    writeStoredCaptureDraft(shared);
+    // An unsaved draft is kept: the shared text is added after it, never
+    // written over it.
+    const existingDraft = readStoredCaptureDraft().trim();
+    const nextDraft = existingDraft ? `${existingDraft}\n\n${shared}` : shared;
+    setCaptureDraft(nextDraft);
+    writeStoredCaptureDraft(nextDraft);
     adoptCaptureFromUrl(true);
 
     params.delete("shared_text");
