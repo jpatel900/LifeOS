@@ -3,6 +3,10 @@ import {
   getGoogleCalendarStoredConnectionForAccessToken,
   upsertGoogleCalendarConnectionForAccessToken,
 } from "@/lib/googleCalendar/server";
+import {
+  isGoogleCalendarRouteAuthFailure,
+  logGoogleCalendarRouteFailure,
+} from "@/lib/googleCalendar/routeErrors";
 import { requireSupabaseServerUser } from "@/lib/supabase/server";
 
 function readBearerToken(request: Request) {
@@ -63,15 +67,28 @@ export async function POST(request: Request) {
         "LifeOS disconnected Google Calendar and deleted its saved access on our side. Your permission still lives in your Google account — remove it there too if you want to fully revoke access.",
     });
   } catch (error) {
+    // #670: only an auth rejection is a 401, with fixed sign-in copy. Any
+    // other failure is logged server-side and answered with a fixed 500 --
+    // never the raw error text.
+    if (isGoogleCalendarRouteAuthFailure(error)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Sign in before disconnecting Google Calendar.",
+        },
+        { status: 401 },
+      );
+    }
+
+    logGoogleCalendarRouteFailure("google-calendar/disconnect", error);
+
     return NextResponse.json(
       {
         ok: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Google Calendar could not be disconnected.",
+          "Google Calendar could not be disconnected. Try again in a moment.",
       },
-      { status: 401 },
+      { status: 500 },
     );
   }
 }

@@ -35,6 +35,12 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { POST } from "./route";
 
+function authRejected(message: string) {
+  const error = new Error(message);
+  error.name = "SupabaseAuthRejectedError";
+  return error;
+}
+
 const proposal = {
   id: "550e8400-e29b-41d4-a716-446655440501",
   user_id: "550e8400-e29b-41d4-a716-446655440001",
@@ -246,5 +252,104 @@ describe("google-calendar freebusy route", () => {
     expect(
       mocks.updateTimeBlockProposalConflictForAccessToken,
     ).not.toHaveBeenCalled();
+  });
+
+  describe("error sanitization (#670)", () => {
+    function freebusyRequest(body: unknown) {
+      return new Request("http://localhost/api/google-calendar/freebusy", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer supabase-access-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+    }
+
+    it("does not echo a raw data-layer error and logs it server-side", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mocks.requireSupabaseServerUser.mockResolvedValue({
+        user: { id: proposal.user_id },
+      });
+      mocks.getGoogleCalendarStoredConnectionForAccessToken.mockRejectedValue(
+        new Error('relation "google_calendar_connections" does not exist'),
+      );
+
+      const response = await POST(
+        freebusyRequest({ proposal_id: proposal.id }),
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(502);
+      expect(body).toEqual({
+        ok: false,
+        error: "Google Calendar conflict check failed.",
+      });
+      expect(spy).toHaveBeenCalled();
+      spy.mockRestore();
+    });
+
+    it("returns fixed sign-in copy on auth rejection", async () => {
+      mocks.requireSupabaseServerUser.mockRejectedValue(
+        authRejected("invalid claim: missing sub claim"),
+      );
+
+      const response = await POST(
+        freebusyRequest({ proposal_id: proposal.id }),
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(body.error).toBe(
+        "Sign in before checking Google Calendar conflicts.",
+      );
+    });
+
+    it("returns a plain 400 for an invalid body instead of the zod issue dump", async () => {
+      mocks.requireSupabaseServerUser.mockResolvedValue({
+        user: { id: proposal.user_id },
+      });
+
+      const response = await POST(freebusyRequest({ proposal_id: "nope" }));
+      const body = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(body.error).toBe(
+        "Google Calendar conflict check request was invalid.",
+      );
+    });
+
+    it("passes through the fixed Google OAuth provider message", async () => {
+      mocks.requireSupabaseServerUser.mockResolvedValue({
+        user: { id: proposal.user_id },
+      });
+      mocks.getGoogleCalendarStoredConnectionForAccessToken.mockResolvedValue({
+        connection: { calendar_id: "primary", status: "connected" },
+      });
+      mocks.getTimeBlockProposalForAccessToken.mockResolvedValue(proposal);
+      const providerError = new Error(
+        "Google Calendar connection step did not complete.",
+      );
+      Object.assign(providerError, {
+        name: "GoogleOAuthProviderError",
+        code: "invalid_grant",
+        description: "Token has been expired or revoked.",
+        httpStatus: 400,
+        phase: "refresh",
+      });
+      mocks.checkGoogleCalendarFreeBusyForConnection.mockRejectedValue(
+        providerError,
+      );
+
+      const response = await POST(
+        freebusyRequest({ proposal_id: proposal.id }),
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(502);
+      expect(body.error).toBe(
+        "Google Calendar connection step did not complete.",
+      );
+    });
   });
 });

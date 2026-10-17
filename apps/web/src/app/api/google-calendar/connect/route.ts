@@ -7,6 +7,10 @@ import {
   sealGoogleCalendarOAuthStateCookie,
 } from "@/lib/googleCalendar/oauth";
 import { getGoogleCalendarConfig } from "@/lib/googleCalendar/config";
+import {
+  isGoogleCalendarRouteAuthFailure,
+  logGoogleCalendarRouteFailure,
+} from "@/lib/googleCalendar/routeErrors";
 import { requireSupabaseServerUser } from "@/lib/supabase/server";
 
 function readBearerToken(request: Request) {
@@ -22,14 +26,6 @@ function readBearerToken(request: Request) {
   }
 
   return value.trim();
-}
-
-function getSafeErrorMessage(error: unknown) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Google Calendar connection could not start.";
 }
 
 export async function POST(request: Request) {
@@ -77,12 +73,28 @@ export async function POST(request: Request) {
 
     return response;
   } catch (error) {
+    // #670: never echo error.message -- it can carry raw Supabase Auth or
+    // config text. Auth rejections get fixed sign-in copy; anything else is
+    // logged server-side and answered with a fixed fallback.
+    if (isGoogleCalendarRouteAuthFailure(error)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Sign in before connecting Google Calendar.",
+        },
+        { status: 401 },
+      );
+    }
+
+    logGoogleCalendarRouteFailure("google-calendar/connect", error);
+
     return NextResponse.json(
       {
         ok: false,
-        error: getSafeErrorMessage(error),
+        error:
+          "Google Calendar connection could not start. Try again in a moment.",
       },
-      { status: 401 },
+      { status: 500 },
     );
   }
 }
