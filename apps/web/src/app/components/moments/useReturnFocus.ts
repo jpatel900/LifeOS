@@ -27,11 +27,16 @@ export function useReturnFocus(active: boolean): void {
     return () => {
       if (
         saved &&
+        saved !== document.body &&
         document.contains(saved) &&
         typeof saved.focus === "function"
       ) {
         saved.focus();
+        return;
       }
+      // Opened straight from a link, so no opener owned focus. Land on the
+      // page's main stage (the skip link's target) instead of `<body>`.
+      document.getElementById("stage-content")?.focus();
     };
   }, [active]);
 }

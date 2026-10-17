@@ -74,6 +74,27 @@ describe("useReturnFocus", () => {
     expect(screen.getByTestId("opener")).toHaveFocus();
   });
 
+  it("falls back to the page's stage when nothing had focus (opened from a link)", async () => {
+    function Page({ active }: { active: boolean }) {
+      return (
+        <div>
+          <section id="stage-content" tabIndex={-1} data-testid="stage" />
+          <Overlay active={active} />
+        </div>
+      );
+    }
+    const { rerender } = render(<Page active={false} />);
+    expect(document.body).toHaveFocus();
+
+    rerender(<Page active />);
+    await waitFor(() => {
+      expect(screen.getByTestId("overlay-input")).toHaveFocus();
+    });
+
+    rerender(<Page active={false} />);
+    expect(screen.getByTestId("stage")).toHaveFocus();
+  });
+
   it("restores focus on unmount, not just on active flipping false", () => {
     function Wrapper({ mounted }: { mounted: boolean }) {
       return (
