@@ -1250,7 +1250,7 @@ The next approved planning focus after the current governance cleanup is the pro
 
 Use that focus to improve how accepted work is structured, related, reviewed, and surfaced inside the existing LifeOS workflow.
 
-Do not read that as approval for new ingestion channels, browser/computer-use automation, realtime voice, vector search, plugin marketplaces, a multi-agent runtime (future scope strictly via ADR 0006's issue-gated path), team collaboration, public SaaS billing, advanced analytics warehouses, self-healing automation, broad web browsing, or new vendors/integrations. The canonical "do not build" and change-control lists remain `AGENTS.md` section 4 and section 20.
+Do not read that as approval for new ingestion channels, browser/computer-use automation, realtime voice, vector search, plugin marketplaces, a multi-agent runtime (future scope strictly via ADR 0006's issue-gated path), team collaboration, public SaaS billing, advanced analytics warehouses, self-healing automation, broad web browsing, or new vendors/integrations. The canonical "do not build" and change-control lists remain `AGENTS.md` "Owner gates".
 
 Background-reference docs may inform planning, but they cannot expand implementation scope on their own.
 

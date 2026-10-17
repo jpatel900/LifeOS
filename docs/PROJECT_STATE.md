@@ -19,8 +19,8 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 - **Program priority (owner 2026-09-29):** the 10-day real-use trial replaces the serial campaign queue. C2 awaits the owner's five-minute glance, with no further re-score rounds. Other campaigns resume only from trial findings; independent acceptance and existing guards still apply. See program §3 and §7.
 - **Merge lanes live (ADR 0008, owner-ratified; amended 2026-08-05):** program-doc auto-merge, additive-tests auto-merge, and the instant Telegram-notified self-merge lane (`selfmerge:auto`) are all live and lane-tested; the veto window is the CI runtime. Demotion: one-line `SELFMERGE_WINDOW.enabled` flip.
-- **Owner decisions 2026-08-05 (parked calls cleared):** onboarding ritual content = the existing plan (`docs/implementation-planning/plan-onboarding-ritual.md`) is ratified as-is; the owner judges the built result at C3's experience gate. The #764 fake-"partial" session-rows gate closed as a **no-op** — prod verified 2026-08-05: zero such rows exist (2 total sessions, none `partial`). `KNOWN_ISSUES` triage runs at campaign close or monthly review, as governed by AGENTS.md rule 6.
-- **Agent rules added by the owner:** plain language for humans (2026-08-04) and deliver the intended scope (2026-09-30) are AGENTS.md rules 12 and 13; that file governs.
+- **Owner decisions 2026-08-05 (parked calls cleared):** onboarding ritual content = the existing plan (`docs/implementation-planning/plan-onboarding-ritual.md`) is ratified as-is; the owner judges the built result at C3's experience gate. The #764 fake-"partial" session-rows gate closed as a **no-op** — prod verified 2026-08-05: zero such rows exist (2 total sessions, none `partial`). `KNOWN_ISSUES` triage runs at campaign close or monthly review, as governed by AGENTS.md "Docs".
+- **Agent rules added by the owner:** plain language for humans (2026-08-04) and deliver the intended scope (2026-09-30) live in AGENTS.md "Delivering work"; that file governs.
 - Safety boundaries are unchanged: no silent external writes, no autonomous rescheduling, no AI-triggered calendar writes, no parser contract weakening, and no raw-capture loss on parse failure.
 - Branch protection on `main` requires `Monorepo Validation`, `Playwright E2E`, and `Migrations + RLS Verification`; GitHub auto-merge gates on these. The Main Red Guard opens a revert PR when main goes red twice, but never arms auto-merge on it — owner decision 2026-08-05: notify-and-hold + stand-down + diagnosis. The PR waits for a human `revert:confirm` label, carries a plain-language diagnosis of the failure, and self-labels `revert:wont-fix` when its own CI shows the same job still failing.
 - Per ADR 0006 (multi-client doctrine): one deployable Next.js app is the single authoritative domain/security layer for multiple clients; web UI and headless `@lifeos/cli` consume shared, versioned `/api/v1` contracts with user-scoped bearer auth. No client reimplements business rules or writes to the database directly. Supabase Edge Functions are default-no unless a specific scheduled or integration constraint justifies them.
@@ -28,7 +28,7 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 - The stage-epic slice relay (`scripts/agent/pipeline-manifest.json` + `pipeline-advance.yml`) is **retired**: the Final UX Loop superseded it as the active program, and the workflow's automatic triggers were removed (owner-merged, 2026-08-05). `workflow_dispatch` remains for manual archaeology; the manifest is historical state.
 - Persistence is intentionally mixed: authenticated Supabase paths where implemented; local/session fallback remains the recovery path when sync or env is unavailable.
 - `design_handoff_lifeos/README.md` is a historical design reference; current UI authority lives in requirements, UX flows, ADRs, and shipped behavior.
-- Governance docs are budgeted: `AGENTS.md` and `CLAUDE.md` stay small; detailed rulebooks live in `.agents/skills`; `docs/agent/` keeps `CODEX_PROMPT_TEMPLATE.md` and `LANES.md` (the Claude/Codex cross-lane protocol).
+- Governance docs are budgeted: `AGENTS.md` stays small and `CLAUDE.md` imports it; LifeOS-specific skills live in `.agents/skills`; `docs/agent/` keeps `CODEX_PROMPT_TEMPLATE.md`, `LANES.md` (the Claude/Codex cross-lane rules), and `MODEL_LANES.md`.
 - Production Supabase migrations are applied via the gated `migration-apply.yml` workflow or manually — never by deploys; the `Migration Drift` workflow red-flags unapplied migrations, and the response procedure is `.agents/skills/lifeos-migration-drift-response/SKILL.md`.
 
 ## Constraints
@@ -36,7 +36,7 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 - Before any work, check `docs/program/final-ux-loop.md` §6 for the live campaign and slice; concurrent lanes allowed with disjoint declared manifests (program R7 as amended 2026-08-05; rules in `docs/agent/LANES.md`).
 - Before feature work, map the task to `docs/REQUIREMENTS.md`, define acceptance criteria, identify tests, and flag risky surfaces.
 - New user-owned tables require RLS policies, export coverage, and multi-user tests in the same change.
-- Calendar/OAuth/RLS/schema/security/privacy/data-deletion changes require human review (the full ten-surface list lives in AGENTS.md "Human review required" — that list governs).
+- Calendar/OAuth/RLS/schema/security/privacy/data-deletion changes require human review (the full ten-surface list lives in AGENTS.md "Owner gates" — that list governs).
 - Docs may not grow by creating session-note files; durable decisions go to ADRs, status goes here, program state goes to `docs/program/`.
 
 ## Open questions

@@ -154,7 +154,7 @@ export const HIGH_RISK_PATH_PATTERNS = [
 // live to match; apply it to hold any PR back regardless of its body text.
 export const OWNER_GATE_LABEL = "owner-gate";
 
-// An unchecked OWNER-GATE task-list line (AGENTS.md rule 11's follow-up
+// An unchecked OWNER-GATE task-list line (AGENTS.md "Delivering work" follow-up
 // marker convention). Checked boxes (`- [x] OWNER-GATE:`) do not block —
 // resolving the item is exactly what checking the box records. GFM accepts
 // any of `-`/`*`/`+` as the bullet (AGENTS.md never mandates `-`), an
