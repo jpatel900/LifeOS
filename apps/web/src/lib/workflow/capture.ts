@@ -391,7 +391,18 @@ export function appendParsedWorkflowResult(
         )
       : [parsed.captureItem, ...state.captureItems],
     taskDrafts: [...parsed.taskDrafts, ...state.taskDrafts],
-    projectDrafts: [...parsed.projectDrafts, ...state.projectDrafts],
+    // A re-sort replaces the capture's earlier undecided project drafts
+    // instead of stacking duplicates (bug hunt #9).
+    projectDrafts: [
+      ...parsed.projectDrafts,
+      ...state.projectDrafts.filter(
+        (draft) =>
+          !(
+            draft.capture_item_id === parsed.captureItem.id &&
+            draft.status === "pending"
+          ),
+      ),
+    ],
     ambiguityAssessments: parsed.ambiguityAssessment
       ? [parsed.ambiguityAssessment, ...state.ambiguityAssessments]
       : state.ambiguityAssessments,
