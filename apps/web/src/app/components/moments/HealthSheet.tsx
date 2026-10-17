@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Check,
@@ -186,6 +186,11 @@ function OpenHealthSheet({
   );
 
   const [pulse, setPulse] = useState(false);
+  // The one pending pulse-off timer, and whether the sheet is still mounted.
+  // A check can settle after the sheet closed; neither may start or leave a
+  // timer that fires once the sheet is gone.
+  const pulseTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(false);
   const [checks, setChecks] = useState<
     Array<(typeof vm.healthChecks)[number] | HealthDashboardCheck>
   >(vm.healthChecks);
@@ -237,7 +242,15 @@ function OpenHealthSheet({
     } catch {
       setMessage("The check could not finish. Close this and open it again.");
     } finally {
-      window.setTimeout(() => setPulse(false), 1400);
+      if (mountedRef.current) {
+        if (pulseTimerRef.current !== null) {
+          window.clearTimeout(pulseTimerRef.current);
+        }
+        pulseTimerRef.current = window.setTimeout(() => {
+          pulseTimerRef.current = null;
+          setPulse(false);
+        }, 1400);
+      }
     }
   }
 
@@ -245,6 +258,7 @@ function OpenHealthSheet({
   // reaches here, so this effect cannot fire unasked.
   useEffect(() => {
     let cancelled = false;
+    mountedRef.current = true;
     void runSystemCheck();
     void readPurposeGaugeSamples(createSupabaseBrowserClient()).then(
       (samples) => {
@@ -253,6 +267,11 @@ function OpenHealthSheet({
     );
     return () => {
       cancelled = true;
+      mountedRef.current = false;
+      if (pulseTimerRef.current !== null) {
+        window.clearTimeout(pulseTimerRef.current);
+        pulseTimerRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

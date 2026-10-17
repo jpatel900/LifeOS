@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 import * as WorkflowContext from "@/lib/WorkflowContext";
@@ -797,5 +797,126 @@ describe("HealthSheet — manual retry action (#967)", () => {
       expect(screen.queryByTestId("health-sheet-retry-save")).toBeNull(),
     );
     expect(screen.queryByText("Saving your work")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The glance's pulse is switched off by a 1400ms timer once a check settles.
+ * That timer must not outlive the sheet: a pending one fired after this file's
+ * environment was torn down and failed a full `pnpm test` run under load with
+ * "window is not defined", even though every test had passed.
+ *
+ * Only `setTimeout`/`clearTimeout` are faked, so promises stay real and the
+ * mocked check still settles. `waitFor` polls on `setTimeout`, which is faked
+ * here, so these tests drain microtasks by hand instead.
+ */
+describe("HealthSheet — the pulse timer never outlives the sheet", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function flushCheck() {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+  }
+
+  /**
+   * jsdom itself queues zero-delay timers (the `storage` event from seeding
+   * sessionStorage, `selectionchange` from the sheet's focus). Run those first
+   * — advancing by 0ms cannot reach the 1400ms pulse timer — so the count is
+   * only the timers that would still fire later.
+   */
+  function laterTimerCount() {
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    return vi.getTimerCount();
+  }
+
+  it("still stops the pulse 1400ms after a check finishes while the sheet is open", async () => {
+    renderSheet();
+    await flushCheck();
+    expect(screen.getByTestId("health-sheet-message")).toHaveTextContent(
+      "Checked. A record of this check was saved to your account.",
+    );
+    expect(screen.getByTestId("health-sheet-glance")).toHaveClass(
+      "animate-pulse",
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(1399);
+    });
+    expect(screen.getByTestId("health-sheet-glance")).toHaveClass(
+      "animate-pulse",
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByTestId("health-sheet-glance")).not.toHaveClass(
+      "animate-pulse",
+    );
+  });
+
+  it("leaves no timer behind when the sheet closes after a check finished", async () => {
+    const { unmount } = renderSheet();
+    await flushCheck();
+    expect(screen.getByTestId("health-sheet-message")).toHaveTextContent(
+      "Checked. A record of this check was saved to your account.",
+    );
+    // Exactly the pulse-off timer is pending while the sheet is open.
+    expect(laterTimerCount()).toBe(1);
+
+    unmount();
+
+    expect(laterTimerCount()).toBe(0);
+  });
+
+  it("starts no timer when the sheet closes while a check is still running", async () => {
+    let finishCheck: (value: unknown) => void = () => {};
+    mocks.getHealthDashboard.mockReturnValue(
+      new Promise((resolve) => {
+        finishCheck = resolve;
+      }),
+    );
+    const { unmount } = renderSheet();
+    await flushCheck();
+    expect(mocks.getHealthDashboard).toHaveBeenCalledTimes(1);
+    expect(laterTimerCount()).toBe(0);
+
+    unmount();
+    finishCheck({
+      provider: "supabase",
+      checkedAt: NOW.toISOString(),
+      checks: ALL_HEALTHY,
+      persistence: "persisted",
+      persistenceMessage: null,
+    });
+    await flushCheck();
+
+    expect(laterTimerCount()).toBe(0);
+  });
+
+  it("keeps one pulse timer, not two, when Check again runs before the last one fired", async () => {
+    const { unmount } = renderSheet();
+    await flushCheck();
+    expect(laterTimerCount()).toBe(1);
+
+    act(() => {
+      screen.getByTestId("health-sheet-check-again").click();
+    });
+    await flushCheck();
+    expect(mocks.getHealthDashboard).toHaveBeenCalledTimes(2);
+    expect(laterTimerCount()).toBe(1);
+
+    unmount();
+    expect(laterTimerCount()).toBe(0);
   });
 });
