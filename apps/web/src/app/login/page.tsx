@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { createSupabaseBrowserClient } from "../../lib/supabase/browser";
+import { safeNextPath } from "@/lib/security/safeNextPath";
 import {
   hasCompletedOnboarding,
   isOnboardingRerunRequested,
@@ -48,16 +49,11 @@ const NOT_CONFIGURED_MESSAGE =
 
 // #688: return the person to the page they came from after signing in. Only
 // same-app paths are honored — the value must be a single leading-slash path
-// (never "//host" or "http://…"), so a crafted ?next= can't bounce a
-// freshly-signed-in session to an external site. Anything else falls back to
+// (never "//host", "/\\host" or "http://…" — see `safeNextPath`), so a
+// crafted ?next= can't bounce a freshly-signed-in session to an external
+// site. Anything else falls back to
 // Today ("/"), which also owns the first-use decision (see the success
 // handler below).
-function safeNextPath(raw: string | null): string {
-  if (!raw) return "/";
-  if (!raw.startsWith("/") || raw.startsWith("//")) return "/";
-  return raw;
-}
-
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();

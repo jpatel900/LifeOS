@@ -1,6 +1,38 @@
 import type { NextConfig } from "next";
 
+/**
+ * Baseline security response headers applied to every route.
+ *
+ * Deliberately conservative so nothing in the app can break: the CSP only
+ * carries directives that do not restrict script/style/connect/img sources
+ * (clickjacking via `frame-ancestors`, `<base>` hijacking, and plugin
+ * embedding). A full source-restricting CSP needs a report-only rollout
+ * first and is tracked separately. `X-Frame-Options` duplicates
+ * `frame-ancestors` for older browsers. HSTS matches Vercel's own default
+ * (no `includeSubDomains`/`preload`, so no sibling-subdomain blast radius).
+ * The app uses no camera/microphone/geolocation/payment/USB APIs, so those
+ * are denied outright.
+ */
+export const SECURITY_HEADERS: ReadonlyArray<{ key: string; value: string }> = [
+  {
+    key: "Content-Security-Policy",
+    value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+  },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  },
+  { key: "Strict-Transport-Security", value: "max-age=63072000" },
+];
+
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: "/:path*", headers: [...SECURITY_HEADERS] }];
+  },
   transpilePackages: ["@lifeos/schemas", "@lifeos/types"],
   // #687 demo-seed round 2: `scripts/run-playwright-e2e.mjs` now runs TWO
   // `next dev` processes from this same `webDir` concurrently (one
