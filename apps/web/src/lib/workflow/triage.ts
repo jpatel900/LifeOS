@@ -349,12 +349,10 @@ function acceptDraftWithStatus(
     return state;
   }
 
-  const existingTask = state.tasks.find(
-    (task) => task.source_capture_item_id === draft.capture_item_id,
-  );
-  if (existingTask) {
-    return state;
-  }
+  // A draft is accepted at most once: the `pending` check above guards that.
+  // Sibling drafts of the SAME capture (a brain dump the parser split, or a
+  // user split) are separate tasks, so a task already made from this capture
+  // must not block them (bug hunt #3).
 
   if (status === "active" && !hasLaunchSequenceStep(draft.first_tiny_step)) {
     return state;
