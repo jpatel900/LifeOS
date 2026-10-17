@@ -64,13 +64,19 @@ describe("revertTaskReviewTransition", () => {
   it("restores only what the transition changed when other work landed since", () => {
     const { state, taskId } = planned();
     const other = acceptLatestDraft(captureWorkflow(state, "Synthetic other"));
-    const otherId = other.tasks.find((task) => task.title === "Synthetic other")!
-      .id;
+    const otherId = other.tasks.find(
+      (task) => task.title === "Synthetic other",
+    )!.id;
     const previous = other;
     const next = deferTask(previous, taskId);
     const current = updateTaskFirstTinyStep(next, otherId, "Open the file");
 
-    const reverted = revertTaskReviewTransition(current, previous, next, taskId);
+    const reverted = revertTaskReviewTransition(
+      current,
+      previous,
+      next,
+      taskId,
+    );
     expect(reverted).not.toBeNull();
     expect(reverted!.tasks.find((task) => task.id === taskId)).toBe(
       previous.tasks.find((task) => task.id === taskId),
