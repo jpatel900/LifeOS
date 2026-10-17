@@ -36,6 +36,9 @@ export interface CaptureOverlayProps {
   initialText?: string;
   onDraftChange?(text: string): void;
   onResolved?(): void;
+  // Bug hunt #7: the overlay was closed from outside (browser Back) while
+  // the post-save conclusion was still showing. The save already happened.
+  onSavedThenDismissed?(): void;
 }
 
 export function CaptureOverlay({
@@ -48,6 +51,7 @@ export function CaptureOverlay({
   initialText,
   onDraftChange,
   onResolved,
+  onSavedThenDismissed,
 }: CaptureOverlayProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [locked, setLocked] = useState(false);
@@ -153,6 +157,7 @@ export function CaptureOverlay({
           onDraftChange={onDraftChange}
           onSubmit={onSave}
           onResolved={onResolved}
+          onSavedThenDismissed={onSavedThenDismissed}
           onCancel={onClose}
           onLockChange={setLocked}
           hint="Enter to save · Shift+Enter for a new line · Esc to close"
