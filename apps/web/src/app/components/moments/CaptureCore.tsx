@@ -250,7 +250,7 @@ export function CaptureCore({
     concludeWith();
   }
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+  function handleKeyDown(event: React.KeyboardEvent<HTMLElement>) {
     const isSubmitCombo =
       event.key === "Enter" &&
       (submitShortcut === "enter"
@@ -313,6 +313,11 @@ export function CaptureCore({
           <input
             value={returnHook}
             onChange={(event) => setReturnHook(event.target.value)}
+            // Escape must close from here too, same as from the textarea —
+            // keyboard users tab into this field and would otherwise be stuck.
+            onKeyDown={(event) => {
+              if (event.key === "Escape") handleKeyDown(event);
+            }}
             readOnly={locked}
             placeholder="e.g. writing the report"
             className={cn(

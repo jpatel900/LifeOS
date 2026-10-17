@@ -70,6 +70,15 @@ describe("CaptureOverlay", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("closes on Escape when the back-to field has focus", () => {
+    const onClose = vi.fn();
+    render(<CaptureOverlay open onSave={vi.fn()} onClose={onClose} />);
+    fireEvent.keyDown(screen.getByTestId("capture-overlay-return-hook"), {
+      key: "Escape",
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("closes on Escape when the area picker has focus", () => {
     const onClose = vi.fn();
     render(
