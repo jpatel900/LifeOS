@@ -53,6 +53,7 @@ import {
 } from "./statusVocabulary";
 import {
   applyTaskReviewTransition,
+  editTimeBlockProposal,
   syncJournaledRollup,
   syncJournaledWin,
   syncJournaledReviewEntry,
@@ -144,7 +145,10 @@ import {
 // Direct submodule import, matching `reducerCore.ts`: the workflow barrel
 // freezes the pre-split public surface, and this #844 type is consumed only by
 // the state layer.
-import type { AccountIdAliasFamily } from "./workflow/shared";
+import {
+  raiseWorkflowIdCounterFromState,
+  type AccountIdAliasFamily,
+} from "./workflow/shared";
 import { createApplyWorkflowState } from "./workflowContext/applyWorkflowState";
 import {
   createPersistenceSync,
@@ -1091,6 +1095,37 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           const originalClientWriteId = payload.supersedes_client_write_id;
           return originalClientWriteId
             ? findJournaledTaskIdByClientWriteId(client, originalClientWriteId)
+            : null;
+        },
+
+        // --- calendar hunt #4: proposal time edits -----------------------
+        syncProposalEdit: async (args) => {
+          const result = await editTimeBlockProposal(client, args.proposal_id, {
+            proposed_start: args.proposed_start,
+            proposed_end: args.proposed_end,
+          });
+          return { provider: result.provider };
+        },
+
+        // --- calendar hunt #3: review transitions ------------------------
+        syncTaskReview: async (args) => {
+          const result = await applyTaskReviewTransition(
+            client,
+            args.task_id,
+            args.target_status,
+          );
+          return { provider: result.provider };
+        },
+        resolveTaskReviewTaskId: async (payload) => {
+          const localAlias = persistedIdForLocalId(
+            String(payload.workflow_task_id),
+            persistedTaskIdByLocalIdRef.current,
+          );
+          if (localAlias) return localAlias;
+
+          const acceptClientWriteId = payload.accept_client_write_id;
+          return acceptClientWriteId
+            ? findJournaledTaskIdByClientWriteId(client, acceptClientWriteId)
             : null;
         },
 
@@ -2294,6 +2329,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       try {
         const drafts = await listStoredTaskDrafts();
         if (!cancelled && drafts.length > 0) {
+          // Drafts minted in other tabs share this device's id space; keep
+          // the next local id clear of them (bug hunt #12).
+          raiseWorkflowIdCounterFromState({
+            ...stateRef.current,
+            taskDrafts: [...stateRef.current.taskDrafts, ...drafts],
+          });
           dispatch({ type: "restoreDeviceDrafts", drafts });
         }
       } catch {
@@ -2313,16 +2354,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   }, [hasHydratedFromStorage]);
 
   /**
-   * #737 C1 re-score GAP 3, write half — mirror the UNDECIDED triage drafts to
-   * the device store.
+   * #737 C1 re-score GAP 3, write half — mirror the triage drafts to the
+   * device store.
    *
-   * ## Why the whole pending set, rather than per-action calls
+   * ## Why the whole set, rather than per-action calls
    *
    * Seven reducer paths change a draft (parse, edit, mention-reject, split,
    * merge, accept, backlog, reject). Reconciling the set after the fact means
-   * none of them can be forgotten, and an accept or a reject removes the draft
-   * for free: the decision flips its status off `pending`, so it drops out of
-   * the filter and `reconcileStoredTaskDrafts` deletes it.
+   * none of them can be forgotten. An accept or a reject flips the draft's
+   * status off `pending`, and the stored copy follows, so the device keeps a
+   * record of the decision rather than an undecided draft (bug hunt #8).
    *
    * ## Why it is gated on the RESTORE, not just on hydration
    *
@@ -2340,10 +2381,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const pending = state.taskDrafts.filter(
-      (draft) => draft.status === "pending",
-    );
-    void reconcileStoredTaskDrafts(pending).catch(() => {
+    // Bug hunt #8: DECIDED drafts are kept too (as a record of the
+    // decision). A reject has no account write, so dropping it from the
+    // device made a new tab offer the thought again as "not sorted yet",
+    // while the banner said the drop was saved on this device.
+    void reconcileStoredTaskDrafts(state.taskDrafts).catch(() => {
       markDeviceStorageBlocked();
     });
   }, [hasRestoredDeviceDrafts, state.taskDrafts, markDeviceStorageBlocked]);
@@ -2421,15 +2463,28 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     let syncedAny = false;
     for (const queued of pending) {
+      // Bug hunt #5: an item whose chosen area cannot be resolved while the
+      // account's areas are not known yet stays queued — sending it now would
+      // file it with no area and delete the person's choice for good. Once
+      // the areas ARE known and the chosen one is still missing (it was
+      // removed), it goes up with no area rather than staying stuck forever.
+      const persistedAreaId = queued.area_id
+        ? persistedAreaIdForWorkflowId(
+            queued.area_id,
+            persistedAreasRef.current,
+          )
+        : null;
+      if (
+        queued.area_id &&
+        !persistedAreaId &&
+        persistedAreasRef.current.length === 0
+      ) {
+        continue;
+      }
       try {
         await syncQueuedCapture(client, {
           raw_text: queued.raw_text,
-          area_id: queued.area_id
-            ? persistedAreaIdForWorkflowId(
-                queued.area_id,
-                persistedAreasRef.current,
-              )
-            : null,
+          area_id: persistedAreaId,
           return_hook: queued.return_hook,
           client_capture_id: queued.client_capture_id,
         });
@@ -2511,7 +2566,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     void refreshUnsyncedCount();
     void refreshJournalledDurableState();
     void refreshPendingLocalChanges();
-    void syncOfflineQueue();
     if (typeof window === "undefined") return;
     const onOnline = () => {
       void syncOfflineQueue();
@@ -2530,6 +2584,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     syncOfflineQueue,
   ]);
 
+  // Bug hunt #5: the mount drain of the offline capture queue waits until
+  // the account's areas have been read (`areasReadbackSettled`), so a queued
+  // capture's chosen area can be resolved. The reconnect drain above needs no
+  // such wait — the areas are long loaded by then. It runs again whenever a
+  // later account read (e.g. signing in) brings the areas in.
+  useEffect(() => {
+    if (!areasReadbackSettled) return;
+    void syncOfflineQueue();
+  }, [areasReadbackSettled, workflowAreaIdByPersistedId, syncOfflineQueue]);
+
   // Extracted to workflowContext/captureParse.ts (issue #590 slice 4) — plain
   // functions (no hooks), so this factory call is positioned after
   // refreshUnsyncedCount (one of its dependencies) without affecting hook
@@ -2542,7 +2606,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     persistedAreasRef,
     applyWorkflowState,
     persistCapture: persistenceOps.persistCapture,
-    markLocalOnly,
+    markDeviceStorageBlocked: () => markDeviceStorageBlocked(),
     markPersistedSaveFailure,
     refreshUnsyncedCount,
   });
@@ -2558,6 +2622,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     return workflowAreaId
       ? persistedAreaIdForWorkflowId(workflowAreaId, persistedAreasRef.current)
       : null;
+  }
+
+  /**
+   * Bug hunt #2: true only when THIS transition was refused. A refusal from
+   * an earlier action rides along on every later state (`{ ...state }`), so
+   * gating writes on `!next.wipRefusal` silently kept every later
+   * "Move to today", carry-forward and Plan change on this device only.
+   * `withWipRefusal` always mints a fresh object, so a new refusal is a new
+   * reference.
+   */
+  function refusedByThisAction(previous: WorkflowState, next: WorkflowState) {
+    return next.wipRefusal != null && next.wipRefusal !== previous.wipRefusal;
   }
 
   function recordWipRefusalIfNew(previous: WorkflowState, next: WorkflowState) {
@@ -3018,7 +3094,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
       recordWipRefusalIfNew(previous, next);
 
-      if (next !== previous && !next.wipRefusal) {
+      if (next !== previous && !refusedByThisAction(previous, next)) {
         void persistenceOps
           .persistTaskReviewTransition(taskId, "active")
           .catch((error) => {
@@ -3101,7 +3177,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
       recordWipRefusalIfNew(previous, next);
 
-      if (proposal && next !== previous && !next.wipRefusal) {
+      if (
+        proposal &&
+        next !== previous &&
+        !refusedByThisAction(previous, next)
+      ) {
         void persistenceOps
           .persistAcceptedLocalProposal(proposal, localBlock)
           .catch((error) => {
@@ -3118,7 +3198,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
       recordWipRefusalIfNew(previous, next);
 
-      if (proposal && next !== previous && !next.wipRefusal) {
+      if (
+        proposal &&
+        next !== previous &&
+        !refusedByThisAction(previous, next)
+      ) {
         void persistenceOps
           .persistRejectedLocalProposal(proposal)
           .catch((error) => {
@@ -3134,7 +3218,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
       recordWipRefusalIfNew(previous, next);
 
-      if (proposal && next !== previous && !next.wipRefusal) {
+      if (
+        proposal &&
+        next !== previous &&
+        !refusedByThisAction(previous, next)
+      ) {
         void persistenceOps
           .persistEditedLocalProposal(proposal)
           .catch((error) => {

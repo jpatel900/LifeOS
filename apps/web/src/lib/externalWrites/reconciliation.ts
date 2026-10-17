@@ -3,10 +3,8 @@ import { ExternalWriteEventSchema } from "@lifeos/schemas";
 import { getGoogleCalendarStoredConnectionForAccessToken } from "@/lib/googleCalendar/server";
 import { getGoogleCalendarEventForConnection } from "@/lib/googleCalendar/events";
 import {
-  createCalendarBlockForProposalForAccessToken,
-  getCalendarBlockForProposalForAccessToken,
   getTimeBlockProposalForAccessToken,
-  updateCalendarBlockGoogleEventForAccessToken,
+  recordGoogleCalendarPlacementForAccessToken,
 } from "@/lib/planning/server";
 import {
   requireSupabaseServiceRoleClient,
@@ -129,22 +127,17 @@ export async function reconcilePendingGoogleCalendarInsertAuditsForAccessToken(
         supabaseAccessToken: accessToken,
       });
 
-      if (remote.exists) {
-        const block = await getCalendarBlockForProposalForAccessToken(
+      // Calendar hunt #7: a cancelled event (deleted in Google, which keeps
+      // it readable with status "cancelled") is not a write that landed.
+      if (remote.exists && remote.status !== "cancelled") {
+        // Calendar hunt #1: heal with the same one-transaction placement the
+        // create-event route uses, so the task is scheduled as well.
+        const placement = await recordGoogleCalendarPlacementForAccessToken(
           accessToken,
-          proposalId,
+          proposal.id,
+          expectedEventId,
         );
-        const healedBlock = block
-          ? await updateCalendarBlockGoogleEventForAccessToken(
-              accessToken,
-              block.id,
-              expectedEventId,
-            )
-          : await createCalendarBlockForProposalForAccessToken(
-              accessToken,
-              proposal,
-              expectedEventId,
-            );
+        const healedBlock = placement.block;
 
         await updateExternalWriteEventResultForAccessToken(
           accessToken,

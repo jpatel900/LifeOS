@@ -1,5 +1,7 @@
 "use client";
 
+import { GOOGLE_BACKED_BLOCK_CHANGE_REFUSED } from "@/lib/statusVocabulary";
+import { taskHasGoogleBackedOpenBlock } from "@/lib/workflow/shared";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -187,6 +189,12 @@ export function ReviewSheet({
                       type="button"
                       size="sm"
                       onClick={async () => {
+                        // Calendar hunt #2: never claim a change the
+                        // account will refuse for a Google-backed block.
+                        if (taskHasGoogleBackedOpenBlock(state, item.task.id)) {
+                          onToast?.(GOOGLE_BACKED_BLOCK_CHANGE_REFUSED);
+                          return;
+                        }
                         const result = await carryForwardTask(item.task.id);
                         onToast?.(reviewSaveMessage(result, "Carried forward"));
                       }}
@@ -200,6 +208,12 @@ export function ReviewSheet({
                       size="sm"
                       variant="outline"
                       onClick={async () => {
+                        // Calendar hunt #2: never claim a change the
+                        // account will refuse for a Google-backed block.
+                        if (taskHasGoogleBackedOpenBlock(state, item.task.id)) {
+                          onToast?.(GOOGLE_BACKED_BLOCK_CHANGE_REFUSED);
+                          return;
+                        }
                         const result = await deferTask(item.task.id);
                         onToast?.(
                           reviewSaveMessage(result, "Put off for later"),
@@ -215,6 +229,12 @@ export function ReviewSheet({
                       size="sm"
                       variant="ghost"
                       onClick={() => {
+                        // Calendar hunt #2: never claim a change the
+                        // account will refuse for a Google-backed block.
+                        if (taskHasGoogleBackedOpenBlock(state, item.task.id)) {
+                          onToast?.(GOOGLE_BACKED_BLOCK_CHANGE_REFUSED);
+                          return;
+                        }
                         dropTask(item.task.id);
                         onToast?.("Dropped");
                       }}

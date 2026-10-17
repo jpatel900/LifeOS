@@ -43,7 +43,10 @@ import {
   journalReviewWrite,
   journalTaskDraftAcceptWrite,
   journalTaskDropWrite,
+  journalTaskReviewWrite,
+  journalProposalEditWrite,
 } from "../durability/durableWrites";
+import { generateClientWriteId } from "../durability/pendingWriteJournal";
 import {
   savedOnThisDeviceAndSendingBanner,
   savedOnThisDeviceBanner,
@@ -202,11 +205,15 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         persistedAreaId,
         rawText: localCapture.raw_text,
         returnHook: localCapture.return_hook ?? null,
-        // Reuses the local capture id as the idempotency key: stable across
-        // retries of the SAME capture, and it is what the account write
-        // ultimately stores as `client_capture_id` — the same uniqueness the
-        // offline capture queue already relies on.
-        clientCaptureId: localCapture.id,
+        // A fresh, globally unique idempotency key for THIS capture. It is
+        // what the account write stores as `client_capture_id`, and the
+        // account upserts on it. The local id (`capture-1`, ...) is NOT
+        // unique: a fresh tab, another device or a browser reset restarts
+        // that counter, and reusing it here overwrote an earlier capture's
+        // raw text in the account (bug hunt #1). `persistCapture` runs once
+        // per capture; journal replays reuse the key stored in the journal.
+        clientCaptureId:
+          localCapture.client_capture_id ?? generateClientWriteId(),
       });
     } catch {
       // #960 review finding 3: the device itself refused to hold the journal
@@ -259,7 +266,15 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       return;
     }
 
-    await syncPersistedWorkflowRows(client);
+    // The account already holds the capture here. A failed follow-up READ
+    // must not surface as "Saving to your account didn't work" (which invites
+    // a duplicate re-entry) — it is a load problem, classified exactly like
+    // the journal-failed fallback branch above (bug hunt #14).
+    try {
+      await syncPersistedWorkflowRows(client);
+    } catch (error) {
+      markPersistedLoadFailure(error);
+    }
   }
 
   /**
@@ -508,10 +523,39 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       return;
     }
 
-    await editTimeBlockProposal(client, persistedProposalId, {
-      proposed_start: localProposal.proposed_start,
-      proposed_end: localProposal.proposed_end,
-    });
+    // Calendar hunt #4: queue the new time on the device first, so a failed
+    // send is retried instead of lost. (Approving the Google event checks
+    // the account holds the time on screen, so a time that has not landed
+    // yet is never sent to Google.)
+    let journalled;
+    try {
+      journalled = await journalProposalEditWrite({
+        workflowProposalId: localProposal.id,
+        persistedProposalId,
+        proposedStart: localProposal.proposed_start,
+        proposedEnd: localProposal.proposed_end,
+      });
+    } catch {
+      // The device cannot hold it: send directly, as before.
+      markDeviceStorageBlocked({ preservePendingLocalChanges: true });
+      await editTimeBlockProposal(client, persistedProposalId, {
+        proposed_start: localProposal.proposed_start,
+        proposed_end: localProposal.proposed_end,
+      });
+      await syncPersistedWorkflowRows(client);
+      return;
+    }
+
+    try {
+      await replayJournaledWrites();
+    } catch {
+      // Best-effort: the edit stays journalled and the next replay retries.
+    }
+
+    if (await hasPendingWrite(journalled.client_write_id)) {
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your proposal edit"));
+      return;
+    }
 
     await syncPersistedWorkflowRows(client);
   }
@@ -700,26 +744,84 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       persistedTaskIdByLocalIdRef.current,
     );
 
-    if (!client || !persistedTaskId) {
+    if (!client) {
       markLocalOnly(savedOnThisDeviceBanner("Your recovery choice"));
       return { status: "local-only" };
     }
 
     // Existing Drop and promotion callers keep their throwing contract.
     // Review opts into outcomes so a failed refresh cannot undo a write receipt.
-    try {
-      await applyTaskReviewTransition(client, persistedTaskId, targetStatus);
-    } catch (error) {
-      if (!options?.settle) throw error;
-      return { status: "failed", error };
+    const sendDirectly = async (
+      accountTaskId: string,
+    ): Promise<TaskReviewPersistenceResult> => {
+      try {
+        await applyTaskReviewTransition(client, accountTaskId, targetStatus);
+      } catch (error) {
+        if (!options?.settle) throw error;
+        return { status: "failed", error };
+      }
+      return refreshAfterWrite();
+    };
+    const refreshAfterWrite =
+      async (): Promise<TaskReviewPersistenceResult> => {
+        try {
+          await syncPersistedWorkflowRows(client);
+        } catch (error) {
+          if (!options?.settle) throw error;
+          return { status: "persisted-refresh-failed", error };
+        }
+        return { status: "persisted" };
+      };
+
+    // A task the account already knows is sent directly, so Review can report
+    // the settled result (#1079). The drop path above also lands here when it
+    // has nothing to annul.
+    if (persistedTaskId) {
+      return sendDirectly(persistedTaskId);
     }
-    try {
-      await syncPersistedWorkflowRows(client);
-    } catch (error) {
-      if (!options?.settle) throw error;
-      return { status: "persisted-refresh-failed", error };
+    if (targetStatus === "dropped") {
+      markLocalOnly(savedOnThisDeviceBanner("Your recovery choice"));
+      return { status: "local-only" };
     }
-    return { status: "persisted" };
+
+    // Calendar hunt #3: a task with NO account id yet (its triage accept is
+    // still queued) used to be reported as saved on this device and then the
+    // change was lost: Retry had nothing to resend and the next sync undid
+    // it. Queue it on the device instead, like a drop. The queued accept that
+    // creates the task is how replay finds its account id — FIFO sends that
+    // accept first.
+    const acceptClientWriteId = await findQueuedWriteToSupersede(
+      "task_draft_accept",
+      (payload) => payload.workflow_task_id === localTaskId,
+    );
+
+    let journalled;
+    try {
+      journalled = await journalTaskReviewWrite({
+        workflowTaskId: localTaskId,
+        persistedTaskId: null,
+        targetStatus,
+        acceptClientWriteId,
+      });
+    } catch {
+      // The device cannot hold it either: it is only in this tab.
+      markLocalOnly(savedOnThisDeviceBanner("Your recovery choice"));
+      markDeviceStorageBlocked();
+      return { status: "local-only" };
+    }
+
+    try {
+      await replayJournaledWrites();
+    } catch {
+      // Best-effort: the change stays journalled and the next replay retries.
+    }
+
+    if (await hasPendingWrite(journalled.client_write_id)) {
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your change"));
+      return { status: "local-only" };
+    }
+
+    return refreshAfterWrite();
   }
 
   /**

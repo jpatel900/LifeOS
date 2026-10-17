@@ -41,7 +41,7 @@
  *  |---|---|---|
  *  | holds | writes owed to the account | work in progress |
  *  | drained by | `replayDurableWrites` | nothing, ever |
- *  | removed when | the account took it | the user decided (accept/reject) |
+ *  | removed when | the account took it | never — a decision is kept as the draft's status |
  *  | ordering | strict FIFO, by `seq` | none needed — no replay |
  *  | key | `seq`, `client_write_id` indexed | the draft's own id |
  *
@@ -49,9 +49,11 @@
  * applies: the store is keyed by the draft id and last-write-wins, which is
  * exactly right for a record whose only reader is the next mount.
  *
- * The moment a draft IS accepted it leaves this store and becomes a real
- * `task_draft_accept` journal entry (#778) — the two tiers hand over at the
- * decision, and nothing lives in both.
+ * The moment a draft IS accepted it becomes a real `task_draft_accept`
+ * journal entry (#778) — the two tiers hand over at the decision. What stays
+ * here is only the record that the draft was decided (bug hunts #8 and #12),
+ * never an undecided copy, so no work lives in both. Decided records are not
+ * pruned yet; each is one small draft object.
  *
  * ## Conventions
  *
@@ -170,26 +172,28 @@ export async function storedTaskDraftCount(): Promise<number> {
 }
 
 /**
- * Make the store match `drafts` exactly: upsert every one of them, and remove
- * every stored draft that is not in the list.
+ * Save `drafts` to the device: upsert each one, by id.
  *
- * ## Why removal is by absence, and why that is safe here
+ * ## Never remove by absence (bug hunt #12)
  *
- * A draft leaves the list for exactly one reason — the user decided about it.
- * `acceptDraft` and `rejectDraft` flip its status off `pending`, and the
- * caller passes only pending drafts, so "no longer in the list" and "no longer
- * undecided" are the same fact. There is no failure path that can drop a draft
- * from the reducer, which is what makes this different from the journal, where
- * absence could mean a delivery failure and removal therefore has to be
- * authorised (see `SUPERSEDES_KEY` in `durableWrites.ts`).
+ * Every open LifeOS tab calls this with ITS OWN drafts. This used to delete
+ * every stored draft not in the list, so two open tabs erased each other's
+ * pending drafts: close one and its sort results and edits were gone. A
+ * draft that one tab does not hold is not a draft the user decided about.
  *
- * ONE TRANSACTION for both halves, so a tab that dies mid-write cannot leave
- * the store holding a draft the user already accepted alongside one they have
- * not seen yet.
+ * ## A decision is final (bug hunt #8)
  *
- * THE CALLER MUST NOT CALL THIS BEFORE `listStoredTaskDrafts` HAS RESOLVED.
- * A fresh tab's reducer holds no drafts until the restore lands; reconciling
- * against that empty state would delete the very drafts it is about to read.
+ * The caller passes decided drafts (accepted or rejected) too, and the
+ * stored copy keeps that status, so a new tab knows the thought was already
+ * sorted. Once a stored draft is decided, an undecided copy of it (another
+ * tab's older state) never overwrites it.
+ *
+ * ONE TRANSACTION for the read and the writes, so a tab that dies mid-write
+ * cannot leave a half-applied set.
+ *
+ * THE CALLER MUST NOT CALL THIS BEFORE `listStoredTaskDrafts` HAS RESOLVED:
+ * an older pending copy written first would be harmless now, but the restore
+ * is still what brings this device's drafts into a fresh tab.
  */
 export async function reconcileStoredTaskDrafts(
   drafts: readonly Phase2TaskDraft[],
@@ -201,26 +205,27 @@ export async function reconcileStoredTaskDrafts(
   }
 
   const savedAt = new Date().toISOString();
-  const keep = new Set(drafts.map((draft) => draft.id));
 
   const db = await openDatabase();
   try {
     const transaction = db.transaction(STORE_NAME, "readwrite");
     const store = transaction.objectStore(STORE_NAME);
 
-    // Read the existing keys INSIDE the transaction. Awaiting a promise
-    // settled from an IndexedDB success callback resumes on a microtask, which
-    // runs before the transaction can auto-commit, so the read and the writes
-    // stay atomic (the same idiom `enqueuePendingWrite` uses).
-    const existingKeys = await requestToPromise(store.getAllKeys());
-
-    for (const key of existingKeys) {
-      if (typeof key === "string" && !keep.has(key)) {
-        store.delete(key);
-      }
-    }
+    // Read INSIDE the transaction. Awaiting a promise settled from an
+    // IndexedDB success callback resumes on a microtask, which runs before
+    // the transaction can auto-commit, so the read and the writes stay
+    // atomic (the same idiom `enqueuePendingWrite` uses).
+    const existing = await requestToPromise(
+      store.getAll() as IDBRequest<StoredTaskDraft[]>,
+    );
+    const decided = new Set(
+      existing
+        .filter((record) => record?.draft && record.draft.status !== "pending")
+        .map((record) => record.id),
+    );
 
     for (const draft of drafts) {
+      if (draft.status === "pending" && decided.has(draft.id)) continue;
       store.put({ id: draft.id, draft, saved_at: savedAt } as StoredTaskDraft);
     }
 

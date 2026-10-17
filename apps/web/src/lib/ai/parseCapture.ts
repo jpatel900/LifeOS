@@ -1,3 +1,4 @@
+import type { ParseCaptureClock } from "./parseCaptureClock";
 import { PARSE_CAPTURE_PROVIDER_DEADLINE_MS } from "./requestDeadline";
 import type { ParseCaptureResponse } from "@lifeos/schemas";
 import {
@@ -19,12 +20,14 @@ export interface BuildParseCaptureRequestInput {
   model: string;
   areaContext?: ParseCaptureAreaContext[];
   operatorProfile?: OperatorProfileContext | null;
+  clock?: ParseCaptureClock | null;
 }
 
 export interface ParseCaptureInput {
   rawText: string;
   areaContext?: ParseCaptureAreaContext[];
   operatorProfile?: OperatorProfileContext | null;
+  clock?: ParseCaptureClock | null;
 }
 
 export interface ParseCaptureOptions {
@@ -69,6 +72,7 @@ export function buildParseCaptureRequest(input: BuildParseCaptureRequestInput) {
       rawText,
       areaContext: input.areaContext,
       operatorProfile: input.operatorProfile,
+      clock: input.clock,
     }),
     text: {
       format: parseCaptureResponseFormat,
@@ -107,6 +111,7 @@ export async function parseCaptureDetailed(
       rawText,
       areaContext: input.areaContext,
       operatorProfile: input.operatorProfile,
+      clock: input.clock,
     }),
     responseFormat: parseCaptureResponseFormat,
   });

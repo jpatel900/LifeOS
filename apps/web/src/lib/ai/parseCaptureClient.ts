@@ -1,3 +1,4 @@
+import type { ParseCaptureClock } from "./parseCaptureClock";
 import {
   ParseCaptureResponseSchema,
   type ParseCaptureResponse,
@@ -75,6 +76,8 @@ export async function requestParseCapture(input: {
   areaContext?: ParseCaptureAreaContextEntry[];
   // S3 (#255): live operator profile forwarded through the S2 plumbing.
   operatorProfile?: ParseCaptureOperatorProfileContext | null;
+  // Bug hunt #16: the user's local date and time zone for the prompt.
+  clock?: ParseCaptureClock | null;
   parserMode: ParseCaptureParserMode;
   // Optional bearer token so the route can write a user-scoped AI call
   // trace row (issue #288); parsing itself never requires it.
@@ -103,6 +106,7 @@ export async function requestParseCapture(input: {
           rawText: input.rawText,
           areaContext: input.areaContext,
           operatorProfile: input.operatorProfile ?? undefined,
+          clock: input.clock ?? undefined,
           parserMode: input.parserMode,
         }),
       });

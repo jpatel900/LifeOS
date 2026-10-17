@@ -1,5 +1,8 @@
 "use client";
 
+import { GOOGLE_BACKED_BLOCK_CHANGE_REFUSED } from "@/lib/statusVocabulary";
+import { taskHasGoogleBackedOpenBlock } from "@/lib/workflow/shared";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -618,6 +621,65 @@ function TodayMomentsContent({
   // showing at all, as opposed to one of the two rituals standing in for it.
   // Now also excludes `onboarding.pending` (see the comment above) so the
   // hand-off tick renders nothing instead of a stale Today greeting.
+  // Bug hunt #4: the capture conclusion's `onResolved` closure is captured
+  // when the save starts, but the offline queue's verdict lands a moment
+  // later. Read the LATEST status when the toast is written.
+  const syncStatusRef = useRef(syncStatus);
+  syncStatusRef.current = syncStatus;
+
+  function announceCaptureSaved() {
+    // #556: the success toast only fires once the capture truly
+    // entered the pipeline — never ahead of that truth.
+    // #689: the toast names WHERE the thought went and offers the
+    // one-tap path there. Every capture is visible in the triage
+    // sheet as an unsorted-capture row, except the offline queue: a
+    // capture saved while offline stays on the device until reconnect
+    // (FR-027), so the message says that instead of promising a
+    // triage row that isn't there yet.
+    // #703: capture is now a single raw-save path (the parse moved to
+    // triage's Sort action), so there is no longer a "parsed" outcome
+    // to branch on here — the offline case is simply "offline".
+    const offline =
+      typeof navigator !== "undefined" && navigator.onLine === false;
+    // #737 C1 S5 — WAS " Saved on this device — sign in to keep it
+    // everywhere.", and that was false. A signed-out capture made while
+    // ONLINE never reaches a device store: `submitCaptureText` only
+    // routes to the durable queue when `navigator.onLine === false`, so
+    // this one is staged in the reducer and mirrored to per-TAB
+    // sessionStorage. It survives a reload and dies with the tab.
+    //
+    // The words now say the narrower true thing. Widening them back is
+    // earned by making the capture durable (Target Card 3), not by
+    // rephrasing — see the AGENT-TODO on this slice's PR.
+    const signedOutNote = syncStatus.signedOut
+      ? " Sign in to keep it — until then it's only in this tab."
+      : "";
+    if (offline && syncStatusRef.current.storage === "blocked") {
+      // The device queue refused the thought, so it was kept in this
+      // tab's triage pile instead (bug hunt #4).
+      showToast(
+        "Captured, but this browser won't keep it on this device. It's only in this tab for now — keep the tab open until you're back online.",
+        {
+          label: "Open triage",
+          run: () => openSheet("triage"),
+        },
+      );
+    } else if (offline) {
+      showToast(
+        "Captured — saved on this device. It joins your triage pile when you're back online.",
+      );
+    } else {
+      showToast(`Captured — it's in your triage pile.${signedOutNote}`, {
+        label: "Open triage",
+        run: () => openSheet("triage"),
+      });
+    }
+    // Clear the draft only after a successful save — Esc/close must
+    // preserve it, so this write happens nowhere else.
+    setCaptureDraft("");
+    writeStoredCaptureDraft("");
+  }
+
   const showingMastheadAndMoments =
     !onboardingOwnsScreen && !(ritualActive && ritual.summary && ritual.plan);
 
@@ -1213,12 +1275,24 @@ function TodayMomentsContent({
     if (typeof window === "undefined") return;
 
     const params = new URLSearchParams(window.location.search);
-    const shared = params.get("shared_text");
-    if (!shared) return;
+    // Bug hunt #13: the manifest maps the shared title, text AND url all to
+    // `shared_text`, so an Android share arrives as several values (usually
+    // the page title and its link). Keep every distinct one, in order.
+    const sharedParts: string[] = [];
+    for (const value of params.getAll("shared_text")) {
+      const trimmed = value.trim();
+      if (trimmed && !sharedParts.includes(trimmed)) sharedParts.push(trimmed);
+    }
+    if (sharedParts.length === 0) return;
+    const shared = sharedParts.join("\n");
 
     sharedTextAppliedRef.current = true;
-    setCaptureDraft(shared);
-    writeStoredCaptureDraft(shared);
+    // An unsaved draft is kept: the shared text is added after it, never
+    // written over it.
+    const existingDraft = readStoredCaptureDraft().trim();
+    const nextDraft = existingDraft ? `${existingDraft}\n\n${shared}` : shared;
+    setCaptureDraft(nextDraft);
+    writeStoredCaptureDraft(nextDraft);
     adoptCaptureFromUrl(true);
 
     params.delete("shared_text");
@@ -2302,7 +2376,15 @@ function TodayMomentsContent({
                 pendingRollups={displayedRollups}
                 approvedRollups={approvedRollups}
                 onCloseDay={handleCloseDay}
-                onCarryForward={(taskId) => carryForwardTask(taskId)}
+                onCarryForward={(taskId) => {
+                  // Calendar hunt #2: a task whose block is on Google
+                  // Calendar changes only after its Google event is cancelled.
+                  if (taskHasGoogleBackedOpenBlock(state, taskId)) {
+                    showToast(GOOGLE_BACKED_BLOCK_CHANGE_REFUSED);
+                    return;
+                  }
+                  carryForwardTask(taskId);
+                }}
                 onConfirmWin={handleConfirmWin}
                 onSkipWin={handleSkipWin}
                 onApproveRollup={handleApproveRollup}
@@ -2468,50 +2550,14 @@ function TodayMomentsContent({
             submitCaptureText(text, captureAreaId, returnHook)
           }
           onResolved={() => {
-            // #556: the success toast only fires once the capture truly
-            // entered the pipeline — never ahead of that truth.
-            // #689: the toast names WHERE the thought went and offers the
-            // one-tap path there. Every capture is visible in the triage
-            // sheet as an unsorted-capture row, except the offline queue: a
-            // capture saved while offline stays on the device until reconnect
-            // (FR-027), so the message says that instead of promising a
-            // triage row that isn't there yet.
-            // #703: capture is now a single raw-save path (the parse moved to
-            // triage's Sort action), so there is no longer a "parsed" outcome
-            // to branch on here — the offline case is simply "offline".
-            const offline =
-              typeof navigator !== "undefined" && navigator.onLine === false;
-            // #737 C1 S5 — WAS " Saved on this device — sign in to keep it
-            // everywhere.", and that was false. A signed-out capture made while
-            // ONLINE never reaches a device store: `submitCaptureText` only
-            // routes to the durable queue when `navigator.onLine === false`, so
-            // this one is staged in the reducer and mirrored to per-TAB
-            // sessionStorage. It survives a reload and dies with the tab.
-            //
-            // The words now say the narrower true thing. Widening them back is
-            // earned by making the capture durable (Target Card 3), not by
-            // rephrasing — see the AGENT-TODO on this slice's PR.
-            const signedOutNote = syncStatus.signedOut
-              ? " Sign in to keep it — until then it's only in this tab."
-              : "";
-            if (offline) {
-              showToast(
-                "Captured — saved on this device. It joins your triage pile when you're back online.",
-              );
-            } else {
-              showToast(
-                `Captured — it's in your triage pile.${signedOutNote}`,
-                {
-                  label: "Open triage",
-                  run: () => openSheet("triage"),
-                },
-              );
-            }
+            announceCaptureSaved();
             closeCapture();
-            // Clear the draft only after a successful save — Esc/close must
-            // preserve it, so this write happens nowhere else.
-            setCaptureDraft("");
-            writeStoredCaptureDraft("");
+          }}
+          onSavedThenDismissed={() => {
+            // Bug hunt #7: Back closed the overlay mid-conclusion. The
+            // thought is saved, so confirm it and clear the draft; the
+            // overlay is already closed.
+            announceCaptureSaved();
           }}
           onClose={() => closeCapture()}
         />

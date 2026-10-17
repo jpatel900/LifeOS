@@ -34,6 +34,7 @@ import type { WorkflowState } from "../workflow";
  */
 
 const journalCaptureWriteMock = vi.hoisted(() => vi.fn());
+const hasPendingWriteMock = vi.hoisted(() => vi.fn(async () => false));
 const createCaptureItemMock = vi.hoisted(() => vi.fn());
 const createSupabaseBrowserClientMock = vi.hoisted(() => vi.fn());
 
@@ -43,6 +44,7 @@ vi.mock("../durability/durableWrites", async (importOriginal) => {
   return {
     ...actual,
     journalCaptureWrite: journalCaptureWriteMock,
+    hasPendingWrite: hasPendingWriteMock,
   };
 });
 
@@ -295,5 +297,72 @@ describe("persistCapture falls back to a direct POST when the device journal ref
     expect(markPersistedLoadFailure).not.toHaveBeenCalled();
     expect(syncPersistedWorkflowRows).not.toHaveBeenCalled();
     expect(markDeviceStorageBlocked).not.toHaveBeenCalled();
+  });
+});
+
+describe("persistCapture gives every capture its own account key (bug hunt #1)", () => {
+  beforeEach(() => {
+    journalCaptureWriteMock.mockReset();
+    createCaptureItemMock.mockReset();
+    createSupabaseBrowserClientMock.mockReset();
+  });
+
+  it("does not reuse the per-tab local id, so a new tab's 'capture-1' cannot overwrite an earlier 'capture-1' in the account", async () => {
+    journalCaptureWriteMock.mockImplementation(
+      async (input: { clientCaptureId: string }) => ({
+        client_write_id: input.clientCaptureId,
+      }),
+    );
+    const { ops } = makeSync({ persistedAreaId: AREA_ID });
+
+    // Day 1 tab and Day 2 fresh tab both mint the local id `capture-1`.
+    await ops.persistCapture(
+      localCapture({ id: "capture-1", raw_text: "Call mom about the lease" }),
+    );
+    await ops.persistCapture(
+      localCapture({ id: "capture-1", raw_text: "Buy milk" }),
+    );
+
+    expect(journalCaptureWriteMock).toHaveBeenCalledTimes(2);
+    const keys = journalCaptureWriteMock.mock.calls.map(
+      ([input]) => (input as { clientCaptureId: string }).clientCaptureId,
+    );
+    expect(keys[0]).not.toBe("capture-1");
+    expect(keys[1]).not.toBe("capture-1");
+    expect(keys[0]).not.toBe(keys[1]);
+    // The local id still travels so replay can alias the right local row.
+    expect(journalCaptureWriteMock.mock.calls[1]?.[0]).toMatchObject({
+      workflowCaptureId: "capture-1",
+      rawText: "Buy milk",
+    });
+  });
+});
+
+describe("persistCapture after the account took the capture (bug hunt #14)", () => {
+  beforeEach(() => {
+    journalCaptureWriteMock.mockReset();
+    createCaptureItemMock.mockReset();
+    createSupabaseBrowserClientMock.mockReset();
+    hasPendingWriteMock.mockReset();
+    hasPendingWriteMock.mockResolvedValue(false);
+  });
+
+  it("reports a failed follow-up read as a load problem, not as a failed save", async () => {
+    journalCaptureWriteMock.mockResolvedValue({
+      client_write_id: "client-capture-1",
+    });
+    const readbackError = new Error("Transient readback outage");
+    const { ops, markPersistedLoadFailure, syncPersistedWorkflowRows } =
+      makeSync({ persistedAreaId: AREA_ID });
+    syncPersistedWorkflowRows.mockRejectedValueOnce(readbackError);
+
+    // A rejection here is what the caller turns into
+    // "Saving to your account didn't work".
+    await expect(ops.persistCapture(localCapture())).resolves.toBeUndefined();
+
+    expect(hasPendingWriteMock).toHaveBeenCalledWith("client-capture-1");
+    expect(markPersistedLoadFailure).toHaveBeenCalledExactlyOnceWith(
+      readbackError,
+    );
   });
 });

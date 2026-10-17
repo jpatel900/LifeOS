@@ -12,6 +12,7 @@ import {
 } from "@/lib/durability/draftStore";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 import { DEVICE_STORAGE_BLOCKED } from "@/lib/statusVocabulary";
+import { countUnsortedCaptures } from "@/lib/workflow/captureStatus";
 
 /**
  * REGRESSION GUARD — an unaccepted triage draft must stay device-durable.
@@ -145,6 +146,7 @@ function DraftHarness() {
       <span data-testid="sync-message">{syncStatus.message ?? ""}</span>
       <span data-testid="draft-title">{draft?.title ?? ""}</span>
       <span data-testid="draft-status">{draft?.status ?? "absent"}</span>
+      <span data-testid="unsorted-count">{countUnsortedCaptures(state)}</span>
       <button
         type="button"
         onClick={() => editTaskDraft(DRAFT_ID, { title: EDITED_TITLE })}
@@ -236,7 +238,7 @@ describe("#737 C1 GAP 3 guard: an unaccepted triage draft is device-durable", ()
     expect(screen.getByTestId("draft-status")).toHaveTextContent("pending");
   });
 
-  it("drops the draft from the device once the user accepts it", async () => {
+  it("no longer keeps the draft as undecided once the user accepts it", async () => {
     await renderWithDraftLoaded();
     await waitFor(async () =>
       expect(await listStoredTaskDrafts()).toHaveLength(1),
@@ -244,14 +246,16 @@ describe("#737 C1 GAP 3 guard: an unaccepted triage draft is device-durable", ()
 
     fireEvent.click(screen.getByRole("button", { name: "accept" }));
 
-    // The decision is what ends this tier's job: the accept becomes a real
-    // `task_draft_accept` journal entry (#778), and nothing lives in both.
-    await waitFor(async () =>
-      expect(await listStoredTaskDrafts()).toHaveLength(0),
-    );
+    // The decision ends this tier's job: the accept becomes a real
+    // `task_draft_accept` journal entry (#778). The device keeps only a
+    // record that the draft was decided, never a pending copy.
+    await waitFor(async () => {
+      const stored = await listStoredTaskDrafts();
+      expect(stored.filter((draft) => draft.status === "pending")).toEqual([]);
+    });
   });
 
-  it("drops the draft from the device once the user rejects it", async () => {
+  it("keeps the reject on the device, so the draft is never offered again as undecided", async () => {
     await renderWithDraftLoaded();
     await waitFor(async () =>
       expect(await listStoredTaskDrafts()).toHaveLength(1),
@@ -259,9 +263,41 @@ describe("#737 C1 GAP 3 guard: an unaccepted triage draft is device-durable", ()
 
     fireEvent.click(screen.getByRole("button", { name: "reject" }));
 
-    await waitFor(async () =>
-      expect(await listStoredTaskDrafts()).toHaveLength(0),
+    await waitFor(async () => {
+      const stored = await listStoredTaskDrafts();
+      expect(stored).toHaveLength(1);
+      expect(stored[0]).toMatchObject({ id: DRAFT_ID, status: "rejected" });
+    });
+  });
+
+  // Bug hunt #8: "Reject" said the drop was saved on this device, but a new
+  // tab offered the thought again as "Captured, not sorted yet".
+  it("keeps a rejected thought out of 'not sorted yet' in a tab that never saw the reject", async () => {
+    const first = await renderWithDraftLoaded();
+    expect(screen.getByTestId("unsorted-count")).toHaveTextContent("0");
+
+    fireEvent.click(screen.getByRole("button", { name: "reject" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("draft-status")).toHaveTextContent("rejected"),
     );
+    // Let the device write land before the tab goes away.
+    await waitFor(async () => {
+      const stored = await listStoredTaskDrafts();
+      expect(stored.some((draft) => draft.status === "rejected")).toBe(true);
+    });
+    first.unmount();
+
+    putSeed({ withDraft: false });
+    render(
+      <WorkflowProvider>
+        <DraftHarness />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("draft-status")).toHaveTextContent("rejected"),
+    );
+    expect(screen.getByTestId("unsorted-count")).toHaveTextContent("0");
   });
 
   it("says the DEVICE refused it when IndexedDB is missing", async () => {

@@ -11,6 +11,29 @@ import { TaskMapDraftReview } from "./TaskMapDraftReview";
 import { UnsortedCaptures } from "./UnsortedCaptures";
 import { HIT_TARGET_MIN } from "./hitTarget";
 import { countUnsortedCaptures } from "@/lib/workflow/captureStatus";
+import {
+  AI_SORTING_OFF_SORTED_HERE,
+  AI_SORTING_UNAVAILABLE_SORTED_HERE,
+} from "@/lib/statusVocabulary";
+import { hasLaunchSequenceStep } from "@/lib/workflow/shared";
+import { canAdmitWipTask } from "@/lib/workflow/wip";
+
+/**
+ * Bug hunt #11: why "Do today" could not put this draft on today, in plain
+ * words.
+ */
+function doTodayRefusalMessage(
+  state: Parameters<typeof canAdmitWipTask>[0],
+  firstTinyStep: string | null | undefined,
+): string {
+  if (!hasLaunchSequenceStep(firstTinyStep)) {
+    return "This needs a first move before it can go on today. Accept it to the backlog and add a first move there.";
+  }
+  if (!canAdmitWipTask(state)) {
+    return "Today is full. Finish or put off a task first, or accept this to the backlog.";
+  }
+  return "This couldn't go on today. Try again, or accept it to the backlog.";
+}
 import { momentKeyLabel } from "@/lib/keys/keymap";
 
 /**
@@ -94,6 +117,12 @@ export function TriageSheet({
   // sheet (see the effect below) cleanly forgets it. Holding the title
   // alongside the id lets the offer copy name the task without a re-lookup
   // once it's no longer in `pendingDrafts`.
+  // Bug hunt #11: the draft whose "Do today" was just refused, and why.
+  const [todayRefusal, setTodayRefusal] = useState<{
+    draftId: string;
+    message: string;
+  } | null>(null);
+
   const [mapOffer, setMapOffer] = useState<{
     taskId: string;
     title: string;
@@ -108,6 +137,7 @@ export function TriageSheet({
   useEffect(() => {
     if (!open) {
       setMapOffer(null);
+      setTodayRefusal(null);
     }
   }, [open]);
 
@@ -134,6 +164,33 @@ export function TriageSheet({
   // cannot disagree, and neither can offer back a thought an accepted task
   // already came from.
   const unsortedCaptureCount = countUnsortedCaptures(state, resolvedAreaId);
+
+  // Bug hunt #10: say when basic sorting stood in for AI sorting, so its
+  // placeholder drafts never pass for a real sort. Basic sorting cannot
+  // tell which area a thought belongs to, so it also says to check that.
+  const sortNoticeInScope =
+    captureParse.phase === "parsed" &&
+    (!resolvedAreaId ||
+      state.captureItems.some(
+        (capture) =>
+          capture.id === captureParse.captureId &&
+          capture.area_id === resolvedAreaId,
+      ));
+  const sortNotice =
+    sortNoticeInScope && captureParse.phase === "parsed"
+      ? [
+          captureParse.parser === "mock"
+            ? `${
+                captureParse.status === "ai_unavailable"
+                  ? AI_SORTING_UNAVAILABLE_SORTED_HERE
+                  : AI_SORTING_OFF_SORTED_HERE
+              } Check each draft and its area before you accept it.`
+            : null,
+          captureParse.warning ?? null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : "";
 
   const showMapOfferReady =
     mapOffer !== null &&
@@ -278,6 +335,18 @@ export function TriageSheet({
                       {estimateLabel}
                     </span>
                   ) : null}
+                  {draft.task_type === "decision" && draft.due_at ? (
+                    // Bug hunt #16: a decision keeps this deadline when it is
+                    // accepted, so show the local day before that happens.
+                    <span data-testid={`triage-sheet-due-${draft.id}`}>
+                      Decide by{" "}
+                      {new Date(draft.due_at).toLocaleDateString(undefined, {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                  ) : null}
                 </div>
                 {draft.first_tiny_step ? (
                   <p
@@ -287,6 +356,16 @@ export function TriageSheet({
                     First move: {draft.first_tiny_step}
                   </p>
                 ) : null}
+                {todayRefusal?.draftId === draft.id ? (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="text-sm text-muted-foreground"
+                    data-testid={`triage-sheet-today-refused-${draft.id}`}
+                  >
+                    {todayRefusal.message}
+                  </p>
+                ) : null}
                 <div className="mt-1 flex flex-wrap gap-2">
                   <Button
                     type="button"
@@ -294,7 +373,16 @@ export function TriageSheet({
                     onClick={() => {
                       const taskId = acceptTaskDraft(draft.id);
                       if (taskId) {
+                        setTodayRefusal(null);
                         setMapOffer({ taskId, title: draft.title });
+                      } else {
+                        setTodayRefusal({
+                          draftId: draft.id,
+                          message: doTodayRefusalMessage(
+                            state,
+                            draft.first_tiny_step,
+                          ),
+                        });
                       }
                     }}
                     className={cn(HIT_TARGET_MIN, "touch-manipulation")}
@@ -337,20 +425,14 @@ export function TriageSheet({
           surfaces (this sheet and the cockpit TriageView) so they show the
           same rows, the same copy (#689), and the same degraded behavior.
           It renders nothing when there is nothing unsorted. */}
-      {captureParse.phase === "parsed" &&
-      captureParse.warning &&
-      (!resolvedAreaId ||
-        state.captureItems.some(
-          (capture) =>
-            capture.id === captureParse.captureId &&
-            capture.area_id === resolvedAreaId,
-        )) ? (
+      {sortNotice ? (
         <p
           role="status"
           aria-live="polite"
           className="text-sm text-muted-foreground"
+          data-testid="triage-sheet-sort-notice"
         >
-          {captureParse.warning}
+          {sortNotice}
         </p>
       ) : null}
       <UnsortedCaptures areaId={resolvedAreaId} />

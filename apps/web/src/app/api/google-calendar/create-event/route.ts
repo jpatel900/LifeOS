@@ -11,12 +11,11 @@ import {
   updateExternalWriteEventResultForAccessToken,
 } from "@/lib/externalWrites/server";
 import {
-  createCalendarBlockForProposalForAccessToken,
+  findGoogleBackedScheduledBlockForTaskForAccessToken,
   getCalendarBlockForProposalForAccessToken,
   getTaskForAccessToken,
   getTimeBlockProposalForAccessToken,
-  markTimeBlockProposalAcceptedForAccessToken,
-  updateCalendarBlockGoogleEventForAccessToken,
+  recordGoogleCalendarPlacementForAccessToken,
 } from "@/lib/planning/server";
 import { requireSupabaseServerUser } from "@/lib/supabase/server";
 
@@ -74,6 +73,12 @@ function mapCreateEventFailure(error: unknown) {
     error:
       "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
   };
+}
+
+function sameInstant(left: string, right: string) {
+  const a = new Date(left).getTime();
+  const b = new Date(right).getTime();
+  return Number.isFinite(a) && a === b;
 }
 
 function isEligibleProposalStatus(status: string) {
@@ -166,6 +171,23 @@ export async function POST(request: Request) {
       );
     }
 
+    // Calendar hunt #4: Google gets exactly the time the person approved.
+    // A local "Move later" that has not reached the account yet would
+    // otherwise send the account's older time.
+    if (
+      !sameInstant(input.approved_start, proposal.proposed_start) ||
+      !sameInstant(input.approved_end, proposal.proposed_end)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "The time you approved isn't saved to your account yet. Wait a moment for it to reach your account, then approve again.",
+        },
+        { status: 409 },
+      );
+    }
+
     const existingBlock = await getCalendarBlockForProposalForAccessToken(
       accessToken,
       proposal.id,
@@ -180,6 +202,26 @@ export async function POST(request: Request) {
         },
         { status: 409 },
       );
+    }
+
+    // Calendar hunt #1: one Google event per task. A sibling proposal of a
+    // task that is already on Google Calendar must not create a second one.
+    if (proposal.task_id) {
+      const googleBackedBlock =
+        await findGoogleBackedScheduledBlockForTaskForAccessToken(
+          accessToken,
+          proposal.task_id,
+        );
+      if (googleBackedBlock) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "This task already has a Google Calendar event. Cancel that event first if you want a different time.",
+          },
+          { status: 409 },
+        );
+      }
     }
 
     const task = proposal.task_id
@@ -232,24 +274,53 @@ export async function POST(request: Request) {
       title,
     });
 
-    const block = existingBlock
-      ? await updateCalendarBlockGoogleEventForAccessToken(
-          accessToken,
-          existingBlock.id,
-          insertResult.googleEventId,
-        )
-      : await createCalendarBlockForProposalForAccessToken(
-          accessToken,
-          proposal,
-          insertResult.googleEventId,
-        );
-    const updatedProposal =
-      proposal.status === "accepted"
-        ? proposal
-        : await markTimeBlockProposalAcceptedForAccessToken(
-            accessToken,
-            proposal.id,
-          );
+    // Calendar hunt #6: from here on the Google write HAS happened. Nothing
+    // below may log it as failed or tell the person their calendar is
+    // unchanged. Approving again is safe: the event id is derived from the
+    // proposal, so Google answers with the same event instead of a second.
+    let placement;
+    try {
+      // Calendar hunt #1: the account half lands in ONE transaction with the
+      // same semantics as placing a block — block stored with its event id,
+      // proposal accepted, the task's other pending proposals superseded,
+      // and the task scheduled.
+      placement = await recordGoogleCalendarPlacementForAccessToken(
+        accessToken,
+        proposal.id,
+        insertResult.googleEventId,
+      );
+    } catch {
+      await updateExternalWriteEventResultForAccessToken(
+        accessToken,
+        auditEvent.id,
+        {
+          errorMessage: null,
+          resultStatus: "succeeded",
+          resultSummary: {
+            follow_up: "account_record_failed",
+            google_event_etag: insertResult.googleEventEtag,
+            google_event_id_stored: false,
+            google_event_snapshot: insertResult.eventSnapshot,
+            provider_event_id_present: true,
+          },
+        },
+      ).catch(() => null);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          google_event_created: true,
+          error:
+            "The event is on your Google Calendar, but LifeOS couldn't finish saving it here. Approve it again to finish — that won't add a second event.",
+        },
+        { status: 502 },
+      );
+    }
+
+    const block = placement.block;
+    const updatedProposal = placement.proposal;
+    // The audit row must say succeeded; a failure in its own follow-up work
+    // (the incident rule) must not turn a finished write into an error.
     const audit = await updateExternalWriteEventResultForAccessToken(
       accessToken,
       auditEvent.id,
@@ -264,7 +335,7 @@ export async function POST(request: Request) {
           provider_event_id_present: true,
         },
       },
-    );
+    ).catch(() => null);
 
     return NextResponse.json({
       ok: true,
@@ -272,6 +343,7 @@ export async function POST(request: Request) {
       block,
       google_event_id: insertResult.googleEventId,
       proposal: updatedProposal,
+      task: placement.task,
     });
   } catch (error) {
     const failure = mapCreateEventFailure(error);

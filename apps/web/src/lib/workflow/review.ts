@@ -1,4 +1,9 @@
-import { acceptedTaskDueAt, nowIso, type WorkflowState } from "./shared";
+import {
+  acceptedTaskDueAt,
+  nowIso,
+  taskHasGoogleBackedOpenBlock,
+  type WorkflowState,
+} from "./shared";
 
 function cancelOpenBlocksForTask(state: WorkflowState, taskId: string) {
   return state.calendarBlocks.map((block) =>
@@ -14,6 +19,11 @@ export function carryForwardTask(
 ): WorkflowState {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) {
+    return state;
+  }
+  // Calendar hunt #2: the account refuses this while the task's block is on
+  // Google Calendar; cancel the Google event first.
+  if (taskHasGoogleBackedOpenBlock(state, taskId)) {
     return state;
   }
 
@@ -39,6 +49,11 @@ export function deferTask(state: WorkflowState, taskId: string): WorkflowState {
   if (!task) {
     return state;
   }
+  // Calendar hunt #2: the account refuses this while the task's block is on
+  // Google Calendar; cancel the Google event first.
+  if (taskHasGoogleBackedOpenBlock(state, taskId)) {
+    return state;
+  }
 
   return {
     ...state,
@@ -55,6 +70,11 @@ export function deferTask(state: WorkflowState, taskId: string): WorkflowState {
 export function dropTask(state: WorkflowState, taskId: string): WorkflowState {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) {
+    return state;
+  }
+  // Calendar hunt #2: the account refuses this while the task's block is on
+  // Google Calendar; cancel the Google event first.
+  if (taskHasGoogleBackedOpenBlock(state, taskId)) {
     return state;
   }
 

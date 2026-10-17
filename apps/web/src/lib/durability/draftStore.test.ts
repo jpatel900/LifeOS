@@ -65,27 +65,44 @@ describe("draftStore", () => {
     expect(stored[0]!.title).toBe("Edited by the user");
   });
 
-  it("removes a draft that is no longer in the set", async () => {
+  // Bug hunt #12: with two LifeOS tabs open, each tab reconciled the store
+  // to ITS OWN drafts and deleted the other tab's. A draft only leaves the
+  // device when the user decides about it, and that decision is written as
+  // the draft's status — never inferred from one tab not knowing it.
+  it("keeps a draft another tab wrote, even when this tab does not hold it", async () => {
+    // Tab A sorted capture X.
+    await reconcileStoredTaskDrafts([makeDraft({ id: "tab-a-x" })]);
+    // Tab B, which never saw X, sorts capture Y.
     await reconcileStoredTaskDrafts([
-      makeDraft({ id: "d-1" }),
-      makeDraft({ id: "d-2" }),
+      makeDraft({ id: "tab-b-y", capture_item_id: "capture-2" }),
     ]);
-    expect(await storedTaskDraftCount()).toBe(2);
 
-    // What an accept or a reject looks like from here: the draft stops being
-    // pending, so the caller stops passing it, so the store stops holding it.
-    await reconcileStoredTaskDrafts([makeDraft({ id: "d-2" })]);
-
-    expect((await listStoredTaskDrafts()).map((draft) => draft.id)).toEqual([
-      "d-2",
-    ]);
+    expect(
+      (await listStoredTaskDrafts()).map((draft) => draft.id).sort(),
+    ).toEqual(["tab-a-x", "tab-b-y"]);
   });
 
-  it("an empty set empties the store", async () => {
+  it("an empty set changes nothing", async () => {
     await reconcileStoredTaskDrafts([makeDraft({ id: "d-1" })]);
     await reconcileStoredTaskDrafts([]);
 
-    expect(await listStoredTaskDrafts()).toEqual([]);
+    expect((await listStoredTaskDrafts()).map((draft) => draft.id)).toEqual([
+      "d-1",
+    ]);
+  });
+
+  it("records a decision, and a stale undecided copy from another tab cannot undo it", async () => {
+    await reconcileStoredTaskDrafts([makeDraft({ id: "d-1" })]);
+    // This tab rejected it.
+    await reconcileStoredTaskDrafts([
+      makeDraft({ id: "d-1", status: "rejected" }),
+    ]);
+    // Another tab still holds its older, undecided copy and writes it back.
+    await reconcileStoredTaskDrafts([makeDraft({ id: "d-1" })]);
+
+    const stored = await listStoredTaskDrafts();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.status).toBe("rejected");
   });
 
   it("reads degrade to nothing stored when IndexedDB is missing", async () => {

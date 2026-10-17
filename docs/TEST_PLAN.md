@@ -233,7 +233,7 @@ Test:
 - User A cannot access User B health rows
 - service-role usage limited to server-side functions only
 - frontend never receives service-role key
-- transactional RPCs (`accept_time_block_proposal`, `place_time_block`, `apply_execution_session_outcome`) deny cross-user calls and enforce status guards
+- transactional RPCs (`accept_time_block_proposal`, `place_time_block`, `record_google_calendar_placement`, `apply_execution_session_outcome`) deny cross-user calls and enforce status guards
 - any new transactional RPC ships a two-user denial test and an invalid-state test in the same PR
 
 Acceptance criteria:

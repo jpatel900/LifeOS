@@ -1,3 +1,4 @@
+import type { ParseCaptureClock } from "./parseCaptureClock";
 import { PARSE_CAPTURE_SCHEMA_VERSION } from "./contracts/parseCapture";
 import { TASK_MAP_DRAFT_SCHEMA_VERSION } from "./contracts/taskMapDraft";
 
@@ -70,6 +71,11 @@ export interface BuildParseCaptureMessagesInput {
   areaContext?: ParseCaptureAreaContext[];
   operatorProfile?: OperatorProfileContext | null;
   rollupContext?: RollupContext[] | null;
+  /**
+   * Bug hunt #16: the user's local date and time zone. Absent → the prompt
+   * is byte-identical to before.
+   */
+  clock?: ParseCaptureClock | null;
 }
 
 export interface ParseCaptureMessage {
@@ -284,6 +290,14 @@ export function buildParseCaptureMessages(
     input.operatorProfile,
     input.rollupContext,
   );
+  if (input.clock) {
+    // Bug hunt #16: anchor relative dates to the user's own day and offset.
+    personalizationLines.unshift(
+      "",
+      `User's today: ${input.clock.weekday} ${input.clock.today}, time zone ${input.clock.timeZone} (UTC${input.clock.utcOffset}).`,
+      `Resolve relative dates against this day, and write any due_at with the ${input.clock.utcOffset} offset.`,
+    );
+  }
 
   const messages: ParseCaptureMessage[] = [
     {

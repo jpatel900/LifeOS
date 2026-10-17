@@ -127,7 +127,7 @@ function getFlashMessage() {
     return {
       severity: "error" as const,
       message:
-        "Google didn't give LifeOS lasting permission, so the connection wasn't turned on. Please connect again and allow access when Google asks.",
+        "Google didn't give LifeOS lasting permission, so the connection wasn't turned on. Please connect again and allow access when Google asks. If it happens again, remove LifeOS from your Google Account's connected apps, then connect again.",
     };
   }
 
