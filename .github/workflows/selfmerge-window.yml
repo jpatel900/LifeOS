@@ -3,9 +3,14 @@
 #
 # notify: when a PR gains the opt-in label (or pushes new commits while
 #   opted in), post the owner-notification comment that starts the clock.
-# scan: every 10 minutes, arm auto-merge on opted-in PRs whose window has
-#   elapsed and whose guards all pass (see selfmerge-window.mjs). The lane
-#   pauses itself whenever main is red or a guard revert PR is open.
+# scan: whenever a CI run completes (PR or main) or on manual dispatch,
+#   re-evaluate every opted-in PR: arm the ones whose guards all pass,
+#   disarm the ones that lost eligibility (see selfmerge-window.mjs). The
+#   lane pauses itself whenever main is red or a guard revert PR is open.
+#   The 10-minute cron was removed 2026-10-17: with windowMinutes 0 there is
+#   no timer to wait out, notify arms at once, and CI completion covers the
+#   re-check (pinned by the "live policy arms at the notify instant"
+#   --self-test case).
 # Demotion: flip SELFMERGE_WINDOW.enabled to false in
 #   scripts/agent/automation-policy.mjs (one-line PR).
 #
@@ -18,7 +23,7 @@
 # PR no longer passes, isolating each PR in its own try/catch so one `gh`
 # hiccup can't skip the rest of the sweep; `types: edited` on the notify
 # job reacts to a title/body edit immediately instead of waiting for the
-# next 10-minute cron tick.
+# next scan.
 
 name: Self-merge Window
 
@@ -31,12 +36,10 @@ on:
       - synchronize
       - ready_for_review
       - edited
-  schedule:
-    - cron: "*/10 * * * *"
   # The live test 2026-08-05 showed GitHub's cron never fired for 2+ hours
-  # on this new workflow. workflow_run makes the scan event-driven: it also
-  # fires whenever a CI run completes, so arming happens promptly during
-  # active periods even if the cron sleeps.
+  # on this workflow. workflow_run makes the scan event-driven: it fires
+  # whenever a CI run completes, which is the only moment arming state can
+  # usefully change in instant mode.
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -77,7 +80,7 @@ jobs:
 
   scan:
     name: Arm eligible PRs past their window
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

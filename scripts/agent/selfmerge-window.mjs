@@ -396,8 +396,8 @@ function runScan() {
     // single `gh` hiccup (rate limit, transient API error) on one PR must
     // not abort the whole sweep — every later PR in this tick would then
     // be neither armed nor disarmed, which is exactly the fail-open shape
-    // this whole PR exists to close. Log and move on; the next cron tick
-    // (10 minutes, or the next workflow_run) retries this PR.
+    // this whole PR exists to close. Log and move on; the next workflow_run
+    // (any CI completion) or a manual dispatch retries this PR.
     try {
       const context = collectPr(number);
       const result = evaluateSelfmergeCandidate({
@@ -494,6 +494,20 @@ function runSelfTest() {
       name: "changes-requested review blocks",
       input: { ...eligible, reviewDecision: "CHANGES_REQUESTED" },
       expected: { armable: false },
+    },
+    // 2026-10-17: the 10-minute cron was removed from selfmerge-window.yml
+    // because the live policy has no timer to wait out: notify arms at the
+    // notify instant, and every CI completion (PR or main) re-runs the scan.
+    // If windowMinutes is ever raised above 0, this case fails: restore a
+    // schedule trigger in the workflow before changing the expectation.
+    {
+      name: "live policy arms at the notify instant (no timer, so no cron needed)",
+      input: {
+        ...eligible,
+        nowIso: eligible.notifiedAtIso,
+        windowMinutes: SELFMERGE_WINDOW.windowMinutes,
+      },
+      expected: { armable: true },
     },
     {
       name: "pending checks do NOT block instant arming (auto-merge waits on them)",
