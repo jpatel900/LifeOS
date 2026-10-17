@@ -2,12 +2,15 @@ import { expect, test } from "@playwright/test";
 import {
   canAuthenticate,
   cleanupSmokeRows,
+  clickSortAndWaitForAnswer,
   goldenCaptureText,
   login,
   marker,
   newRunId,
+  NO_AREAS_SMOKE_MESSAGE,
   readSmokeEnv,
   readSupabaseAccessToken,
+  smokeAccountHasActiveArea,
   type SmokeEnv,
 } from "./helpers/smoke";
 import { ONBOARDING_COMPLETED_KEY } from "../../src/lib/onboarding/onboarding";
@@ -30,7 +33,8 @@ import { ONBOARDING_COMPLETED_KEY } from "../../src/lib/onboarding/onboarding";
  *   `auth_rejected` (the HIGH-1 / #670 guard rejects a tokenless request
  *   before any provider call), the capture is still saved raw, still listed
  *   in triage, and the failure surfaces as `triage-sheet-sort-failed-<id>`
- *   with the "sort it the simple way" retry offered. It must never silently
+ *   saying Sort requires sign-in, with no basic-sorting retry offered (#1040:
+ *   basic sorting also needs the authenticated route). It must never silently
  *   skip and report success — before #713 it asserted 200 unconditionally and
  *   the weekly run failed with "Expected: 200 / Received: 401".
  *
@@ -120,6 +124,24 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
   } else {
     console.log(
       "[smoke] no credentials: journey runs in local-only demo mode (no persisted rows).",
+    );
+  }
+
+  // ---- Precondition: the account can Sort at all (#1026) -----------------
+  // Since #1050 Sort refuses to run with no areas, so an account with none
+  // can never reach a draft. Check once, read-only, before anything is
+  // captured, so the run fails at once with the cause and leaves no rows
+  // behind. If the check cannot run, the Sort step below still names it.
+  if (authenticated) {
+    const accessToken = await readSupabaseAccessToken(page);
+    const hasArea = accessToken
+      ? await smokeAccountHasActiveArea(request, env, accessToken)
+      : null;
+    if (hasArea === false) throw new Error(NO_AREAS_SMOKE_MESSAGE);
+    console.log(
+      hasArea
+        ? "[smoke] PASS precondition: the account has at least one area to Sort into."
+        : "[smoke] precondition: could not check the account's areas; the Sort step checks again.",
     );
   }
 
@@ -213,14 +235,14 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
     journeyCaptureRow,
     "journey capture not found in triage by marker",
   ).toBeVisible({ timeout: 30_000 });
-  const parseResponsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/parse-capture") &&
-      response.request().method() === "POST",
+  // #1026: the wait for Sort's answer is raced against the row's failure
+  // card and bounded just above the app's own 35-second Sort limit, so a Sort
+  // that never sends its request (no areas) or is given up on fails at once
+  // with its cause instead of hanging until the test's 120-second limit.
+  const parseResponse = await clickSortAndWaitForAnswer(
+    page,
+    journeyCaptureRow,
   );
-  await journeyCaptureRow.getByTestId(/^triage-sheet-sort-/).click();
-
-  const parseResponse = await parseResponsePromise;
   const parseBody = (await parseResponse.json()) as {
     ok?: boolean;
     errorCategory?: string;
@@ -257,22 +279,34 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
       "capture text must be preserved verbatim after the rejected sort",
     ).toContainText(captureText);
 
-    // The failure is SURFACED, in plain language, on the row it belongs to —
-    // and a retry is offered rather than the person being left stuck.
+    // The failure is SURFACED, in plain language, on the row it belongs to,
+    // and its recovery names what is actually missing: sign-in (#1040).
+    // Basic sorting posts to the same authenticated route, so a signed-out
+    // person is never offered it; that retry would be rejected the same way.
+    const sortFailure = journeyCaptureRow.getByTestId(
+      /^triage-sheet-sort-failed-/,
+    );
     await expect(
-      journeyCaptureRow.getByTestId(/^triage-sheet-sort-failed-/),
+      sortFailure,
       "rejected sort must surface a plain-language failure on its own row",
     ).toBeVisible();
     await expect(
+      sortFailure,
+      "signed-out sort failure must say Sort requires sign-in",
+    ).toContainText("Sorting requires you to be signed in.");
+    await expect(
+      sortFailure,
+      "signed-out sort failure must not offer the signed-in recovery",
+    ).not.toContainText("Try again, or use basic sorting.");
+    await expect(
       journeyCaptureRow.getByTestId(/^triage-sheet-sort-basic-/),
-      "rejected sort must still offer the simple-parser retry",
-    ).toBeVisible();
-    // Deliberately NOT clicked: the retry re-posts the same tokenless request
-    // and is rejected the same way, so it can never produce a draft here.
+      "signed-out sort failure must not offer basic sorting",
+    ).toHaveCount(0);
 
     console.log(
       "[smoke] PASS triage Sort (degraded): parse-capture rejected 401 auth_rejected; " +
-        "capture preserved, listed, failure surfaced, retry offered.",
+        "capture preserved, listed, failure surfaced with sign-in recovery, " +
+        "no basic-sorting retry offered.",
     );
     console.log(
       "[smoke] NOT EXERCISED: draft -> today -> focus session -> close the day. " +

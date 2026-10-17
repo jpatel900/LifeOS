@@ -78,6 +78,7 @@ export function TriageSheet({
   const {
     state,
     syncStatus,
+    captureParse,
     acceptTaskDraft,
     backlogTaskDraft,
     rejectTaskDraft,
@@ -336,6 +337,22 @@ export function TriageSheet({
           surfaces (this sheet and the cockpit TriageView) so they show the
           same rows, the same copy (#689), and the same degraded behavior.
           It renders nothing when there is nothing unsorted. */}
+      {captureParse.phase === "parsed" &&
+      captureParse.warning &&
+      (!resolvedAreaId ||
+        state.captureItems.some(
+          (capture) =>
+            capture.id === captureParse.captureId &&
+            capture.area_id === resolvedAreaId,
+        )) ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className="text-sm text-muted-foreground"
+        >
+          {captureParse.warning}
+        </p>
+      ) : null}
       <UnsortedCaptures areaId={resolvedAreaId} />
 
       {/* #689 item 3: when signed out, say where these live, plainly, with
