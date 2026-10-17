@@ -11,93 +11,33 @@ Entry schema: **Symptom → Root cause → Evidence → Status → Date** (+ **R
 
 ---
 
-## Env-blind validation: implementer's green ≠ CI's green (B7, PR #291)
+## Distilled entries (one line + pointer)
 
-- **Symptom:** B7 PR (capture wired through parse route) opened with a truthful "all tests pass" report, then failed two required CI lanes — including the guard test for its OWN issue's binding constraint (raw capture stays visible when parsing fails).
-- **Root cause:** The Codex cloud environment deliberately has no Supabase stack, no provider env, and no browsers (no-secrets policy). Tests that exercise env-dependent paths pass vacuously there via mock fallbacks; the Migrations+RLS lane and Playwright E2E are unrunnable. The implementer's evidence was truthful but incomplete, and nothing required disclosing which lanes were unverifiable.
-- **Evidence:** PR #291 body reports `WorkflowContext.test.tsx` passing locally; the same file failed in the Migrations + RLS Verification lane. Playwright plan-flow spec timed out. Secondary noise: B2's meta-learning writes logged `query.insert is not a function` against the shared test mock, which was never extended with the new tables.
-- **Status:** Mitigated — kick template requires an "unverified lanes" disclosure and running the guard tests named in the issue; `lifeos-testing` skill documents the env-dependent lanes and the shared-mock rule; remaining pipeline issues name their guard tests. Required CI checks remain the real gate (they caught this). Do not give the agent environment secrets to "fix" this — the no-secrets boundary is deliberate.
-- **Date:** 2026-07-03
+The lesson now lives in doctrine or a guard; full text is in git history (distillation #289, 2026-10-17).
 
-## Codex ignored the pipeline's @codex kicks
+- **Env-blind validation: implementer's green ≠ CI's green (B7, PR #291)** — PR #291 (2026-07-03): mock fallbacks made `pnpm test` green in a no-services sandbox while required CI lanes failed. → `lifeos-testing` (environment-dependent lanes; green from the right layer).
+- **Codex ignored the pipeline's @codex kicks** — 2026-07: Codex ignores bot-authored mentions, so kicks post via `CODEX_KICK_TOKEN`. Do not switch back to `GITHUB_TOKEN`. → `.github/workflows/pipeline-advance.yml`.
+- **Required-review branch protection was unsatisfiable** — 2026-06/07: required reviews cannot be met on a solo repo, so they were removed; strict up-to-date kept. Merge authority → `AGENTS.md` (PR and merge).
+- **Remote schema dump committed as a migration broke local resets** — 2026-06-12/13: a remote drift dump committed as a migration broke `supabase db reset`. Never commit drift dumps; author migrations and verify a local reset. → KNOWN_ISSUES row 7; `scripts/agent/migration-drift-allowlist.mjs`.
+- **Per-PR auto-review produced noise, not safety (check diet)** — PR #248: blanket auto-review was noise. Extend the risk classifier, not blanket reviews. → `scripts/agent/classify-pr-risk.mjs`.
+- **Doc sprawl → the doc-registry guard** — Issue #228 / PR #244: session notes and duplicate docs forked truth. → `docRegistry.test.ts` (allowlist, shrink-only registry, entry-file budget that never rises).
+- **Merge race turned main red: a guard and its offenders merged 77 seconds apart** — #331/#337 (2026-07-04); fixed by #340. Still open: why Main Red Guard skipped on that red main. → `lifeos-testing` (a PR's CI proves it against main as of that run).
+- **Codex mention-lane deliveries stranded: make_pr claimed success, nothing reached GitHub** — #240/#313/#323 (2026-07-04): `make_pr` reported success but nothing reached GitHub; recovered by patch (#347-#349). → protocol v2, next line.
+- **Stranded-delivery recovery by mention is dead: a follow-up @codex mention spawns a fresh environment** — 2026-07-05: a follow-up @codex mention starts a fresh environment with none of the task's commits, and the sandbox has no comment tool. Protocol v2 (patch inside the final summary, applied with `git am`; proven by #402/#404-#406) → the kick text in `.github/workflows/pipeline-advance.yml`; harvest rules → `docs/agent/LANES.md`.
+- **A merged migration went unapplied for two days: no staged apply-SQL, no reminder** — 2026-07-07: C3/C4 migrations were CI-green but never applied to prod. Fixed by `pnpm drift:assemble` + the apply-reminder check, later by the gated `migration-apply.yml`. → `lifeos-migration-drift-response`; `lifeos-testing` (correct is not applied).
+- **A second merge race turned main red: two green-in-isolation docs PRs combined within 49 seconds** — #471/#472 (2026-07-09); healed by #476. → same `lifeos-testing` rule; `format-selfheal.yml` heals format-only reds.
+- **Two governance stores drifted apart: the repo's status doc went dead while the real program lived out-of-repo** — 2026-08-04: the real program lived outside the repo while PROJECT_STATE went stale. The program now lives in `docs/program/` (PR #811). → `AGENTS.md` (Authority); freshness rule at the top of `docs/PROJECT_STATE.md`.
+- **Turbo's test cache key didn't cover the paths its own guards read — a docs-only change could hit a stale cached PASS** — 2026-08-21: `turbo.json`'s `test` task had no `inputs`, so a docs-only change could replay a cached PASS from a guard that reads `docs/**`. Never drop the root inputs or set `cache: false` to paper over a gap. → `scripts/agent/check-turbo-test-inputs.mjs` (CI).
+- **A migration went unseen for a month: the drift detector only looked one way** — 2026-07-18 → 08-21: a hand-applied prod migration was invisible because the drift check only compared repo → prod. Now both directions, with an allowlist that has a reason per entry. → `scripts/agent/check-migration-drift.mjs`, `scripts/agent/migration-drift-allowlist.mjs`.
+- **A self-test that would have caught this drift was never running: `campaigns.json` and its own guard went stale together** — 2026-08-29: `status.test.mjs` never ran in CI, and both program docs under-listed C2 slices in lockstep. Now a CI job (`program-state-self-test`) with a git-history cross-check and a vacuity floor. → `scripts/agent/status.test.mjs`.
 
-- **Symptom:** Pipeline-advance workflow posted `@codex` mentions on the next issue; Codex cloud never picked them up. Pipeline stalled silently after each merge.
-- **Root cause:** Codex ignores mentions authored by bot accounts; the workflow's default `GITHUB_TOKEN` posts as a bot.
-- **Evidence:** Issue timelines show bot-authored mentions with no Codex response; mentions posted manually by the owner worked.
-- **Status:** Fixed — `.github/workflows/pipeline-advance.yml` posts via the `CODEX_KICK_TOKEN` fine-grained PAT (Issues+PRs RW) so kicks are human-authored. Do not "simplify" back to `GITHUB_TOKEN`; the pipeline dies quietly.
-- **Date:** 2026-07 (epic #243 bring-up)
+## Owner decisions decided in chat, never written back — the work map drifted
 
-## Required-review branch protection was unsatisfiable
-
-- **Symptom:** Green pipeline PRs could not be merged at all.
-- **Root cause:** Solo repo: GitHub required-review rules cannot be satisfied when every PR is self-authored (authors cannot approve their own PRs).
-- **Evidence:** Merge blocked on "review required" with no eligible reviewer existing.
-- **Status:** Fixed — required-reviews removed; strict up-to-date requirement kept. Do not re-enable required reviews without a second reviewer identity. Merge authority policy lives in the agent docs, not in an unsatisfiable rule.
-- **Date:** 2026-06/07
-
-## Remote schema dump committed as a migration broke local resets
-
-- **Symptom:** `supabase db reset` failed locally (storage trigger ordering) after adding `supabase/migrations/20260612231853_remote_schema.sql`.
-- **Root cause:** The file was a remote drift _dump_ (platform-managed objects, no app tables), not an authored migration; platform-only objects don't replay locally.
-- **Evidence:** KNOWN_ISSUES row 7 (resolved); reset verified clean after deletion, RLS suite 17/17.
-- **Status:** Fixed 2026-06-13 — dump deleted. Rule: never commit remote drift dumps as migrations; author migrations, then verify `supabase db reset` locally.
-- **Date:** 2026-06-12 → 2026-06-13
-
-## Per-PR auto-review produced noise, not safety (check diet)
-
-- **Symptom:** Every PR — including docs-only — accumulated automatic review comments; signal drowned, merges slowed, nobody read the reviews.
-- **Root cause:** Reviews attached by default rather than by risk class; a gate that fires on everything is a ritual, not a gate.
-- **Evidence:** PR #248 (check diet): auto Claude review removed; Codex baseline review now skips docs-only PRs.
-- **Status:** Fixed — review effort is risk-routed (`scripts/agent/classify-pr-risk.mjs`, `check-safe-automerge.mjs`). Don't re-add blanket auto-reviews; extend the risk classifier instead.
-- **Date:** 2026-06/07
-
-## Codex Actions lanes retired in favor of the mention lane
-
-- **Symptom:** Two ways to invoke Codex existed (Actions `codex-*` workflows and the @codex mention lane); the Actions lanes sat unused and looked like dead config.
-- **Root cause:** Economic, not technical: Actions lanes bill the OpenAI API key per run; the mention lane bills the flat subscription.
-- **Evidence:** Pipeline design (epic #243) routes exclusively through human-authored mention kicks.
-- **Status:** Settled decision, not debt. Do not "clean up" by re-enabling Actions lanes without redoing the cost math.
-- **Date:** 2026-07
-
-## Doc sprawl → the doc-registry guard
-
-- **Symptom:** Agent sessions accumulated per-session note files and duplicate docs; entry files bloated; truth forked across files.
-- **Root cause:** No mechanical gate on new markdown; every session's "helpful notes" compounded.
-- **Evidence:** Issue #228 / PR #244 — `apps/web/src/__tests__/docRegistry.test.ts` (allowlist + shrink-only grandfather registry + entry-file line budget).
-- **Status:** Fixed structurally. New canonical docs require a deliberate allowlist edit with review — this file itself entered that way. Budget ratchets down (A4 → 250 lines); never raise it.
-- **Date:** 2026-06/07
-
-## Parallel agent fan-out burned the entire usage window (ops, maintainer-side)
-
-- **Symptom:** Two 19-agent authoring workflows died mid-flight with "session limit" errors; ~1.4M tokens spent for partial output; all work blocked until window reset.
-- **Root cause:** Concurrent subagent fan-out multiplies cold-start context cost; a rolling usage window can be exhausted in minutes while sequential inline work would have fit.
-- **Evidence:** 2026-07-02 skills-library authoring session (recorded in maintainer memory and the library's own `agentic-context-engineering-reference` §2).
-- **Status:** Fenced — default to sequential/inline work for bulk tasks; reserve fan-out for adversarial review and schedule it right after window resets.
-- **Date:** 2026-07-02
-
-## Merge race turned main red: a guard and its offenders merged 77 seconds apart
-
-- **Symptom:** Main CI failed on merge commit 8d6724d. PR #331's workflow-truth guard bans `WorkflowState` annotations in tests; two B6-era test files still carried them. Each PR was green in isolation; combined, main was red. Main Red Guard skipped instead of firing, and Codex CI Autofix ran and failed without producing a fix.
-- **Root cause:** A guard PR's CI proves the guard against the merge ref at _review_ time, not against what main looks like when it lands; #337 merged 77 seconds earlier. The refactor of the two offender files that would have made #331 safe was reported complete by Codex but never actually pushed (see the stranded-delivery entry below).
-- **Evidence:** CI run 28707997136 (failure on 8d6724d); fix PR #340 (offenders rebuilt on `workflowSeed()` + transition helpers, no allowlist additions).
-- **Status:** Fixed by #340. Open follow-ups: why Main Red Guard's trigger condition skipped on a genuinely red main, and the standing rule that a guard PR must land only after (or together with) the refactor of every known offender, re-verified against current main immediately before merge.
-- **Date:** 2026-07-04
-
-## Codex mention-lane deliveries stranded: make_pr claimed success, nothing reached GitHub
-
-- **Symptom:** Six deliveries in one day (#240 twice, #313, #323, plus the #333 fix round and the #331 offender refactor) ended with Codex reporting green checks and "created the PR via make_pr" — but no branch existed on origin, no PR existed, and the task page offered no Create PR action. Sequential pipelines stall silently; work evaporates.
-- **Root cause:** The platform-side PR-creation step of the Codex mention lane failed silently while the sandbox work succeeded. Fresh re-kicked environments can neither recover a previous task's commits nor push (no origin remote, agent-phase network off), so naive re-kicks re-implement and re-strand.
-- **Evidence:** Issue threads on #240/#313/#323 (completion summaries with no corresponding branches); recovery PRs #347/#348/#349.
-- **Status:** Fenced by the patch-paste protocol, proven three-for-three on 2026-07-04: the kick instructs Codex to post `git format-patch origin/main --stdout` as issue comments; a maintainer applies the patch in a worktree (`git am`, author preserved), runs the lanes the sandbox cannot (local Supabase/RLS), and opens the PR. Both candidate follow-ups were built in PR #357 (kick-template fallback + watchdog claimed-PR-exists check). Partially superseded 2026-07-05: the "ask the still-live task by mention" recovery no longer works — see the next entry.
-- **Date:** 2026-07-04
-
-## Stranded-delivery recovery by mention is dead: a follow-up @codex mention spawns a fresh environment
-
-- **Symptom:** Both 2026-07-05 Codex tasks (C1 #364, commit f9ce109; #377, commit a8d51e0) completed with `make_pr` reporting success but no branch or PR on GitHub — and the previously proven recovery (mention the task, ask for a format-patch) failed: the recovery mention spawned a FRESH environment (branch `work`, no origin remote, no `gh`, none of the task's commits) that could not produce the patch.
-- **Root cause:** A follow-up @codex mention is a new task, not a message to the old one; task state lives only inside the original session. Two compounding platform gaps: the sandbox cannot reach github.com (HTTP 403), so the kick's "verify your PR exists" step cannot actually be executed — tasks truthfully report completion while structurally unable to detect their own stranding; and the Codex task UI currently shows no diff view or Create PR button (owner-observed 2026-07-05), removing the platform's own manual recovery affordances.
-- **Evidence:** #364 comment thread (fresh-env reply 2026-07-05T07:14Z: current branch `work`, commit f9ce109 unavailable, no `origin/main` configured); #377 delivery-verification comment; owner UI observation 2026-07-05.
-- **Status:** Superseded by delivery protocol v2 (2026-07-05, proven 4/4: PRs #402/#404/#405/#406). The comment-based fallback was ALSO unexecutable: the env has NO issue-comment tool, no origin remote (so `git format-patch origin/main` fails — determine the base locally as the newest commit not authored by the task), and 403s to github.com. The ONLY working channel is the final summary the connector relays. Protocol v2: skip make_pr; embed the complete `git format-patch <local-base>..HEAD --stdout` output as fenced block(s) IN the final summary; maintainer extracts (fence-strip), applies with `git am` (authorship preserved), validates, opens the PR. Chat-print recovery of stranded sessions fails on context limits — v2 re-kick (fresh run) is cheaper than archaeology.
-- **Date:** 2026-07-05
+- **Symptom:** The generated work map's "Owner Queue" showed five decisions as pending (#737 make-it-true, #742 door, merge/apply gates on #775/#777/#778) that the owner had already made days earlier. The owner discovered the drift by asking whether the map was accurate (2026-07-28).
+- **Root cause:** A closure-ritual asymmetry with a dual-store state. The program formalized how decisions are ASKED (plain-language `- [ ] OWNER-GATE:` checkboxes on issues/PRs — machine-harvested by the map generator) but never formalized how they are CLOSED. Decisions happened in the orchestrator's chat and were recorded in the orchestrator's private layer (handover/program docs, session memory) — a second store the map does not read. The write-back to the canonical store (GitHub) was manual, unowned, and therefore skipped. Classic dual-write drift: the authoritative artifact was the one nobody was required to update.
+- **Evidence:** 2026-07-28 map render listed all five resolved gates as open; each gate's issue/PR body still carried the unticked checkbox while the orchestrator's PROGRAM/TARGET-CARDS docs recorded the decisions with dates.
+- **Status:** Fixed at instance and cause. Instance: all five gates ticked `- [x]` with DECIDED comments (see #737/#742 comments of 2026-07-28). Cause: standing closure ritual — the session in which the owner decides must, in that same turn, tick the gate's checkbox and post a one-line DECIDED comment on the artifact; the map is regenerated at every major milestone as part of the checkpoint. A decision is not done until the artifact says so.
+- **Date:** 2026-07-28
 
 ## Prod parse 502s were undiagnosable: safe degradation without loud reporting
 
@@ -125,62 +65,23 @@ Entry schema: **Symptom → Root cause → Evidence → Status → Date** (+ **R
 - **2026-07-05 addendum — the "API Response stalled mid-stream" death is SIZE-UNCORRELATED, and a batching-for-speed inference was wrong.** During the Opus subtle-polish session two subagents died with "API Error: Response stalled mid-stream," losing all work each time. In the moment this was rationalized as "long runs catch the stall window, so split into shorter runs" — **the data refutes that.** Completion metadata across 8+ runs that session: the two deaths were the SHORTEST-lived runs (527s / 532s, 38–48 tool calls) while successful runs went far longer (up to 3125s / 304 tool calls, and a 1878s solo run). Run length did not predict the stall. What the two deaths shared was not size but STATE: both were multi-packet batches still in a front-loaded audit/investigation phase with a **clean worktree — nothing committed yet** — so the probabilistic stream stall cost the entire run. Correct conclusion: the stall is an external API event we cannot prevent or predict from task shape; the only lever is making failure CHEAP. (1) Commit+push per SMALLEST coherent unit is what bounds a stall to the current unit — proven when the re-dispatched batch with strict per-packet-commit ordering ran 52 min and would have preserved every committed packet on death. (2) Prefer single-focus tasks — not because they stall less (unproven), but because they fail cheaper and salvage cleaner. Do NOT justify batching as stall-avoidance, and do NOT justify splitting as stall-avoidance; justify unit size by failure cost. Open gap: dead-agent transcripts were already garbage-collected (0 bytes) at post-mortem time — there is no captured final-state to inspect after a stall; if deeper root-causing is ever needed, snapshot the agent transcript on the death notification before it's reaped.
 - **Date (addendum):** 2026-07-05
 
-## A merged migration went unapplied for two days: no staged apply-SQL, no reminder
+## Parallel agent fan-out burned the entire usage window (ops, maintainer-side)
 
-- **Symptom:** Migration Drift stayed RED even after the owner applied the four 2026-07-06 drift-fix files — two OLDER migrations (`20260705120000_add_task_is_reversible` / C3, `20260705130000_add_execution_session_cap_outcome` / C4) had merged on 2026-07-05, been flagged "prod needs manual apply," but never got a staged drift-fix file and were silently forgotten. Prod ran ~two days behind main on Stage-1 schema.
-- **Root cause:** The manual-prod-apply step depended entirely on a human remembering, at merge time, to hand-assemble apply SQL (DDL + `schema_migrations` ledger rows) and stage it. Nothing generated the SQL, enqueued it, or flagged the PR — so a busy merge dropped it. The C3/C4 PRs (#422/#430) were mock-green and CI-green: the Migrations+RLS lane proves a migration is CORRECT, never that it was APPLIED to prod.
-- **Evidence:** Migration Drift run 28835436092 (RED, 2026-07-07); `drift-fix-c3-c4-2026-07-07.sql` (owner-assembled recovery); green again from run 28844055978.
-- **Status:** Fixed by U2b. `pnpm drift:assemble <files>` generates the paste-ready apply SQL in one command (proven to reproduce the hand-assembled ledger exactly — PR #453); a `Migration Apply Reminder` PR check flags any migration-adding PR with that exact command; `pnpm status` surfaces a RED Migration Drift with the fix. The human gate on prod DDL is deliberately kept — the prevention is generation + reminder, not auto-apply (NS-INV-2 additive-only makes CI auto-apply a later, lower-risk graduation, not now).
-- **Date:** 2026-07-07
+- **Symptom:** Two 19-agent authoring workflows died mid-flight with "session limit" errors; ~1.4M tokens spent for partial output; all work blocked until window reset.
+- **Root cause:** Concurrent subagent fan-out multiplies cold-start context cost; a rolling usage window can be exhausted in minutes while sequential inline work would have fit.
+- **Evidence:** 2026-07-02 skills-library authoring session (recorded in maintainer memory and the library's own `agentic-context-engineering-reference` §2).
+- **Status:** Fenced — default to sequential/inline work for bulk tasks; reserve fan-out for adversarial review and schedule it right after window resets.
+- **Date:** 2026-07-02
+- **Retirement condition:** no repeat is recorded since 2026-07-02 (over 90 days), so a retest is due (#289 sweep, 2026-10-17): run one bounded fan-out of 5-10 agents. If it finishes inside the usage window, delete this fence.
 
-## A second merge race turned main red: two green-in-isolation docs PRs combined within 49 seconds
+## Codex Actions lanes retired in favor of the mention lane
 
-- **Symptom:** PR #471 (privacy/evidence hygiene, touched `docs/KNOWN_ISSUES.md`) and PR #472 (the blocking format check itself, plus a repo-wide reformat) each passed CI on their own branch, then merged 49 seconds apart. The combined state on main was never itself CI-validated before landing, and it had formatting drift; CI's new `pnpm format:check` step then failed on every subsequent PR (it checks the whole repo, not just the diff) until a human opened a one-file prettier fix by hand (PR #476).
-- **Root cause:** Same pattern as the earlier `WorkflowState` guard race (#331/#337, above): a PR's CI proves the PR against the merge ref at review time, not against whatever lands on main seconds later from a concurrently-merging PR. `pnpm format:check` was added in the same PR (#472) that also reformatted the tree, so #471's un-rebased `docs/KNOWN_ISSUES.md` edit combined with #472's formatting pass into a state neither PR's own CI run had seen.
-- **Evidence:** Commits `6b7c8561` (#471, 2026-07-09 18:30:34) and `4455c49c` (#472, 18:31:22); fix commit `8386bd69` (#476, 19:23:35).
-- **Status:** Fenced going forward by `.github/workflows/format-selfheal.yml`: the blocking format check is what caught the drift (the fence already worked as a stop), and this workflow now auto-heals it — on the next CI failure whose only problem is formatting, it reformats main, verifies clean, and opens a PR through the same docs safe-automerge lane #476 rode, instead of waiting for a human to notice.
-- **Date:** 2026-07-09
+- **Symptom:** Two ways to invoke Codex existed (Actions `codex-*` workflows and the @codex mention lane); the Actions lanes sat unused and looked like dead config.
+- **Root cause:** Economic, not technical: Actions lanes bill the OpenAI API key per run; the mention lane bills the flat subscription.
+- **Evidence:** Pipeline design (epic #243) routes exclusively through human-authored mention kicks.
+- **Status:** Settled decision, not debt. Do not "clean up" by re-enabling Actions lanes without redoing the cost math.
+- **Date:** 2026-07
 
 ---
 
 _Seeded 2026-07-02 from repo history and operator memory. Dead branches at seeding time (`agent/single-review-policy`, `codex/...a4-governance-restructure...`, `fix/plan-single-task-scheduling`, `ui/handoff-cockpit-pass`) were not chronicled — whoever closes or deletes one adds its entry._
-
-## Owner decisions decided in chat, never written back — the work map drifted
-
-- **Symptom:** The generated work map's "Owner Queue" showed five decisions as pending (#737 make-it-true, #742 door, merge/apply gates on #775/#777/#778) that the owner had already made days earlier. The owner discovered the drift by asking whether the map was accurate (2026-07-28).
-- **Root cause:** A closure-ritual asymmetry with a dual-store state. The program formalized how decisions are ASKED (plain-language `- [ ] OWNER-GATE:` checkboxes on issues/PRs — machine-harvested by the map generator) but never formalized how they are CLOSED. Decisions happened in the orchestrator's chat and were recorded in the orchestrator's private layer (handover/program docs, session memory) — a second store the map does not read. The write-back to the canonical store (GitHub) was manual, unowned, and therefore skipped. Classic dual-write drift: the authoritative artifact was the one nobody was required to update.
-- **Evidence:** 2026-07-28 map render listed all five resolved gates as open; each gate's issue/PR body still carried the unticked checkbox while the orchestrator's PROGRAM/TARGET-CARDS docs recorded the decisions with dates.
-- **Status:** Fixed at instance and cause. Instance: all five gates ticked `- [x]` with DECIDED comments (see #737/#742 comments of 2026-07-28). Cause: standing closure ritual — the session in which the owner decides must, in that same turn, tick the gate's checkbox and post a one-line DECIDED comment on the artifact; the map is regenerated at every major milestone as part of the checkpoint. A decision is not done until the artifact says so.
-- **Date:** 2026-07-28
-
-## Two governance stores drifted apart: the repo's status doc went dead while the real program lived out-of-repo
-
-- **Symptom:** A full documentation audit (2026-08-04, four independent read-only auditors) found the repo and the out-of-repo planning folder describing two different worlds. `docs/PROJECT_STATE.md` — the designated status home — had its newest fact dated 2026-07-16/17 and never mentioned the Final UX Loop, the feature freeze, or campaigns C1/C2 (the program behind ~3 weeks of commits). Meanwhile the stage-relay machinery (`pipeline-manifest.json` + `pipeline-advance.yml`) still named epic #251 as the active program. An agent following repo law alone (AGENTS.md → PROJECT_STATE) would have started feature work the program froze, and could not have discovered the program at all.
-- **Root cause:** The governing program was authored and updated in the orchestrator's private folder (`LifeOS-plans\`), a store no repo agent reads, while the repo file that every agent IS told to read had no owner and no freshness signal. Same dual-store class as the 2026-07-28 decision-write-back entry, one level up: not single decisions this time, but the entire program. Nothing made the repo copy the mandatory write point, so it silently became the stale copy.
-- **Evidence:** The 2026-08-04 audit reports (session transcript); `git log -1 -- docs/PROJECT_STATE.md` (one touch since 2026-07-17) vs the #690-#805 Final-UX-Loop commit range it never mentions.
-- **Status:** Fixed at instance and cause. Instance: the program docs moved into the repo (`docs/program/`, PR #811) and PROJECT_STATE was rewritten to current truth. Cause: standing rule — the governing program lives in the repo; the out-of-repo folder is provenance-only with SUPERSEDED headers; PROJECT_STATE carries a freshness rule (newest date >2 weeks old ⇒ distrust it and check `docs/program/`); pilot-era docs are archived under `docs/_archive/` with successors named, so stale text stops shadowing current truth.
-- **Date:** 2026-08-04
-
-## Turbo's test cache key didn't cover the paths its own guards read — a docs-only change could hit a stale cached PASS
-
-- **Symptom:** Found while another lane fixed migration drift, not by a real leak this time, but the same shape as one: `apps/web/src/__tests__/publicEvidenceHygiene.test.ts` scans `docs/**` and root markdown for the production Supabase project ref, UUID-shaped IDs, and emails — it is what caught the live project ref that nearly shipped via `docs/FAILURES.md` earlier. `docRegistry.test.ts`, `coherenceRegistry.test.ts`, `docLinkIntegrity.test.ts`, `supabaseMigration.test.ts`, and others read `docs/**`, `supabase/**`, `.env.example`, and every git-tracked `.md` file repo-wide the same way. `turbo.json`'s `test` task declared no `inputs`, so Turbo's default (all files inside the task's OWN package directory, `apps/web/**` only) never included any of those repo-root paths. Proven empirically: with a warm cache, planting the forbidden project-ref string into `docs/KNOWN_ISSUES.md` and re-running `pnpm test` reported `Cached: 6 cached, 6 total ... FULL TURBO` in under 400ms — the guard never re-ran.
-- **Root cause:** Turbo's per-task cache key is built entirely from its declared (or default) `inputs` globs. A task with no `inputs` for a package hashes only that package's own tracked files; a guard test that reads OUTSIDE its package via `resolve(__dirname, "../../../..")`-style repo-root escapes is invisible to that hash. Same silent-vacuous-pass class as the knip/depcruise-era entries above: a mechanism that reports green without having actually re-examined the thing it guards.
-- **Evidence:** Captured in the fix PR's evidence comment — warm-cache baseline (`Tasks: 6 successful, 6 total`), planted-violation run still `6 cached, 6 total ... FULL TURBO` under the buggy config, then the same plant under the fixed config producing a real `publicEvidenceHygiene` FAIL (cache MISS, guard actually ran).
-- **Status:** Fixed. `turbo.json`'s `test` task now declares explicit `inputs`: `$TURBO_DEFAULT$` (keeps the normal per-package file set) plus `$TURBO_ROOT$` globs for every repo-root path a guard test reads (`docs/**`, `supabase/**`, `scripts/**`, `.github/**`, `.agents/**`, `.cursor/**`, `.env.example`, `**/*.md`). `scripts/agent/check-turbo-test-inputs.mjs` (wired into the `automerge-policy-self-tests` CI job via `--self-test`, and run for real in `validate-monorepo`) re-derives the requirement from the guard tests' actual source on every PR, so a future test that starts reading a new repo-root directory — or a turbo.json edit that drops coverage — fails CI instead of silently reopening the gap. Do not "simplify" the `test` task back to no `inputs`, and do not paper over a future gap with `"cache": false` on the whole task — name the missing path instead.
-- **Date:** 2026-08-21
-
-## A migration went unseen for a month: the drift detector only looked one way
-
-- **Symptom:** Production's migration ledger (`supabase_migrations.schema_migrations`) has carried `20260718184244_security_harden_functions` since 2026-07-18, applied by hand directly to the database — no file, no PR, no other record anywhere in this repo's git history. Nobody noticed for a month. It surfaced only because an unrelated third-party check complained; `Migration Drift` stayed green the entire time.
-- **Root cause:** `.github/workflows/migration-drift.yml` compared repo migrations against production in exactly one direction — `comm -23 <(local) <(remote)`, i.e. "which repo files are NOT yet in prod." A version applied straight to the database, with no matching repo file, is invisible to that comparison: it never shows up as "missing" on either side, so the check reports clean. The check could tell you the repo was ahead of production; it could never tell you production was ahead of the repo.
-- **Evidence:** `.github/workflows/migration-drift.yml` (before this fix) line 61: `missing=$(comm -23 <(printf '%s\n' "$local_versions") <(printf '%s\n' "$remote_versions"))` — one direction only, nothing computes the reverse `comm -13`. `git log --all -S "security_harden_functions"` and `git log --all -S "20260718184244"` both return zero commits. Read-only `list_migrations` (Supabase MCP, project `<prod-project-ref>`) confirms the row is live in production today. PR #896 adds the missing file after the fact, reconstructed from the live database.
-- **Status:** Fixed — the comparison moved into `scripts/agent/check-migration-drift.mjs`, called by the same workflow (no parallel mechanism), and now runs BOTH directions every push to `main`: repo-ahead (unchanged, still `missingFromProd`) and prod-ahead (new: any ledger version with no repo file fails loudly as "the database has changes this repo has no record of"). Because this Supabase project is shared with the RiseUp Cockpit project (which applies its own migrations directly) and carries one already-closed historical `remote_schema` dump (see "Remote schema dump committed as a migration broke local resets," above), a small auditable allowlist (`scripts/agent/migration-drift-allowlist.mjs`) lists exactly those 11 known prod-only versions with a one-line reason each — anything NOT on that list still fails the check. Proven with a planted case: an unlisted prod-only version made the check fail with the new error message; removing it made the check pass again (both self-test and a live end-to-end run against the real `supabase/migrations/` tree — see PR evidence). A regression case in the same self-test proves the original repo-ahead direction still fires.
-- **Date:** 2026-07-18 (drift began) / 2026-08-21 (detector fixed)
-
-## A self-test that would have caught this drift was never running: `campaigns.json` and its own guard went stale together
-
-- **Symptom:** `docs/program/campaigns.json`'s C2 slice list stalled at S0-S6 (RE-SCORE "queued") while PRs #889-#911 merged nine more slices (S7-S13) over the next day, and S4-S6 themselves sat mis-stated as in-flight/queued after already merging. The file's own `$comment` claimed a self-test (`scripts/agent/status.test.mjs`) "fails the build" on exactly this kind of drift.
-- **Root cause:** `scripts/agent/status.test.mjs` was never wired into any CI job from the moment it and `campaigns.json` were introduced together (PR #848, 2026-08-06) through 2026-08-29 — it only ran when a human typed `node scripts/agent/status.test.mjs` by hand. Its two `campaigns.json` tests also only ever compared campaign-level id/name/state against `final-ux-loop.md` section 4; neither checked slice rows against anything, and section 6 of that same doc stopped logging slice merges at the same point (S6), so even a slice-level doc-vs-doc comparison would have found nothing — both docs under-listed the same slices in lockstep.
-- **Evidence:** `git grep -n "status.test.mjs"` across every `.github/workflows/*.yml` on origin/main returns zero invocations before this fix. `node scripts/agent/status.test.mjs` on unmodified origin/main exits 0 (72/72 tests green) despite the real drift, because nothing it checked was capable of seeing it. `gh pr view` confirms #846/#851/#880/#889/#890/#891/#892/#894/#898/#906/#911 (C2-S4 through S13) all `state: MERGED`, commit SHAs matching `git log` on origin/main.
-- **Status:** Fixed at instance and cause. Instance: `campaigns.json`'s C2 slices corrected to merged reality, each cited to its PR. Cause, two parts: (a) a new self-test cross-checks every "Final UX Loop `<campaign>`-`<slice>`" mention in git commit history against `campaigns.json`'s slice rows — the one signal that exists independently of both program docs — gated by a vacuity floor (`git rev-list --count HEAD` >= 200) so a shallow checkout fails loudly instead of passing by examining nothing; (b) a second self-test asserts a campaign's slices are sequential (a later one can't be merged/done while an earlier one isn't), catching a wrong status on an existing row that the history check alone would miss. Both proven with planted violations (reverting to the pre-fix file fails the history check; setting one already-fixed slice back to "queued" alone fails the sequencing check, nothing else). `status.test.mjs` is now a real CI job (`program-state-self-test`, full-history checkout) instead of a file nobody ran.
-- **Date:** 2026-08-29
