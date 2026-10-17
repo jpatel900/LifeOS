@@ -209,6 +209,10 @@ Acceptance criteria:
 - Every write creates an audit record.
 - Failed write is shown immediately and does not mark the block as scheduled.
 - No AI response can directly trigger a calendar write.
+- An approved event schedules its task and supersedes the task's other pending proposals in one transaction; a task has at most one Google event (2026-10-17).
+- The event uses the start and end the user saw when approving; the server refuses when the account holds a different time (2026-10-17).
+- Once Google has created the event, the write is never reported as failed (2026-10-17).
+- A block placed on the hour rail can be sent to Google with the same explicit approve action (owner decision, 2026-10-17).
 
 ---
 

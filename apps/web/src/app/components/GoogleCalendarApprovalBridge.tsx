@@ -140,6 +140,39 @@ export function GoogleCalendarApprovalBridge({
   const eligibleBlocks = planned.filter((item) =>
     isLifeOsOwnedGoogleEventIdShape(item.block.google_event_id),
   );
+  // Calendar hunt #8 (owner decision, option B): a block put on the hour
+  // rail is already accepted, so it never showed up as a proposal here and
+  // could never reach Google. A rail block with no Google event gets the
+  // same explicit approval step, through its own proposal.
+  const approvals: {
+    proposalId: string;
+    title: string;
+    startAt: string;
+    label: string;
+  }[] = [
+    ...proposals.map(({ proposal, task }) => ({
+      proposalId: proposal.id,
+      title: task.title,
+      startAt: proposal.proposed_start,
+      label: "local proposal",
+    })),
+    ...planned
+      .filter(
+        (item) =>
+          !item.block.google_event_id &&
+          item.block.status === "scheduled" &&
+          Boolean(item.block.proposal_id) &&
+          !proposals.some(
+            ({ proposal }) => proposal.id === item.block.proposal_id,
+          ),
+      )
+      .map(({ block, task }) => ({
+        proposalId: block.proposal_id!,
+        title: task.title,
+        startAt: block.start_at,
+        label: "on your plan",
+      })),
+  ];
   const writable = availability.status === "ready";
   const disabledReason =
     availability.status === "blocked"
@@ -185,22 +218,22 @@ export function GoogleCalendarApprovalBridge({
       {disabledReason ? (
         <p className="text-sm text-[var(--mut)]">{disabledReason}</p>
       ) : null}
-      {proposals.length === 0 && eligibleBlocks.length === 0 ? (
+      {approvals.length === 0 && eligibleBlocks.length === 0 ? (
         <p className="text-sm text-[var(--mut)]">
           No proposals or LifeOS-created events are waiting for a Google
           decision.
         </p>
       ) : null}
-      {proposals.map(({ proposal, task }) => (
+      {approvals.map(({ proposalId, title, startAt, label }) => (
         <div
-          key={proposal.id}
+          key={proposalId}
           className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
         >
-          <p className="font-bold">{task.title}</p>
+          <p className="font-bold">{title}</p>
           <p className="mono mt-1 text-sm text-[var(--fnt)]">
-            {formatBlockTime(proposal.proposed_start)} · local proposal
+            {formatBlockTime(startAt)} · {label}
           </p>
-          {pendingWarning?.proposalId === proposal.id ? (
+          {pendingWarning?.proposalId === proposalId ? (
             <div className="mt-3 grid gap-2">
               <p className="text-sm font-semibold text-[var(--amb-fg)]">
                 {pendingWarning.message}
@@ -208,7 +241,7 @@ export function GoogleCalendarApprovalBridge({
               <button
                 type="button"
                 disabled={busyId !== null}
-                onClick={() => void handleApprove(proposal.id, true)}
+                onClick={() => void handleApprove(proposalId, true)}
                 className="min-h-10 rounded-full bg-[var(--amb-sf)] px-4 text-sm font-bold text-[var(--amb-fg)]"
               >
                 Acknowledge and create Google event
@@ -217,9 +250,9 @@ export function GoogleCalendarApprovalBridge({
           ) : (
             <button
               type="button"
-              aria-label={`Approve Google event for ${task.title}`}
+              aria-label={`Approve Google event for ${title}`}
               disabled={!writable || busyId !== null}
-              onClick={() => void handleApprove(proposal.id, false)}
+              onClick={() => void handleApprove(proposalId, false)}
               className={cn(
                 "mt-3 min-h-10 rounded-full px-4 text-sm font-bold",
                 writable && busyId === null
@@ -227,7 +260,7 @@ export function GoogleCalendarApprovalBridge({
                   : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
               )}
             >
-              {busyId === proposal.id ? "Approving" : "Approve Google event"}
+              {busyId === proposalId ? "Approving" : "Approve Google event"}
             </button>
           )}
         </div>

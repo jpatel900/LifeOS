@@ -454,6 +454,39 @@ describe("google-calendar create-event route", () => {
     expect(response.status).toBe(200);
   });
 
+  // Calendar hunt #8 (owner option B): a block put on the hour rail is an
+  // ACCEPTED proposal that already has a block with no Google event. It goes
+  // through the same explicit approval and the same transactional record.
+  it("creates the Google event for an accepted rail block that has no event yet", async () => {
+    mocks.getTimeBlockProposalForAccessToken.mockResolvedValue({
+      ...proposal,
+      status: "accepted",
+    });
+    mocks.getCalendarBlockForProposalForAccessToken.mockResolvedValue({
+      ...block,
+      google_event_id: null,
+    });
+
+    const response = await POST(
+      request({
+        proposal_id: proposal.id,
+        approved: true,
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalled();
+    expect(
+      mocks.recordGoogleCalendarPlacementForAccessToken,
+    ).toHaveBeenCalledWith(
+      "supabase-access-token",
+      proposal.id,
+      "google-event-1",
+    );
+  });
+
   it("blocks unauthenticated requests", async () => {
     const response = await POST(
       new Request("http://localhost/api/google-calendar/create-event", {
