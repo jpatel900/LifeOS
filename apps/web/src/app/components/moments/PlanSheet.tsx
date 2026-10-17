@@ -1110,7 +1110,14 @@ export function PlanSheet({
                           // the box grow with wrapped text instead; the
                           // `whitespace-normal` below is what enables the
                           // wrap that then needs room to grow into.
-                          "h-auto touch-manipulation min-w-0 max-w-full justify-start whitespace-normal break-words text-left",
+                          // `wrap-anywhere`, not `break-words`: the label is
+                          // an anonymous flex item of this `inline-flex`
+                          // button, so its minimum width is its longest
+                          // word. `break-word` leaves that minimum alone, so
+                          // a long unbroken word (a pasted link, an ID)
+                          // painted past the right edge. `anywhere` lowers
+                          // the minimum so the word breaks inside the box.
+                          "h-auto touch-manipulation min-w-0 max-w-full justify-start whitespace-normal wrap-anywhere text-left",
                         )}
                         data-testid={`plan-sheet-promote-${task.id}`}
                       >

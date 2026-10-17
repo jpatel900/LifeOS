@@ -475,8 +475,43 @@ test.describe("bottom navigator: label containment and geometry (#1011)", () => 
  * 44px box, 57px content, label painting past the button). Fixed by adding
  * `h-auto` (tailwind-merge displaces `h-10` in the same utility group), so
  * the box grows with the wrapped label instead.
+ *
+ * Second case: a title holding one long unbroken token (a pasted link or an
+ * ID). The label is an anonymous flex item of the `inline-flex` button, so
+ * its minimum width is its longest word; `break-words` did not lower that,
+ * and the token painted past the button's right edge and off-screen at
+ * 320px. `wrap-anywhere` lets it break inside the box.
  */
 const PLAN_TASK_ID = "probe-1011-backlog-task";
+const PLAN_LONG_TOKEN_TASK_ID = "probe-1011-long-token-task";
+
+function planBacklogTask(
+  id: string,
+  title: string,
+  nowIso: string,
+): Record<string, unknown> {
+  return {
+    id,
+    user_id: "00000000-0000-0000-0000-000000000001",
+    area_id: "area-main-job",
+    title,
+    description: null,
+    status: "backlog",
+    priority_score: 1,
+    priority_confidence: null,
+    task_type: null,
+    energy_type: null,
+    estimated_minutes_low: 30,
+    estimated_minutes_high: 45,
+    due_at: null,
+    definition_of_done: null,
+    first_tiny_step: "Open the outline doc",
+    created_at: nowIso,
+    updated_at: nowIso,
+    project_id: null,
+    source_capture_item_id: null,
+  };
+}
 const PLAN_WORKFLOW_STORAGE_KEY = "lifeos.phase2.workflow";
 
 function planSeedState(nowIso: string) {
@@ -497,30 +532,19 @@ function planSeedState(nowIso: string) {
     timeBlockProposalDrafts: [],
     projects: [],
     tasks: [
-      {
-        id: PLAN_TASK_ID,
-        user_id: "00000000-0000-0000-0000-000000000001",
-        area_id: "area-main-job",
-        // Synthetic generic title, long enough to force a 3-line wrap —
-        // no private task text or identifiers, per the issue's fixture rule.
-        title:
-          "Draft the quarterly synthetic planning summary document for review",
-        description: null,
-        status: "backlog",
-        priority_score: 1,
-        priority_confidence: null,
-        task_type: null,
-        energy_type: null,
-        estimated_minutes_low: 30,
-        estimated_minutes_high: 45,
-        due_at: null,
-        definition_of_done: null,
-        first_tiny_step: "Open the outline doc",
-        created_at: nowIso,
-        updated_at: nowIso,
-        project_id: null,
-        source_capture_item_id: null,
-      },
+      // Synthetic generic titles only — no private task text or identifiers,
+      // per the issue's fixture rule. The first is long enough to force a
+      // 3-line wrap; the second holds one long unbroken token.
+      planBacklogTask(
+        PLAN_TASK_ID,
+        "Draft the quarterly synthetic planning summary document for review",
+        nowIso,
+      ),
+      planBacklogTask(
+        PLAN_LONG_TOKEN_TASK_ID,
+        "Review https://example.com/synthetic/planning/reference/document-without-breaks before standup",
+        nowIso,
+      ),
     ],
     timeBlockProposals: [],
     calendarBlocks: [],
@@ -559,20 +583,32 @@ test.describe("Plan deferred button: label containment (#1011)", () => {
     }) => {
       await page.setViewportSize({ width, height: 800 });
       await page.goto("/?sheet=plan");
-      const testId = `plan-sheet-promote-${PLAN_TASK_ID}`;
-      await expect(page.getByTestId(testId)).toBeVisible();
+      for (const taskId of [PLAN_TASK_ID, PLAN_LONG_TOKEN_TASK_ID]) {
+        const testId = `plan-sheet-promote-${taskId}`;
+        await expect(page.getByTestId(testId)).toBeVisible();
+        // The full title stays in the label (no truncation).
+        await expect(page.getByTestId(testId)).toContainText(
+          taskId === PLAN_LONG_TOKEN_TASK_ID
+            ? "document-without-breaks before standup"
+            : "summary document for review",
+        );
 
-      const result = await textContainedInBox(page, testId);
-      expect(
-        result.contained,
-        `"Move to today" label ${JSON.stringify(result.text)} must fit inside its button ${JSON.stringify(result.box)} at ${width}px`,
-      ).toBe(true);
+        const result = await textContainedInBox(page, testId);
+        expect(
+          result.contained,
+          `"Move to today" label (${taskId}) ${JSON.stringify(result.text)} must fit inside its button ${JSON.stringify(result.box)} at ${width}px`,
+        ).toBe(true);
 
-      const box = await page.getByTestId(testId).boundingBox();
-      expect(
-        box!.height,
-        `"Move to today" button height (44px floor) at ${width}px`,
-      ).toBeGreaterThanOrEqual(44);
+        const box = await page.getByTestId(testId).boundingBox();
+        expect(
+          box!.height,
+          `"Move to today" button height (44px floor, ${taskId}) at ${width}px`,
+        ).toBeGreaterThanOrEqual(44);
+        expect(
+          box!.x + box!.width,
+          `"Move to today" button (${taskId}) stays within the ${width}px viewport`,
+        ).toBeLessThanOrEqual(width + 0.5);
+      }
 
       const violations = await scanAxeViolationNodes(page);
       expect(
