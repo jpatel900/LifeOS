@@ -2542,7 +2542,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     persistedAreasRef,
     applyWorkflowState,
     persistCapture: persistenceOps.persistCapture,
-    markLocalOnly,
+    markDeviceStorageBlocked: () => markDeviceStorageBlocked(),
     markPersistedSaveFailure,
     refreshUnsyncedCount,
   });

@@ -618,6 +618,12 @@ function TodayMomentsContent({
   // showing at all, as opposed to one of the two rituals standing in for it.
   // Now also excludes `onboarding.pending` (see the comment above) so the
   // hand-off tick renders nothing instead of a stale Today greeting.
+  // Bug hunt #4: the capture conclusion's `onResolved` closure is captured
+  // when the save starts, but the offline queue's verdict lands a moment
+  // later. Read the LATEST status when the toast is written.
+  const syncStatusRef = useRef(syncStatus);
+  syncStatusRef.current = syncStatus;
+
   const showingMastheadAndMoments =
     !onboardingOwnsScreen && !(ritualActive && ritual.summary && ritual.plan);
 
@@ -2494,7 +2500,17 @@ function TodayMomentsContent({
             const signedOutNote = syncStatus.signedOut
               ? " Sign in to keep it — until then it's only in this tab."
               : "";
-            if (offline) {
+            if (offline && syncStatusRef.current.storage === "blocked") {
+              // The device queue refused the thought, so it was kept in this
+              // tab's triage pile instead (bug hunt #4).
+              showToast(
+                "Captured, but this browser won't keep it on this device. It's only in this tab for now — keep the tab open until you're back online.",
+                {
+                  label: "Open triage",
+                  run: () => openSheet("triage"),
+                },
+              );
+            } else if (offline) {
               showToast(
                 "Captured — saved on this device. It joins your triage pile when you're back online.",
               );

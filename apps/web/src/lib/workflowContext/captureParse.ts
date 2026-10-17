@@ -48,7 +48,7 @@ export interface CaptureParseDeps {
   persistCapture: (
     localCapture: WorkflowState["captureItems"][number],
   ) => Promise<void>;
-  markLocalOnly: (message: string) => void;
+  markDeviceStorageBlocked: () => void;
   markPersistedSaveFailure: (error: unknown) => void;
   refreshUnsyncedCount: () => Promise<void>;
 }
@@ -62,7 +62,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
     persistedAreasRef,
     applyWorkflowState,
     persistCapture,
-    markLocalOnly,
+    markDeviceStorageBlocked,
     markPersistedSaveFailure,
     refreshUnsyncedCount,
   } = deps;
@@ -323,9 +323,14 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
   ) {
     void enqueueCapture({ rawText, areaId, returnHook: returnHook ?? null })
       .then(() => refreshUnsyncedCount())
-      .catch(() =>
-        markLocalOnly("Capture could not be saved offline; please try again."),
-      );
+      .catch(() => {
+        // Bug hunt #4: the device queue refused the thought (full quota,
+        // blocked site data). A raw capture must never be lost, so keep it in
+        // this tab's triage pile through the normal capture path, and say in
+        // the alarm tone that this browser is not keeping it on the device.
+        stageAndPersistRawCapture(rawText, areaId, returnHook);
+        markDeviceStorageBlocked();
+      });
   }
 
   // Stage + persist the raw capture item WITHOUT parsing it. Since #703 this

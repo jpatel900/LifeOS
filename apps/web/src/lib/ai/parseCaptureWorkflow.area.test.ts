@@ -152,7 +152,7 @@ describe("capture draft area mapping", () => {
       persistedAreasRef: { current: [] },
       applyWorkflowState,
       persistCapture: vi.fn(),
-      markLocalOnly: vi.fn(),
+      markDeviceStorageBlocked: vi.fn(),
       markPersistedSaveFailure: vi.fn(),
       refreshUnsyncedCount: vi.fn(),
     });
@@ -175,7 +175,7 @@ describe("capture draft area mapping", () => {
       persistedAreasRef: { current: [] },
       applyWorkflowState,
       persistCapture: vi.fn(),
-      markLocalOnly: vi.fn(),
+      markDeviceStorageBlocked: vi.fn(),
       markPersistedSaveFailure: vi.fn(),
       refreshUnsyncedCount: vi.fn(),
     });
