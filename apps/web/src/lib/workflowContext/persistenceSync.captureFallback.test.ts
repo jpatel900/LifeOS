@@ -34,6 +34,7 @@ import type { WorkflowState } from "../workflow";
  */
 
 const journalCaptureWriteMock = vi.hoisted(() => vi.fn());
+const hasPendingWriteMock = vi.hoisted(() => vi.fn(async () => false));
 const createCaptureItemMock = vi.hoisted(() => vi.fn());
 const createSupabaseBrowserClientMock = vi.hoisted(() => vi.fn());
 
@@ -43,6 +44,7 @@ vi.mock("../durability/durableWrites", async (importOriginal) => {
   return {
     ...actual,
     journalCaptureWrite: journalCaptureWriteMock,
+    hasPendingWrite: hasPendingWriteMock,
   };
 });
 
@@ -333,5 +335,34 @@ describe("persistCapture gives every capture its own account key (bug hunt #1)",
       workflowCaptureId: "capture-1",
       rawText: "Buy milk",
     });
+  });
+});
+
+describe("persistCapture after the account took the capture (bug hunt #14)", () => {
+  beforeEach(() => {
+    journalCaptureWriteMock.mockReset();
+    createCaptureItemMock.mockReset();
+    createSupabaseBrowserClientMock.mockReset();
+    hasPendingWriteMock.mockReset();
+    hasPendingWriteMock.mockResolvedValue(false);
+  });
+
+  it("reports a failed follow-up read as a load problem, not as a failed save", async () => {
+    journalCaptureWriteMock.mockResolvedValue({
+      client_write_id: "client-capture-1",
+    });
+    const readbackError = new Error("Transient readback outage");
+    const { ops, markPersistedLoadFailure, syncPersistedWorkflowRows } =
+      makeSync({ persistedAreaId: AREA_ID });
+    syncPersistedWorkflowRows.mockRejectedValueOnce(readbackError);
+
+    // A rejection here is what the caller turns into
+    // "Saving to your account didn't work".
+    await expect(ops.persistCapture(localCapture())).resolves.toBeUndefined();
+
+    expect(hasPendingWriteMock).toHaveBeenCalledWith("client-capture-1");
+    expect(markPersistedLoadFailure).toHaveBeenCalledExactlyOnceWith(
+      readbackError,
+    );
   });
 });

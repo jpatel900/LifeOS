@@ -264,7 +264,15 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       return;
     }
 
-    await syncPersistedWorkflowRows(client);
+    // The account already holds the capture here. A failed follow-up READ
+    // must not surface as "Saving to your account didn't work" (which invites
+    // a duplicate re-entry) — it is a load problem, classified exactly like
+    // the journal-failed fallback branch above (bug hunt #14).
+    try {
+      await syncPersistedWorkflowRows(client);
+    } catch (error) {
+      markPersistedLoadFailure(error);
+    }
   }
 
   /**
