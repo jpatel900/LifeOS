@@ -3,7 +3,12 @@
   "note": "This manifest is the ALLOWLIST for vendored skills (pruned 2026-08-04, again 2026-10-17 to the skills AGENTS.md names). The sync only creates/updates/deletes dirs listed here; to vendor a new skill, add its entry in a reviewed PR first. Repo-native skills are never listed or touched. Third-party sources keep their upstream licenses.",
   "skills": {
     "impeccable": {
-      "source": "local-hub"
+      "source": "local-hub",
+      "pin": {
+        "version": "4.1.1",
+        "treeSha256": "e4c3d68d86bde721739199c06eeb65309a795c7ab78834cb40d2d5282131e0e4"
+      }
     }
-  }
+  },
+  "pinPolicy": "Owner 2026-10-17: a skill with a `pin` is frozen at that upstream version. The sync must leave it untouched unless the pin changes; upstream updates are a deliberate bump (new pin.version and pin.treeSha256 in one reviewed PR). apps/web/src/__tests__/vendoredSkillPin.test.ts fails CI on any drift from the pin."
 }

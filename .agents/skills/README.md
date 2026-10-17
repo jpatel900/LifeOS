@@ -1,6 +1,6 @@
 # Repo-local skills
 
-Skills here hold LifeOS-specific knowledge an agent can't derive: where a surface's traps are, which guard covers it, what a past failure taught. Keep them short; link to `AGENTS.md` and the authority docs instead of restating them. `AGENTS.md` outranks every skill; no skill authorizes weakening tests, schemas, review gates, approval gates, or secrets handling. Vendored skills are allowlisted in `.vendored-manifest.json`; the daily sync manages only the dirs listed there.
+Skills here hold LifeOS-specific knowledge an agent can't derive: where a surface's traps are, which guard covers it, what a past failure taught. Keep them short; link to `AGENTS.md` and the authority docs instead of restating them. `AGENTS.md` outranks every skill; no skill authorizes weakening tests, schemas, review gates, approval gates, or secrets handling. Vendored skills are allowlisted in `.vendored-manifest.json`; the daily sync manages only the dirs listed there. A skill with a `pin` there (impeccable) stays at that upstream version: updates are a deliberate pin bump, and `vendoredSkillPin.test.ts` fails CI on drift.
 
 <!-- vendored-skills:begin (managed by sync-skills-to-lifeos.ps1; do not edit inside markers) -->
 
