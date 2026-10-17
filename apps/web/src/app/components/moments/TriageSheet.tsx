@@ -11,6 +11,25 @@ import { TaskMapDraftReview } from "./TaskMapDraftReview";
 import { UnsortedCaptures } from "./UnsortedCaptures";
 import { HIT_TARGET_MIN } from "./hitTarget";
 import { countUnsortedCaptures } from "@/lib/workflow/captureStatus";
+import { hasLaunchSequenceStep } from "@/lib/workflow/shared";
+import { canAdmitWipTask } from "@/lib/workflow/wip";
+
+/**
+ * Bug hunt #11: why "Do today" could not put this draft on today, in plain
+ * words.
+ */
+function doTodayRefusalMessage(
+  state: Parameters<typeof canAdmitWipTask>[0],
+  firstTinyStep: string | null | undefined,
+): string {
+  if (!hasLaunchSequenceStep(firstTinyStep)) {
+    return "This needs a first move before it can go on today. Accept it to the backlog and add a first move there.";
+  }
+  if (!canAdmitWipTask(state)) {
+    return "Today is full. Finish or put off a task first, or accept this to the backlog.";
+  }
+  return "This couldn't go on today. Try again, or accept it to the backlog.";
+}
 import { momentKeyLabel } from "@/lib/keys/keymap";
 
 /**
@@ -94,6 +113,12 @@ export function TriageSheet({
   // sheet (see the effect below) cleanly forgets it. Holding the title
   // alongside the id lets the offer copy name the task without a re-lookup
   // once it's no longer in `pendingDrafts`.
+  // Bug hunt #11: the draft whose "Do today" was just refused, and why.
+  const [todayRefusal, setTodayRefusal] = useState<{
+    draftId: string;
+    message: string;
+  } | null>(null);
+
   const [mapOffer, setMapOffer] = useState<{
     taskId: string;
     title: string;
@@ -108,6 +133,7 @@ export function TriageSheet({
   useEffect(() => {
     if (!open) {
       setMapOffer(null);
+      setTodayRefusal(null);
     }
   }, [open]);
 
@@ -287,6 +313,16 @@ export function TriageSheet({
                     First move: {draft.first_tiny_step}
                   </p>
                 ) : null}
+                {todayRefusal?.draftId === draft.id ? (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="text-sm text-muted-foreground"
+                    data-testid={`triage-sheet-today-refused-${draft.id}`}
+                  >
+                    {todayRefusal.message}
+                  </p>
+                ) : null}
                 <div className="mt-1 flex flex-wrap gap-2">
                   <Button
                     type="button"
@@ -294,7 +330,16 @@ export function TriageSheet({
                     onClick={() => {
                       const taskId = acceptTaskDraft(draft.id);
                       if (taskId) {
+                        setTodayRefusal(null);
                         setMapOffer({ taskId, title: draft.title });
+                      } else {
+                        setTodayRefusal({
+                          draftId: draft.id,
+                          message: doTodayRefusalMessage(
+                            state,
+                            draft.first_tiny_step,
+                          ),
+                        });
                       }
                     }}
                     className={cn(HIT_TARGET_MIN, "touch-manipulation")}
