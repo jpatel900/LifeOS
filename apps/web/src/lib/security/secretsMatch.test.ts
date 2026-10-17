@@ -10,6 +10,7 @@ describe("secretsMatch", () => {
     ["a different secret of equal length", "cron-secreX"],
     ["a strict prefix", "cron-secre"],
     ["a trailing suffix", "cron-secret-extra"],
+    ["the secret plus a NUL that matches the padding", "cron-secret\u0000"],
     ["an empty string", ""],
     ["a much longer value", "x".repeat(4096)],
   ])("returns false (never throws) for %s", (_label, provided) => {
