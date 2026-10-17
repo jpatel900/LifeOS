@@ -274,17 +274,53 @@ export async function POST(request: Request) {
       title,
     });
 
-    // Calendar hunt #1: the account half lands in ONE transaction with the
-    // same semantics as placing a block — block stored with its event id,
-    // proposal accepted, the task's other pending proposals superseded, and
-    // the task scheduled.
-    const placement = await recordGoogleCalendarPlacementForAccessToken(
-      accessToken,
-      proposal.id,
-      insertResult.googleEventId,
-    );
+    // Calendar hunt #6: from here on the Google write HAS happened. Nothing
+    // below may log it as failed or tell the person their calendar is
+    // unchanged. Approving again is safe: the event id is derived from the
+    // proposal, so Google answers with the same event instead of a second.
+    let placement;
+    try {
+      // Calendar hunt #1: the account half lands in ONE transaction with the
+      // same semantics as placing a block — block stored with its event id,
+      // proposal accepted, the task's other pending proposals superseded,
+      // and the task scheduled.
+      placement = await recordGoogleCalendarPlacementForAccessToken(
+        accessToken,
+        proposal.id,
+        insertResult.googleEventId,
+      );
+    } catch {
+      await updateExternalWriteEventResultForAccessToken(
+        accessToken,
+        auditEvent.id,
+        {
+          errorMessage: null,
+          resultStatus: "succeeded",
+          resultSummary: {
+            follow_up: "account_record_failed",
+            google_event_etag: insertResult.googleEventEtag,
+            google_event_id_stored: false,
+            google_event_snapshot: insertResult.eventSnapshot,
+            provider_event_id_present: true,
+          },
+        },
+      ).catch(() => null);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          google_event_created: true,
+          error:
+            "The event is on your Google Calendar, but LifeOS couldn't finish saving it here. Approve it again to finish — that won't add a second event.",
+        },
+        { status: 502 },
+      );
+    }
+
     const block = placement.block;
     const updatedProposal = placement.proposal;
+    // The audit row must say succeeded; a failure in its own follow-up work
+    // (the incident rule) must not turn a finished write into an error.
     const audit = await updateExternalWriteEventResultForAccessToken(
       accessToken,
       auditEvent.id,
@@ -299,7 +335,7 @@ export async function POST(request: Request) {
           provider_event_id_present: true,
         },
       },
-    );
+    ).catch(() => null);
 
     return NextResponse.json({
       ok: true,

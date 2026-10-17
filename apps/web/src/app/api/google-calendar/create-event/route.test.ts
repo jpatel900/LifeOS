@@ -298,7 +298,10 @@ describe("google-calendar create-event route", () => {
     );
   });
 
-  it("logs failure when Google insert succeeds but local google_event_id storage fails", async () => {
+  // Calendar hunt #6: once Google has the event, the write SUCCEEDED. A
+  // later account failure must not be logged as a failed write or told to the
+  // person as "Local proposal data is unchanged" while the event exists.
+  it("says the event exists when Google insert succeeds but the account record fails", async () => {
     mocks.recordGoogleCalendarPlacementForAccessToken.mockRejectedValue(
       new Error("calendar_blocks insert failed."),
     );
@@ -315,9 +318,9 @@ describe("google-calendar create-event route", () => {
 
     expect(response.status).toBe(502);
     expect(body.ok).toBe(false);
-    expect(body.error).toBe(
-      "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
-    );
+    expect(body.google_event_created).toBe(true);
+    expect(body.error).toContain("is on your Google Calendar");
+    expect(body.error).not.toContain("unchanged");
     expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
@@ -325,13 +328,47 @@ describe("google-calendar create-event route", () => {
       "supabase-access-token",
       "550e8400-e29b-41d4-a716-446655440701",
       expect.objectContaining({
-        errorMessage:
-          "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
-        resultStatus: "failed",
-        resultSummary: {
+        resultStatus: "succeeded",
+        resultSummary: expect.objectContaining({
           google_event_id_stored: false,
-        },
+          provider_event_id_present: true,
+          follow_up: "account_record_failed",
+        }),
       }),
+    );
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ resultStatus: "failed" }),
+    );
+  });
+
+  it("still reports success when only the audit follow-up throws after everything landed", async () => {
+    mocks.updateExternalWriteEventResultForAccessToken.mockRejectedValueOnce(
+      new Error("incident rule failed"),
+    );
+
+    const response = await POST(
+      request({
+        proposal_id: proposal.id,
+        approved: true,
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.google_event_id).toBe("google-event-1");
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ resultStatus: "failed" }),
     );
   });
 
