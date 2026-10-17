@@ -38,7 +38,7 @@ const KNOWN_ERROR_GLANCE_MESSAGES: Readonly<Record<string, string>> = {
   access_denied:
     "You didn't grant Google Calendar access, so nothing was connected.",
   refresh_token_missing:
-    "Google didn't give LifeOS lasting permission, so the connection wasn't turned on. Connect again and allow access when Google asks.",
+    "Google didn't give LifeOS lasting permission, so the connection wasn't turned on. Connect again and allow access when Google asks. If it happens again, remove LifeOS from your Google Account's connected apps, then connect again.",
   missing_code:
     "Google didn't send back what LifeOS needed to finish connecting. Please try again.",
   auth_required:
