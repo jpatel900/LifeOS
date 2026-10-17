@@ -1,0 +1,6 @@
+{
+  "env": {
+    "NEXT_TELEMETRY_DISABLED": "1",
+    "MAX_MCP_OUTPUT_TOKENS": "60000"
+  }
+}
