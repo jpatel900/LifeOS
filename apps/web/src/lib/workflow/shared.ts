@@ -174,6 +174,15 @@ export function syncWorkflowIdCounterFromState(state: WorkflowState): void {
   idCounter = maxWorkflowGeneratedIdSuffix(state);
 }
 
+/**
+ * Like `syncWorkflowIdCounterFromState`, but never LOWERS the counter. Used
+ * when rows minted in other tabs arrive (the device draft store), so a new
+ * local id cannot collide with one of them (bug hunt #12).
+ */
+export function raiseWorkflowIdCounterFromState(state: WorkflowState): void {
+  idCounter = Math.max(idCounter, maxWorkflowGeneratedIdSuffix(state));
+}
+
 export function nextId(prefix: string) {
   idCounter += 1;
   return `${prefix}-${idCounter}`;

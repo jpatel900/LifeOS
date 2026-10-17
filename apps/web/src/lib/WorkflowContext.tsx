@@ -144,7 +144,10 @@ import {
 // Direct submodule import, matching `reducerCore.ts`: the workflow barrel
 // freezes the pre-split public surface, and this #844 type is consumed only by
 // the state layer.
-import type { AccountIdAliasFamily } from "./workflow/shared";
+import {
+  raiseWorkflowIdCounterFromState,
+  type AccountIdAliasFamily,
+} from "./workflow/shared";
 import { createApplyWorkflowState } from "./workflowContext/applyWorkflowState";
 import {
   createPersistenceSync,
@@ -2294,6 +2297,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       try {
         const drafts = await listStoredTaskDrafts();
         if (!cancelled && drafts.length > 0) {
+          // Drafts minted in other tabs share this device's id space; keep
+          // the next local id clear of them (bug hunt #12).
+          raiseWorkflowIdCounterFromState({
+            ...stateRef.current,
+            taskDrafts: [...stateRef.current.taskDrafts, ...drafts],
+          });
           dispatch({ type: "restoreDeviceDrafts", drafts });
         }
       } catch {
