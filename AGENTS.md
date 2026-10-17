@@ -47,7 +47,7 @@ Implementation truth: `docs/REQUIREMENTS.md`, `docs/ARCHITECTURE.md`, `docs/DATA
 
 ## Merge authority
 
-This paragraph wins over any other doc. T0 docs-only PRs may auto-merge after CI (`.github/AGENT_AUTOMATION_POLICY.md`). An agent never merges its own PR; the owner does, and the harness's self-approval check enforces it. Two exceptions: auto-merge armed by a policy lane counts as the policy's merge, and a `risk:low`, non-T2+ agent PR labelled `selfmerge:auto` arms auto-merge at once with a Telegram notice to the owner; CI runtime is the veto window (ADR 0008). The Claude lane merges Codex-lane work (`docs/agent/LANES.md`). T2+ surfaces always get human review before merge.
+This paragraph wins over any other doc. T0 docs-only PRs may auto-merge after CI (`.github/AGENT_AUTOMATION_POLICY.md`). An agent never merges its own PR; the owner does, and the harness's self-approval check enforces it. Two exceptions: auto-merge armed by a policy lane counts as the policy's merge, and a `risk:low`, non-T2+ agent PR labelled `selfmerge:auto` arms auto-merge at once with a Telegram notice to the owner; CI runtime is the veto window (ADR 0008). The Claude lane merges Codex-lane work (`docs/agent/LANES.md`). T2+ surfaces always get human review before merge. Standing grant (owner 2026-10-17): agents may open PRs for their own pushed branches and close issues already fixed by a merged PR without asking.
 
 ## Docs
 
