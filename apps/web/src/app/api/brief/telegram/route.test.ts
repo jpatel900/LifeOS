@@ -21,6 +21,18 @@ vi.mock("@/lib/brief/telegram", async (importOriginal) => {
   };
 });
 
+const secretsMatchSpy = vi.fn();
+vi.mock("@/lib/security/secretsMatch", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/security/secretsMatch")>();
+  return {
+    secretsMatch: (...args: Parameters<typeof actual.secretsMatch>) => {
+      secretsMatchSpy(...args);
+      return actual.secretsMatch(...args);
+    },
+  };
+});
+
 const { GET } = await import("./route");
 
 const ENV_KEYS = [
@@ -171,6 +183,35 @@ describe("GET /api/brief/telegram", () => {
     expect(json).toEqual({ ok: false, error: "Unauthorized." });
     expect(loadOwnerWorkflowState).not.toHaveBeenCalled();
   });
+
+  it("checks the bearer token with the constant-time secretsMatch, not !== (#670 INFO-2)", async () => {
+    setEnv(configured);
+    secretsMatchSpy.mockClear();
+
+    const response = await GET(getRequest("wrong-secret"));
+
+    expect(response.status).toBe(401);
+    expect(secretsMatchSpy).toHaveBeenCalledTimes(1);
+    expect(secretsMatchSpy).toHaveBeenCalledWith("wrong-secret", "cron-secret");
+  });
+
+  it.each([
+    ["a strict prefix of CRON_SECRET", "cron-secre"],
+    ["CRON_SECRET with a trailing suffix", "cron-secret-extra"],
+    ["a much longer token", "x".repeat(4096)],
+  ])(
+    "responds 401 (and never throws) when the bearer token is %s",
+    async (_label, token) => {
+      setEnv(configured);
+
+      const response = await GET(getRequest(token));
+      const json = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(json).toEqual({ ok: false, error: "Unauthorized." });
+      expect(loadOwnerWorkflowState).not.toHaveBeenCalled();
+    },
+  );
 
   it("responds 401 when no Authorization header is sent", async () => {
     setEnv(configured);
