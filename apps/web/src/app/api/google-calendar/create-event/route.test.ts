@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   getTimeBlockProposalForAccessToken: vi.fn(),
   insertGoogleCalendarEventForConnection: vi.fn(),
   markTimeBlockProposalAcceptedForAccessToken: vi.fn(),
+  recordGoogleCalendarPlacementForAccessToken: vi.fn(),
+  findGoogleBackedScheduledBlockForTaskForAccessToken: vi.fn(),
   requireSupabaseServerUser: vi.fn(),
   updateCalendarBlockGoogleEventForAccessToken: vi.fn(),
   updateExternalWriteEventResultForAccessToken: vi.fn(),
@@ -48,6 +50,10 @@ vi.mock("@/lib/planning/server", () => ({
   getTimeBlockProposalForAccessToken: mocks.getTimeBlockProposalForAccessToken,
   markTimeBlockProposalAcceptedForAccessToken:
     mocks.markTimeBlockProposalAcceptedForAccessToken,
+  recordGoogleCalendarPlacementForAccessToken:
+    mocks.recordGoogleCalendarPlacementForAccessToken,
+  findGoogleBackedScheduledBlockForTaskForAccessToken:
+    mocks.findGoogleBackedScheduledBlockForTaskForAccessToken,
   updateCalendarBlockGoogleEventForAccessToken:
     mocks.updateCalendarBlockGoogleEventForAccessToken,
 }));
@@ -156,6 +162,14 @@ describe("google-calendar create-event route", () => {
       id: "550e8400-e29b-41d4-a716-446655440701",
       result_status: "succeeded",
     });
+    mocks.findGoogleBackedScheduledBlockForTaskForAccessToken.mockResolvedValue(
+      null,
+    );
+    mocks.recordGoogleCalendarPlacementForAccessToken.mockResolvedValue({
+      proposal: { ...proposal, status: "accepted" },
+      block,
+      task: { id: proposal.task_id, status: "scheduled" },
+    });
   });
 
   it("requires explicit approval", async () => {
@@ -214,9 +228,24 @@ describe("google-calendar create-event route", () => {
         timezone: "America/Toronto",
       }),
     );
+    // Calendar hunt #1: the account side of an approved event lands in ONE
+    // transactional call, with the same semantics as placing a block: the
+    // proposal is accepted, sibling proposals are superseded, and the task is
+    // scheduled.
+    expect(
+      mocks.recordGoogleCalendarPlacementForAccessToken,
+    ).toHaveBeenCalledWith(
+      "supabase-access-token",
+      proposal.id,
+      "google-event-1",
+    );
+    expect(body.task).toEqual(expect.objectContaining({ status: "scheduled" }));
     expect(
       mocks.createCalendarBlockForProposalForAccessToken,
-    ).toHaveBeenCalledWith("supabase-access-token", proposal, "google-event-1");
+    ).not.toHaveBeenCalled();
+    expect(
+      mocks.markTimeBlockProposalAcceptedForAccessToken,
+    ).not.toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
     ).toHaveBeenCalledWith(
@@ -248,10 +277,7 @@ describe("google-calendar create-event route", () => {
       "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
     );
     expect(
-      mocks.createCalendarBlockForProposalForAccessToken,
-    ).not.toHaveBeenCalled();
-    expect(
-      mocks.markTimeBlockProposalAcceptedForAccessToken,
+      mocks.recordGoogleCalendarPlacementForAccessToken,
     ).not.toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
@@ -267,7 +293,7 @@ describe("google-calendar create-event route", () => {
   });
 
   it("logs failure when Google insert succeeds but local google_event_id storage fails", async () => {
-    mocks.createCalendarBlockForProposalForAccessToken.mockRejectedValue(
+    mocks.recordGoogleCalendarPlacementForAccessToken.mockRejectedValue(
       new Error("calendar_blocks insert failed."),
     );
 
@@ -285,9 +311,6 @@ describe("google-calendar create-event route", () => {
       "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
     );
     expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalled();
-    expect(
-      mocks.markTimeBlockProposalAcceptedForAccessToken,
-    ).not.toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
     ).toHaveBeenCalledWith(
@@ -315,6 +338,34 @@ describe("google-calendar create-event route", () => {
     );
 
     expect(response.status).toBe(409);
+    expect(
+      mocks.createPendingExternalWriteEventForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+  });
+
+  it("refuses a second Google event for a task that already has one (calendar hunt #1)", async () => {
+    mocks.findGoogleBackedScheduledBlockForTaskForAccessToken.mockResolvedValue(
+      {
+        ...block,
+        id: "550e8400-e29b-41d4-a716-446655440602",
+        proposal_id: "550e8400-e29b-41d4-a716-446655440502",
+      },
+    );
+
+    const response = await POST(
+      request({
+        proposal_id: proposal.id,
+        approved: true,
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("already has a Google Calendar event");
+    expect(
+      mocks.findGoogleBackedScheduledBlockForTaskForAccessToken,
+    ).toHaveBeenCalledWith("supabase-access-token", proposal.task_id);
     expect(
       mocks.createPendingExternalWriteEventForAccessToken,
     ).not.toHaveBeenCalled();

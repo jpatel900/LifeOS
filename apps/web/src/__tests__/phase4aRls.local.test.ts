@@ -1475,6 +1475,90 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     }
   });
 
+  it("records an approved Google event as a placement, once per task, and only for its owner (calendar hunt #1)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const { data: task } = await userAClient
+      .from("tasks")
+      .insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        title: `rls-google-placement-${suffix}`,
+        status: "active",
+      })
+      .select("id")
+      .single();
+    const proposalRow = (start: string, end: string) => ({
+      user_id: userA.id,
+      area_id: userA.areaId,
+      task_id: task!.id,
+      proposed_start: start,
+      proposed_end: end,
+      status: "proposed",
+    });
+    const { data: approved } = await userAClient
+      .from("time_block_proposals")
+      .insert(
+        proposalRow("2026-05-08T09:00:00.000Z", "2026-05-08T10:00:00.000Z"),
+      )
+      .select("id")
+      .single();
+    const { data: sibling } = await userAClient
+      .from("time_block_proposals")
+      .insert(
+        proposalRow("2026-05-08T11:00:00.000Z", "2026-05-08T12:00:00.000Z"),
+      )
+      .select("id")
+      .single();
+
+    try {
+      const { error: crossUserError } = await userBClient.rpc(
+        "record_google_calendar_placement",
+        {
+          p_proposal_id: approved!.id,
+          p_google_event_id: `lifeos-b-${suffix}`,
+        },
+      );
+      expect(crossUserError).not.toBeNull();
+
+      const { data, error } = await userAClient.rpc(
+        "record_google_calendar_placement",
+        {
+          p_proposal_id: approved!.id,
+          p_google_event_id: `lifeos-a-${suffix}`,
+        },
+      );
+      expect(error).toBeNull();
+      expect(data.task.status).toBe("scheduled");
+      expect(data.block.google_event_id).toBe(`lifeos-a-${suffix}`);
+
+      const { data: siblingAfter } = await userAClient
+        .from("time_block_proposals")
+        .select("status")
+        .eq("id", sibling!.id)
+        .single();
+      expect(siblingAfter?.status).toBe("superseded");
+
+      const { error: secondEventError } = await userAClient.rpc(
+        "record_google_calendar_placement",
+        { p_proposal_id: sibling!.id, p_google_event_id: `lifeos-c-${suffix}` },
+      );
+      expect(secondEventError).not.toBeNull();
+    } finally {
+      await userAClient
+        .from("calendar_blocks")
+        .delete()
+        .eq("task_id", task!.id);
+      await userAClient
+        .from("time_block_proposals")
+        .delete()
+        .eq("task_id", task!.id);
+      await userAClient.from("tasks").delete().eq("id", task!.id);
+    }
+  });
+
   it("dedupes a replayed triage accept on tasks.client_write_id", async () => {
     const userAClient = await signIn(userA.email, userA.password);
     const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;

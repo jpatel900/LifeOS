@@ -322,6 +322,8 @@ Indexes:
 - `(user_id, start_at)`
 - `(user_id, google_event_id)`
 
+An approved Google Calendar event is a placement: its account half lands through the transactional `record_google_calendar_placement` function (`20261017120000_record_google_calendar_placement.sql`, 2026-10-17), which stores the block's `google_event_id`, accepts the proposal, supersedes the task's other pending proposals and schedules the task — the same semantics as `place_time_block`. A task has at most one scheduled Google-backed block.
+
 ---
 
 ### 4.8 `execution_sessions`

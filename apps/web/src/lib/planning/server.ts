@@ -362,3 +362,99 @@ export async function markTimeBlockProposalAcceptedForAccessToken(
 
   return parseTimeBlockProposal(data);
 }
+
+/**
+ * Calendar hunt #1: a scheduled, Google-backed block this task already has,
+ * from any proposal — or null. Used to refuse a second Google event for one
+ * task before anything is written to Google.
+ */
+export async function findGoogleBackedScheduledBlockForTaskForAccessToken(
+  accessToken: string,
+  taskId: string,
+) {
+  assertServerRuntime();
+
+  const { client } = await requireSupabaseServerUser(accessToken);
+  const query = client.from("calendar_blocks") as unknown as {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => {
+          not: (
+            column: string,
+            operator: string,
+            value: null,
+          ) => {
+            limit: (
+              count: number,
+            ) => Promise<{ data: unknown; error: unknown }>;
+          };
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .select(calendarBlockColumns)
+    .eq("task_id", taskId)
+    .eq("status", "scheduled")
+    .not("google_event_id", "is", null)
+    .limit(1);
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  const rows = Array.isArray(data) ? data : [];
+  return rows.length > 0 ? parseCalendarBlock(rows[0]) : null;
+}
+
+/**
+ * Calendar hunt #1: record the account half of an approved, already-inserted
+ * Google event in ONE transaction (`record_google_calendar_placement`): the
+ * block gains its google_event_id, the proposal is accepted, the task's other
+ * pending proposals are superseded and the task is scheduled — the same
+ * semantics as `place_time_block`.
+ */
+export async function recordGoogleCalendarPlacementForAccessToken(
+  accessToken: string,
+  proposalId: string,
+  googleEventId: string,
+): Promise<{
+  proposal: TimeBlockProposal;
+  block: CalendarBlock;
+  task: Task | null;
+}> {
+  assertServerRuntime();
+
+  const { client } = await requireSupabaseServerUser(accessToken);
+  const rpc = (
+    client as unknown as {
+      rpc: (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: unknown; error: unknown }>;
+    }
+  ).rpc.bind(client);
+
+  const { data, error } = await rpc("record_google_calendar_placement", {
+    p_proposal_id: proposalId,
+    p_google_event_id: googleEventId,
+  });
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  const payload = (data ?? {}) as Record<string, unknown>;
+  return {
+    proposal: parseTimeBlockProposal(payload.proposal),
+    block: parseCalendarBlock(payload.block),
+    task: payload.task ? parseTask(payload.task) : null,
+  };
+}

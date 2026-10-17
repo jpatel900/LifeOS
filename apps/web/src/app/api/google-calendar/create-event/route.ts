@@ -11,12 +11,11 @@ import {
   updateExternalWriteEventResultForAccessToken,
 } from "@/lib/externalWrites/server";
 import {
-  createCalendarBlockForProposalForAccessToken,
+  findGoogleBackedScheduledBlockForTaskForAccessToken,
   getCalendarBlockForProposalForAccessToken,
   getTaskForAccessToken,
   getTimeBlockProposalForAccessToken,
-  markTimeBlockProposalAcceptedForAccessToken,
-  updateCalendarBlockGoogleEventForAccessToken,
+  recordGoogleCalendarPlacementForAccessToken,
 } from "@/lib/planning/server";
 import { requireSupabaseServerUser } from "@/lib/supabase/server";
 
@@ -182,6 +181,26 @@ export async function POST(request: Request) {
       );
     }
 
+    // Calendar hunt #1: one Google event per task. A sibling proposal of a
+    // task that is already on Google Calendar must not create a second one.
+    if (proposal.task_id) {
+      const googleBackedBlock =
+        await findGoogleBackedScheduledBlockForTaskForAccessToken(
+          accessToken,
+          proposal.task_id,
+        );
+      if (googleBackedBlock) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "This task already has a Google Calendar event. Cancel that event first if you want a different time.",
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const task = proposal.task_id
       ? await getTaskForAccessToken(accessToken, proposal.task_id)
       : null;
@@ -232,24 +251,17 @@ export async function POST(request: Request) {
       title,
     });
 
-    const block = existingBlock
-      ? await updateCalendarBlockGoogleEventForAccessToken(
-          accessToken,
-          existingBlock.id,
-          insertResult.googleEventId,
-        )
-      : await createCalendarBlockForProposalForAccessToken(
-          accessToken,
-          proposal,
-          insertResult.googleEventId,
-        );
-    const updatedProposal =
-      proposal.status === "accepted"
-        ? proposal
-        : await markTimeBlockProposalAcceptedForAccessToken(
-            accessToken,
-            proposal.id,
-          );
+    // Calendar hunt #1: the account half lands in ONE transaction with the
+    // same semantics as placing a block — block stored with its event id,
+    // proposal accepted, the task's other pending proposals superseded, and
+    // the task scheduled.
+    const placement = await recordGoogleCalendarPlacementForAccessToken(
+      accessToken,
+      proposal.id,
+      insertResult.googleEventId,
+    );
+    const block = placement.block;
+    const updatedProposal = placement.proposal;
     const audit = await updateExternalWriteEventResultForAccessToken(
       accessToken,
       auditEvent.id,
@@ -272,6 +284,7 @@ export async function POST(request: Request) {
       block,
       google_event_id: insertResult.googleEventId,
       proposal: updatedProposal,
+      task: placement.task,
     });
   } catch (error) {
     const failure = mapCreateEventFailure(error);
