@@ -2,12 +2,15 @@ import { expect, test } from "@playwright/test";
 import {
   canAuthenticate,
   cleanupSmokeRows,
+  clickSortAndWaitForAnswer,
   goldenCaptureText,
   login,
   marker,
   newRunId,
+  NO_AREAS_SMOKE_MESSAGE,
   readSmokeEnv,
   readSupabaseAccessToken,
+  smokeAccountHasActiveArea,
   type SmokeEnv,
 } from "./helpers/smoke";
 import { ONBOARDING_COMPLETED_KEY } from "../../src/lib/onboarding/onboarding";
@@ -123,6 +126,24 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
     );
   }
 
+  // ---- Precondition: the account can Sort at all (#1026) -----------------
+  // Since #1050 Sort refuses to run with no areas, so an account with none
+  // can never reach a draft. Check once, read-only, before anything is
+  // captured, so the run fails at once with the cause and leaves no rows
+  // behind. If the check cannot run, the Sort step below still names it.
+  if (authenticated) {
+    const accessToken = await readSupabaseAccessToken(page);
+    const hasArea = accessToken
+      ? await smokeAccountHasActiveArea(request, env, accessToken)
+      : null;
+    if (hasArea === false) throw new Error(NO_AREAS_SMOKE_MESSAGE);
+    console.log(
+      hasArea
+        ? "[smoke] PASS precondition: the account has at least one area to Sort into."
+        : "[smoke] precondition: could not check the account's areas; the Sort step checks again.",
+    );
+  }
+
   // ---- Journey: capture -> parse ------------------------------------------
   // Force the deterministic MOCK parser for this journey's parse request. The
   // smoke's entire marker/cleanup safety contract depends on the draft title
@@ -213,14 +234,14 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
     journeyCaptureRow,
     "journey capture not found in triage by marker",
   ).toBeVisible({ timeout: 30_000 });
-  const parseResponsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/parse-capture") &&
-      response.request().method() === "POST",
+  // #1026: the wait for Sort's answer is raced against the row's failure
+  // card and bounded just above the app's own 35-second Sort limit, so a Sort
+  // that never sends its request (no areas) or is given up on fails at once
+  // with its cause instead of hanging until the test's 120-second limit.
+  const parseResponse = await clickSortAndWaitForAnswer(
+    page,
+    journeyCaptureRow,
   );
-  await journeyCaptureRow.getByTestId(/^triage-sheet-sort-/).click();
-
-  const parseResponse = await parseResponsePromise;
   const parseBody = (await parseResponse.json()) as {
     ok?: boolean;
     errorCategory?: string;

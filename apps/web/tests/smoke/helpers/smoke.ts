@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import {
+  expect,
+  type APIRequestContext,
+  type Locator,
+  type Page,
+  type Request,
+  type Response,
+} from "@playwright/test";
+import { PARSE_CAPTURE_CLIENT_DEADLINE_MS } from "../../../src/lib/ai/requestDeadline";
 
 /**
  * Shared helpers for the B8 production smoke (issue #241).
@@ -325,4 +333,156 @@ export async function assertDesignedJson(
   const body = (await response.json()) as Record<string, unknown>;
   assertion(body, status);
   return body;
+}
+
+/**
+ * Plain-language cause for an account with no areas (#1026). Since #1050 the
+ * app refuses to Sort with no areas, so no parse request is ever sent.
+ */
+export const NO_AREAS_SMOKE_MESSAGE =
+  "The smoke account has no areas, so Sort did not run. Add one area to the smoke account.";
+
+/** Start of the app's own no-areas Sort message (workflowContext/captureParse.ts). */
+const NO_AREAS_SORT_COPY = "Add an area before sorting";
+
+/**
+ * How long the smoke waits for Sort to answer. The app stops waiting after
+ * PARSE_CAPTURE_CLIENT_DEADLINE_MS (35 seconds) and shows a failure card, so
+ * the smoke waits 10 seconds more: a slow answer still counts, and a stopped
+ * request has time to show its card (#1026).
+ */
+export const SORT_ANSWER_WAIT_MS = PARSE_CAPTURE_CLIENT_DEADLINE_MS + 10_000;
+
+/**
+ * Read-only check, run once after sign-in: does the smoke account have at
+ * least one active area (the same filter the app loads areas with)? Returns
+ * null when the check itself could not run, so a network hiccup never fails
+ * the smoke here; the Sort step below still names the cause. It reads one id
+ * and writes nothing.
+ */
+export async function smokeAccountHasActiveArea(
+  request: APIRequestContext,
+  env: SmokeEnv,
+  accessToken: string,
+): Promise<boolean | null> {
+  if (!env.supabaseUrl || !env.supabaseAnonKey) return null;
+  try {
+    const response = await request.get(
+      `${env.supabaseUrl}/rest/v1/areas?select=id&is_active=eq.true&limit=1`,
+      {
+        headers: {
+          apikey: env.supabaseAnonKey,
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+    if (!response.ok()) return null;
+    const rows = (await response.json()) as unknown;
+    return Array.isArray(rows) ? rows.length > 0 : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Press Sort on one capture row and return the `/api/parse-capture` answer.
+ *
+ * Before #1026 the smoke only waited for that answer, so when Sort never sent
+ * a request (no areas) or the app gave up on it, the run hung until the
+ * 120-second test limit with no hint why. Now the wait is raced against the
+ * row's own failure card. If the card wins, the run fails at once with a
+ * plain message naming the cause. If neither shows up within
+ * SORT_ANSWER_WAIT_MS, it fails with what it saw.
+ */
+export async function clickSortAndWaitForAnswer(
+  page: Page,
+  captureRow: Locator,
+): Promise<Response> {
+  const isSortRequest = (request: Request) =>
+    request.url().includes("/api/parse-capture") && request.method() === "POST";
+  const seen = { sent: false, failed: false };
+  const onRequest = (request: Request) => {
+    if (isSortRequest(request)) seen.sent = true;
+  };
+  const onRequestFailed = (request: Request) => {
+    if (isSortRequest(request)) seen.failed = true;
+  };
+  page.on("request", onRequest);
+  page.on("requestfailed", onRequestFailed);
+
+  type Outcome =
+    | { kind: "answer"; response: Response }
+    | { kind: "failure-card" }
+    | { kind: "nothing" };
+  // Both waits settle instead of throwing, so the losing one never surfaces
+  // as an unhandled error later in the run.
+  const answer: Promise<Outcome> = page
+    .waitForResponse((response) => isSortRequest(response.request()), {
+      timeout: SORT_ANSWER_WAIT_MS,
+    })
+    .then(
+      (response) => ({ kind: "answer", response }) as const,
+      () => ({ kind: "nothing" }) as const,
+    );
+  const failureCard = captureRow.getByTestId(/^triage-sheet-sort-failed-/);
+  const cardShown: Promise<Outcome> = failureCard
+    .waitFor({ state: "visible", timeout: SORT_ANSWER_WAIT_MS })
+    .then(
+      () => ({ kind: "failure-card" }) as const,
+      () => ({ kind: "nothing" }) as const,
+    );
+
+  const startedAt = Date.now();
+  try {
+    await captureRow.getByTestId(/^triage-sheet-sort-/).click();
+    let outcome = await Promise.race([answer, cardShown]);
+    if (outcome.kind === "failure-card" && seen.sent && !seen.failed) {
+      // A sent request that was answered shows its card right after the
+      // answer arrives (the signed-out branch expects exactly that). Give the
+      // answer a moment to win before calling it lost.
+      outcome = await Promise.race([
+        answer,
+        new Promise<Outcome>((resolve) =>
+          setTimeout(() => resolve({ kind: "failure-card" }), 2_000),
+        ),
+      ]);
+    }
+    if (outcome.kind === "answer") return outcome.response;
+
+    const seconds = Math.round((Date.now() - startedAt) / 1000);
+    const limitSeconds = PARSE_CAPTURE_CLIENT_DEADLINE_MS / 1000;
+    if (outcome.kind === "nothing") {
+      throw new Error(
+        `Sort showed no answer and no failure message within ${SORT_ANSWER_WAIT_MS / 1000} seconds ` +
+          `(the app's own limit is ${limitSeconds} seconds). ` +
+          (seen.sent
+            ? "Its request was sent but never answered."
+            : "Its request was never sent."),
+      );
+    }
+    // The card's first line is its headline; the full text also holds the
+    // "What happened?" detail, which keeps the specific cause.
+    const fullText = (await failureCard.textContent()) ?? "";
+    const cardText = (
+      (await failureCard.locator("p").first().textContent()) ?? fullText
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    if (fullText.includes(NO_AREAS_SORT_COPY)) {
+      throw new Error(`${NO_AREAS_SMOKE_MESSAGE} The app said: "${cardText}"`);
+    }
+    throw new Error(
+      seen.sent
+        ? `Sort sent its request but got no answer, and the app stopped ` +
+            `waiting after ${seconds} seconds (its limit is ${limitSeconds}). ` +
+            `The app said: "${cardText}"`
+        : `Sort stopped after ${seconds} seconds before it sent its request. ` +
+            `If that is close to ${limitSeconds} seconds, the browser's ` +
+            `sign-in and profile lookups before the request took too long. ` +
+            `The app said: "${cardText}"`,
+    );
+  } finally {
+    page.off("request", onRequest);
+    page.off("requestfailed", onRequestFailed);
+  }
 }
