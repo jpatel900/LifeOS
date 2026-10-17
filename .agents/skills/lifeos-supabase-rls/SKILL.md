@@ -5,34 +5,11 @@ description: Use for LifeOS Supabase, migrations, RLS, tables, grants, indexes, 
 
 # lifeos-supabase-rls
 
-## Use when
+The table and transaction red lines in `AGENTS.md` and INV-1/INV-2 govern. LifeOS-specific facts:
 
-- Adding or changing Supabase tables, migrations, grants, constraints, indexes, RLS-sensitive persistence paths, or same-user ownership guarantees.
-
-## Boundaries
-
-- `AGENTS.md`, authority docs, and direct instructions override this skill.
-- Never disable or weaken RLS to make behavior pass.
-- Avoid schema changes unless explicitly scoped and approved.
-- Do not leak service-role keys or broaden authenticated grants unnecessarily.
-- Do not use PostgreSQL enums for user-expandable values such as area names.
-
-## Table requirements
-
-Every user-owned table needs `id`, `user_id`, timestamps where appropriate, RLS enabled, select/insert/update/delete-or-archive policies, relevant indexes, and export coverage in `USER_DATA_EXPORT_TABLES`. Area-scoped tables include `area_id`.
-
-## Procedure
-
-1. Enforce `user_id` ownership and same-user constraints on every user-owned path.
-2. For multi-table persisted transitions, use one transactional `SECURITY INVOKER` server boundary/RPC instead of sequenced client writes.
-3. Use authenticated Data API grants narrowly to the minimum needed tables/actions.
-4. Keep service-role usage server-only and narrowly justified.
-5. When DB/RLS surfaces change, run local Supabase reset and two-user RLS tests.
-6. Report any grant/policy risk and keep changes minimal and reversible.
-
-## Done criteria
-
-- User ownership, RLS, policies, indexes, and export coverage are present.
-- Same-user isolation remains intact.
-- Grants are narrow and service-role usage is not exposed to browser code.
-- Two-user RLS expectations are covered when relevant.
+- **New user-owned table:** `id`, `user_id`, timestamps, RLS enabled with select/insert/update/delete-or-archive policies, indexes, and an entry in `USER_DATA_EXPORT_TABLES` (`apps/web/src/lib/data/export.ts`) in the same PR. Area-scoped tables carry `area_id`. Extend the shared mock Supabase client in the same PR (`lifeos-testing`).
+- **No PostgreSQL enums** for user-expandable values such as area names.
+- **Multi-table transitions** go through one `SECURITY INVOKER` RPC; pattern: `supabase/migrations/20260612120000_add_workflow_transition_functions.sql`, callers in `apps/web/src/lib/data/workflow.ts`.
+- **Grants** stay narrow to the tables and actions needed; service-role usage stays server-only and justified.
+- **Migrations are additive within an epic** (NS-INV-2) and must survive a local `supabase db reset`; never commit a remote schema dump as a migration.
+- **Proof:** `RUN_SUPABASE_RLS_TESTS=1` with env from `supabase status -o env`, covering the two-user isolation case (`apps/web/src/__tests__/phase4aRls.local.test.ts`). Mock-green `pnpm test` proves nothing about RLS.

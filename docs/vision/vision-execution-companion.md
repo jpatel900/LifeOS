@@ -303,7 +303,7 @@ One branch, one PR, words only. Target files and what goes in each:
 2. `docs/ENGINEERING_INVARIANTS.md`: injection invariant text (7b) +
    context-diet invariant (item 6, guard test may follow in Batch B —
    note it as "guard pending" honestly).
-3. `.agents/skills/lifeos-stage-contract-authoring/STAGE_BRIEFS.md`:
+3. `docs/_archive/STAGE_BRIEFS.md`:
    ¶s — trust kernel (item 4), auto-triage-first (§7), money boundary
    (§7), inference ladder (§7), trust-repair ritual (§7), charter
    renewal (7b), continuity envelope (7b), Stage-5 negotiating perimeter

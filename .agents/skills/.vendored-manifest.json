@@ -1,27 +1,9 @@
 {
   "managedBy": "sync-skills-to-lifeos.ps1 (maintainer machine); merge stays human per repo change control",
-  "note": "This manifest is the ALLOWLIST for vendored skills (pruned 2026-08-04 to the set the AGENTS.md routing table names). The sync only creates/updates/deletes dirs listed here; to vendor a new skill, add its entry in a reviewed PR first. Repo-native skills are never listed or touched. Third-party sources keep their upstream licenses.",
+  "note": "This manifest is the ALLOWLIST for vendored skills (pruned 2026-08-04, again 2026-10-17 to the skills AGENTS.md names). The sync only creates/updates/deletes dirs listed here; to vendor a new skill, add its entry in a reviewed PR first. Repo-native skills are never listed or touched. Third-party sources keep their upstream licenses.",
   "skills": {
-    "agentic-docs-and-writing": {
-      "source": "claude-user-skills"
-    },
-    "browser-testing-with-devtools": {
-      "source": "addy-agent-skills"
-    },
-    "documentation-and-adrs": {
-      "source": "addy-agent-skills"
-    },
-    "frontend-ui-engineering": {
-      "source": "addy-agent-skills"
-    },
     "impeccable": {
       "source": "local-hub"
-    },
-    "security-and-hardening": {
-      "source": "addy-agent-skills"
-    },
-    "verification-before-completion": {
-      "source": "superpowers"
     }
   }
 }
