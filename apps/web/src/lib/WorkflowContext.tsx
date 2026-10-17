@@ -2313,16 +2313,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   }, [hasHydratedFromStorage]);
 
   /**
-   * #737 C1 re-score GAP 3, write half — mirror the UNDECIDED triage drafts to
-   * the device store.
+   * #737 C1 re-score GAP 3, write half — mirror the triage drafts to the
+   * device store.
    *
-   * ## Why the whole pending set, rather than per-action calls
+   * ## Why the whole set, rather than per-action calls
    *
    * Seven reducer paths change a draft (parse, edit, mention-reject, split,
    * merge, accept, backlog, reject). Reconciling the set after the fact means
-   * none of them can be forgotten, and an accept or a reject removes the draft
-   * for free: the decision flips its status off `pending`, so it drops out of
-   * the filter and `reconcileStoredTaskDrafts` deletes it.
+   * none of them can be forgotten. An accept or a reject flips the draft's
+   * status off `pending`, and the stored copy follows, so the device keeps a
+   * record of the decision rather than an undecided draft (bug hunt #8).
    *
    * ## Why it is gated on the RESTORE, not just on hydration
    *
@@ -2340,10 +2340,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const pending = state.taskDrafts.filter(
-      (draft) => draft.status === "pending",
-    );
-    void reconcileStoredTaskDrafts(pending).catch(() => {
+    // Bug hunt #8: DECIDED drafts are kept too (as a record of the
+    // decision). A reject has no account write, so dropping it from the
+    // device made a new tab offer the thought again as "not sorted yet",
+    // while the banner said the drop was saved on this device.
+    void reconcileStoredTaskDrafts(state.taskDrafts).catch(() => {
       markDeviceStorageBlocked();
     });
   }, [hasRestoredDeviceDrafts, state.taskDrafts, markDeviceStorageBlocked]);
