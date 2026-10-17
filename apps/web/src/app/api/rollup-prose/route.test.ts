@@ -125,6 +125,33 @@ describe("POST /api/rollup-prose", () => {
       degraded: true,
     });
   });
+  it("returns the route's own validation message for a bad body (#670)", async () => {
+    const response = await POST(postRequest({ areaLabel: "X" }, "tok"));
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "periodType must be week or month.",
+    });
+  });
+
+  it("returns a plain 'Invalid request.' for unparseable JSON instead of the parser error text (#670)", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/rollup-prose", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer tok",
+        },
+        body: "{not json",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "Invalid request.",
+    });
+    expect(enhanceRollupProse).not.toHaveBeenCalled();
+  });
 });
 
 it("allows 60 seconds for the route and its 50-second provider budget", () => {

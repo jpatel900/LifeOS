@@ -450,6 +450,20 @@ describe("task-map route", () => {
       },
     });
   });
+  it("returns a plain 'Invalid request.' for unparseable JSON instead of the parser error text (#670)", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/task-map", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: "{not json",
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toEqual({ ok: false, error: "Invalid request." });
+    expect(mocks.generateTaskMapDraftWithFallback).not.toHaveBeenCalled();
+  });
 });
 
 it("allows 60 seconds for the route and its 50-second provider budget", () => {

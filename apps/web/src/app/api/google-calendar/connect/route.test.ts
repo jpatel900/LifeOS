@@ -28,6 +28,12 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { POST } from "./route";
 
+function authRejected(message: string) {
+  const error = new Error(message);
+  error.name = "SupabaseAuthRejectedError";
+  return error;
+}
+
 describe("google-calendar connect route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -93,5 +99,61 @@ describe("google-calendar connect route", () => {
     expect(response.headers.get("set-cookie")).toContain(
       "lifeos_google_calendar_oauth=sealed-cookie",
     );
+  });
+
+  describe("error sanitization (#670)", () => {
+    beforeEach(() => {
+      mocks.getGoogleCalendarConfig.mockReturnValue({
+        clientId: "client-id",
+        clientSecret: "client-secret",
+        redirectUri: "http://localhost:3000/api/google-calendar/callback",
+        tokenEncryptionKey: "token-encryption-key",
+      });
+    });
+
+    function connectRequest() {
+      return new Request("http://localhost/api/google-calendar/connect", {
+        method: "POST",
+        headers: { Authorization: "Bearer supabase-access-token" },
+      });
+    }
+
+    it("returns fixed sign-in copy, not the raw Supabase Auth text, on auth rejection", async () => {
+      mocks.requireSupabaseServerUser.mockRejectedValue(
+        authRejected("invalid claim: missing sub claim"),
+      );
+
+      const response = await POST(connectRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(body).toEqual({
+        ok: false,
+        error: "Sign in before connecting Google Calendar.",
+      });
+    });
+
+    it("maps an unexpected failure to a fixed 500 message and logs the detail", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mocks.requireSupabaseServerUser.mockResolvedValue({
+        user: { id: "550e8400-e29b-41d4-a716-446655440001" },
+      });
+      mocks.createGoogleCalendarOAuthState.mockReturnValue("state");
+      mocks.buildGoogleCalendarAuthorizeUrl.mockImplementation(() => {
+        throw new Error("GOOGLE_CLIENT_SECRET decode failed at offset 12");
+      });
+
+      const response = await POST(connectRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(body).toEqual({
+        ok: false,
+        error:
+          "Google Calendar connection could not start. Try again in a moment.",
+      });
+      expect(spy).toHaveBeenCalled();
+      spy.mockRestore();
+    });
   });
 });

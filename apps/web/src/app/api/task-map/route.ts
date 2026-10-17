@@ -113,19 +113,32 @@ interface TaskMapRequestBody {
   revision: RevisionInput | null;
 }
 
+/**
+ * #670: the only error whose message this route returns to the client. Thrown
+ * by parseRequestBody for the route's own plain-language validation copy;
+ * anything else (e.g. the JSON parser's SyntaxError text) becomes
+ * "Invalid request.".
+ */
+class TaskMapRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TaskMapRequestError";
+  }
+}
+
 function parseRequestBody(body: unknown): TaskMapRequestBody {
   if (!body || typeof body !== "object") {
-    throw new Error("Task map request body is required.");
+    throw new TaskMapRequestError("Task map request body is required.");
   }
 
   const record = body as Record<string, unknown>;
 
   if (typeof record.taskId !== "string" || !record.taskId.trim()) {
-    throw new Error("taskId is required.");
+    throw new TaskMapRequestError("taskId is required.");
   }
 
   if (typeof record.title !== "string" || !record.title.trim()) {
-    throw new Error("title is required.");
+    throw new TaskMapRequestError("title is required.");
   }
 
   if (
@@ -133,7 +146,7 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
     record.areaId !== null &&
     typeof record.areaId !== "string"
   ) {
-    throw new Error("areaId must be a string when provided.");
+    throw new TaskMapRequestError("areaId must be a string when provided.");
   }
 
   if (
@@ -141,7 +154,9 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
     record.description !== null &&
     typeof record.description !== "string"
   ) {
-    throw new Error("description must be a string when provided.");
+    throw new TaskMapRequestError(
+      "description must be a string when provided.",
+    );
   }
 
   if (
@@ -149,7 +164,9 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
     record.definitionOfDone !== null &&
     typeof record.definitionOfDone !== "string"
   ) {
-    throw new Error("definitionOfDone must be a string when provided.");
+    throw new TaskMapRequestError(
+      "definitionOfDone must be a string when provided.",
+    );
   }
 
   if (
@@ -157,13 +174,17 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
     record.firstTinyStep !== null &&
     typeof record.firstTinyStep !== "string"
   ) {
-    throw new Error("firstTinyStep must be a string when provided.");
+    throw new TaskMapRequestError(
+      "firstTinyStep must be a string when provided.",
+    );
   }
 
   let breakdownSteps: BreakdownStepInput[] | null = null;
   if (record.breakdownSteps !== undefined && record.breakdownSteps !== null) {
     if (!Array.isArray(record.breakdownSteps)) {
-      throw new Error("breakdownSteps must be an array when provided.");
+      throw new TaskMapRequestError(
+        "breakdownSteps must be an array when provided.",
+      );
     }
 
     breakdownSteps = record.breakdownSteps.map((step) => {
@@ -172,7 +193,9 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
         typeof step !== "object" ||
         typeof (step as Record<string, unknown>).title !== "string"
       ) {
-        throw new Error("breakdownSteps entries require a title.");
+        throw new TaskMapRequestError(
+          "breakdownSteps entries require a title.",
+        );
       }
 
       const stepRecord = step as Record<string, unknown>;
@@ -190,19 +213,23 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
     if (record.parserMode === "auto" || record.parserMode === "mock") {
       parserMode = record.parserMode;
     } else {
-      throw new Error("parserMode must be auto or mock when provided.");
+      throw new TaskMapRequestError(
+        "parserMode must be auto or mock when provided.",
+      );
     }
   }
 
   let currentMap: CurrentMapInput | null = null;
   if (record.currentMap !== undefined && record.currentMap !== null) {
     if (typeof record.currentMap !== "object") {
-      throw new Error("currentMap must be an object when provided.");
+      throw new TaskMapRequestError(
+        "currentMap must be an object when provided.",
+      );
     }
     const mapRecord = record.currentMap as Record<string, unknown>;
 
     if (!Array.isArray(mapRecord.nodes)) {
-      throw new Error("currentMap.nodes must be an array.");
+      throw new TaskMapRequestError("currentMap.nodes must be an array.");
     }
     const nodes = mapRecord.nodes.map((node) => {
       if (
@@ -214,7 +241,9 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
           (node as Record<string, unknown>).role as string,
         )
       ) {
-        throw new Error("currentMap.nodes entries require id, title, role.");
+        throw new TaskMapRequestError(
+          "currentMap.nodes entries require id, title, role.",
+        );
       }
       const nodeRecord = node as Record<string, unknown>;
       return {
@@ -241,7 +270,7 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
     });
 
     if (!Array.isArray(mapRecord.edges)) {
-      throw new Error("currentMap.edges must be an array.");
+      throw new TaskMapRequestError("currentMap.edges must be an array.");
     }
     const edges = mapRecord.edges.map((edge) => {
       if (
@@ -250,7 +279,9 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
         typeof (edge as Record<string, unknown>).from !== "string" ||
         typeof (edge as Record<string, unknown>).to !== "string"
       ) {
-        throw new Error("currentMap.edges entries require from and to.");
+        throw new TaskMapRequestError(
+          "currentMap.edges entries require from and to.",
+        );
       }
       const edgeRecord = edge as Record<string, unknown>;
       return { from: edgeRecord.from as string, to: edgeRecord.to as string };
@@ -262,20 +293,22 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
   let revision: RevisionInput | null = null;
   if (record.revision !== undefined && record.revision !== null) {
     if (typeof record.revision !== "object") {
-      throw new Error("revision must be an object when provided.");
+      throw new TaskMapRequestError(
+        "revision must be an object when provided.",
+      );
     }
     if (!currentMap) {
-      throw new Error("revision requires currentMap.");
+      throw new TaskMapRequestError("revision requires currentMap.");
     }
     const revisionRecord = record.revision as Record<string, unknown>;
     if (!Array.isArray(revisionRecord.signals)) {
-      throw new Error("revision.signals must be an array.");
+      throw new TaskMapRequestError("revision.signals must be an array.");
     }
     if (
       revisionRecord.signals.length === 0 ||
       revisionRecord.signals.length > MAX_REVISION_SIGNALS
     ) {
-      throw new Error(
+      throw new TaskMapRequestError(
         `revision.signals must contain 1-${MAX_REVISION_SIGNALS} entries.`,
       );
     }
@@ -289,7 +322,7 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
             .kind as RevisionSignalInput["kind"],
         )
       ) {
-        throw new Error(
+        throw new TaskMapRequestError(
           "revision.signals entries require a known kind and a detail string.",
         );
       }
@@ -400,7 +433,10 @@ export async function POST(request: Request) {
     return Response.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Invalid request.",
+        error:
+          error instanceof TaskMapRequestError
+            ? error.message
+            : "Invalid request.",
       },
       { status: 400 },
     );

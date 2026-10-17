@@ -21,6 +21,12 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { GET } from "./route";
 
+function authRejected(message: string) {
+  const error = new Error(message);
+  error.name = "SupabaseAuthRejectedError";
+  return error;
+}
+
 const connection = {
   id: "550e8400-e29b-41d4-a716-446655440901",
   user_id: "550e8400-e29b-41d4-a716-446655440001",
@@ -187,5 +193,33 @@ describe("google-calendar connection route", () => {
       "Google Calendar connection status could not load. Local planning is still available.",
     );
     expect(body.error).not.toContain("database timeout");
+  });
+
+  it("logs the unexpected lookup failure server-side (#670)", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const error = new Error("database timeout while loading connection");
+    mocks.getGoogleCalendarConnectionForAccessToken.mockRejectedValue(error);
+
+    await GET(request("supabase-access-token"));
+
+    expect(spy).toHaveBeenCalledWith(
+      "google-calendar/connection failed:",
+      error,
+    );
+    spy.mockRestore();
+  });
+
+  it("returns fixed sign-in copy for a typed auth rejection (#670)", async () => {
+    mocks.requireSupabaseServerUser.mockRejectedValue(
+      authRejected("invalid claim: missing sub claim"),
+    );
+
+    const response = await GET(request("supabase-access-token"));
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe(
+      "Sign in before loading Google Calendar connection status.",
+    );
   });
 });

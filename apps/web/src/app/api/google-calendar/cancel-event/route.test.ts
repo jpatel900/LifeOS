@@ -53,6 +53,12 @@ vi.mock("@/lib/supabase/server", () => ({
 import { GoogleCalendarEventDriftError } from "@/lib/googleCalendar/events";
 import { POST } from "./route";
 
+function authRejected(message: string) {
+  const error = new Error(message);
+  error.name = "SupabaseAuthRejectedError";
+  return error;
+}
+
 const user = { id: "550e8400-e29b-41d4-a716-446655440001" };
 const proposalId = "550e8400-e29b-41d4-a716-446655440501";
 const ownedGoogleEventId = "lifeos550e8400e29b41d4a716446655440501";
@@ -442,5 +448,45 @@ describe("google-calendar cancel-event route", () => {
 
     expect(response.status).toBe(409);
     expect(mocks.deleteGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+  });
+
+  it("logs an unexpected failure server-side without echoing it (#670)", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.getCalendarBlockForAccessToken.mockRejectedValue(
+      new Error("permission denied for table calendar_blocks"),
+    );
+
+    const response = await POST(
+      request({ calendar_block_id: block.id, approved: true }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body.error).toBe(
+      "Google Calendar cancel failed. Local block data is unchanged. Review connection status and retry.",
+    );
+    expect(spy).toHaveBeenCalledWith(
+      "google-calendar/cancel-event failed:",
+      expect.objectContaining({
+        message: "permission denied for table calendar_blocks",
+      }),
+    );
+    spy.mockRestore();
+  });
+
+  it("returns fixed sign-in copy for a typed auth rejection (#670)", async () => {
+    mocks.requireSupabaseServerUser.mockRejectedValue(
+      authRejected("invalid claim: missing sub claim"),
+    );
+
+    const response = await POST(
+      request({ calendar_block_id: block.id, approved: true }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe(
+      "Sign in before cancelling Google Calendar events.",
+    );
   });
 });

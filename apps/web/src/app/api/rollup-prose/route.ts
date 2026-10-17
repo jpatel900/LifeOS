@@ -31,32 +31,47 @@ function isStringArray(value: unknown): value is string[] {
   );
 }
 
+/**
+ * #670: the only error whose message this route returns to the client. Thrown
+ * by parseRequestBody for the route's own plain-language validation copy;
+ * anything else (e.g. the JSON parser's SyntaxError text) becomes
+ * "Invalid request.".
+ */
+class RollupProseRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RollupProseRequestError";
+  }
+}
+
 function parseRequestBody(body: unknown) {
   if (!body || typeof body !== "object") {
-    throw new Error("Rollup prose request body is required.");
+    throw new RollupProseRequestError("Rollup prose request body is required.");
   }
   const record = body as Record<string, unknown>;
 
   if (typeof record.areaLabel !== "string" || !record.areaLabel.trim()) {
-    throw new Error("areaLabel is required.");
+    throw new RollupProseRequestError("areaLabel is required.");
   }
   if (record.periodType !== "week" && record.periodType !== "month") {
-    throw new Error("periodType must be week or month.");
+    throw new RollupProseRequestError("periodType must be week or month.");
   }
   if (typeof record.periodLabel !== "string" || !record.periodLabel.trim()) {
-    throw new Error("periodLabel is required.");
+    throw new RollupProseRequestError("periodLabel is required.");
   }
 
   const draft = record.draft;
   if (!draft || typeof draft !== "object") {
-    throw new Error("draft is required.");
+    throw new RollupProseRequestError("draft is required.");
   }
   const draftRecord = draft as Record<string, unknown>;
   if (
     !isStringArray(draftRecord.highlights) ||
     !isStringArray(draftRecord.misses)
   ) {
-    throw new Error("draft.highlights and draft.misses must be string arrays.");
+    throw new RollupProseRequestError(
+      "draft.highlights and draft.misses must be string arrays.",
+    );
   }
   const counts = draftRecord.counts;
   if (
@@ -66,7 +81,9 @@ function parseRequestBody(body: unknown) {
       (value) => typeof value === "number",
     )
   ) {
-    throw new Error("draft.counts must be an object of numbers.");
+    throw new RollupProseRequestError(
+      "draft.counts must be an object of numbers.",
+    );
   }
 
   return {
@@ -111,7 +128,10 @@ export async function POST(request: Request) {
     return Response.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Invalid request.",
+        error:
+          error instanceof RollupProseRequestError
+            ? error.message
+            : "Invalid request.",
       },
       { status: 400 },
     );
