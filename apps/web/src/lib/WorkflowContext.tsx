@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useReducer,
   useRef,
   useState,
@@ -517,7 +518,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [markAccountSyncError],
   );
 
-  useEffect(() => {
+  // Layout, not passive: a tap between the screen update and a passive effect read stale state (#853).
+  useLayoutEffect(() => {
     stateRef.current = state;
   }, [state]);
 
