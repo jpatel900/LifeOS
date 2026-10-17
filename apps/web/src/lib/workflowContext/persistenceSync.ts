@@ -44,6 +44,7 @@ import {
   journalTaskDraftAcceptWrite,
   journalTaskDropWrite,
 } from "../durability/durableWrites";
+import { generateClientWriteId } from "../durability/pendingWriteJournal";
 import {
   savedOnThisDeviceAndSendingBanner,
   savedOnThisDeviceBanner,
@@ -202,11 +203,15 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         persistedAreaId,
         rawText: localCapture.raw_text,
         returnHook: localCapture.return_hook ?? null,
-        // Reuses the local capture id as the idempotency key: stable across
-        // retries of the SAME capture, and it is what the account write
-        // ultimately stores as `client_capture_id` — the same uniqueness the
-        // offline capture queue already relies on.
-        clientCaptureId: localCapture.id,
+        // A fresh, globally unique idempotency key for THIS capture. It is
+        // what the account write stores as `client_capture_id`, and the
+        // account upserts on it. The local id (`capture-1`, ...) is NOT
+        // unique: a fresh tab, another device or a browser reset restarts
+        // that counter, and reusing it here overwrote an earlier capture's
+        // raw text in the account (bug hunt #1). `persistCapture` runs once
+        // per capture; journal replays reuse the key stored in the journal.
+        clientCaptureId:
+          localCapture.client_capture_id ?? generateClientWriteId(),
       });
     } catch {
       // #960 review finding 3: the device itself refused to hold the journal
