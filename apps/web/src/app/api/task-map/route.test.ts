@@ -28,6 +28,10 @@ vi.mock("@/lib/observability", () => ({
 }));
 
 import { GET, POST, maxDuration } from "./route";
+import {
+  AI_ROUTE_RATE_LIMIT,
+  resetAiRouteRateLimitsForTests,
+} from "@/lib/security/rateLimit";
 
 const validDraft = {
   schema_version: "1.0",
@@ -51,6 +55,7 @@ const authHeaders = { Authorization: "Bearer user-a-access-token" };
 describe("task-map route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetAiRouteRateLimitsForTests();
     mocks.getTaskMapDraftStatus.mockReturnValue({
       status: "ai_configured",
       preferredParser: "ai",
@@ -463,6 +468,49 @@ describe("task-map route", () => {
     expect(response.status).toBe(400);
     expect(body).toEqual({ ok: false, error: "Invalid request." });
     expect(mocks.generateTaskMapDraftWithFallback).not.toHaveBeenCalled();
+  });
+
+  describe("per-user rate limit (#670)", () => {
+    beforeEach(() => {
+      mocks.generateTaskMapDraftWithFallback.mockResolvedValue({
+        ok: true,
+        parser: "ai",
+        draft: validDraft,
+      });
+    });
+
+    it("returns 429 with plain copy once a user passes the limit, before any provider call", async () => {
+      for (let i = 0; i < AI_ROUTE_RATE_LIMIT.limit; i += 1) {
+        const ok = await POST(
+          postRequest({ taskId: "task-1", title: "Ship it" }, authHeaders),
+        );
+        expect(ok.status).toBe(200);
+      }
+      mocks.generateTaskMapDraftWithFallback.mockClear();
+
+      const response = await POST(
+        postRequest({ taskId: "task-1", title: "Ship it" }, authHeaders),
+      );
+
+      expect(response.status).toBe(429);
+      expect(await response.json()).toEqual({
+        ok: false,
+        error: "Too many requests. Try again in a minute.",
+      });
+      expect(mocks.generateTaskMapDraftWithFallback).not.toHaveBeenCalled();
+    });
+
+    it("does not count mock-parser requests, which spend no AI credit", async () => {
+      for (let i = 0; i < AI_ROUTE_RATE_LIMIT.limit + 5; i += 1) {
+        const ok = await POST(
+          postRequest(
+            { taskId: "task-1", title: "Ship it", parserMode: "mock" },
+            authHeaders,
+          ),
+        );
+        expect(ok.status).toBe(200);
+      }
+    });
   });
 });
 

@@ -1,6 +1,10 @@
 import { enhanceRollupProse } from "@/lib/ai/rollupProseService";
 import { captureError } from "@/lib/observability";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  rateLimitedResponse,
+  takeAiRouteRequest,
+} from "@/lib/security/rateLimit";
 
 export const maxDuration = 60;
 
@@ -16,13 +20,14 @@ function readBearerToken(request: Request) {
   return value.trim();
 }
 
+/** Returns the verified user's id, or null when the token is not accepted. */
 async function verifyBearerToken(accessToken: string) {
   const client = createSupabaseServerClient({ accessToken });
   if (!client) {
-    return false;
+    return null;
   }
   const { data, error } = await client.auth.getUser();
-  return !error && Boolean(data.user);
+  return !error && data.user ? data.user.id : null;
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -113,7 +118,8 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!(await verifyBearerToken(accessToken))) {
+  const userId = await verifyBearerToken(accessToken);
+  if (!userId) {
     return Response.json(
       { ok: false, errorCategory: "auth_rejected" },
       { status: 401 },
@@ -135,6 +141,14 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  }
+
+  // #670: per-user cap before any provider call. The AI on/off switch lives
+  // inside enhanceRollupProse, so every valid request counts; reviews call
+  // this a handful of times, far below the limit.
+  const decision = takeAiRouteRequest("rollup-prose", userId);
+  if (!decision.allowed) {
+    return rateLimitedResponse(decision.retryAfterSeconds);
   }
 
   try {

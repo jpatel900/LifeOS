@@ -10,6 +10,10 @@ import {
 } from "@/lib/data/workflow";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { captureError } from "@/lib/observability";
+import {
+  rateLimitedResponse,
+  takeAiRouteRequest,
+} from "@/lib/security/rateLimit";
 
 export const maxDuration = 60;
 
@@ -370,7 +374,10 @@ async function verifyBearerToken(accessToken: string) {
     return null;
   }
 
-  return client as MinimalSupabaseClient;
+  return {
+    client: client as MinimalSupabaseClient,
+    userId: data.user.id,
+  };
 }
 
 function countNodesByRole(nodes: { role: "required" | "optional" | "red" }[]) {
@@ -417,9 +424,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const client = await verifyBearerToken(accessToken);
+  const verified = await verifyBearerToken(accessToken);
 
-  if (!client) {
+  if (!verified) {
     return Response.json(
       { ok: false, errorCategory: "auth_rejected" },
       { status: 401 },
@@ -442,9 +449,20 @@ export async function POST(request: Request) {
     );
   }
 
+  const { client, userId } = verified;
+  const forceMock =
+    input.parserMode === "mock" || status.status === "ai_unavailable";
+
+  // #670: per-user cap on requests that can spend OpenAI credit. Mock drafts
+  // cost nothing and stay unlimited.
+  if (!forceMock && status.status === "ai_configured") {
+    const decision = takeAiRouteRequest("task-map", userId);
+    if (!decision.allowed) {
+      return rateLimitedResponse(decision.retryAfterSeconds);
+    }
+  }
+
   try {
-    const forceMock =
-      input.parserMode === "mock" || status.status === "ai_unavailable";
     const result = await generateTaskMapDraftWithFallback(
       {
         title: input.title,
