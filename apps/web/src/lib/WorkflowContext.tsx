@@ -6,7 +6,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useLayoutEffect,
   useReducer,
   useRef,
   useState,
@@ -140,6 +139,7 @@ import {
   storeSelectedAreaId,
   workflowReducer,
   type PersistedWorkflowPayload,
+  type WorkflowAction,
 } from "./workflowContext/reducerCore";
 // Direct submodule import, matching `reducerCore.ts`: the workflow barrel
 // freezes the pre-split public surface, and this #844 type is consumed only by
@@ -240,7 +240,7 @@ function derivePendingSaveFailureAggregate(pending: PendingWrite[]): {
 const WorkflowContext = createContext<WorkflowContextValue | null>(null);
 
 export function WorkflowProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(
+  const [state, reactDispatch] = useReducer(
     workflowReducer,
     undefined,
     createSyncedInitialState,
@@ -348,6 +348,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const activeParseCaptureIdRef = useRef<string | null>(null);
   const stateRef = useRef(state);
+  // #853 follow-up: the reducer runs HERE, once, so `stateRef` holds every
+  // transition the moment it is dispatched rather than when React next
+  // renders, and React is handed the result. Not pure (`nextId`'s counter,
+  // clock reads), so React must never re-run it on the original action.
+  const dispatch = useCallback((action: WorkflowAction) => {
+    const next = workflowReducer(stateRef.current, action);
+    stateRef.current = next;
+    reactDispatch({ type: "hydrate", state: next });
+  }, []);
   const persistedAreasRef = useRef<Area[]>([]);
   const persistedCaptureIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedTaskIdByLocalIdRef = useRef(new Map<string, string>());
@@ -517,11 +526,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     [markAccountSyncError],
   );
-
-  // Layout, not passive: a tap between the screen update and a passive effect read stale state (#853).
-  useLayoutEffect(() => {
-    stateRef.current = state;
-  }, [state]);
 
   const applyPersistedAreas = useCallback((areas: Area[]) => {
     persistedAreasRef.current = areas;
