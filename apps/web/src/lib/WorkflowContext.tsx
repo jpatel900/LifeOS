@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useReducer,
   useRef,
   useState,
@@ -517,7 +518,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [markAccountSyncError],
   );
 
-  useEffect(() => {
+  // Layout, not passive: a tap between the screen update and a passive effect read stale state (#853).
+  useLayoutEffect(() => {
     stateRef.current = state;
   }, [state]);
 
@@ -1552,6 +1554,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }));
     }
     if (restoredState) {
+      // #853: the persist paths read these per-mount refs, which a reload
+      // empties. Refill them from the alias record that rode sessionStorage,
+      // or an action taken before the first sync cannot name its account row.
+      // `sessions` is left out on purpose: no persist path reads its ref (a
+      // focus-session outcome is filed by its task and block).
+      const restoredAliasRefs = {
+        captures: persistedCaptureIdByLocalIdRef,
+        tasks: persistedTaskIdByLocalIdRef,
+        proposals: persistedProposalIdByLocalIdRef,
+        blocks: persistedBlockIdByLocalIdRef,
+      } as const;
+      for (const [family, ref] of Object.entries(restoredAliasRefs)) {
+        const aliases =
+          restoredState.accountIdByLocalId?.[
+            family as keyof typeof restoredAliasRefs
+          ] ?? {};
+        for (const [localId, accountId] of Object.entries(aliases)) {
+          if (!ref.current.has(localId)) ref.current.set(localId, accountId);
+        }
+      }
       dispatch({ type: "hydrate", state: restoredState });
       setSelectedAreaId((current) => {
         // #691: `null` = explicit All-areas choice; keep it (see
