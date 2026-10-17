@@ -1175,3 +1175,24 @@ describe("cross-runtime compensating writes", () => {
     expect(await listPendingWrites()).toEqual([]);
   });
 });
+
+describe("a Google-backed refusal is permanent (calendar hunt #2)", () => {
+  it("drops a queued unplan the account refuses because the block is on Google Calendar", async () => {
+    await journalPlanUnplacementWrite({
+      workflowBlockId: "block-local-google",
+      persistedBlockId: "550e8400-e29b-41d4-a716-446655440399",
+      supersedesClientWriteId: null,
+    });
+    const syncPlanUnplacement = vi.fn(async () => {
+      throw new Error(
+        "Google-backed blocks require calendar approval before unplanning.",
+      );
+    });
+
+    await replayDurableWrites(serverOps({ syncPlanUnplacement }));
+
+    expect(syncPlanUnplacement).toHaveBeenCalledOnce();
+    // Not left to retry forever.
+    expect(await pendingWriteCount()).toBe(0);
+  });
+});

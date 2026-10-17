@@ -1358,6 +1358,18 @@ export function isRollupPeriodConflict(error: unknown): boolean {
 export const ALREADY_UNPLANNED_MESSAGE =
   "Only scheduled blocks can be unplanned.";
 
+const GOOGLE_BACKED_REFUSAL_MESSAGE =
+  "Google-backed blocks require calendar approval";
+
+/** The account refused because the block is on Google Calendar. */
+export function isGoogleBackedRefusal(error: unknown): boolean {
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message: unknown }).message)
+      : String(error ?? "");
+  return message.includes(GOOGLE_BACKED_REFUSAL_MESSAGE);
+}
+
 export function isAlreadyUnplanned(error: unknown): boolean {
   const message =
     error && typeof error === "object" && "message" in error
@@ -1460,6 +1472,12 @@ function planUnplacementHandler(ops: DurableWriteServerOps) {
       // AFTER the row changed would otherwise retry forever against a block
       // that is already in exactly the state the user asked for.
       if (isAlreadyUnplanned(error)) return;
+      // Calendar hunt #2: PERMANENT. A Google-backed block is never unplanned
+      // this way (the Google event would be left behind), so retrying can
+      // only fail forever. Drop the entry; the next sync shows the block as
+      // the account holds it, and "Cancel Google event" is the way to remove
+      // it.
+      if (isGoogleBackedRefusal(error)) return;
       throw error;
     }
     requireAccountWrite(result);
@@ -1490,7 +1508,17 @@ function taskDropHandler(ops: DurableWriteServerOps) {
 
     // No conflict case to absorb: `apply_task_review_transition` to `dropped`
     // is a fixed-value update, so replaying it is naturally idempotent.
-    const result = await sync({ task_id: taskId });
+    let result;
+    try {
+      result = await sync({ task_id: taskId });
+    } catch (error) {
+      // Calendar hunt #2: PERMANENT, same as the unplan handler — the task's
+      // block is on Google Calendar, so this drop can never land until the
+      // Google event is cancelled. Retrying forever helps nobody; the next
+      // sync shows the task as the account holds it.
+      if (isGoogleBackedRefusal(error)) return;
+      throw error;
+    }
     requireAccountWrite(result);
   };
 }

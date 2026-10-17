@@ -351,6 +351,24 @@ export function workflowStateHasDemoSeed(state: WorkflowState): boolean {
   );
 }
 
+/**
+ * Calendar hunt #2: does this task have an open (scheduled or running) block
+ * that is on Google Calendar? Such a block can only be moved or removed
+ * through the "Cancel Google event" approval step: the account refuses to
+ * cancel it any other way, because the Google event would be left behind.
+ */
+export function taskHasGoogleBackedOpenBlock(
+  state: WorkflowState,
+  taskId: string,
+): boolean {
+  return state.calendarBlocks.some(
+    (block) =>
+      block.task_id === taskId &&
+      (block.status === "scheduled" || block.status === "running") &&
+      Boolean(block.google_event_id),
+  );
+}
+
 export function hasLaunchSequenceStep(
   value: string | null | undefined,
 ): value is string {

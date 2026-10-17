@@ -1,5 +1,8 @@
 "use client";
 
+import { GOOGLE_BACKED_BLOCK_CHANGE_REFUSED } from "@/lib/statusVocabulary";
+import { taskHasGoogleBackedOpenBlock } from "@/lib/workflow/shared";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -2373,7 +2376,15 @@ function TodayMomentsContent({
                 pendingRollups={displayedRollups}
                 approvedRollups={approvedRollups}
                 onCloseDay={handleCloseDay}
-                onCarryForward={(taskId) => carryForwardTask(taskId)}
+                onCarryForward={(taskId) => {
+                  // Calendar hunt #2: a task whose block is on Google
+                  // Calendar changes only after its Google event is cancelled.
+                  if (taskHasGoogleBackedOpenBlock(state, taskId)) {
+                    showToast(GOOGLE_BACKED_BLOCK_CHANGE_REFUSED);
+                    return;
+                  }
+                  carryForwardTask(taskId);
+                }}
                 onConfirmWin={handleConfirmWin}
                 onSkipWin={handleSkipWin}
                 onApproveRollup={handleApproveRollup}
