@@ -2421,15 +2421,28 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     let syncedAny = false;
     for (const queued of pending) {
+      // Bug hunt #5: an item whose chosen area cannot be resolved while the
+      // account's areas are not known yet stays queued — sending it now would
+      // file it with no area and delete the person's choice for good. Once
+      // the areas ARE known and the chosen one is still missing (it was
+      // removed), it goes up with no area rather than staying stuck forever.
+      const persistedAreaId = queued.area_id
+        ? persistedAreaIdForWorkflowId(
+            queued.area_id,
+            persistedAreasRef.current,
+          )
+        : null;
+      if (
+        queued.area_id &&
+        !persistedAreaId &&
+        persistedAreasRef.current.length === 0
+      ) {
+        continue;
+      }
       try {
         await syncQueuedCapture(client, {
           raw_text: queued.raw_text,
-          area_id: queued.area_id
-            ? persistedAreaIdForWorkflowId(
-                queued.area_id,
-                persistedAreasRef.current,
-              )
-            : null,
+          area_id: persistedAreaId,
           return_hook: queued.return_hook,
           client_capture_id: queued.client_capture_id,
         });
@@ -2511,7 +2524,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     void refreshUnsyncedCount();
     void refreshJournalledDurableState();
     void refreshPendingLocalChanges();
-    void syncOfflineQueue();
     if (typeof window === "undefined") return;
     const onOnline = () => {
       void syncOfflineQueue();
@@ -2529,6 +2541,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     replayJournaledWrites,
     syncOfflineQueue,
   ]);
+
+  // Bug hunt #5: the mount drain of the offline capture queue waits until
+  // the account's areas have been read (`areasReadbackSettled`), so a queued
+  // capture's chosen area can be resolved. The reconnect drain above needs no
+  // such wait — the areas are long loaded by then. It runs again whenever a
+  // later account read (e.g. signing in) brings the areas in.
+  useEffect(() => {
+    if (!areasReadbackSettled) return;
+    void syncOfflineQueue();
+  }, [areasReadbackSettled, workflowAreaIdByPersistedId, syncOfflineQueue]);
 
   // Extracted to workflowContext/captureParse.ts (issue #590 slice 4) — plain
   // functions (no hooks), so this factory call is positioned after
