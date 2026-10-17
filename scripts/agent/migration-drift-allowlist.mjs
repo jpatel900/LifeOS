@@ -4,7 +4,7 @@
 // foreign releases; inclusion does not prove a version has been applied.
 //
 // This Supabase project (<prod-project-ref> — see the Supabase dashboard;
-// deliberately not hardcoded here, see AGENTS.md rule 9) is SHARED: the
+// deliberately not hardcoded here, see AGENTS.md "Operational red lines") is SHARED: the
 // RiseUp Cockpit project (a separate repo/app) applies its own migrations
 // directly to the same database. Its versions will never have a file here,
 // and that is fine — they are not this repo's migrations to track.

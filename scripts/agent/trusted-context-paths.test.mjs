@@ -48,10 +48,8 @@ const scannedRelative = scannedFiles.map((file) =>
 for (const required of [
   ".github/AGENT_AUTOMATION_POLICY.md",
   ".github/ISSUE_TEMPLATE/agent-task.yml",
-  ".github/workflows/codex-low-risk-issue-to-pr.yml",
-  ".github/codex/prompts/low-risk-implementation.md",
-  ".github/workflows/codex-issue-plan.yml",
-  ".github/codex/prompts/issue-plan.md",
+  ".github/workflows/codex-pr-review.yml",
+  ".github/codex/prompts/pr-review-baseline.md",
 ]) {
   assert.ok(
     scannedRelative.includes(required),

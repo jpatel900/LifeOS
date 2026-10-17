@@ -20,7 +20,12 @@ concurrency:
 jobs:
   docs-scope:
     name: Detect docs-only scope
-    if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
+    # Every job is opt-in via the review:llm label (2026-10-17): without it,
+    # nothing in this workflow runs, so unlabeled PR events cost nothing.
+    if: >-
+      contains(github.event.pull_request.labels.*.name, 'review:llm') &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.detect.outputs.docs_only }}
@@ -51,7 +56,12 @@ jobs:
     # Cost control: rebases, merges from main, and label events re-trigger this
     # workflow without changing the PR's three-dot diff. If a posted Codex review
     # already covers this exact diff (patch-id match), skip the LLM jobs entirely.
-    if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
+    # Every job is opt-in via the review:llm label (2026-10-17): without it,
+    # nothing in this workflow runs, so unlabeled PR events cost nothing.
+    if: >-
+      contains(github.event.pull_request.labels.*.name, 'review:llm') &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
     outputs:
       fingerprint: ${{ steps.fingerprint.outputs.fingerprint }}
@@ -99,7 +109,12 @@ jobs:
 
   classify-risk:
     name: Classify PR risk
-    if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
+    # Every job is opt-in via the review:llm label (2026-10-17): without it,
+    # nothing in this workflow runs, so unlabeled PR events cost nothing.
+    if: >-
+      contains(github.event.pull_request.labels.*.name, 'review:llm') &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
     outputs:
       escalation_required: ${{ steps.classify.outputs.escalation_required }}

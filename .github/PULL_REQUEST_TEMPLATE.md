@@ -1,33 +1,17 @@
-<!-- Cross-lane coordination fields (docs/agent/LANES.md). Every PR — human or agent — fills these. -->
+Closes # / Part of #
 
-Issue: #
-Lane: Claude | Codex | human
-Depends on: #<PR> | none
-Base SHA:
+## What and why
 
-## Authority anchors
+<!-- plain words; the requirement / ADR / invariant this answers to. Cross-lane: note files touched beyond your claim and why. -->
 
-<!-- requirement / ADR / invariant / audit line this change answers to -->
+## Evidence
 
-## Declared file manifest
+<!-- exact commands + decisive output (AGENTS.md "Delivering work") -->
 
-<!-- what this PR was allowed to touch (from the issue CLAIM); note any beyond-claim files and why -->
+## UNVERIFIED
 
-Forbidden files confirmed untouched: yes | no
-Cross-lane overlap checked at: <UTC + other lane's branch SHA>
-
-## Validation evidence
-
-<!-- exact commands + decisive output lines; "should work" is banned (AGENTS.md verified-claims rule 11) -->
-
-## NOT VERIFIED
-
-<!-- explicit list; empty is a claim too -->
+<!-- what was not proven and the check that would prove it; "none" is a claim too -->
 
 ## Risk and rollback
 
-<!-- blast radius + how to revert -->
-
-## Weak points
-
-<!-- the honest short list: what could be wrong with this change, what it didn't cover -->
+<!-- Follow-ups: `- [ ] OWNER-GATE:` / `- [ ] AGENT-TODO:` -->

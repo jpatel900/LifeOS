@@ -12,17 +12,7 @@ CI and validation requirements from `AGENTS.md` still apply. This policy adds hu
 
 ## T0 — Fully automatable after CI
 
-Allowed without extra human review once required checks pass:
-
-- docs-only
-- issue templates
-
-Current deterministic safe auto-merge allowlist:
-
-- `docs/**`
-- `README.md`
-- `.github/ISSUE_TEMPLATE/**`
-- `.agents/skills/**` (owner-approved 2026-07-03 after the epic #243 pipeline proved the lane)
+Docs-only and issue-template changes need no extra human review once required checks pass. The deterministic safe auto-merge allowlist is the T0 row of the matrix below (`.agents/skills/**` owner-approved 2026-07-03); it must stay exactly there unless separately approved.
 
 Second T0 route (ADR 0008 move 1b, owner-ratified 2026-08-04): strictly-additive test-only PRs under `automerge:tests-additive` + `risk:low`. Machine-checked, not claimed: every changed file must match the test-path allowlist in `scripts/agent/automation-policy.mjs` and the diff must contain zero deleted lines (renames, deletions, and binary changes disqualify). CI still gates the merge, and the Main Red Guard demotion applies to this class on any incident.
 
@@ -45,52 +35,19 @@ Why: on 2026-08-05 the guard auto-armed PR #841 against five commits (an app re-
 
 ## T1 — Agent PR allowed, human review recommended
 
-Agent may implement and open a PR. Human review is recommended before merge.
-
-- isolated UI copy
-- route smoke coverage
-
-Typical paths:
-
-- `apps/web/src/app/**` when the change is narrow copy-only or bounded smoke coverage
-- `apps/web/tests/e2e/**` when the change is bounded smoke coverage rather than assertion-changing broad test rewrites
-
-Planning-only note:
-
-- If the correct implementation slice is unclear, use `agent:plan` first instead of guessing.
+Isolated UI copy and bounded route-smoke coverage (paths: T1 row below).
 
 ## T2 — Agent implementation allowed, human review required
 
-Agent may implement, but a human must review before merge or rollout.
+A human reviews before merge or rollout: workflow and automation control-plane files, assertion-affecting test changes (modifying or deleting existing assertions), cross-flow UX, parser UI, health behavior, observability display, and workflow data-layer changes. Strictly-additive test-only PRs are the exception: per ADR 0008 move 1b they may ride the auto-merge lane under `automerge:tests-additive` (`scripts/agent/check-safe-automerge.mjs` machine-checks that every file is a test path and the diff deletes zero lines). Paths: T2 row below, plus `apps/web/src/__tests__/**`, `apps/web/tests/e2e/**` when behavior assertions materially change, and `apps/web/src/lib/observability/**` for UI-facing observability behavior.
 
-- small test fixes
-- assertion-affecting test changes (modifying or deleting existing assertions). Strictly-ADDITIVE test-only PRs are the exception: per ADR 0008 move 1b they may ride the auto-merge lane under `automerge:tests-additive` — the guard machine-checks that every file is a test path and the diff deletes zero lines (`scripts/agent/check-safe-automerge.mjs`)
-- workflow file changes
-- automation control-plane files such as `.github/codex/prompts/**`
-- cross-flow UX
-- parser UI
-- health behavior
-- observability display
-- workflow data layer changes
+## T3 — Planning or implementation only with explicit human approval
 
-Typical paths:
+Start with planning/review only. Do not implement beyond bounded analysis unless a human explicitly approves the exact surface; after approval, keep implementation bounded to that surface. Covers Supabase schema, migrations, RLS, auth, OAuth, Google Calendar writes, AI parser contracts, observability privacy, secrets/env, and production deployment (paths: T3 row below). Planning may comment on the issue but creates no branches, commits, or implementation PRs.
 
-- `.github/workflows/**`
-- `.github/codex/prompts/**`
-- `scripts/agent/**`
-- `apps/web/src/__tests__/**`
-- `apps/web/tests/e2e/**` when behavior assertions materially change
-- `apps/web/src/lib/observability/**` for UI-facing observability behavior
+## T4 — Human decision before any implementation
 
-## Guardrail references
-
-- Safe auto-merge evaluator and revocation guard: `.github/workflows/safe-automerge.yml` and `scripts/agent/check-safe-automerge.mjs`
-- Shared automation path policy: `scripts/agent/automation-policy.mjs`
-- Shared automation path guard: `scripts/agent/check-automation-scope.mjs`
-- PR risk classification: `scripts/agent/classify-pr-risk.mjs`
-- Main Red Guard hold, diagnosis, and stand-down: `.github/workflows/main-red-guard.yml` and `scripts/agent/red-guard-diagnose.mjs`
-- PR evidence guidance: `AGENTS.md` rule 11 (verified claims: evidence or UNVERIFIED; OWNER-GATE/AGENT-TODO markers)
-- Decision review guidance: `docs/adr/` (architecture decisions) and `AGENTS.md` change-control rules
+Stop at planning/review, tradeoffs, or requirements clarification until a human decides. Implementation proceeds only after explicit human approval and any resulting requirements or policy update. Covers new vendors, new external write capabilities, background jobs, autonomous scheduling, broad architecture changes, and scope expansion beyond requirements.
 
 ## Hands-off path matrix
 
@@ -104,33 +61,11 @@ Use this as the deterministic routing summary before opening or merging an autom
 | T3   | Planning first; implementation only after explicit human approval | `supabase/**`, `**/migrations/**`, `apps/web/src/lib/supabase/**`, `apps/web/src/lib/ai/**`, `apps/web/src/lib/googleCalendar/**`, `apps/web/src/app/api/google-calendar/**`, `.env*` | Sensitive auth, persistence, parser, calendar, secrets, and deployment-adjacent surfaces.                                                                                                                                                                                                                                               |
 | T4   | Human decision before any implementation                          | New vendor/service surfaces, new background automation surfaces, scope-expansion surfaces                                                                                             | Requires an explicit human decision and usually requirements/policy updates first.                                                                                                                                                                                                                                                      |
 
-## T3 — Planning or implementation only with explicit human approval
+## Guardrail references
 
-Start with planning/review-only. Do not implement beyond bounded analysis unless a human explicitly approves the exact surface. After approval, keep implementation bounded to that approved surface.
-
-- Supabase schema
-- migrations
-- RLS
-- auth
-- OAuth
-- Google Calendar writes
-- AI parser contracts
-- observability privacy
-- secrets/env
-- production deployment
-
-Planning route:
-
-- `agent:plan` is the preferred GitHub-first planning route for T2/T3 issues that still need repo research, risk classification, test mapping, or a smallest-safe-slice recommendation.
-- The planning route may comment on the issue but must not create branches, commits, or implementation PRs.
-
-## T4 — Human decision before any implementation
-
-Stop at planning/review-only, tradeoffs, or requirements clarification until a human makes the decision. Implementation may proceed only after explicit human approval and any resulting requirements or policy update.
-
-- new vendors
-- new external write capabilities
-- background jobs
-- autonomous scheduling
-- broad architecture changes
-- scope expansion beyond requirements
+- Safe auto-merge evaluator and revocation guard: `.github/workflows/safe-automerge.yml` and `scripts/agent/check-safe-automerge.mjs`
+- Shared automation path policy: `scripts/agent/automation-policy.mjs`
+- PR risk classification: `scripts/agent/classify-pr-risk.mjs`
+- Main Red Guard hold, diagnosis, and stand-down: `.github/workflows/main-red-guard.yml` and `scripts/agent/red-guard-diagnose.mjs`
+- PR evidence guidance: `AGENTS.md` "Delivering work" (evidence or UNVERIFIED; OWNER-GATE/AGENT-TODO markers)
+- Decision review guidance: `docs/adr/` (architecture decisions) and `AGENTS.md` "Owner gates"

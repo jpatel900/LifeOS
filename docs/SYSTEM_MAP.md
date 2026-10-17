@@ -27,10 +27,9 @@ overplanning, missed-block collapse) is a design input everywhere.
    baseline and stages as dependency/risk order, while retaining evidence gates
    for behavior that depends on personal usage. Conflicts are surfaced, never
    silently resolved.
-3. **Delivery apparatus** — two implementation lanes (Codex cloud via manifest
-   kicks; local Claude subagents in isolated worktrees) + CI guard tests +
-   watchdogs (stranded-delivery, migration drift, provider canary, Main Red
-   Guard) + `pnpm status` (owner queue). Deterministic guards enforce what
+3. **Delivery apparatus** — two implementation lanes (Codex and Claude, each in
+   isolated branches/worktrees; `docs/agent/LANES.md`) + CI guard tests +
+   watchdogs (migration drift, provider canary, Main Red Guard) + `pnpm status` (owner queue). Deterministic guards enforce what
    review would otherwise have to remember.
 4. **Learning loops** — suggestion/override records with stable policy ids →
    recalibration + override-pattern scans → trust-ladder graduation (L0–L3,
@@ -52,29 +51,17 @@ overplanning, missed-block collapse) is a design input everywhere.
 | UX contract                | `docs/UX_FLOWS.md`, ADR 0003, design tokens in `globals.css`                                               |
 | Current status handoff     | `docs/PROJECT_STATE.md` (<=120 lines, replaced in place)                                                   |
 | Failure / success patterns | `docs/FAILURES.md` / `docs/PLAYS.md`                                                                       |
-| Rituals and procedures     | `.agents/skills/` (stage-contract authoring, drift response…)                                              |
+| Rituals and procedures     | `.agents/skills/` (drift response, lane contracts…)                                                        |
 | Roadmap + vision placement | Curated `docs/vision/`; tracker #293; stage cards and epics                                                |
 | Work in flight             | Open PRs/issues + epic decision logs (comments)                                                            |
 
 ## How to change things safely
 
-1. Feature/scope change → `REQUIREMENTS.md` first (FR in house format,
-   non-goals included), via a docs PR. Then contract-driven slices (issue body
-   = binding contract), smallest faithful implementation.
-2. Never weaken a schema, guard test, or RLS policy to make something pass.
-   T2 surfaces (workflows, CI, RLS, calendar writes, security) need human
-   review. Deterministic product decisions live in code/config, not prompts.
-3. Ship the guard with the invariant (same PR), instrument AI surfaces from
-   first merge (policy ids), and run the coherence pass (registry + UX grammar)
-   before authoring new contracts.
-4. Work in isolated worktrees (the main checkout is shared and moves);
-   checkpoint discipline: commit per unit, push every commit.
-5. When docs and reality disagree: verify against `git log` / `pnpm status`,
-   then fix the doc — never build on a stale claim.
+`AGENTS.md` governs: red lines, owner gates, and how work is delivered.
 
 ## Cold-start reading order (human or AI)
 
-1. This file, then `AGENTS.md` + `CLAUDE.md` (budgeted entry files).
+1. This file, then `AGENTS.md` (the budgeted entry file; `CLAUDE.md` imports it).
 2. `docs/PROJECT_STATE.md` (current status), then a reality sweep:
    `git log --oneline -15`, `pnpm status`, open PRs/issues.
 3. ADR 0002 and ADR 0003 (the two load-bearing decisions).

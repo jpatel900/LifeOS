@@ -58,3 +58,6 @@ codex-*.json
 
 # Graphify code graph (local, rebuilt per worktree)
 graphify-out/
+
+# Stale Playwright MCP page snapshots (removed 2026-10-17)
+.playwright-mcp/

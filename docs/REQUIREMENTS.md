@@ -643,7 +643,7 @@ Rationale: a real incident (OpenAI 429 for hours) was discovered only by manual 
 Acceptance criteria:
 
 - A scheduled GitHub Actions cron probes the production parse path (and other provider paths as they are added) on a fixed interval, reusing the house watchdog pattern (`migration-drift.yml` shape: skip-with-warning when the required secret is absent; `::error:: + exit 1` on failure so the run goes red).
-- On a detected failure state transition (healthy→failing), the canary raises a GitHub issue (the house alert channel, per `pipeline-advance.yml`'s issue-write pattern) — it does not spam an issue every run.
+- On a detected failure state transition (healthy→failing), the canary raises a GitHub issue (the house alert channel; one open issue per incident, reused rather than duplicated) — it does not spam an issue every run.
 - The probe is near-free (NFR-001): it first reads recent recorded real-parse outcomes from `ai_call_traces` (a cheap read; `latency_ms`/`status` already recorded fire-and-forget per real parse); it issues a synthetic real parse POST only when there is no recent real signal or to confirm a suspected transition. It never runs a paid parse on every tick.
 - Mock-first auto-degrade. When the provider is known-down (canary-detected or runtime 429 observed), the parse surface degrades to mock/deterministic parsing automatically and visibly, rather than surfacing repeated failures — extending the existing `parseCaptureWithFallback` degrade from "key absent" to "provider runtime-down."
 - The degrade and the recovery are visible on the Health surface (connector/AI-failure separation, NFR-004) and recorded so the learning loop / audit sees provider incidents.
@@ -1250,7 +1250,7 @@ The next approved planning focus after the current governance cleanup is the pro
 
 Use that focus to improve how accepted work is structured, related, reviewed, and surfaced inside the existing LifeOS workflow.
 
-Do not read that as approval for new ingestion channels, browser/computer-use automation, realtime voice, vector search, plugin marketplaces, a multi-agent runtime (future scope strictly via ADR 0006's issue-gated path), team collaboration, public SaaS billing, advanced analytics warehouses, self-healing automation, broad web browsing, or new vendors/integrations. The canonical "do not build" and change-control lists remain `AGENTS.md` section 4 and section 20.
+Do not read that as approval for new ingestion channels, browser/computer-use automation, realtime voice, vector search, plugin marketplaces, a multi-agent runtime (future scope strictly via ADR 0006's issue-gated path), team collaboration, public SaaS billing, advanced analytics warehouses, self-healing automation, broad web browsing, or new vendors/integrations. The canonical "do not build" and change-control lists remain `AGENTS.md` "Owner gates".
 
 Background-reference docs may inform planning, but they cannot expand implementation scope on their own.
 

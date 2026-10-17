@@ -36,7 +36,7 @@ Focus on:
 
 - scope control
 - rationalization and scope-drift patterns
-- whether the PR does more than one reviewable thing
+- whether the PR carries changes unrelated to its stated purpose
 - whether adjacent cleanup was smuggled in under "while I'm here"
 - implementation vs trusted issue acceptance criteria, research/spec checkpoint, and forbidden changes when available
 - LifeOS non-negotiables

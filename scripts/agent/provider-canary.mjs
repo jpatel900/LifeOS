@@ -294,7 +294,7 @@ export function decideTransition(previousState, currentState) {
 
 /**
  * Dedupe: find the currently-open canary-labelled issue, if any. Mirrors
- * pipeline-advance's "check for an existing open ... issue" convention
+ * the former pipeline-advance relay's "check for an existing open ... issue" convention
  * instead of inventing new state storage.
  *
  * @param {{ number: number, state: string, labels: (string | { name: string })[] }[]} issues
