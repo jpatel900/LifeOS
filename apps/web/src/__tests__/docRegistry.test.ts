@@ -1,5 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -107,9 +113,50 @@ const CANONICAL_ALLOWLIST_PATTERNS = [
  * This constant may ONLY ever be DECREASED. Never raise it to make the
  * test pass — trim the entry files instead. Content that does not fit:
  * decisions go to `docs/adr/`, status goes to `docs/PROJECT_STATE.md`,
- * procedures go to `.agents/skills/`. Issue A4 ratchets this to 250.
+ * procedures go to `.agents/skills/`. Issue A4 ratcheted this to 250; the
+ * 2026-10-17 harness-thinning pass (CLAUDE.md became `@AGENTS.md`) lowered
+ * it to 70.
  */
-const ENTRY_FILE_LINE_BUDGET = 250;
+const ENTRY_FILE_LINE_BUDGET = 70;
+
+/**
+ * The registry checks list files with `git ls-files`, so they only mean
+ * something inside a git checkout whose top level is this repo. In a non-git
+ * copy (an exported tarball, a sandbox without `.git`) `git rev-parse` fails,
+ * and those checks are skipped with a warning instead of failing on an
+ * environment problem. The line-budget check needs no git and always runs.
+ */
+function detectGitCheckout(): { ok: true } | { ok: false; reason: string } {
+  try {
+    const topLevel = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    if (realpathSync(topLevel) !== realpathSync(repoRoot)) {
+      return {
+        ok: false,
+        reason: `git top level is ${topLevel}, not the repo root ${repoRoot}`,
+      };
+    }
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: `git rev-parse failed (${error instanceof Error ? error.message.split("\n")[0] : String(error)})`,
+    };
+  }
+}
+
+const gitCheckout = detectGitCheckout();
+const NOT_A_GIT_CHECKOUT_NOTE = gitCheckout.ok
+  ? ""
+  : [
+      `docRegistry: skipped because this is not a git checkout: ${gitCheckout.reason}.`,
+      "`git ls-files` cannot say which markdown files are tracked here.",
+      "Run the suite from a git clone to enforce the registry.",
+    ].join(" ");
+if (!gitCheckout.ok) console.warn(NOT_A_GIT_CHECKOUT_NOTE);
 
 /**
  * Lists every `.md` file git tracks in the repo, as repo-relative paths with
@@ -147,7 +194,8 @@ function countLines(path: string): number {
 }
 
 describe("doc registry", () => {
-  it("keeps every markdown file allowlisted or grandfathered", () => {
+  it("keeps every markdown file allowlisted or grandfathered", ({ skip }) => {
+    skip(!gitCheckout.ok, NOT_A_GIT_CHECKOUT_NOTE);
     const markdownFiles = listTrackedMarkdownFiles().sort();
     const grandfathered = new Set(readGrandfatheredPaths());
     const unregistered = markdownFiles.filter(
@@ -171,7 +219,8 @@ describe("doc registry", () => {
     ).toEqual([]);
   });
 
-  it("removes deleted files from the grandfather snapshot", () => {
+  it("removes deleted files from the grandfather snapshot", ({ skip }) => {
+    skip(!gitCheckout.ok, NOT_A_GIT_CHECKOUT_NOTE);
     const markdownFiles = new Set(listTrackedMarkdownFiles());
     const stale = readGrandfatheredPaths().filter(
       (path) => !markdownFiles.has(path),
@@ -216,7 +265,8 @@ describe("doc registry", () => {
    * vacuously), and it must be untracked but NOT gitignored (`git ls-files`
    * omits ignored files for a different reason than the one under test).
    */
-  it("ignores untracked local scratch markdown files", () => {
+  it("ignores untracked local scratch markdown files", ({ skip }) => {
+    skip(!gitCheckout.ok, NOT_A_GIT_CHECKOUT_NOTE);
     const probeDirectoryRelativePath = ".doc-registry-probe";
     const probeRelativePath = `${probeDirectoryRelativePath}/untracked-probe.md`;
     const probeAbsolutePath = resolve(repoRoot, probeRelativePath);
