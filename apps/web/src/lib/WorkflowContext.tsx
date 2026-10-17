@@ -1557,7 +1557,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // #853: the persist paths read these per-mount refs, which a reload
       // empties. Refill them from the alias record that rode sessionStorage,
       // or an action taken before the first sync cannot name its account row.
+      // `sessions` is left out on purpose: no persist path reads its ref (a
+      // focus-session outcome is filed by its task and block).
       const restoredAliasRefs = {
+        captures: persistedCaptureIdByLocalIdRef,
         tasks: persistedTaskIdByLocalIdRef,
         proposals: persistedProposalIdByLocalIdRef,
         blocks: persistedBlockIdByLocalIdRef,
