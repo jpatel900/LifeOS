@@ -79,6 +79,19 @@ describe("CaptureOverlay", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it.each(["capture-overlay-close", "capture-overlay-save"])(
+    "closes on Escape when %s has focus",
+    (testId) => {
+      const onClose = vi.fn();
+      render(<CaptureOverlay open onSave={vi.fn()} onClose={onClose} />);
+      fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
+        target: { value: "buy milk" },
+      });
+      fireEvent.keyDown(screen.getByTestId(testId), { key: "Escape" });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("closes on Escape when the area picker has focus", () => {
     const onClose = vi.fn();
     render(

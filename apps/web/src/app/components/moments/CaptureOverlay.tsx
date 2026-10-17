@@ -91,6 +91,14 @@ export function CaptureOverlay({
         role="dialog"
         aria-modal="true"
         aria-label="Capture a thought"
+        // Escape closes from any control in the dialog, not just the fields
+        // that handle it themselves (they call preventDefault, so this skips
+        // them) — keyboard users on Close or Save were stuck.
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !event.defaultPrevented) {
+            handleCancel();
+          }
+        }}
         className="workflow-primary-card relative z-10 m-4 grid w-full max-w-lg gap-3 rounded-xl border border-border bg-card p-5 motion-reduce:transition-none motion-reduce:duration-0"
         style={{
           transitionDuration: "var(--motion-base)",
