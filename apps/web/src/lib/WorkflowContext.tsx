@@ -2560,6 +2560,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       : null;
   }
 
+  /**
+   * Bug hunt #2: true only when THIS transition was refused. A refusal from
+   * an earlier action rides along on every later state (`{ ...state }`), so
+   * gating writes on `!next.wipRefusal` silently kept every later
+   * "Move to today", carry-forward and Plan change on this device only.
+   * `withWipRefusal` always mints a fresh object, so a new refusal is a new
+   * reference.
+   */
+  function refusedByThisAction(previous: WorkflowState, next: WorkflowState) {
+    return next.wipRefusal != null && next.wipRefusal !== previous.wipRefusal;
+  }
+
   function recordWipRefusalIfNew(previous: WorkflowState, next: WorkflowState) {
     if (!next.wipRefusal || next.wipRefusal === previous.wipRefusal) {
       return;
@@ -3018,7 +3030,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
       recordWipRefusalIfNew(previous, next);
 
-      if (next !== previous && !next.wipRefusal) {
+      if (next !== previous && !refusedByThisAction(previous, next)) {
         void persistenceOps
           .persistTaskReviewTransition(taskId, "active")
           .catch((error) => {
@@ -3101,7 +3113,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
       recordWipRefusalIfNew(previous, next);
 
-      if (proposal && next !== previous && !next.wipRefusal) {
+      if (
+        proposal &&
+        next !== previous &&
+        !refusedByThisAction(previous, next)
+      ) {
         void persistenceOps
           .persistAcceptedLocalProposal(proposal, localBlock)
           .catch((error) => {
@@ -3118,7 +3134,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
       recordWipRefusalIfNew(previous, next);
 
-      if (proposal && next !== previous && !next.wipRefusal) {
+      if (
+        proposal &&
+        next !== previous &&
+        !refusedByThisAction(previous, next)
+      ) {
         void persistenceOps
           .persistRejectedLocalProposal(proposal)
           .catch((error) => {
@@ -3134,7 +3154,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
       recordWipRefusalIfNew(previous, next);
 
-      if (proposal && next !== previous && !next.wipRefusal) {
+      if (
+        proposal &&
+        next !== previous &&
+        !refusedByThisAction(previous, next)
+      ) {
         void persistenceOps
           .persistEditedLocalProposal(proposal)
           .catch((error) => {
