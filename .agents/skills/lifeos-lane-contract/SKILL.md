@@ -64,7 +64,7 @@ CI runs the full floor. Locally, before the first push:
 - `pnpm build` — catches prerender crashes nothing else sees.
 - `pnpm lint`, `pnpm type-check`, `prettier --check`.
 - Vitest uses the threads pool on Windows.
-- Pin calendar/clock-dependent moments in specs.
+- Pin calendar/clock-dependent moments in specs (rule: `lifeos-testing`, "Time and readiness").
 - Check that no stale dev server holds the port (look at the listener's commandline).
 
 For UI changes: look at one real screenshot of the changed state and fix what is

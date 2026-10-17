@@ -6,6 +6,8 @@ Purpose: Positive guarantees the system must keep. Safety prohibitions live in `
 
 Each invariant names its enforcement. If you weaken an enforcement mechanism to pass a check, you have violated the invariant.
 
+A new invariant ships its guard in the same PR, and the guard is proven able to fail: plant a violation, watch it go red, remove it. A guard that has never failed may be checking nothing. Evidence: born-with-guard worked for NS-INV-1 (#369) and the doc registry (#244); planted-violation proof exposed the Turbo cache gap and the one-way drift check (2026-08-21) and the unwired program-state test (2026-08-29) (`docs/FAILURES.md`).
+
 ## INV-1 — Atomic multi-table transitions
 
 Any persisted workflow transition that writes more than one table must execute inside one transactional server boundary — a `SECURITY INVOKER` Postgres function called via RPC (pattern: `supabase/migrations/20260612120000_add_workflow_transition_functions.sql`, callers in `apps/web/src/lib/data/workflow.ts`). Never sequence dependent writes from the client.

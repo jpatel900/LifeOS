@@ -16,21 +16,11 @@ Entry format: Situation / Move / Why it worked / Evidence / Reuse trigger.
 
 ---
 
-## Patch-paste delivery recovery
+## Distilled plays (one line + pointer)
 
-- **Situation:** Codex cloud completed work but platform-side PR creation failed silently; fresh re-kicks cannot recover a prior task's commits.
-- **Move:** Get `git format-patch origin/main --stdout` out of the ORIGINAL task session as issue comments — proactively in the first run (the kick demands it whenever PR existence isn't positively confirmed), or for already-stranded work via the owner opening the task's "View task →" link and asking there (a follow-up @codex mention spawns a fresh env with no task state — dead path per FAILURES.md 2026-07-05). Maintainer applies with `git am` in a worktree (author preserved), runs the lanes the sandbox cannot, opens the PR.
-- **Why it worked:** The patch travels over the one channel that always works (issue comments), and `git am` keeps attribution and history clean.
-- **Evidence:** Proven 3/3 on 2026-07-04 (recovery PRs #347/#348/#349); kick template's standard fallback since PR #357.
-- **Reuse trigger:** Any delivery lane where the artifact exists but the transport failed.
-
-## Guard test born with the invariant
-
-- **Situation:** S2 had to create the NS-INV-1 single prompt-construction choke point — an invariant that only holds if future code cannot quietly violate it.
-- **Move:** The same PR that created the module shipped a repo-scanning guard test (construction-marker sentinel + `role: "system"` regex over all production sources) that fails CI on any second construction site.
-- **Why it worked:** The invariant is enforced by CI from birth — violation is a red build, not a review-time hope. Same pattern as the doc-registry and migration-timestamp guards.
-- **Evidence:** PR #369, `contextAssemblyChokePoint.test.ts`.
-- **Reuse trigger:** Any new invariant whose violation is textually detectable — ship the guard in the PR that births the invariant, never later.
+- **Patch-paste delivery recovery** — When the work exists but the transport failed, ship the patch over the one channel that works and apply it with `git am`. The issue-comment version (#347-#349) is dead. Current protocol v2 → kick text in `.github/workflows/pipeline-advance.yml`; see `docs/FAILURES.md`.
+- **Guard test born with the invariant** — PR #369 shipped the NS-INV-1 guard with the invariant. Promoted 2026-10-17 → `docs/ENGINEERING_INVARIANTS.md` preamble (guard in the same PR, proven by a planted violation).
+- **Generate + flag, don't rely on remembering (manual prod-apply gate)** — Keep the human gate and stop relying on memory: generate the artifact and surface the reminder (`pnpm drift:assemble`, PR #453). For migrations this was later replaced by the gated `migration-apply.yml`; the move still applies to any easy-to-forget manual step.
 
 ## Verify-not-redo on collision
 
@@ -55,14 +45,6 @@ Entry format: Situation / Move / Why it worked / Evidence / Reuse trigger.
 - **Why it worked:** Console output needs no adapter, no vendor, no config; the very next probe returned the provider's HTTP status and settled quota-vs-key definitively.
 - **Evidence:** PR #361; the `429` log line of 2026-07-05.
 - **Reuse trigger:** Any catch-and-degrade path — the degrade may be silent for the user, never for the operator.
-
-## Generate + flag, don't rely on remembering (manual prod-apply gate)
-
-- **Situation:** Prod migrations are manual (Vercel never pushes them); the apply step relied on a human remembering to hand-assemble apply SQL at merge time — and a merge dropped it, leaving prod two days behind (see FAILURES: the C3/C4 gap).
-- **Move:** Keep the human gate on prod DDL, but remove the remembering — a one-command generator (`pnpm drift:assemble`) that turns merged migration files into exact paste-ready SQL, a PR check that flags any migration-adding PR with that command, and a `pnpm status` line that surfaces a RED drift with the fix.
-- **Why it worked:** The gap was never "the SQL was wrong" — the Migrations+RLS lane already proves correctness. It was "nobody generated or remembered it." Automating generation + surfacing (not application) closes the gap without weakening human control over irreversible prod DDL.
-- **Evidence:** PR #453 (assembler, Codex) + the U2b integration; the generator reproduced the owner's hand-assembled `drift-fix-c3-c4` ledger byte-for-byte.
-- **Reuse trigger:** Any manual, easy-to-forget step gated behind a human — generate the artifact and surface the reminder; keep the gate, kill the remembering.
 
 ---
 
