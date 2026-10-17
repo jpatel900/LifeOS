@@ -315,10 +315,70 @@ export function submitRawCapture(
   };
 }
 
+/**
+ * Bug hunt #6: point every draft and task made from a capture at a new id
+ * for that capture. Used when sync swaps a capture's device id for its
+ * account id, so its drafts are not orphaned (which made the same thought
+ * show as both a pending draft and "not sorted yet").
+ */
+export function retargetCaptureReferences(
+  state: WorkflowState,
+  renames: ReadonlyMap<string, string>,
+): WorkflowState {
+  if (renames.size === 0) return state;
+  const rename = (id: string) => renames.get(id) ?? id;
+  const touches = (id: string) => renames.has(id);
+  if (
+    !state.taskDrafts.some((d) => touches(d.capture_item_id)) &&
+    !state.projectDrafts.some((d) => touches(d.capture_item_id)) &&
+    !state.timeBlockProposalDrafts.some((d) => touches(d.capture_item_id)) &&
+    !state.tasks.some((t) => touches(t.source_capture_item_id ?? ""))
+  ) {
+    return state;
+  }
+  return {
+    ...state,
+    taskDrafts: state.taskDrafts.map((draft) =>
+      touches(draft.capture_item_id)
+        ? { ...draft, capture_item_id: rename(draft.capture_item_id) }
+        : draft,
+    ),
+    projectDrafts: state.projectDrafts.map((draft) =>
+      touches(draft.capture_item_id)
+        ? { ...draft, capture_item_id: rename(draft.capture_item_id) }
+        : draft,
+    ),
+    timeBlockProposalDrafts: state.timeBlockProposalDrafts.map((draft) =>
+      touches(draft.capture_item_id)
+        ? { ...draft, capture_item_id: rename(draft.capture_item_id) }
+        : draft,
+    ),
+    tasks: state.tasks.map((task) =>
+      task.source_capture_item_id && touches(task.source_capture_item_id)
+        ? {
+            ...task,
+            source_capture_item_id: rename(task.source_capture_item_id),
+          }
+        : task,
+    ),
+  };
+}
+
 export function appendParsedWorkflowResult(
   state: WorkflowState,
-  parsed: ParsedWorkflowResult,
+  incoming: ParsedWorkflowResult,
 ): WorkflowState {
+  // Bug hunt #6: a sort started from a capture's DEVICE id can land after
+  // sync already swapped that capture for its account twin. File the result
+  // under the account capture instead of re-adding the retired device row.
+  const accountTwinId =
+    state.accountIdByLocalId?.captures?.[incoming.captureItem.id];
+  const parsed: ParsedWorkflowResult =
+    accountTwinId &&
+    !state.captureItems.some((item) => item.id === incoming.captureItem.id) &&
+    state.captureItems.some((item) => item.id === accountTwinId)
+      ? retargetParsedResult(incoming, accountTwinId, state)
+      : incoming;
   const captureExists = state.captureItems.some(
     (item) => item.id === parsed.captureItem.id,
   );
@@ -343,5 +403,36 @@ export function appendParsedWorkflowResult(
       `Parsed capture: ${parsed.captureItem.raw_text}`,
       ...state.reviewLog,
     ],
+  };
+}
+
+function retargetParsedResult(
+  parsed: ParsedWorkflowResult,
+  accountCaptureId: string,
+  state: WorkflowState,
+): ParsedWorkflowResult {
+  const from = parsed.captureItem.id;
+  const twin = state.captureItems.find((item) => item.id === accountCaptureId)!;
+  const move = <T extends { capture_item_id: string }>(item: T): T =>
+    item.capture_item_id === from
+      ? { ...item, capture_item_id: accountCaptureId }
+      : item;
+  return {
+    ...parsed,
+    captureItem: {
+      ...parsed.captureItem,
+      ...twin,
+      status: parsed.captureItem.status,
+    },
+    taskDrafts: parsed.taskDrafts.map(move),
+    projectDrafts: parsed.projectDrafts.map(move),
+    timeBlockProposalDrafts: parsed.timeBlockProposalDrafts.map(move),
+    ambiguityAssessment:
+      parsed.ambiguityAssessment?.source_capture_item_id === from
+        ? {
+            ...parsed.ambiguityAssessment,
+            source_capture_item_id: accountCaptureId,
+          }
+        : parsed.ambiguityAssessment,
   };
 }
