@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import type { TaskReviewSaveResult } from "@/lib/workflowContext/types";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import {
   countNeedsDecision,
@@ -94,6 +95,23 @@ const REASON_LABEL: Record<string, string> = {
   partial: "only partly done",
 };
 
+function reviewSaveMessage(result: TaskReviewSaveResult, success: string) {
+  switch (result) {
+    case "persisted":
+      return success;
+    case "persisted-refresh-failed":
+      return "Saved to your account. The latest view could not load. Try refreshing.";
+    case "local-only":
+      return "Changed here. Account save is not confirmed.";
+    case "refused":
+      return "Your choice was not saved. Check the open-work limit notice.";
+    case "unchanged":
+      return "Nothing changed. Refresh to check this task.";
+    case "failed":
+      return "Could not save your choice to your account. Try again.";
+  }
+}
+
 export function ReviewSheet({
   open,
   onClose,
@@ -168,9 +186,9 @@ export function ReviewSheet({
                     <Button
                       type="button"
                       size="sm"
-                      onClick={() => {
-                        carryForwardTask(item.task.id);
-                        onToast?.("Carried forward");
+                      onClick={async () => {
+                        const result = await carryForwardTask(item.task.id);
+                        onToast?.(reviewSaveMessage(result, "Carried forward"));
                       }}
                       className={cn(HIT_TARGET_MIN, "touch-manipulation")}
                       data-testid={`review-sheet-carry-forward-${item.task.id}`}
@@ -181,9 +199,11 @@ export function ReviewSheet({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        deferTask(item.task.id);
-                        onToast?.("Put off for later");
+                      onClick={async () => {
+                        const result = await deferTask(item.task.id);
+                        onToast?.(
+                          reviewSaveMessage(result, "Put off for later"),
+                        );
                       }}
                       className={cn(HIT_TARGET_MIN, "touch-manipulation")}
                       data-testid={`review-sheet-defer-${item.task.id}`}
