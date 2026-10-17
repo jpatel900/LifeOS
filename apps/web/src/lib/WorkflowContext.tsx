@@ -1097,6 +1097,28 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             : null;
         },
 
+        // --- calendar hunt #3: review transitions ------------------------
+        syncTaskReview: async (args) => {
+          const result = await applyTaskReviewTransition(
+            client,
+            args.task_id,
+            args.target_status,
+          );
+          return { provider: result.provider };
+        },
+        resolveTaskReviewTaskId: async (payload) => {
+          const localAlias = persistedIdForLocalId(
+            String(payload.workflow_task_id),
+            persistedTaskIdByLocalIdRef.current,
+          );
+          if (localAlias) return localAlias;
+
+          const acceptClientWriteId = payload.accept_client_write_id;
+          return acceptClientWriteId
+            ? findJournaledTaskIdByClientWriteId(client, acceptClientWriteId)
+            : null;
+        },
+
         // --- #960 defect 3: raw captures ---------------------------------
         syncCapture: (args) => syncJournaledCapture(client, args),
         // Same late resolution as the review's area, and the same rule: a

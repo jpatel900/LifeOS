@@ -129,6 +129,10 @@ export type PendingWriteEntity =
   // compensating entry cancels its target.
   | "plan_unplacement"
   | "task_drop"
+  // Calendar hunt #3: "Move to today", carry forward and put off. Before
+  // this they were sent directly, or — with no account id yet — reported as
+  // saved on this device and then lost.
+  | "task_review"
   // #960 defect 3: a raw capture whose account write could not be resolved at
   // the moment it was made (a client existed but the area id, or the
   // account itself, had not synced yet). Previously `persistCapture` simply

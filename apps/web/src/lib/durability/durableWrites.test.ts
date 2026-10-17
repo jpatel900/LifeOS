@@ -5,6 +5,7 @@ import {
   journalPlanPlacementWrite,
   journalPlanUnplacementWrite,
   journalReviewWrite,
+  journalTaskReviewWrite,
   journalWinWrite,
   createDurableWriteHandlers,
   replayDurableWrites,
@@ -639,6 +640,7 @@ describe("createDurableWriteHandlers", () => {
       "rollup",
       "task_draft_accept",
       "task_drop",
+      "task_review",
       "win",
     ]);
   });
@@ -1193,6 +1195,44 @@ describe("a Google-backed refusal is permanent (calendar hunt #2)", () => {
 
     expect(syncPlanUnplacement).toHaveBeenCalledOnce();
     // Not left to retry forever.
+    expect(await pendingWriteCount()).toBe(0);
+  });
+});
+
+// Calendar hunt #3: "Move to today", carry forward and put off were never
+// queued — with no account id yet they said "saved on this device" and were
+// lost, and the next sync undid them.
+describe("journalTaskReviewWrite / task review replay (calendar hunt #3)", () => {
+  it("waits for the account task, then sends the move", async () => {
+    await journalTaskReviewWrite({
+      workflowTaskId: "task-local-7",
+      persistedTaskId: null,
+      targetStatus: "active",
+      acceptClientWriteId: "accept-write-7",
+    });
+    const syncTaskReview = vi.fn(async () => ({
+      provider: "supabase" as const,
+    }));
+
+    let accountTaskId: string | null = null;
+    const ops = serverOps({
+      syncTaskReview,
+      resolveTaskReviewTaskId: async (payload) => {
+        expect(payload.accept_client_write_id).toBe("accept-write-7");
+        return accountTaskId;
+      },
+    });
+
+    await replayDurableWrites(ops);
+    expect(syncTaskReview).not.toHaveBeenCalled();
+    expect(await pendingWriteCount()).toBe(1);
+
+    accountTaskId = PERSISTED_TASK;
+    await replayDurableWrites(ops);
+    expect(syncTaskReview).toHaveBeenCalledWith({
+      task_id: PERSISTED_TASK,
+      target_status: "active",
+    });
     expect(await pendingWriteCount()).toBe(0);
   });
 });

@@ -687,6 +687,27 @@ export interface TaskDropWritePayload extends CompensatingWritePayload {
 }
 
 /**
+ * Journalled shape of a review transition — calendar hunt #3: "Move to
+ * today" / carry forward (`active`) and put off (`backlog`).
+ *
+ * Unlike a drop, this is not a compensating write: the accept that created
+ * the task must still be delivered, and this is applied on top of it. So it
+ * names that queued accept (`accept_client_write_id`) only to RESOLVE the
+ * account task id at replay time, never to annul it. FIFO replay sends the
+ * accept first.
+ */
+export interface TaskReviewWritePayload {
+  /** Workflow-local task id, so replay can re-resolve if needed. */
+  workflow_task_id: string;
+  /** Account task id when it was already known at the time of the change. */
+  persisted_task_id: string | null;
+  target_status: "active" | "backlog";
+  /** The queued triage accept that creates this task, if there was one. */
+  accept_client_write_id: string | null;
+  [key: string]: unknown;
+}
+
+/**
  * Journalled shape of a raw capture — #960 defect 3.
  *
  * `persistCapture` used to open with
@@ -734,6 +755,13 @@ export interface JournalTaskDropInput {
   workflowTaskId: string;
   persistedTaskId: string | null;
   supersedesClientWriteId: string | null;
+}
+
+export interface JournalTaskReviewInput {
+  workflowTaskId: string;
+  persistedTaskId: string | null;
+  targetStatus: "active" | "backlog";
+  acceptClientWriteId: string | null;
 }
 
 export interface JournalCaptureInput {
@@ -792,6 +820,21 @@ export function journalTaskDropWrite(
       workflow_task_id: input.workflowTaskId,
       persisted_task_id: input.persistedTaskId,
       supersedes_client_write_id: input.supersedesClientWriteId,
+    },
+  });
+}
+
+/** Journal one review transition (calendar hunt #3). Throws like the rest. */
+export function journalTaskReviewWrite(
+  input: JournalTaskReviewInput,
+): Promise<PendingWrite<TaskReviewWritePayload>> {
+  return enqueuePendingWrite<TaskReviewWritePayload>({
+    entity: "task_review",
+    payload: {
+      workflow_task_id: input.workflowTaskId,
+      persisted_task_id: input.persistedTaskId,
+      target_status: input.targetStatus,
+      accept_client_write_id: input.acceptClientWriteId,
     },
   });
 }
@@ -1002,6 +1045,14 @@ export interface DurableWriteServerOps {
   resolveTaskDropTaskId?(
     payload: TaskDropWritePayload,
   ): string | null | Promise<string | null>;
+  /** Calendar hunt #3: apply a review transition on the account. */
+  syncTaskReview?(
+    args: SyncTaskReviewArgs,
+  ): Promise<{ provider: "mock" | "supabase" }>;
+  /** Late resolution of the task id for a review journalled before it synced. */
+  resolveTaskReviewTaskId?(
+    payload: TaskReviewWritePayload,
+  ): string | null | Promise<string | null>;
   /** #960 defect 3: send one journalled raw capture, idempotently. */
   syncCapture?(args: SyncCaptureArgs): Promise<SyncCaptureResult>;
   /**
@@ -1039,6 +1090,12 @@ export interface SyncPlanUnplacementArgs {
 /** The account-side call for a journalled task drop. */
 export interface SyncTaskDropArgs {
   task_id: string;
+}
+
+/** The account-side call for a journalled review transition (hunt #3). */
+export interface SyncTaskReviewArgs {
+  task_id: string;
+  target_status: "active" | "backlog";
 }
 
 /** The account-side call for a journalled capture — #960 defect 3. */
@@ -1523,6 +1580,43 @@ function taskDropHandler(ops: DurableWriteServerOps) {
   };
 }
 
+/** Calendar hunt #3: replay one journalled review transition. */
+function taskReviewHandler(ops: DurableWriteServerOps) {
+  return async (write: PendingWrite): Promise<void> => {
+    const payload = write.payload as TaskReviewWritePayload;
+    const sync = ops.syncTaskReview;
+    if (!sync) {
+      throw new Error(
+        "Cannot send this change yet: LifeOS cannot reach your account.",
+      );
+    }
+
+    const taskId =
+      payload.persisted_task_id ??
+      (await ops.resolveTaskReviewTaskId?.(payload)) ??
+      null;
+    if (!taskId) {
+      throw new Error(
+        "Cannot send this change yet: its account task is not known on this device.",
+      );
+    }
+
+    let result;
+    try {
+      // A fixed-value transition, so a replay is naturally idempotent.
+      result = await sync({
+        task_id: taskId,
+        target_status: payload.target_status,
+      });
+    } catch (error) {
+      // Same permanent case as unplan and drop (calendar hunt #2).
+      if (isGoogleBackedRefusal(error)) return;
+      throw error;
+    }
+    requireAccountWrite(result);
+  };
+}
+
 /**
  * #960 defect 3: replay one journalled raw capture. Same shape as
  * `reviewHandler`'s area guard — `workflow_area_id !== null` is what tells
@@ -1592,6 +1686,7 @@ export function createDurableWriteHandlers(
     rollup: rollupHandler(ops),
     plan_unplacement: planUnplacementHandler(ops),
     task_drop: taskDropHandler(ops),
+    task_review: taskReviewHandler(ops),
     capture: captureHandler(ops),
   };
 }
