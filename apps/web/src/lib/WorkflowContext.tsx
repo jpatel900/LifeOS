@@ -53,6 +53,7 @@ import {
 } from "./statusVocabulary";
 import {
   applyTaskReviewTransition,
+  editTimeBlockProposal,
   syncJournaledRollup,
   syncJournaledWin,
   syncJournaledReviewEntry,
@@ -1095,6 +1096,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           return originalClientWriteId
             ? findJournaledTaskIdByClientWriteId(client, originalClientWriteId)
             : null;
+        },
+
+        // --- calendar hunt #4: proposal time edits -----------------------
+        syncProposalEdit: async (args) => {
+          const result = await editTimeBlockProposal(client, args.proposal_id, {
+            proposed_start: args.proposed_start,
+            proposed_end: args.proposed_end,
+          });
+          return { provider: result.provider };
         },
 
         // --- calendar hunt #3: review transitions ------------------------

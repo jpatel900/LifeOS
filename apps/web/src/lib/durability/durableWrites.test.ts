@@ -4,6 +4,7 @@ import {
   journalCaptureWrite,
   journalPlanPlacementWrite,
   journalPlanUnplacementWrite,
+  journalProposalEditWrite,
   journalReviewWrite,
   journalTaskReviewWrite,
   journalWinWrite,
@@ -636,6 +637,7 @@ describe("createDurableWriteHandlers", () => {
       "execution_session",
       "plan_placement",
       "plan_unplacement",
+      "proposal_edit",
       "review",
       "rollup",
       "task_draft_accept",
@@ -1232,6 +1234,37 @@ describe("journalTaskReviewWrite / task review replay (calendar hunt #3)", () =>
     expect(syncTaskReview).toHaveBeenCalledWith({
       task_id: PERSISTED_TASK,
       target_status: "active",
+    });
+    expect(await pendingWriteCount()).toBe(0);
+  });
+});
+
+// Calendar hunt #4: a "Move later" edit was sent once, directly; if that
+// failed (offline, a dropped connection) it was lost, and the account kept
+// the older time.
+describe("journalProposalEditWrite / proposal edit replay (calendar hunt #4)", () => {
+  it("sends the edited time when the account is reachable, and keeps it queued until then", async () => {
+    await journalProposalEditWrite({
+      workflowProposalId: "proposal-local-2",
+      persistedProposalId: "550e8400-e29b-41d4-a716-446655440502",
+      proposedStart: "2026-05-08T15:00:00.000Z",
+      proposedEnd: "2026-05-08T16:00:00.000Z",
+    });
+
+    const failing = vi.fn(async () => {
+      throw new Error("Network request failed");
+    });
+    await replayDurableWrites(serverOps({ syncProposalEdit: failing }));
+    expect(await pendingWriteCount()).toBe(1);
+
+    const syncProposalEdit = vi.fn(async () => ({
+      provider: "supabase" as const,
+    }));
+    await replayDurableWrites(serverOps({ syncProposalEdit }));
+    expect(syncProposalEdit).toHaveBeenCalledWith({
+      proposal_id: "550e8400-e29b-41d4-a716-446655440502",
+      proposed_start: "2026-05-08T15:00:00.000Z",
+      proposed_end: "2026-05-08T16:00:00.000Z",
     });
     expect(await pendingWriteCount()).toBe(0);
   });

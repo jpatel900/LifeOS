@@ -44,6 +44,7 @@ import {
   journalTaskDraftAcceptWrite,
   journalTaskDropWrite,
   journalTaskReviewWrite,
+  journalProposalEditWrite,
 } from "../durability/durableWrites";
 import { generateClientWriteId } from "../durability/pendingWriteJournal";
 import {
@@ -522,10 +523,39 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       return;
     }
 
-    await editTimeBlockProposal(client, persistedProposalId, {
-      proposed_start: localProposal.proposed_start,
-      proposed_end: localProposal.proposed_end,
-    });
+    // Calendar hunt #4: queue the new time on the device first, so a failed
+    // send is retried instead of lost. (Approving the Google event checks
+    // the account holds the time on screen, so a time that has not landed
+    // yet is never sent to Google.)
+    let journalled;
+    try {
+      journalled = await journalProposalEditWrite({
+        workflowProposalId: localProposal.id,
+        persistedProposalId,
+        proposedStart: localProposal.proposed_start,
+        proposedEnd: localProposal.proposed_end,
+      });
+    } catch {
+      // The device cannot hold it: send directly, as before.
+      markDeviceStorageBlocked({ preservePendingLocalChanges: true });
+      await editTimeBlockProposal(client, persistedProposalId, {
+        proposed_start: localProposal.proposed_start,
+        proposed_end: localProposal.proposed_end,
+      });
+      await syncPersistedWorkflowRows(client);
+      return;
+    }
+
+    try {
+      await replayJournaledWrites();
+    } catch {
+      // Best-effort: the edit stays journalled and the next replay retries.
+    }
+
+    if (await hasPendingWrite(journalled.client_write_id)) {
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your proposal edit"));
+      return;
+    }
 
     await syncPersistedWorkflowRows(client);
   }

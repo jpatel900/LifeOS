@@ -75,6 +75,12 @@ function mapCreateEventFailure(error: unknown) {
   };
 }
 
+function sameInstant(left: string, right: string) {
+  const a = new Date(left).getTime();
+  const b = new Date(right).getTime();
+  return Number.isFinite(a) && a === b;
+}
+
 function isEligibleProposalStatus(status: string) {
   return status === "proposed" || status === "edited" || status === "accepted";
 }
@@ -160,6 +166,23 @@ export async function POST(request: Request) {
           ok: false,
           error:
             "Only proposed, edited, or accepted local proposals can create Google Calendar events.",
+        },
+        { status: 409 },
+      );
+    }
+
+    // Calendar hunt #4: Google gets exactly the time the person approved.
+    // A local "Move later" that has not reached the account yet would
+    // otherwise send the account's older time.
+    if (
+      !sameInstant(input.approved_start, proposal.proposed_start) ||
+      !sameInstant(input.approved_end, proposal.proposed_end)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "The time you approved isn't saved to your account yet. Wait a moment for it to reach your account, then approve again.",
         },
         { status: 409 },
       );

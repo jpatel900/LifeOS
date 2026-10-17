@@ -234,6 +234,14 @@ describe("Google Calendar approval bridge", () => {
       approved: true,
       acknowledge_first_write_warning: false,
     });
+    // Calendar hunt #4: the approval carries the time shown on screen.
+    expect(typeof writeCall?.body?.approved_start).toBe("string");
+    expect(typeof writeCall?.body?.approved_end).toBe("string");
+    expect(
+      new Date(String(writeCall?.body?.approved_end)).getTime(),
+    ).toBeGreaterThan(
+      new Date(String(writeCall?.body?.approved_start)).getTime(),
+    );
 
     expect(
       await screen.findByRole("button", {

@@ -198,6 +198,8 @@ describe("google-calendar create-event route", () => {
       request({
         proposal_id: proposal.id,
         approved: true,
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
       }),
     );
     const body = await response.json();
@@ -213,6 +215,8 @@ describe("google-calendar create-event route", () => {
         proposal_id: proposal.id,
         approved: true,
         timezone: "America/Toronto",
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
       }),
     );
     const body = await response.json();
@@ -267,6 +271,8 @@ describe("google-calendar create-event route", () => {
       request({
         proposal_id: proposal.id,
         approved: true,
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
       }),
     );
     const body = await response.json();
@@ -301,6 +307,8 @@ describe("google-calendar create-event route", () => {
       request({
         proposal_id: proposal.id,
         approved: true,
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
       }),
     );
     const body = await response.json();
@@ -334,6 +342,8 @@ describe("google-calendar create-event route", () => {
       request({
         proposal_id: proposal.id,
         approved: true,
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
       }),
     );
 
@@ -357,6 +367,8 @@ describe("google-calendar create-event route", () => {
       request({
         proposal_id: proposal.id,
         approved: true,
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
       }),
     );
     const body = await response.json();
@@ -370,6 +382,39 @@ describe("google-calendar create-event route", () => {
       mocks.createPendingExternalWriteEventForAccessToken,
     ).not.toHaveBeenCalled();
     expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the approved time is not the time the account holds (calendar hunt #4)", async () => {
+    const response = await POST(
+      request({
+        proposal_id: proposal.id,
+        approved: true,
+        // The person moved it later on this device; the account never got it.
+        approved_start: "2026-05-10T18:00:00.000Z",
+        approved_end: "2026-05-10T19:00:00.000Z",
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("time you approved");
+    expect(
+      mocks.createPendingExternalWriteEventForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+  });
+
+  it("accepts the same instant written with a numeric offset", async () => {
+    const response = await POST(
+      request({
+        proposal_id: proposal.id,
+        approved: true,
+        approved_start: "2026-05-10T12:00:00.000-04:00",
+        approved_end: "2026-05-10T13:00:00.000-04:00",
+      }),
+    );
+
+    expect(response.status).toBe(200);
   });
 
   it("blocks unauthenticated requests", async () => {
@@ -396,6 +441,8 @@ describe("google-calendar create-event route", () => {
       request({
         proposal_id: proposal.id,
         approved: true,
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
       }),
     );
 

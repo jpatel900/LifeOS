@@ -133,6 +133,10 @@ export type PendingWriteEntity =
   // this they were sent directly, or — with no account id yet — reported as
   // saved on this device and then lost.
   | "task_review"
+  // Calendar hunt #4: a "Move later" edit to a proposal the account already
+  // holds. Lost before on any failed send, while the approval used the
+  // account's older time.
+  | "proposal_edit"
   // #960 defect 3: a raw capture whose account write could not be resolved at
   // the moment it was made (a client existed but the area id, or the
   // account itself, had not synced yet). Previously `persistCapture` simply

@@ -314,6 +314,8 @@ describe("CreateGoogleCalendarEventInputSchema", () => {
       approved: true,
       acknowledge_first_write_warning: true,
       timezone: "America/Toronto",
+      approved_start: "2026-05-10T16:00:00.000Z",
+      approved_end: "2026-05-10T17:00:00.000Z",
     });
 
     expect(result.success).toBe(true);
@@ -321,6 +323,17 @@ describe("CreateGoogleCalendarEventInputSchema", () => {
     expect(
       result.success ? result.data.acknowledge_first_write_warning : false,
     ).toBe(true);
+  });
+
+  // Calendar hunt #4: the event is created at the time the person SAW and
+  // approved, so that time must travel with the approval.
+  it("requires the approved start and end", () => {
+    const result = CreateGoogleCalendarEventInputSchema.safeParse({
+      proposal_id: uid,
+      approved: true,
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it("rejects event creation input without approval", () => {

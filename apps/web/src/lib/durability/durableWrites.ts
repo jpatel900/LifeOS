@@ -708,6 +708,19 @@ export interface TaskReviewWritePayload {
 }
 
 /**
+ * Journalled shape of a proposal time edit — calendar hunt #4. Only queued
+ * for a proposal the account already holds (its id is known), so replay can
+ * always resolve it.
+ */
+export interface ProposalEditWritePayload {
+  workflow_proposal_id: string;
+  persisted_proposal_id: string;
+  proposed_start: string;
+  proposed_end: string;
+  [key: string]: unknown;
+}
+
+/**
  * Journalled shape of a raw capture — #960 defect 3.
  *
  * `persistCapture` used to open with
@@ -762,6 +775,13 @@ export interface JournalTaskReviewInput {
   persistedTaskId: string | null;
   targetStatus: "active" | "backlog";
   acceptClientWriteId: string | null;
+}
+
+export interface JournalProposalEditInput {
+  workflowProposalId: string;
+  persistedProposalId: string;
+  proposedStart: string;
+  proposedEnd: string;
 }
 
 export interface JournalCaptureInput {
@@ -835,6 +855,21 @@ export function journalTaskReviewWrite(
       persisted_task_id: input.persistedTaskId,
       target_status: input.targetStatus,
       accept_client_write_id: input.acceptClientWriteId,
+    },
+  });
+}
+
+/** Journal one proposal time edit (calendar hunt #4). Throws like the rest. */
+export function journalProposalEditWrite(
+  input: JournalProposalEditInput,
+): Promise<PendingWrite<ProposalEditWritePayload>> {
+  return enqueuePendingWrite<ProposalEditWritePayload>({
+    entity: "proposal_edit",
+    payload: {
+      workflow_proposal_id: input.workflowProposalId,
+      persisted_proposal_id: input.persistedProposalId,
+      proposed_start: input.proposedStart,
+      proposed_end: input.proposedEnd,
     },
   });
 }
@@ -1045,6 +1080,10 @@ export interface DurableWriteServerOps {
   resolveTaskDropTaskId?(
     payload: TaskDropWritePayload,
   ): string | null | Promise<string | null>;
+  /** Calendar hunt #4: move a proposal's time on the account. */
+  syncProposalEdit?(
+    args: SyncProposalEditArgs,
+  ): Promise<{ provider: "mock" | "supabase" }>;
   /** Calendar hunt #3: apply a review transition on the account. */
   syncTaskReview?(
     args: SyncTaskReviewArgs,
@@ -1090,6 +1129,13 @@ export interface SyncPlanUnplacementArgs {
 /** The account-side call for a journalled task drop. */
 export interface SyncTaskDropArgs {
   task_id: string;
+}
+
+/** The account-side call for a journalled proposal edit (hunt #4). */
+export interface SyncProposalEditArgs {
+  proposal_id: string;
+  proposed_start: string;
+  proposed_end: string;
 }
 
 /** The account-side call for a journalled review transition (hunt #3). */
@@ -1580,6 +1626,26 @@ function taskDropHandler(ops: DurableWriteServerOps) {
   };
 }
 
+/** Calendar hunt #4: replay one journalled proposal time edit. */
+function proposalEditHandler(ops: DurableWriteServerOps) {
+  return async (write: PendingWrite): Promise<void> => {
+    const payload = write.payload as ProposalEditWritePayload;
+    const sync = ops.syncProposalEdit;
+    if (!sync) {
+      throw new Error(
+        "Cannot send this change yet: LifeOS cannot reach your account.",
+      );
+    }
+    // Setting a time is a fixed-value update, so a replay is idempotent.
+    const result = await sync({
+      proposal_id: payload.persisted_proposal_id,
+      proposed_start: payload.proposed_start,
+      proposed_end: payload.proposed_end,
+    });
+    requireAccountWrite(result);
+  };
+}
+
 /** Calendar hunt #3: replay one journalled review transition. */
 function taskReviewHandler(ops: DurableWriteServerOps) {
   return async (write: PendingWrite): Promise<void> => {
@@ -1687,6 +1753,7 @@ export function createDurableWriteHandlers(
     plan_unplacement: planUnplacementHandler(ops),
     task_drop: taskDropHandler(ops),
     task_review: taskReviewHandler(ops),
+    proposal_edit: proposalEditHandler(ops),
     capture: captureHandler(ops),
   };
 }
