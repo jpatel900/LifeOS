@@ -20,7 +20,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
-import { planTaskAtHour, type WorkflowState } from "@/lib/workflow";
+import { planTaskAtHour } from "@/lib/workflow";
 import {
   acceptLatestDraft,
   captureWorkflow,
@@ -104,7 +104,7 @@ const BLOCK_HOUR = 10;
  * reload: a device-born task and block, both still under their local ids,
  * with their account twins recorded in the state's alias map.
  */
-function seedPlacedBeforeReload(): WorkflowState {
+function seedPlacedBeforeReload() {
   let state = workflowSeed();
   state = captureWorkflow(state, "Renew the volunteer insurance certificate");
   state = acceptLatestDraft(state);

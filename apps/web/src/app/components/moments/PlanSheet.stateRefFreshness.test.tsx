@@ -104,7 +104,7 @@ const persistedArea = {
 
 const NOW = new Date("2026-08-20T09:30:00");
 
-function localTaskState(): WorkflowState {
+function localTaskState() {
   let state = workflowSeed();
   state = captureWorkflow(state, "Renew the volunteer insurance certificate");
   state = acceptLatestDraft(state);
@@ -118,7 +118,7 @@ function localTaskState(): WorkflowState {
 }
 
 /** A device-born task whose account twin is already known (alias recorded). */
-function seedLocalTask(): WorkflowState {
+function seedLocalTask() {
   const state = localTaskState();
   return {
     ...state,
@@ -137,7 +137,7 @@ function seedLocalTask(): WorkflowState {
  * is already known — the state right after the proposal's create resolved and
  * before the next full sync landed.
  */
-function seedLocalProposal(): WorkflowState {
+function seedLocalProposal() {
   const state = localTaskState();
   const task = { ...state.tasks[0], id: ACCOUNT_TASK_ID };
   const start = new Date(NOW);
@@ -199,7 +199,7 @@ function RefreshHarness() {
   );
 }
 
-function renderPlan(seed: WorkflowState, toasts: string[] = []) {
+function renderPlan(seed: object, toasts: string[] = []) {
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
   render(
     <WorkflowProvider>
