@@ -71,9 +71,6 @@ jobs:
       - name: safe-automerge-demotion self-test
         run: node scripts/agent/safe-automerge-demotion.mjs --self-test
 
-      - name: low-risk issue authorization self-test
-        run: node scripts/agent/low-risk-issue-policy.mjs --self-test
-
       - name: red-guard diagnosis self-test
         run: node scripts/agent/red-guard-diagnose.mjs --self-test
 

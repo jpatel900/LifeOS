@@ -65,7 +65,6 @@ Use this as the deterministic routing summary before opening or merging an autom
 
 - Safe auto-merge evaluator and revocation guard: `.github/workflows/safe-automerge.yml` and `scripts/agent/check-safe-automerge.mjs`
 - Shared automation path policy: `scripts/agent/automation-policy.mjs`
-- Shared automation path guard: `scripts/agent/check-automation-scope.mjs`
 - PR risk classification: `scripts/agent/classify-pr-risk.mjs`
 - Main Red Guard hold, diagnosis, and stand-down: `.github/workflows/main-red-guard.yml` and `scripts/agent/red-guard-diagnose.mjs`
 - PR evidence guidance: `AGENTS.md` "Delivering work" (evidence or UNVERIFIED; OWNER-GATE/AGENT-TODO markers)

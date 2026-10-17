@@ -287,13 +287,12 @@ Code rollback if needed:
 
 ## Pipeline Kill Switch
 
-When the autonomous pipeline misbehaves (loops, runaway spend, bad merges), pause the
-autonomous half immediately while keeping CI and the Main Red Guard alive:
+When agent automation misbehaves (loops, runaway spend, bad merges), pause it
+immediately while keeping CI and the Main Red Guard alive:
 
 ```
-gh workflow disable pipeline-advance.yml
-gh workflow disable codex-low-risk-issue-to-pr.yml
-gh workflow disable codex-issue-plan.yml
+gh workflow disable codex-pr-review.yml
+gh workflow disable selfmerge-window.yml
 ```
 
 Re-enable with `gh workflow enable <file>` once the cause is understood. Never disable

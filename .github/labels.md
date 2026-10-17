@@ -6,9 +6,6 @@ Use labels to show agent readiness, owning surface, expected risk, and automatio
 
 - `agent:ready` - The issue is bounded enough for an agent to start.
 - `agent:claimed` - An agent has claimed this issue (AGENTS.md "Shared repo"); do not start work on it.
-- `agent:plan` - Run the read-only planning packet workflow for medium/high-risk or unclear tasks before implementation.
-- `agent:codex` - Good fit for Codex execution.
-- `agent:cursor` - Good fit for Cursor execution.
 
 ## Risk
 
@@ -30,8 +27,8 @@ Use labels to show agent readiness, owning surface, expected risk, and automatio
 - `needs:human-decision` - The issue is blocked on scope, policy, approval, or risk decisions a human must make.
 - `automerge:safe` - The issue is explicitly approved for the T0 safe auto-merge lane when deterministic path checks also pass.
 - `automerge:tests-additive` - Strictly-additive test-only PR opting into the ADR 0008 move-1b auto-merge route; the guard verifies test-paths-only and zero deleted lines.
+- `review:llm` - Opt-in Codex LLM review on a PR (`codex-pr-review.yml`); without it that workflow does nothing. Bills `OPENAI_API_KEY`.
 - `selfmerge:auto` - Low-risk agent PR opting into instant self-merge (ADR 0008 move 2 as amended 2026-08-05): owner gets a Telegram notice, auto-merge arms immediately, CI runtime is the veto window. `selfmerge:30m` remains as a legacy alias.
-- `agent:claimed` - An agent has claimed this issue and is actively working it; do not start parallel work (AGENTS.md "Shared repo").
 - `usability` / `enjoyability` - Lane labels driving the two-lane work-map view; apply one at issue creation.
 
 ## Main Red Guard revert PRs (owner decision 2026-08-05: notify and hold)
@@ -43,6 +40,6 @@ Guard revert PRs open HELD and never arm auto-merge on their own.
 
 ## Suggested combinations
 
-- Typical bounded UI task: `agent:ready`, `agent:codex`, `area:ui`, `risk:low`
-- Test hardening task: `agent:ready`, `agent:codex`, `area:tests`, `risk:medium`
+- Typical bounded UI task: `agent:ready`, `area:ui`, `risk:low`
+- Test hardening task: `agent:ready`, `area:tests`, `risk:medium`
 - Calendar or security-sensitive task: `area:calendar` or `area:security`, plus the matching risk label, and add `needs:human-decision` when explicit approval is still missing

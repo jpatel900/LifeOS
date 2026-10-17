@@ -27,10 +27,9 @@ overplanning, missed-block collapse) is a design input everywhere.
    baseline and stages as dependency/risk order, while retaining evidence gates
    for behavior that depends on personal usage. Conflicts are surfaced, never
    silently resolved.
-3. **Delivery apparatus** — two implementation lanes (Codex cloud via manifest
-   kicks; local Claude subagents in isolated worktrees) + CI guard tests +
-   watchdogs (stranded-delivery, migration drift, provider canary, Main Red
-   Guard) + `pnpm status` (owner queue). Deterministic guards enforce what
+3. **Delivery apparatus** — two implementation lanes (Codex and Claude, each in
+   isolated branches/worktrees; `docs/agent/LANES.md`) + CI guard tests +
+   watchdogs (migration drift, provider canary, Main Red Guard) + `pnpm status` (owner queue). Deterministic guards enforce what
    review would otherwise have to remember.
 4. **Learning loops** — suggestion/override records with stable policy ids →
    recalibration + override-pattern scans → trust-ladder graduation (L0–L3,
