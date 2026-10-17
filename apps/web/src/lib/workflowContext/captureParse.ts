@@ -23,6 +23,7 @@ import {
 import { createSupabaseBrowserClient } from "../supabase/browser";
 import { enqueueCapture } from "../capture/offlineQueue";
 import { buildParsedWorkflowResult } from "../ai/parseCaptureWorkflow";
+import { buildParseCaptureClock } from "../ai/parseCaptureClock";
 import {
   requestParseCapture,
   type ParseCaptureOperatorProfileContext,
@@ -180,6 +181,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
               };
             }),
             operatorProfile: operatorProfileContext,
+            clock: buildParseCaptureClock(),
             parserMode,
             authorization,
           });

@@ -165,10 +165,20 @@ describe("INV-8 — the triage Sort action cannot bypass structural delimiting (
     // The only other things sent are app-owned context (the area list) and
     // the parser mode — never capture-derived text. Pinning the exact key set
     // is the guard: a future prompt-ish field added here would fail this.
+    // Bug hunt #16 added `clock`: the user's local date and time zone, built
+    // from the device clock (never from capture text) and re-validated by
+    // the route, which drops anything not matching its strict shape.
     expect(Object.keys(body).sort()).toEqual([
       "areaContext",
+      "clock",
       "parserMode",
       "rawText",
+    ]);
+    expect(Object.keys(body.clock as object).sort()).toEqual([
+      "timeZone",
+      "today",
+      "utcOffset",
+      "weekday",
     ]);
   });
 

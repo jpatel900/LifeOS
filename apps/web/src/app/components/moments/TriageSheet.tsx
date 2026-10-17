@@ -335,6 +335,18 @@ export function TriageSheet({
                       {estimateLabel}
                     </span>
                   ) : null}
+                  {draft.task_type === "decision" && draft.due_at ? (
+                    // Bug hunt #16: a decision keeps this deadline when it is
+                    // accepted, so show the local day before that happens.
+                    <span data-testid={`triage-sheet-due-${draft.id}`}>
+                      Decide by{" "}
+                      {new Date(draft.due_at).toLocaleDateString(undefined, {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                  ) : null}
                 </div>
                 {draft.first_tiny_step ? (
                   <p

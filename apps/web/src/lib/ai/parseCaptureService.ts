@@ -1,3 +1,4 @@
+import type { ParseCaptureClock } from "./parseCaptureClock";
 import {
   ParseCaptureResponseSchema,
   type ParseCaptureResponse,
@@ -29,6 +30,7 @@ export interface ParseCaptureServiceInput {
   rawText: string;
   areaContext?: ParseCaptureAreaContext[];
   operatorProfile?: OperatorProfileContext | null;
+  clock?: ParseCaptureClock | null;
 }
 
 export interface ParseCaptureServiceOptions {
@@ -478,6 +480,7 @@ export async function parseCaptureWithFallback(
               rawText,
               areaContext: input.areaContext,
               operatorProfile: input.operatorProfile,
+              clock: input.clock,
             },
             {
               apiKey,
@@ -499,6 +502,7 @@ export async function parseCaptureWithFallback(
             rawText,
             areaContext: input.areaContext,
             operatorProfile: input.operatorProfile,
+            clock: input.clock,
           },
           {
             apiKey,
