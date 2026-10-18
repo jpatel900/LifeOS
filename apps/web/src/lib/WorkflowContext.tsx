@@ -42,6 +42,7 @@ import {
   type WipRefusal,
   type WorkflowState,
 } from "./workflow";
+import { taskHasGoogleBackedOpenBlock } from "./workflow/shared";
 import type { SessionSaveResult } from "./workflowContext/persistenceSync";
 import {
   ACCOUNT_UNREACHABLE_NOW,
@@ -2814,6 +2815,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     notes: string | null,
   ): Promise<DeferTaskWithSessionResult> {
     const previous = stateRef.current;
+    // Follow-up to calendar hunt #2: the account refuses to put off a task
+    // whose block is on Google Calendar (the Google event would be left
+    // behind). The end-session policy already stops before this call; this
+    // is the backstop for any other caller, and it changes nothing — no
+    // session mark, no deferral, nothing journalled.
+    if (taskHasGoogleBackedOpenBlock(previous, taskId)) {
+      return "failure";
+    }
     const localSession = findLiveSession(previous);
     const sessionApplied = markCurrentSession(previous, "stuck", {
       actualMinutes,
@@ -3024,17 +3033,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
   async function settleTaskReviewTransition(
     taskId: string,
-    targetStatus: "active" | "backlog",
+    targetStatus: "active" | "backlog" | "dropped",
     previous: WorkflowState,
     next: WorkflowState,
   ): Promise<TaskReviewSaveResult> {
     let error: unknown;
     try {
-      const result = await persistenceOps.persistTaskReviewTransition(
-        taskId,
-        targetStatus,
-        { settle: true },
-      );
+      // #1089 follow-up: Drop keeps its own persistence path (it may annul a
+      // still-queued triage accept), but its result is settled — and a
+      // refused drop rolled back — exactly like put off and carry forward.
+      const result =
+        targetStatus === "dropped"
+          ? await persistenceOps.persistDroppedTask(taskId)
+          : await persistenceOps.persistTaskReviewTransition(
+              taskId,
+              targetStatus,
+              { settle: true },
+            );
       if (result.status === "persisted-refresh-failed") {
         markPersistedLoadFailure(result.error);
       }
@@ -3339,21 +3354,19 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       return settleTaskReviewTransition(taskId, "backlog", previous, next);
     },
     deferTaskWithSession: deferTaskWithSessionWithPersistence,
-    dropTask: (taskId) => {
+    dropTask: async (taskId) => {
       const previous = stateRef.current;
       const next = dropTask(previous, taskId);
       applyWorkflowState(next);
 
-      if (next !== previous) {
-        // #737 C1 S5: routed through `persistDroppedTask`, not the generic
-        // transition, because a drop can be a COMPENSATING action — it may
-        // annul a triage accept that is still queued (#778's accept-then-drop
-        // resurrection). Defer and carry-forward deliberately keep the generic
-        // path: they move a task the user still wants.
-        void persistenceOps.persistDroppedTask(taskId).catch((error) => {
-          markPersistedSaveFailure(error);
-        });
-      }
+      if (next === previous) return "unchanged";
+      // #737 C1 S5: routed through `persistDroppedTask`, not the generic
+      // transition, because a drop can be a COMPENSATING action — it may
+      // annul a triage accept that is still queued (#778's accept-then-drop
+      // resurrection). Defer and carry-forward deliberately keep the generic
+      // path: they move a task the user still wants. #1089 follow-up: the
+      // result is settled the same way, so a refused drop is rolled back.
+      return settleTaskReviewTransition(taskId, "dropped", previous, next);
     },
     saveReview: () => {
       // Audit P0#4 — THE choke point for "one close per day".

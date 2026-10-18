@@ -298,7 +298,11 @@ export interface WorkflowContextValue {
     actualMinutes: number,
     notes: string | null,
   ) => Promise<DeferTaskWithSessionResult>;
-  dropTask: (taskId: string) => void;
+  /**
+   * Applies locally first, then reports the settled account result; a drop
+   * the account refuses is rolled back, like put off and carry forward.
+   */
+  dropTask: (taskId: string) => Promise<TaskReviewSaveResult>;
   /**
    * #588 (review closure truth): resolves with the actual persistence
    * outcome. Local state still updates synchronously/optimistically, but any
