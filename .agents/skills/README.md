@@ -9,7 +9,7 @@ Skills here hold LifeOS-specific knowledge an agent can't derive: where a surfac
 Everything below is auto-vendored from the maintainer's curated hub so cloud agents get the
 same skills as local tools. Do not hand-edit vendored skills here - fix them at their source
 and let the daily sync PR carry the change. Ownership list: `.vendored-manifest.json`.
-Repo-native skills (`lifeos-*`) always win on any overlap.
+Repo-native skills (`lifeos-*`, `skill-router`, etc.) always win on any overlap.
 Third-party skills remain under their upstream repos' licenses.
 
 - **local-hub**: impeccable

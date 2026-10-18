@@ -1,6 +1,7 @@
 {
   "managedBy": "sync-skills-to-lifeos.ps1 (maintainer machine); merge stays human per repo change control",
-  "note": "This manifest is the ALLOWLIST for vendored skills (pruned 2026-08-04, again 2026-10-17 to the skills AGENTS.md names). The sync only creates/updates/deletes dirs listed here; to vendor a new skill, add its entry in a reviewed PR first. Repo-native skills are never listed or touched. Third-party sources keep their upstream licenses.",
+  "note": "This manifest is the ALLOWLIST for vendored skills (pruned 2026-08-04 to the set the AGENTS.md routing table names). The sync only creates/updates/deletes dirs listed here; to vendor a new skill, add its entry in a reviewed PR first. Repo-native skills are never listed or touched. Third-party sources keep their upstream licenses.",
+  "pinPolicy": "Owner 2026-10-17: a skill with a `pin` is frozen at that upstream version. The sync must leave it untouched unless the pin changes; upstream updates are a deliberate bump (new pin.version and pin.treeSha256 in one reviewed PR). apps/web/src/__tests__/vendoredSkillPin.test.ts fails CI on any drift from the pin.",
   "skills": {
     "impeccable": {
       "source": "local-hub",
@@ -9,6 +10,5 @@
         "treeSha256": "e4c3d68d86bde721739199c06eeb65309a795c7ab78834cb40d2d5282131e0e4"
       }
     }
-  },
-  "pinPolicy": "Owner 2026-10-17: a skill with a `pin` is frozen at that upstream version. The sync must leave it untouched unless the pin changes; upstream updates are a deliberate bump (new pin.version and pin.treeSha256 in one reviewed PR). apps/web/src/__tests__/vendoredSkillPin.test.ts fails CI on any drift from the pin."
+  }
 }
