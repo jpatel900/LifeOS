@@ -10,7 +10,10 @@ import { scopeAreaId } from "./pipelineCounts";
 import { TaskMapDraftReview } from "./TaskMapDraftReview";
 import { UnsortedCaptures } from "./UnsortedCaptures";
 import { HIT_TARGET_MIN } from "./hitTarget";
-import { countUnsortedCaptures } from "@/lib/workflow/captureStatus";
+import {
+  countUnsortedCaptures,
+  currentCaptureId,
+} from "@/lib/workflow/captureStatus";
 import {
   AI_SORTING_OFF_SORTED_HERE,
   AI_SORTING_UNAVAILABLE_SORTED_HERE,
@@ -173,7 +176,7 @@ export function TriageSheet({
     (!resolvedAreaId ||
       state.captureItems.some(
         (capture) =>
-          capture.id === captureParse.captureId &&
+          capture.id === currentCaptureId(state, captureParse.captureId) &&
           capture.area_id === resolvedAreaId,
       ));
   const sortNotice =

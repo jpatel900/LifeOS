@@ -154,3 +154,63 @@ describe("Sort recovery follows current sign-in state", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+// #1091 follow-up: sync swaps a capture's device id for its account id. A
+// sort started before the swap must keep showing on the renamed row.
+describe("Sort state follows the device -> account id swap", () => {
+  const DEVICE_ID = "capture-device-1";
+  const ACCOUNT_ID = "55555555-5555-4555-8555-555555555555";
+  function swappedWorkflow(captureParse: Record<string, unknown>) {
+    mocks.useWorkflow.mockReturnValue({
+      state: {
+        areas: [],
+        tasks: [],
+        taskDrafts: [],
+        // The device row is retired; only its account twin is on screen.
+        captureItems: [
+          {
+            id: ACCOUNT_ID,
+            area_id: null,
+            raw_text: "Draft an example",
+            status: "new",
+          },
+        ],
+        accountIdByLocalId: { captures: { [DEVICE_ID]: ACCOUNT_ID } },
+      },
+      captureParse,
+      storageMode: "persisted",
+      syncStatus: { account: "synced", signedOut: false },
+      sortCaptureIntoDrafts: vi.fn(),
+      retryCaptureParseWithMock: vi.fn(),
+    });
+  }
+
+  it("shows Sorting… on the account row for a sort started under the device id", () => {
+    swappedWorkflow({
+      phase: "parsing",
+      captureId: DEVICE_ID,
+      parserMode: "auto",
+    });
+    render(<UnsortedCaptures areaId={null} />);
+    const button = screen.getByTestId(`triage-sheet-sort-${ACCOUNT_ID}`);
+    expect(button).toHaveTextContent("Sorting…");
+    expect(button).toBeDisabled();
+  });
+
+  it("shows a failure recorded under the device id on the account row", async () => {
+    swappedWorkflow({
+      phase: "failed",
+      captureId: DEVICE_ID,
+      status: "unknown",
+      message: AI_SORTING_FAILED_NOT_SORTED,
+      canRetryWithMock: true,
+    });
+    render(<UnsortedCaptures areaId={null} />);
+    expect(
+      screen.getByTestId(`triage-sheet-sort-failed-${ACCOUNT_ID}`),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId(`triage-sheet-sort-${ACCOUNT_ID}`),
+    ).toHaveTextContent("Sort");
+  });
+});
