@@ -46,6 +46,8 @@ describe("GET /api/v1/blocks", () => {
     expect(await response.json()).toEqual({
       ok: false,
       errorCategory: "auth_rejected",
+      error:
+        "Your sign-in is missing or has expired. Sign in again, then retry.",
     });
     expect(mocks.requireSupabaseServerUser).not.toHaveBeenCalled();
     expect(mocks.listExecutionReviewItems).not.toHaveBeenCalled();
@@ -80,6 +82,8 @@ describe("GET /api/v1/blocks", () => {
     expect(await response.json()).toEqual({
       ok: false,
       errorCategory: "auth_rejected",
+      error:
+        "Your sign-in is missing or has expired. Sign in again, then retry.",
     });
     expect(mocks.listExecutionReviewItems).not.toHaveBeenCalled();
   });
@@ -161,6 +165,69 @@ describe("GET /api/v1/blocks", () => {
     const body = await response.json();
     expect(body.ok).toBe(false);
     expect(JSON.stringify(body)).not.toContain("boom");
-    expect(body.error).toBe("Something went wrong.");
+    expect(body.error).toBe(
+      "Could not load your schedule. Try again in a moment.",
+    );
+  });
+
+  it("maps a token that expires mid-request (data-layer JWT error) to 401 with fixed copy (#670)", async () => {
+    mocks.requireSupabaseServerUser.mockResolvedValue({
+      client: {},
+      user: { id: "user-1" },
+    });
+    mocks.listExecutionReviewItems.mockRejectedValue(
+      new Error("JWT expired (PGRST301)"),
+    );
+
+    const response = await GET(makeRequest({ authorization: "Bearer good" }));
+    expect(response.status).toBe(401);
+    const body = await response.json();
+    expect(body).toEqual({
+      ok: false,
+      errorCategory: "auth_rejected",
+      error:
+        "Your sign-in is missing or has expired. Sign in again, then retry.",
+    });
+    expect(JSON.stringify(body)).not.toContain("PGRST301");
+  });
+
+  it("classifies the auth rejection by error name, so a second bundled copy of the class still maps to 401 (#670)", async () => {
+    const crossBundle = new Error("invalid claim: missing sub claim");
+    crossBundle.name = "SupabaseAuthRejectedError";
+    mocks.requireSupabaseServerUser.mockRejectedValue(crossBundle);
+
+    const response = await GET(makeRequest({ authorization: "Bearer stale" }));
+    expect(response.status).toBe(401);
+    const body = await response.json();
+    expect(body.error).toBe(
+      "Your sign-in is missing or has expired. Sign in again, then retry.",
+    );
+    expect(JSON.stringify(body)).not.toContain("missing sub claim");
+    expect(mocks.listExecutionReviewItems).not.toHaveBeenCalled();
+  });
+
+  it("logs an unexpected failure server-side without echoing it (#670)", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.requireSupabaseServerUser.mockResolvedValue({
+      client: {},
+      user: { id: "user-1" },
+    });
+    mocks.listExecutionReviewItems.mockRejectedValue(
+      new Error("permission denied for table tasks"),
+    );
+
+    const response = await GET(makeRequest({ authorization: "Bearer good" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toBe(
+      "Could not load your schedule. Try again in a moment.",
+    );
+    expect(JSON.stringify(body)).not.toContain("permission denied");
+    expect(spy).toHaveBeenCalledWith(
+      "v1/blocks GET failed:",
+      expect.objectContaining({ message: "permission denied for table tasks" }),
+    );
+    spy.mockRestore();
   });
 });

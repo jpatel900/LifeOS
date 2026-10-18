@@ -54,6 +54,8 @@ describe("POST /api/v1/captures", () => {
     expect(await response.json()).toEqual({
       ok: false,
       errorCategory: "auth_rejected",
+      error:
+        "Your sign-in is missing or has expired. Sign in again, then retry.",
     });
     expect(mocks.requireSupabaseServerUser).not.toHaveBeenCalled();
     expect(mocks.syncQueuedCapture).not.toHaveBeenCalled();
@@ -163,6 +165,8 @@ describe("POST /api/v1/captures", () => {
     expect(await unauth.json()).toEqual({
       ok: false,
       errorCategory: "auth_rejected",
+      error:
+        "Your sign-in is missing or has expired. Sign in again, then retry.",
     });
 
     mocks.requireSupabaseServerUser.mockResolvedValueOnce({
@@ -179,6 +183,75 @@ describe("POST /api/v1/captures", () => {
     const failedBody = await failed.json();
     expect(failedBody.ok).toBe(false);
     expect(JSON.stringify(failedBody)).not.toContain("db down");
-    expect(failedBody.error).toBe("Something went wrong.");
+    expect(failedBody.error).toBe(
+      "The capture could not be saved. Try again in a moment.",
+    );
+  });
+
+  it("maps a token that expires mid-request (data-layer JWT error) to 401 with fixed copy (#670)", async () => {
+    mocks.requireSupabaseServerUser.mockResolvedValue({
+      client: {},
+      user: { id: "user-1" },
+    });
+    mocks.syncQueuedCapture.mockRejectedValue(
+      new Error("JWT expired (PGRST301)"),
+    );
+
+    const response = await POST(
+      makeRequest({ raw_text: "x", client_capture_id: CCID }),
+    );
+    expect(response.status).toBe(401);
+    const body = await response.json();
+    expect(body).toEqual({
+      ok: false,
+      errorCategory: "auth_rejected",
+      error:
+        "Your sign-in is missing or has expired. Sign in again, then retry.",
+    });
+    expect(JSON.stringify(body)).not.toContain("PGRST301");
+  });
+
+  it("classifies the auth rejection by error name, so a second bundled copy of the class still maps to 401 (#670)", async () => {
+    const crossBundle = new Error("invalid claim: missing sub claim");
+    crossBundle.name = "SupabaseAuthRejectedError";
+    mocks.requireSupabaseServerUser.mockRejectedValue(crossBundle);
+
+    const response = await POST(
+      makeRequest({ raw_text: "x", client_capture_id: CCID }),
+    );
+    expect(response.status).toBe(401);
+    const body = await response.json();
+    expect(body.error).toBe(
+      "Your sign-in is missing or has expired. Sign in again, then retry.",
+    );
+    expect(JSON.stringify(body)).not.toContain("missing sub claim");
+    expect(mocks.syncQueuedCapture).not.toHaveBeenCalled();
+  });
+
+  it("logs an unexpected failure server-side without echoing it (#670)", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.requireSupabaseServerUser.mockResolvedValue({
+      client: {},
+      user: { id: "user-1" },
+    });
+    mocks.syncQueuedCapture.mockRejectedValue(
+      new Error("permission denied for table tasks"),
+    );
+
+    const response = await POST(
+      makeRequest({ raw_text: "x", client_capture_id: CCID }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toBe(
+      "The capture could not be saved. Try again in a moment.",
+    );
+    expect(JSON.stringify(body)).not.toContain("permission denied");
+    expect(spy).toHaveBeenCalledWith(
+      "v1/captures POST failed:",
+      expect.objectContaining({ message: "permission denied for table tasks" }),
+    );
+    spy.mockRestore();
   });
 });

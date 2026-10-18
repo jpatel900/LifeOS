@@ -22,9 +22,46 @@ interface StoredSession {
   user_email: string | null;
 }
 
+/**
+ * INFO-1 (#670): the session file holds a long-lived refresh token in plain
+ * JSON (the same model as gh/aws CLIs; an OS keychain would need a new
+ * dependency, which is an owner decision). Its protection is file
+ * permissions, so they are enforced on every read and write, not only when
+ * the file is first created: `mkdirSync`/`writeFileSync` modes apply to new
+ * paths only, so an older, looser file or directory would otherwise stay
+ * readable by other local users.
+ *
+ * The directory is tightened only when it is LifeOS's own (`~/.lifeos` by
+ * default). A custom LIFEOS_SESSION_FILE can live in a shared directory
+ * (for example a CI temp dir) whose permissions are not ours to change.
+ */
+const LIFEOS_SESSION_DIR_NAME = ".lifeos";
+
+function restrictMode(target: string, allowed: number) {
+  try {
+    const current = fs.statSync(target).mode & 0o777;
+    if ((current & ~allowed) !== 0) {
+      fs.chmodSync(target, allowed);
+    }
+  } catch {
+    // Best effort: a missing path or a filesystem without POSIX modes must
+    // not break sign-in. Write still sets the mode on creation.
+  }
+}
+
+function restrictSessionPermissions(sessionFile: string) {
+  if (process.platform === "win32") return;
+  const dir = path.dirname(sessionFile);
+  if (path.basename(dir) === LIFEOS_SESSION_DIR_NAME) {
+    restrictMode(dir, 0o700);
+  }
+  restrictMode(sessionFile, 0o600);
+}
+
 function readSessionFile(sessionFile: string): StoredSession | null {
   try {
     const raw = fs.readFileSync(sessionFile, "utf8");
+    restrictSessionPermissions(sessionFile);
     const parsed = JSON.parse(raw) as Partial<StoredSession>;
     if (
       typeof parsed.access_token !== "string" ||
@@ -58,6 +95,7 @@ function writeSessionFile(sessionFile: string, session: Session) {
     mode: 0o600,
   });
   fs.chmodSync(sessionFile, 0o600);
+  restrictSessionPermissions(sessionFile);
 }
 
 function makeAuthClient(config: CliConfig): SupabaseClient {

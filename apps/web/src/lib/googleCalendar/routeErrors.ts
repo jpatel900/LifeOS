@@ -8,6 +8,10 @@
  * message for a known user-facing domain error class. The detail goes to
  * the server log via `logGoogleCalendarRouteFailure`.
  *
+ * The /api/v1/* and /api/export routes reuse the same two helpers for the
+ * same #670 rule (LOW-1), so every bearer-token route classifies an auth
+ * rejection and logs an unexpected failure the same way.
+ *
  * Classification is by `error.name`, not `instanceof`, for the same reason as
  * `isGoogleOAuthProviderError` in ./oauth: Next.js can bundle more than one
  * copy of a shared module across route chunks, so class identity can differ.
