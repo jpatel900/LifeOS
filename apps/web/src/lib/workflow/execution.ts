@@ -23,6 +23,31 @@ import { getWipSlotHolders, withWipRefusal } from "./wip";
  */
 const STARTABLE_TASK_STATUSES = ["scheduled", "active"];
 
+type CalendarBlock = WorkflowState["calendarBlocks"][number];
+
+/**
+ * #1096 (design A): the block of a session that ended skipped, missed or
+ * partial.
+ *
+ * An ordinary block is marked `missed`. A block that is on Google Calendar is
+ * the only thing in LifeOS that points at its event, and every guard that
+ * keeps the event from being left behind (put off, carry forward and drop are
+ * refused; Review offers "Cancel Google event"; a second Google event is
+ * refused) only looks at OPEN blocks. So while it is open it goes back to
+ * `scheduled` and keeps its event id, the same rule "Stuck" follows; a
+ * Google-backed block that is already closed is left as it is. The account
+ * applies the identical rule (migration 20261018140000), so the next sync
+ * agrees with this device.
+ */
+function blockAfterUnfinishedSession(block: CalendarBlock): CalendarBlock {
+  if (!block.google_event_id) {
+    return { ...block, status: "missed" };
+  }
+  return block.status === "scheduled" || block.status === "running"
+    ? { ...block, status: "scheduled" }
+    : block;
+}
+
 /**
  * The one session the user is actually in, if any.
  *
@@ -200,7 +225,7 @@ export function markCurrentSession(
             (status === "missed" ||
               status === "partial" ||
               status === "skipped")
-          ? { ...block, status: "missed" }
+          ? blockAfterUnfinishedSession(block)
           : block,
     ),
     tasks: state.tasks.map((task) =>

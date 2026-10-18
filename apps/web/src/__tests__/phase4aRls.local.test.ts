@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import {
   findOrCreatePerson,
+  listExecutionReviewItems,
   resolveCaptureItems,
   syncQueuedCapture,
   type MinimalSupabaseClient,
@@ -1693,6 +1694,416 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
         .eq("task_id", task!.id);
       await userAClient.from("tasks").delete().eq("id", task!.id);
     }
+  });
+
+  // #1096 (design A, migration 20261018140000): a session that ends
+  // skipped, missed (recorded as `skipped`) or partial keeps a Google-backed
+  // block `scheduled` and linked, the same rule "Stuck" follows, so every
+  // guard that protects the Google event still sees an open block. Ordinary
+  // blocks are still marked `missed`, and partial now does the same, so the
+  // account agrees with the device. A session put-off cancels the task's
+  // ordinary open blocks in the same transaction as the move to backlog.
+  describe("focus-session outcomes on calendar blocks (#1096)", () => {
+    type Client = Awaited<ReturnType<typeof signIn>>;
+
+    async function seedTask(client: Client, title: string) {
+      const { data, error } = await client
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title,
+          status: "scheduled",
+        })
+        .select("id")
+        .single();
+      expect(error).toBeNull();
+      return data!.id as string;
+    }
+
+    async function seedProposal(client: Client, taskId: string, day: string) {
+      const { data, error } = await client
+        .from("time_block_proposals")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_id: taskId,
+          proposed_start: `${day}T09:00:00.000Z`,
+          proposed_end: `${day}T10:00:00.000Z`,
+          status: "proposed",
+        })
+        .select("id")
+        .single();
+      expect(error).toBeNull();
+      return data!.id as string;
+    }
+
+    async function seedGoogleBlock(
+      client: Client,
+      taskId: string,
+      eventId: string,
+    ) {
+      const proposalId = await seedProposal(client, taskId, "2026-05-10");
+      const { data, error } = await client.rpc(
+        "record_google_calendar_placement",
+        { p_proposal_id: proposalId, p_google_event_id: eventId },
+      );
+      expect(error).toBeNull();
+      return data.block.id as string;
+    }
+
+    async function seedOrdinaryBlock(client: Client, taskId: string) {
+      const { data, error } = await client
+        .from("calendar_blocks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_id: taskId,
+          start_at: "2026-05-11T09:00:00.000Z",
+          end_at: "2026-05-11T10:00:00.000Z",
+          status: "scheduled",
+        })
+        .select("id")
+        .single();
+      expect(error).toBeNull();
+      return data!.id as string;
+    }
+
+    function recordArgs(
+      taskId: string,
+      blockId: string,
+      outcome: string,
+      clientWriteId: string,
+      deferTask = false,
+    ) {
+      return {
+        p_task_id: taskId,
+        p_calendar_block_id: blockId,
+        p_outcome: outcome,
+        p_actual_minutes: 10,
+        p_paused_minutes: 0,
+        p_distraction_minutes: 0,
+        p_productivity_rating: 1,
+        p_notes: `rls-1096-${clientWriteId}`,
+        p_cap_outcome: deferTask ? "deferred" : null,
+        p_client_write_id: clientWriteId,
+        p_defer_task: deferTask,
+      };
+    }
+
+    async function blockRow(client: Client, blockId: string) {
+      const { data, error } = await client
+        .from("calendar_blocks")
+        .select("status,google_event_id")
+        .eq("id", blockId)
+        .single();
+      expect(error).toBeNull();
+      return data!;
+    }
+
+    async function cleanUp(client: Client, taskIds: string[]) {
+      for (const taskId of taskIds) {
+        await deleteSessionByTaskId(client, taskId);
+        await deleteBlockByTaskId(client, taskId);
+        await deleteProposalByTaskId(client, taskId);
+        await client.from("tasks").delete().eq("id", taskId);
+      }
+    }
+
+    it("keeps a Google-backed block scheduled after a skipped session, keeps every guard, dedupes a replay and hides it from another user", async () => {
+      const userAClient = await signIn(userA.email, userA.password);
+      const userBClient = await signIn(userB.email, userB.password);
+      const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const eventId = `lifeos-1096-skip-${suffix}`;
+      const taskId = await seedTask(userAClient, `rls-1096-skip-${suffix}`);
+
+      try {
+        const blockId = await seedGoogleBlock(userAClient, taskId, eventId);
+        const args = recordArgs(taskId, blockId, "skipped", `skip-${suffix}`);
+
+        // Another user gets "not found" and writes nothing.
+        const { error: crossUserError } = await userBClient.rpc(
+          "record_execution_session",
+          args,
+        );
+        expect(crossUserError?.message).toMatch(/was not found/i);
+
+        // Criterion 1: the block stays scheduled and linked; the task is
+        // not changed.
+        const { data: first, error: firstError } = await userAClient.rpc(
+          "record_execution_session",
+          args,
+        );
+        expect(firstError).toBeNull();
+        expect(first.deduplicated).toBe(false);
+        expect(first.session.outcome).toBe("skipped");
+        expect(first.block.status).toBe("scheduled");
+        expect(first.block.google_event_id).toBe(eventId);
+        expect(await blockRow(userAClient, blockId)).toEqual({
+          status: "scheduled",
+          google_event_id: eventId,
+        });
+
+        // Criterion 6: a replay is still deduplicated.
+        const { data: replay, error: replayError } = await userAClient.rpc(
+          "record_execution_session",
+          args,
+        );
+        expect(replayError).toBeNull();
+        expect(replay.deduplicated).toBe(true);
+        expect(replay.session.id).toBe(first.session.id);
+        const { data: rows } = await userAClient
+          .from("execution_sessions")
+          .select("id")
+          .eq("client_write_id", `skip-${suffix}`);
+        expect(rows).toHaveLength(1);
+
+        // Criterion 3: put off (backlog), carry forward (active) and drop
+        // are refused with the existing message.
+        for (const target of ["backlog", "active", "dropped"]) {
+          const { error } = await userAClient.rpc(
+            "apply_task_review_transition",
+            { p_task_id: taskId, p_target_status: target },
+          );
+          expect(error?.message, target).toMatch(
+            /Google-backed blocks require calendar approval/,
+          );
+        }
+        // ...and a second Google event for the task is refused.
+        const secondProposalId = await seedProposal(
+          userAClient,
+          taskId,
+          "2026-05-12",
+        );
+        const { error: secondEventError } = await userAClient.rpc(
+          "record_google_calendar_placement",
+          {
+            p_proposal_id: secondProposalId,
+            p_google_event_id: `lifeos-1096-second-${suffix}`,
+          },
+        );
+        expect(secondEventError?.message).toMatch(
+          /already has a Google Calendar event/,
+        );
+        expect(await blockRow(userAClient, blockId)).toEqual({
+          status: "scheduled",
+          google_event_id: eventId,
+        });
+        const { data: taskAfter } = await userAClient
+          .from("tasks")
+          .select("status")
+          .eq("id", taskId)
+          .single();
+        expect(taskAfter?.status).toBe("scheduled");
+      } finally {
+        await cleanUp(userAClient, [taskId]);
+      }
+    });
+
+    it("gives skipped and partial the same block status as the device, Google-backed and ordinary, on both outcome paths", async () => {
+      const userAClient = await signIn(userA.email, userA.password);
+      const userBClient = await signIn(userB.email, userB.password);
+      const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const taskIds: string[] = [];
+
+      try {
+        for (const outcome of ["skipped", "partial"]) {
+          for (const google of [true, false]) {
+            const label = `${outcome}-${google ? "google" : "ordinary"}`;
+            const expected = google ? "scheduled" : "missed";
+
+            // Create path (`record_execution_session`), what the journal
+            // replays.
+            const recordTask = await seedTask(
+              userAClient,
+              `rls-1096-${label}-record-${suffix}`,
+            );
+            taskIds.push(recordTask);
+            const recordEvent = `lifeos-1096-${label}-r-${suffix}`;
+            const recordBlock = google
+              ? await seedGoogleBlock(userAClient, recordTask, recordEvent)
+              : await seedOrdinaryBlock(userAClient, recordTask);
+            const { data: recorded, error: recordError } =
+              await userAClient.rpc(
+                "record_execution_session",
+                recordArgs(
+                  recordTask,
+                  recordBlock,
+                  outcome,
+                  `${label}-${suffix}`,
+                ),
+              );
+            expect(recordError, label).toBeNull();
+            expect(recorded.block.status, label).toBe(expected);
+            expect(await blockRow(userAClient, recordBlock), label).toEqual({
+              status: expected,
+              google_event_id: google ? recordEvent : null,
+            });
+
+            // Legacy row-update path (`apply_execution_session_outcome`),
+            // on a block a legacy start left `running`.
+            const legacyTask = await seedTask(
+              userAClient,
+              `rls-1096-${label}-legacy-${suffix}`,
+            );
+            taskIds.push(legacyTask);
+            const legacyEvent = `lifeos-1096-${label}-l-${suffix}`;
+            const legacyBlock = google
+              ? await seedGoogleBlock(userAClient, legacyTask, legacyEvent)
+              : await seedOrdinaryBlock(userAClient, legacyTask);
+            await userAClient
+              .from("calendar_blocks")
+              .update({ status: "running" })
+              .eq("id", legacyBlock);
+            const { data: session, error: sessionError } = await userAClient
+              .from("execution_sessions")
+              .insert({
+                user_id: userA.id,
+                area_id: userA.areaId,
+                task_id: legacyTask,
+                calendar_block_id: legacyBlock,
+                outcome: "partial",
+              })
+              .select("id")
+              .single();
+            expect(sessionError).toBeNull();
+            const outcomeArgs = {
+              p_session_id: session!.id,
+              p_outcome: outcome,
+              p_actual_minutes: 10,
+              p_paused_minutes: 0,
+              p_distraction_minutes: 0,
+              p_productivity_rating: 1,
+              p_notes: `rls-1096-${label}-legacy`,
+            };
+            const { error: legacyCrossUserError } = await userBClient.rpc(
+              "apply_execution_session_outcome",
+              outcomeArgs,
+            );
+            expect(legacyCrossUserError?.message).toMatch(/was not found/i);
+            const { data: applied, error: applyError } = await userAClient.rpc(
+              "apply_execution_session_outcome",
+              outcomeArgs,
+            );
+            expect(applyError, label).toBeNull();
+            expect(applied.block.status, label).toBe(expected);
+            expect(await blockRow(userAClient, legacyBlock), label).toEqual({
+              status: expected,
+              google_event_id: google ? legacyEvent : null,
+            });
+          }
+        }
+      } finally {
+        await cleanUp(userAClient, taskIds);
+      }
+    });
+
+    it("cancels the ordinary block when a session puts the task off, on both paths, and a sync does not bring it back", async () => {
+      const userAClient = await signIn(userA.email, userA.password);
+      const userBClient = await signIn(userB.email, userB.password);
+      const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const createTask = await seedTask(
+        userAClient,
+        `rls-1096-defer-create-${suffix}`,
+      );
+      const legacyTask = await seedTask(
+        userAClient,
+        `rls-1096-defer-legacy-${suffix}`,
+      );
+
+      try {
+        // Create path: `record_execution_session(..., p_defer_task => true)`.
+        const createBlock = await seedOrdinaryBlock(userAClient, createTask);
+        const deferArgs = recordArgs(
+          createTask,
+          createBlock,
+          "blocked",
+          `defer-${suffix}`,
+          true,
+        );
+        const { error: crossUserError } = await userBClient.rpc(
+          "record_execution_session",
+          deferArgs,
+        );
+        expect(crossUserError?.message).toMatch(/was not found/i);
+        expect((await blockRow(userAClient, createBlock)).status).toBe(
+          "scheduled",
+        );
+
+        const { data: deferred, error: deferError } = await userAClient.rpc(
+          "record_execution_session",
+          deferArgs,
+        );
+        expect(deferError).toBeNull();
+        expect(deferred.task.status).toBe("backlog");
+        expect(deferred.session.cap_outcome).toBe("deferred");
+        expect(deferred.block.status).toBe("cancelled");
+        expect((await blockRow(userAClient, createBlock)).status).toBe(
+          "cancelled",
+        );
+        // A replay is deduplicated and changes nothing.
+        const { data: replay } = await userAClient.rpc(
+          "record_execution_session",
+          deferArgs,
+        );
+        expect(replay.deduplicated).toBe(true);
+
+        // Legacy row-update path: `apply_execution_session_defer`.
+        const legacyBlock = await seedOrdinaryBlock(userAClient, legacyTask);
+        const { data: session } = await userAClient
+          .from("execution_sessions")
+          .insert({
+            user_id: userA.id,
+            area_id: userA.areaId,
+            task_id: legacyTask,
+            calendar_block_id: legacyBlock,
+            outcome: "partial",
+          })
+          .select("id")
+          .single();
+        const legacyArgs = {
+          p_session_id: session!.id,
+          p_task_id: legacyTask,
+          p_actual_minutes: 10,
+          p_paused_minutes: 0,
+          p_distraction_minutes: 0,
+          p_notes: "dod_cap.v1 deferred: rls-1096",
+        };
+        const { error: legacyCrossUserError } = await userBClient.rpc(
+          "apply_execution_session_defer",
+          legacyArgs,
+        );
+        expect(legacyCrossUserError?.message).toMatch(/was not found/i);
+        const { data: legacy, error: legacyError } = await userAClient.rpc(
+          "apply_execution_session_defer",
+          legacyArgs,
+        );
+        expect(legacyError).toBeNull();
+        expect(legacy.task.status).toBe("backlog");
+        expect((await blockRow(userAClient, legacyBlock)).status).toBe(
+          "cancelled",
+        );
+
+        // The device's sync reader sees both blocks cancelled, so nothing
+        // comes back as scheduled.
+        const synced = await listExecutionReviewItems(
+          userAClient as unknown as MinimalSupabaseClient,
+        );
+        const syncedStatus = (blockId: string) =>
+          synced.blocks.find((block) => block.id === blockId)?.status;
+        expect(syncedStatus(createBlock)).toBe("cancelled");
+        expect(syncedStatus(legacyBlock)).toBe("cancelled");
+        const syncedTasks = synced.tasks.filter((task) =>
+          [createTask, legacyTask].includes(task.id),
+        );
+        expect(syncedTasks.map((task) => task.status)).toEqual([
+          "backlog",
+          "backlog",
+        ]);
+      } finally {
+        await cleanUp(userAClient, [createTask, legacyTask]);
+      }
+    });
   });
 
   it("dedupes a replayed triage accept on tasks.client_write_id", async () => {

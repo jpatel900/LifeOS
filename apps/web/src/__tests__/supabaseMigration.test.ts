@@ -446,6 +446,48 @@ describe("Supabase local database scaffold", () => {
     );
   });
 
+  // #1096 acceptance criterion 7: the session-outcome migration replaces
+  // three transition functions in place. Their signatures (argument names,
+  // types and defaults), return type, SECURITY INVOKER and search_path must
+  // match the definitions they replace, and the file must not touch grants,
+  // policies or tables (`create or replace` keeps the existing grants).
+  it("keeps the session-outcome functions' signatures, grants and SECURITY INVOKER unchanged (#1096)", () => {
+    const target = "20261018140000_keep_google_block_on_session_outcomes.sql";
+    const files = loadMigrationFilenames().sort();
+    expect(files).toContain(target);
+    const stripComments = (sql: string) => sql.replace(/--[^\n]*/g, " ");
+    const headerOf = (sql: string, fn: string) => {
+      const start = sql.indexOf(`create or replace function public.${fn}(`);
+      if (start === -1) return null;
+      const end = sql.indexOf("as $$", start);
+      return normalizeWhitespace(sql.slice(start, end));
+    };
+    const read = (file: string) =>
+      stripComments(readFileSync(resolve(migrationsDir, file), "utf8"));
+    const targetSql = read(target);
+
+    for (const fn of [
+      "record_execution_session",
+      "apply_execution_session_defer",
+      "apply_execution_session_outcome",
+    ]) {
+      const replaced = files
+        .filter((file) => file < target)
+        .map((file) => headerOf(read(file), fn))
+        .filter((header): header is string => header !== null)
+        .at(-1);
+      const header = headerOf(targetSql, fn);
+      expect(replaced, `${fn} has an earlier definition`).toBeDefined();
+      expect(header, `${fn} is replaced`).toBe(replaced);
+      expect(header).toContain("security invoker");
+      expect(header).toContain("set search_path = public, pg_temp");
+    }
+
+    expect(targetSql).not.toMatch(
+      /\b(grant|revoke|drop|alter|security definer|create policy|create table)\b/i,
+    );
+  });
+
   it("has no duplicate leading timestamps across migration filenames", () => {
     const filenames = loadMigrationFilenames();
 
