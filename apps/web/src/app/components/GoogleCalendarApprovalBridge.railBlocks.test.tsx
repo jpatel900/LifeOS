@@ -87,6 +87,8 @@ describe("GoogleCalendarApprovalBridge — rail blocks (calendar hunt #8)", () =
       name: `Approve Google event for ${task.title}`,
     });
     await waitFor(() => expect(approve).not.toBeDisabled());
+    // A new button on the Plan sheet keeps the 44px touch target rule.
+    expect(approve.className).toContain("min-h-[44px]");
     fireEvent.click(approve);
 
     await waitFor(() =>

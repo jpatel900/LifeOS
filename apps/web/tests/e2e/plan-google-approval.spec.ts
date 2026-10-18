@@ -188,7 +188,15 @@ for (const viewport of VIEWPORTS) {
       await expect(
         sheet.getByTestId(/^plan-sheet-hour-\d+$/).filter({ hasText: title }),
       ).toHaveCount(1);
-      await expect(approveButtons).toHaveCount(0);
+      // Calendar hunt #8 (owner decision 2026-10-17, option B): a block on
+      // the hour rail can be sent to Google with the same explicit approval,
+      // so the placed block keeps ONE approve button. It is still disabled
+      // here, for the same honest reason, and nothing has been sent.
+      await expect(approveButtons).toHaveCount(1);
+      await expect(approveButtons).toBeDisabled();
+      await expect(
+        bridge.getByText(GOOGLE_CALENDAR_UNAVAILABLE_HERE),
+      ).toBeVisible();
       await expect(
         page.getByRole("button", { name: /Cancel Google event/ }),
       ).toHaveCount(0);

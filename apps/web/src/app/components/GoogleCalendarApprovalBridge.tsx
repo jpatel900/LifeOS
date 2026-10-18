@@ -242,7 +242,7 @@ export function GoogleCalendarApprovalBridge({
                 type="button"
                 disabled={busyId !== null}
                 onClick={() => void handleApprove(proposalId, true)}
-                className="min-h-10 rounded-full bg-[var(--amb-sf)] px-4 text-sm font-bold text-[var(--amb-fg)]"
+                className="min-h-[44px] touch-manipulation rounded-full bg-[var(--amb-sf)] px-4 text-sm font-bold text-[var(--amb-fg)]"
               >
                 Acknowledge and create Google event
               </button>
@@ -254,7 +254,7 @@ export function GoogleCalendarApprovalBridge({
               disabled={!writable || busyId !== null}
               onClick={() => void handleApprove(proposalId, false)}
               className={cn(
-                "mt-3 min-h-10 rounded-full px-4 text-sm font-bold",
+                "mt-3 min-h-[44px] touch-manipulation rounded-full px-4 text-sm font-bold",
                 writable && busyId === null
                   ? "bg-[var(--acc)] text-[var(--on-acc)]"
                   : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
@@ -280,7 +280,7 @@ export function GoogleCalendarApprovalBridge({
             disabled={!writable || busyId !== null}
             onClick={() => void handleCancel(block.id)}
             className={cn(
-              "mt-3 min-h-10 rounded-full border px-4 text-sm font-semibold",
+              "mt-3 min-h-[44px] touch-manipulation rounded-full border px-4 text-sm font-semibold",
               writable && busyId === null
                 ? "border-[var(--ln2)] text-[var(--mut)]"
                 : "cursor-not-allowed border-[var(--ln)] text-[var(--fnt)]",
