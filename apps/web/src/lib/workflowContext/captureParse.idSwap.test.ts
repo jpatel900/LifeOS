@@ -3,7 +3,7 @@ import { createCaptureParseOps } from "./captureParse";
 import { requestParseCapture } from "../ai/parseCaptureClient";
 import { parseCaptureRegressionFixtures } from "../ai/fixtures/parseCaptureFixtures";
 import { workflowReducer, type PersistedWorkflowPayload } from "./reducerCore";
-import { submitRawCapture, type WorkflowState } from "../workflow";
+import { submitRawCapture } from "../workflow";
 import { workflowSeed } from "@/__tests__/helpers/workflowReachability";
 
 vi.mock("../ai/parseCaptureClient", async (importOriginal) => ({
@@ -18,7 +18,9 @@ vi.mock("../ai/parseCaptureClient", async (importOriginal) => ({
  */
 const ACCOUNT_CAPTURE_ID = "55555555-5555-4555-8555-555555555555";
 
-function swapCaptureId(state: WorkflowState, localId: string): WorkflowState {
+type SeededState = ReturnType<typeof workflowSeed>;
+
+function swapCaptureId(state: SeededState, localId: string) {
   const local = state.captureItems.find((item) => item.id === localId)!;
   const payload: PersistedWorkflowPayload = {
     captures: [{ ...local, id: ACCOUNT_CAPTURE_ID, status: "new" }],
@@ -35,16 +37,13 @@ function swapCaptureId(state: WorkflowState, localId: string): WorkflowState {
       sessions: new Map(),
     },
   };
-  return workflowReducer(
-    {
-      ...state,
-      accountIdByLocalId: {
-        ...state.accountIdByLocalId,
-        captures: { [localId]: ACCOUNT_CAPTURE_ID },
-      },
-    },
-    { type: "syncPersistedWorkflow", payload },
-  );
+  const recorded = workflowReducer(state, {
+    type: "recordAccountId",
+    family: "captures",
+    localId,
+    accountId: ACCOUNT_CAPTURE_ID,
+  });
+  return workflowReducer(recorded, { type: "syncPersistedWorkflow", payload });
 }
 
 function harness() {
@@ -61,7 +60,7 @@ function harness() {
     captureParse: { phase: "idle" as const },
     stateRef,
     persistedAreasRef: { current: [] },
-    applyWorkflowState: vi.fn((next: WorkflowState) => {
+    applyWorkflowState: vi.fn((next: SeededState) => {
       stateRef.current = next;
     }),
     persistCapture: vi.fn(),
