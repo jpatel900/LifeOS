@@ -63,7 +63,7 @@ describe("TriageSheet — 'Do today' that cannot happen says why (bug hunt #11)"
     fireEvent.click(await screen.findByTestId(`triage-sheet-today-${draftId}`));
 
     expect(
-      await screen.findByTestId(`triage-sheet-today-refused-${draftId}`),
+      await screen.findByTestId(`triage-today-refused-${draftId}`),
     ).toHaveTextContent("Today is full");
     // The draft is still there to decide about.
     expect(
@@ -78,7 +78,7 @@ describe("TriageSheet — 'Do today' that cannot happen says why (bug hunt #11)"
     fireEvent.click(await screen.findByTestId(`triage-sheet-today-${draftId}`));
 
     expect(
-      await screen.findByTestId(`triage-sheet-today-refused-${draftId}`),
+      await screen.findByTestId(`triage-today-refused-${draftId}`),
     ).toHaveTextContent("first move");
   });
 });

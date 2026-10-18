@@ -361,7 +361,9 @@ export function TriageSheet({
                     role="status"
                     aria-live="polite"
                     className="text-sm text-muted-foreground"
-                    data-testid={`triage-sheet-today-refused-${draft.id}`}
+                    // Not `triage-sheet-today-…`: tests select the Do today
+                    // buttons by that prefix.
+                    data-testid={`triage-today-refused-${draft.id}`}
                   >
                     {todayRefusal.message}
                   </p>
@@ -430,7 +432,9 @@ export function TriageSheet({
           role="status"
           aria-live="polite"
           className="text-sm text-muted-foreground"
-          data-testid="triage-sheet-sort-notice"
+          // Not `triage-sheet-sort-…`: tests select Sort buttons by that
+          // prefix, and this notice stays on screen between sorts.
+          data-testid="triage-sort-notice"
         >
           {sortNotice}
         </p>

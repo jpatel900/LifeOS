@@ -52,7 +52,7 @@ describe("TriageSheet — basic sorting is disclosed (bug hunt #10)", () => {
     );
 
     const notice = await screen.findByTestId(
-      "triage-sheet-sort-notice",
+      "triage-sort-notice",
       {},
       { timeout: 3000 },
     );
