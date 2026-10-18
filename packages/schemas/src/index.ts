@@ -225,6 +225,11 @@ export const CreateGoogleCalendarEventInputSchema = z.object({
   approved: z.literal(true),
   acknowledge_first_write_warning: z.boolean().optional().default(false),
   timezone: z.string().trim().min(1).default("UTC"),
+  // Calendar hunt #4: the start and end the person saw when they approved.
+  // The route refuses when the account holds a different time, so Google
+  // never gets a time nobody approved.
+  approved_start: z.string().datetime({ offset: true }),
+  approved_end: z.string().datetime({ offset: true }),
 });
 
 export type CreateGoogleCalendarEventInput = z.input<

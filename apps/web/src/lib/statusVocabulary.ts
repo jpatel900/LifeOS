@@ -409,3 +409,11 @@ export function systemCheckSaveLabel(status: SaveOutcome) {
       return "Not applicable";
   }
 }
+
+/**
+ * Calendar hunt #2: a block that is on Google Calendar can only be moved or
+ * removed by cancelling its Google event first (the account refuses any
+ * other change, because the Google event would be left behind).
+ */
+export const GOOGLE_BACKED_BLOCK_CHANGE_REFUSED =
+  "This block is on your Google Calendar. Use “Cancel Google event” first, then change it here.";

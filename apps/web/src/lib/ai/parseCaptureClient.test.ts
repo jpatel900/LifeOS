@@ -79,3 +79,31 @@ describe("requestParseCapture live charter/profile read path (S3 #255)", () => {
     expect(body.operatorProfile).toBeUndefined();
   });
 });
+
+describe("requestParseCapture sends the user's date and time zone (bug hunt #16)", () => {
+  it("includes the clock in the request body", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => okResponseBody,
+    })) as unknown as typeof fetch;
+    const clock = {
+      today: "2026-10-17",
+      weekday: "Saturday",
+      timeZone: "Australia/Sydney",
+      utcOffset: "+11:00",
+    };
+
+    await requestParseCapture({
+      rawText: "Decide on the lease by Friday",
+      parserMode: "auto",
+      clock,
+      fetchImpl,
+    });
+
+    const [, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(JSON.parse((init as RequestInit).body as string).clock).toEqual(
+      clock,
+    );
+  });
+});

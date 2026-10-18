@@ -23,6 +23,7 @@ import {
 import { createSupabaseBrowserClient } from "../supabase/browser";
 import { enqueueCapture } from "../capture/offlineQueue";
 import { buildParsedWorkflowResult } from "../ai/parseCaptureWorkflow";
+import { buildParseCaptureClock } from "../ai/parseCaptureClock";
 import {
   requestParseCapture,
   type ParseCaptureOperatorProfileContext,
@@ -48,7 +49,7 @@ export interface CaptureParseDeps {
   persistCapture: (
     localCapture: WorkflowState["captureItems"][number],
   ) => Promise<void>;
-  markLocalOnly: (message: string) => void;
+  markDeviceStorageBlocked: () => void;
   markPersistedSaveFailure: (error: unknown) => void;
   refreshUnsyncedCount: () => Promise<void>;
 }
@@ -62,7 +63,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
     persistedAreasRef,
     applyWorkflowState,
     persistCapture,
-    markLocalOnly,
+    markDeviceStorageBlocked,
     markPersistedSaveFailure,
     refreshUnsyncedCount,
   } = deps;
@@ -180,6 +181,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
               };
             }),
             operatorProfile: operatorProfileContext,
+            clock: buildParseCaptureClock(),
             parserMode,
             authorization,
           });
@@ -189,12 +191,31 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
           if (result.ok) {
             if (activeParseCaptureIdRef.current !== attemptId) return;
             if (failIfNoAreas()) return;
-            const parsed = buildParsedWorkflowResult({
+            const built = buildParsedWorkflowResult({
               response: result.response,
               capture,
               workflowAreaId: capture.area_id,
               areas: stateRef.current.areas,
             });
+            // Bug hunt #9: a sort that found no task leaves the thought in
+            // "not sorted yet" (never marked sorted with nothing to show),
+            // and says so below.
+            const foundNoTask = built.taskDrafts.length === 0;
+            const parsed = foundNoTask
+              ? {
+                  ...built,
+                  captureItem: {
+                    ...built.captureItem,
+                    status: "triage_required" as const,
+                  },
+                }
+              : built;
+            if (foundNoTask) {
+              const projectTitle = parsed.projectDrafts[0]?.title?.trim();
+              warning = projectTitle
+                ? `Sorting found a bigger project here ("${projectTitle}"), not a single task, so the thought stays here. Capture its first step as a new thought, or sort it again.`
+                : "Sorting didn't find a task in this one, so it stays here as a thought. You can sort it again later.";
+            }
             try {
               applyWorkflowState(
                 appendParsedWorkflowResult(stateRef.current, parsed),
@@ -272,7 +293,8 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
                 }
               }
             } catch {
-              warning = "Sorting finished. Some details could not be updated.";
+              warning ??=
+                "Sorting finished. Some details could not be updated.";
             }
           }
 
@@ -286,7 +308,13 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
                   phase: "parsed",
                   captureId: capture.id,
                   parser: result.parser,
-                  status: result.status,
+                  // Bug hunt #10: a request the server auto-degraded to basic
+                  // sorting (AI provider down) reports as AI unavailable, so
+                  // the notice does not claim AI sorting is turned off.
+                  status:
+                    result.parser === "mock" && result.degraded
+                      ? "ai_unavailable"
+                      : result.status,
                   ...(warning ? { warning } : {}),
                 }
               : {
@@ -323,9 +351,14 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
   ) {
     void enqueueCapture({ rawText, areaId, returnHook: returnHook ?? null })
       .then(() => refreshUnsyncedCount())
-      .catch(() =>
-        markLocalOnly("Capture could not be saved offline; please try again."),
-      );
+      .catch(() => {
+        // Bug hunt #4: the device queue refused the thought (full quota,
+        // blocked site data). A raw capture must never be lost, so keep it in
+        // this tab's triage pile through the normal capture path, and say in
+        // the alarm tone that this browser is not keeping it on the device.
+        stageAndPersistRawCapture(rawText, areaId, returnHook);
+        markDeviceStorageBlocked();
+      });
   }
 
   // Stage + persist the raw capture item WITHOUT parsing it. Since #703 this
@@ -409,13 +442,9 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
     }
 
     // A stale rendered row must not sort a capture already staged in the ref.
-    if (
-      captureHasTriageDecision(stateRef.current, captureId) ||
-      stateRef.current.projectDrafts.some(
-        (draft) => draft.capture_item_id === captureId,
-      )
-    )
-      return;
+    // Bug hunt #9: a capture whose sort found only a project (no task) may be
+    // sorted again; the new result replaces that project draft.
+    if (captureHasTriageDecision(stateRef.current, captureId)) return;
 
     void parseCaptureIntoDrafts(capture, parserMode);
   }

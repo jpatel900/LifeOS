@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getGoogleCalendarConfig: vi.fn(),
   getGoogleCalendarConnectionForAccessToken: vi.fn(),
   requireSupabaseServerUser: vi.fn(),
+  reconcilePendingGoogleCalendarInsertAuditsForAccessToken: vi.fn(),
 }));
 
 vi.mock("@/lib/googleCalendar/config", () => ({
@@ -17,6 +18,11 @@ vi.mock("@/lib/googleCalendar/server", () => ({
 
 vi.mock("@/lib/supabase/server", () => ({
   requireSupabaseServerUser: mocks.requireSupabaseServerUser,
+}));
+
+vi.mock("@/lib/externalWrites/reconciliation", () => ({
+  reconcilePendingGoogleCalendarInsertAuditsForAccessToken:
+    mocks.reconcilePendingGoogleCalendarInsertAuditsForAccessToken,
 }));
 
 import { GET } from "./route";
@@ -63,6 +69,45 @@ describe("google-calendar connection route", () => {
     mocks.getGoogleCalendarConnectionForAccessToken.mockResolvedValue({
       connection,
     });
+    mocks.reconcilePendingGoogleCalendarInsertAuditsForAccessToken.mockResolvedValue(
+      { checked: 0, failed: 0, leftPending: 0, succeeded: 0 },
+    );
+  });
+
+  // Calendar hunt #7: the crash-window reconciliation existed but nothing
+  // ever called it, so an approved write whose result was lost stayed
+  // "pending" forever.
+  it("settles stale pending Google writes when a connected status is loaded", async () => {
+    const response = await GET(request("supabase-access-token"));
+
+    expect(response.status).toBe(200);
+    expect(
+      mocks.reconcilePendingGoogleCalendarInsertAuditsForAccessToken,
+    ).toHaveBeenCalledWith("supabase-access-token");
+  });
+
+  it("never fails the status read when settling stale writes fails", async () => {
+    mocks.reconcilePendingGoogleCalendarInsertAuditsForAccessToken.mockRejectedValue(
+      new Error("Google unreachable"),
+    );
+
+    const response = await GET(request("supabase-access-token"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.status).toBe("connected");
+  });
+
+  it("does not touch Google writes when the calendar is not connected", async () => {
+    mocks.getGoogleCalendarConnectionForAccessToken.mockResolvedValue({
+      connection: { ...connection, status: "disconnected" },
+    });
+
+    await GET(request("supabase-access-token"));
+
+    expect(
+      mocks.reconcilePendingGoogleCalendarInsertAuditsForAccessToken,
+    ).not.toHaveBeenCalled();
   });
 
   it("returns a disconnected configured:false payload when Google config is absent", async () => {

@@ -39,6 +39,15 @@ describe("Google Calendar OAuth helpers", () => {
     expect(url.searchParams.get("access_type")).toBe("offline");
   });
 
+  // Calendar hunt #5: Google only hands out a refresh token on the FIRST
+  // consent. Disconnect does not revoke LifeOS's grant, so reconnecting
+  // without asking again failed with refresh_token_missing every time.
+  it("asks for consent every time, so a reconnect gets lasting access again", () => {
+    const url = new URL(buildGoogleCalendarAuthorizeUrl("state-123"));
+
+    expect(url.searchParams.get("prompt")).toBe("consent");
+  });
+
   it("round-trips a sealed OAuth state cookie payload", () => {
     const state = createGoogleCalendarOAuthState();
     const cookieValue = sealGoogleCalendarOAuthStateCookie({

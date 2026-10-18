@@ -50,7 +50,7 @@ function harness() {
     },
     applyWorkflowState: createApplyWorkflowState(stateRef, dispatch),
     persistCapture: vi.fn(async () => {}),
-    markLocalOnly: vi.fn(),
+    markDeviceStorageBlocked: vi.fn(),
     markPersistedSaveFailure: vi.fn(),
     refreshUnsyncedCount: vi.fn(async () => {}),
   };

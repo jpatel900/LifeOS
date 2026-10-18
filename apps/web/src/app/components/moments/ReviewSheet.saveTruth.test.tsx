@@ -11,7 +11,10 @@ import type { Area, CalendarBlock, Task } from "@lifeos/schemas";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
-import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
+import {
+  GOOGLE_BACKED_BLOCK_CHANGE_REFUSED,
+  SAVED_ON_THIS_DEVICE_SHORT,
+} from "@/lib/statusVocabulary";
 import {
   acceptLatestDraft,
   backlogLatestDraft,
@@ -371,22 +374,19 @@ describe("ReviewSheet account save truth", () => {
         screen.getByTestId(`review-sheet-cancel-google-${TASK_ID}`),
       ).toBeVisible();
 
+      // #1091 calendar C2: the screen already knows this block is on Google
+      // Calendar, so the choice is refused up front and never sent to the
+      // account. A refusal the screen could not foresee is still mapped to
+      // "Not <label>. … Cancel that event first" (taskReviewRefusal.test.ts).
       fireEvent.click(screen.getByTestId(`review-sheet-${action}-${TASK_ID}`));
-      await waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
-      await act(async () => {
-        finishAccountWrite({
-          data: null,
-          error: { message: GOOGLE_BLOCK_REFUSAL },
-        });
-      });
-
-      const message =
-        `Not ${label}. This task still has an event on your Google ` +
-        "Calendar. Cancel that event first, then choose again.";
       await waitFor(() =>
-        expect(toast).toHaveBeenCalledExactlyOnceWith(message),
+        expect(toast).toHaveBeenCalledExactlyOnceWith(
+          GOOGLE_BACKED_BLOCK_CHANGE_REFUSED,
+        ),
       );
-      expect(message).not.toMatch(/try again/i);
+      expect(rpc).not.toHaveBeenCalled();
+      expect(GOOGLE_BACKED_BLOCK_CHANGE_REFUSED).not.toMatch(/try again/i);
+      void label;
       // Rolled back: the task and its block read as the account holds them.
       expect(screen.getByTestId("task-status")).toHaveTextContent("blocked");
       expect(screen.getByTestId("block-status")).toHaveTextContent("scheduled");

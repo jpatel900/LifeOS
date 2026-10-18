@@ -4,7 +4,9 @@ import {
   journalCaptureWrite,
   journalPlanPlacementWrite,
   journalPlanUnplacementWrite,
+  journalProposalEditWrite,
   journalReviewWrite,
+  journalTaskReviewWrite,
   journalWinWrite,
   createDurableWriteHandlers,
   replayDurableWrites,
@@ -635,10 +637,12 @@ describe("createDurableWriteHandlers", () => {
       "execution_session",
       "plan_placement",
       "plan_unplacement",
+      "proposal_edit",
       "review",
       "rollup",
       "task_draft_accept",
       "task_drop",
+      "task_review",
       "win",
     ]);
   });
@@ -1173,5 +1177,95 @@ describe("cross-runtime compensating writes", () => {
 
     expect(summary).toEqual({ cancelled: 1 });
     expect(await listPendingWrites()).toEqual([]);
+  });
+});
+
+describe("a Google-backed refusal is permanent (calendar hunt #2)", () => {
+  it("drops a queued unplan the account refuses because the block is on Google Calendar", async () => {
+    await journalPlanUnplacementWrite({
+      workflowBlockId: "block-local-google",
+      persistedBlockId: "550e8400-e29b-41d4-a716-446655440399",
+      supersedesClientWriteId: null,
+    });
+    const syncPlanUnplacement = vi.fn(async () => {
+      throw new Error(
+        "Google-backed blocks require calendar approval before unplanning.",
+      );
+    });
+
+    await replayDurableWrites(serverOps({ syncPlanUnplacement }));
+
+    expect(syncPlanUnplacement).toHaveBeenCalledOnce();
+    // Not left to retry forever.
+    expect(await pendingWriteCount()).toBe(0);
+  });
+});
+
+// Calendar hunt #3: "Move to today", carry forward and put off were never
+// queued — with no account id yet they said "saved on this device" and were
+// lost, and the next sync undid them.
+describe("journalTaskReviewWrite / task review replay (calendar hunt #3)", () => {
+  it("waits for the account task, then sends the move", async () => {
+    await journalTaskReviewWrite({
+      workflowTaskId: "task-local-7",
+      persistedTaskId: null,
+      targetStatus: "active",
+      acceptClientWriteId: "accept-write-7",
+    });
+    const syncTaskReview = vi.fn(async () => ({
+      provider: "supabase" as const,
+    }));
+
+    let accountTaskId: string | null = null;
+    const ops = serverOps({
+      syncTaskReview,
+      resolveTaskReviewTaskId: async (payload) => {
+        expect(payload.accept_client_write_id).toBe("accept-write-7");
+        return accountTaskId;
+      },
+    });
+
+    await replayDurableWrites(ops);
+    expect(syncTaskReview).not.toHaveBeenCalled();
+    expect(await pendingWriteCount()).toBe(1);
+
+    accountTaskId = PERSISTED_TASK;
+    await replayDurableWrites(ops);
+    expect(syncTaskReview).toHaveBeenCalledWith({
+      task_id: PERSISTED_TASK,
+      target_status: "active",
+    });
+    expect(await pendingWriteCount()).toBe(0);
+  });
+});
+
+// Calendar hunt #4: a "Move later" edit was sent once, directly; if that
+// failed (offline, a dropped connection) it was lost, and the account kept
+// the older time.
+describe("journalProposalEditWrite / proposal edit replay (calendar hunt #4)", () => {
+  it("sends the edited time when the account is reachable, and keeps it queued until then", async () => {
+    await journalProposalEditWrite({
+      workflowProposalId: "proposal-local-2",
+      persistedProposalId: "550e8400-e29b-41d4-a716-446655440502",
+      proposedStart: "2026-05-08T15:00:00.000Z",
+      proposedEnd: "2026-05-08T16:00:00.000Z",
+    });
+
+    const failing = vi.fn(async () => {
+      throw new Error("Network request failed");
+    });
+    await replayDurableWrites(serverOps({ syncProposalEdit: failing }));
+    expect(await pendingWriteCount()).toBe(1);
+
+    const syncProposalEdit = vi.fn(async () => ({
+      provider: "supabase" as const,
+    }));
+    await replayDurableWrites(serverOps({ syncProposalEdit }));
+    expect(syncProposalEdit).toHaveBeenCalledWith({
+      proposal_id: "550e8400-e29b-41d4-a716-446655440502",
+      proposed_start: "2026-05-08T15:00:00.000Z",
+      proposed_end: "2026-05-08T16:00:00.000Z",
+    });
+    expect(await pendingWriteCount()).toBe(0);
   });
 });

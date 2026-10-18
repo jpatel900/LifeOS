@@ -339,6 +339,38 @@ export function backlogDraft(
   return acceptDraftWithStatus(state, draftId, "backlog");
 }
 
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
+const DEFAULT_FOCUS_BLOCK_MS = 45 * 60 * 1000;
+
+/**
+ * Bug hunt #15: where a "Do today" focus block goes, from `now`. An hour out
+ * when that still ends today (local time); otherwise it starts as soon as
+ * possible (the next 5-minute mark, or right now if that mark is already
+ * tomorrow). It always STARTS today, never on the next day.
+ */
+export function todayFocusBlockWindow(
+  now: Date,
+  durationMs: number,
+): { start: Date; end: Date } {
+  const duration =
+    Number.isFinite(durationMs) && durationMs > 0
+      ? durationMs
+      : DEFAULT_FOCUS_BLOCK_MS;
+  const endOfToday = new Date(now);
+  endOfToday.setHours(24, 0, 0, 0);
+
+  const inAnHour = new Date(now.getTime() + ONE_HOUR_MS);
+  if (inAnHour.getTime() + duration <= endOfToday.getTime()) {
+    return { start: inAnHour, end: new Date(inAnHour.getTime() + duration) };
+  }
+  const nextMark = Math.ceil(now.getTime() / FIVE_MINUTES_MS) * FIVE_MINUTES_MS;
+  const start = new Date(
+    nextMark < endOfToday.getTime() ? nextMark : now.getTime(),
+  );
+  return { start, end: new Date(start.getTime() + duration) };
+}
+
 function acceptDraftWithStatus(
   state: WorkflowState,
   draftId: string,
@@ -349,12 +381,10 @@ function acceptDraftWithStatus(
     return state;
   }
 
-  const existingTask = state.tasks.find(
-    (task) => task.source_capture_item_id === draft.capture_item_id,
-  );
-  if (existingTask) {
-    return state;
-  }
+  // A draft is accepted at most once: the `pending` check above guards that.
+  // Sibling drafts of the SAME capture (a brain dump the parser split, or a
+  // user split) are separate tasks, so a task already made from this capture
+  // must not block them (bug hunt #3).
 
   if (status === "active" && !hasLaunchSequenceStep(draft.first_tiny_step)) {
     return state;
@@ -401,20 +431,31 @@ function acceptDraftWithStatus(
         )
       : null;
 
-  const proposal = matchingProposalDraft
-    ? Phase2TimeBlockProposalSchema.parse({
-        id: nextId("proposal"),
-        user_id: matchingProposalDraft.user_id,
-        area_id: matchingProposalDraft.area_id,
-        task_id: task.id,
-        proposed_start: matchingProposalDraft.proposed_start,
-        proposed_end: matchingProposalDraft.proposed_end,
-        rationale: matchingProposalDraft.rationale,
-        conflict_flag: matchingProposalDraft.conflict_flag,
-        status: "proposed",
-        created_at: nowIso(),
-      })
+  // Bug hunt #15: the drafted block was timed when the capture was SORTED.
+  // Re-time it from the moment of accept, and keep it on today.
+  const todayWindow = matchingProposalDraft
+    ? todayFocusBlockWindow(
+        new Date(),
+        new Date(matchingProposalDraft.proposed_end).getTime() -
+          new Date(matchingProposalDraft.proposed_start).getTime(),
+      )
     : null;
+
+  const proposal =
+    matchingProposalDraft && todayWindow
+      ? Phase2TimeBlockProposalSchema.parse({
+          id: nextId("proposal"),
+          user_id: matchingProposalDraft.user_id,
+          area_id: matchingProposalDraft.area_id,
+          task_id: task.id,
+          proposed_start: todayWindow.start.toISOString(),
+          proposed_end: todayWindow.end.toISOString(),
+          rationale: matchingProposalDraft.rationale,
+          conflict_flag: matchingProposalDraft.conflict_flag,
+          status: "proposed",
+          created_at: nowIso(),
+        })
+      : null;
 
   if (status === "active" && !canAdmitWipTask(state)) {
     return withWipRefusal(state, draft, "triage_accept_to_today");

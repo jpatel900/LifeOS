@@ -176,6 +176,11 @@ export function unplanTask(
   if (!block?.task_id) {
     return state;
   }
+  // Calendar hunt #2: a Google-backed block is removed only through
+  // "Cancel Google event"; the account refuses any other unplan.
+  if (block.google_event_id) {
+    return state;
+  }
 
   const task = state.tasks.find((item) => item.id === block.task_id);
   return {

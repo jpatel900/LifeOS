@@ -7,6 +7,7 @@ import {
 } from "@/lib/googleCalendar/routeErrors";
 import { getGoogleCalendarConnectionForAccessToken } from "@/lib/googleCalendar/server";
 import { requireSupabaseServerUser } from "@/lib/supabase/server";
+import { reconcilePendingGoogleCalendarInsertAuditsForAccessToken } from "@/lib/externalWrites/reconciliation";
 
 function readBearerToken(request: Request) {
   const authorization = request.headers.get("authorization");
@@ -68,6 +69,17 @@ export async function GET(request: Request) {
     const reason = connection
       ? describeGoogleCalendarConnectionError(connection.last_error_json)
       : null;
+
+    // Calendar hunt #7: settle LifeOS's own approved Google writes whose
+    // result was lost (a crash between the Google insert and the audit
+    // update). It reads only the events LifeOS created, by their own id, and
+    // never creates or changes anything in Google. Best-effort: it must
+    // never fail the status read.
+    if (connection?.status === "connected") {
+      await reconcilePendingGoogleCalendarInsertAuditsForAccessToken(
+        accessToken,
+      ).catch(() => null);
+    }
 
     return NextResponse.json({
       ok: true,

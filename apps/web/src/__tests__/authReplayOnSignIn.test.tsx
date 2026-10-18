@@ -2145,9 +2145,21 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         const wins = await listPendingWrites("win");
         expect(wins).toHaveLength(0);
       });
+      // Barrier: the WHOLE account pass has settled, not just the journal.
+      // "synced" alone is not that signal — the pre-replay readback
+      // (`syncPersistedWorkflowRows` inside `runAccountSync`) already sets
+      // it before replay even starts, so waiting on it let this assertion
+      // race `refreshPendingSaveFailed` (journal read + identity check) and
+      // fail under load. `areasReadbackSettled` flips in `runAccountSync`'s
+      // `finally`, strictly after replay, the failure-only refresh and the
+      // gated readback, so everything below is checked after the refresh it
+      // is about has actually run.
       await waitFor(() => {
-        expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        );
       });
+      expect(screen.getByTestId("sync-account")).toHaveTextContent("synced");
       expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
         "true",
       );

@@ -171,6 +171,9 @@ export function createCalendarApproval(deps: CalendarApprovalDeps) {
           options?.acknowledgeFirstWriteWarning,
         ),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        // Calendar hunt #4: the time on screen is the time approved.
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
       },
     );
     if (!sent.ok) {

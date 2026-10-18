@@ -57,6 +57,12 @@ export interface CaptureCoreProps {
   // Fires once the capture is saved and the conclusion (if any) is done —
   // the caller closes/navigates/toasts here, never before.
   onResolved?(): void;
+  // Bug hunt #7: this widget was torn down from outside (e.g. browser Back
+  // closed the overlay) while the post-save conclusion was still showing, so
+  // `onResolved` will never run. The capture IS saved — the caller must
+  // still treat it as saved (clear its draft, confirm it) without closing
+  // anything, since the surface is already gone.
+  onSavedThenDismissed?(): void;
   // Escape/close while idle; also dismisses the conclusion.
   onCancel?(): void;
   // Reports whether a new capture may begin right now — false only while
@@ -104,6 +110,7 @@ export function CaptureCore({
   onDraftChange,
   onSubmit,
   onResolved,
+  onSavedThenDismissed,
   onCancel,
   onLockChange,
   // #689 scope add (owner): the old "Save raw" vs "Save thought" pair was a
@@ -184,10 +191,21 @@ export function CaptureCore({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Latest callback, read from the unmount cleanup below.
+  const onSavedThenDismissedRef = useRef(onSavedThenDismissed);
+  useEffect(() => {
+    onSavedThenDismissedRef.current = onSavedThenDismissed;
+  }, [onSavedThenDismissed]);
+
   useEffect(() => {
     return () => {
       if (conclusionTimeoutRef.current) {
         clearTimeout(conclusionTimeoutRef.current);
+        conclusionTimeoutRef.current = null;
+        // The save already happened but the conclusion never finished
+        // (bug hunt #7) — report it so the saved text is not later offered
+        // back as an unsaved draft.
+        onSavedThenDismissedRef.current?.();
       }
     };
   }, []);

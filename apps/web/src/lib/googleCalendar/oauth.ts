@@ -201,6 +201,10 @@ export function buildGoogleCalendarAuthorizeUrl(state: string) {
   url.searchParams.set("state", state);
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("include_granted_scopes", "true");
+  // Calendar hunt #5: Google returns a refresh token only when the person
+  // consents. Disconnect does not revoke the grant, so without this a
+  // reconnect skipped consent and failed with refresh_token_missing.
+  url.searchParams.set("prompt", "consent");
 
   return url.toString();
 }

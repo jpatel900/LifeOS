@@ -57,6 +57,8 @@ import {
   toggleTaskMapNodeCompletionLocal,
   type WorkflowState,
 } from "../workflow";
+// Direct submodule import (bug hunt #6): the barrel's public surface is frozen.
+import { retargetCaptureReferences } from "../workflow/capture";
 // Direct submodule import: the workflow barrel (`../workflow.ts`) freezes the
 // pre-split public surface byte-for-byte, and these #844 additions are
 // consumed only by the state layer, so they ride the submodule path.
@@ -951,16 +953,34 @@ export function workflowReducer(
         ]);
       const taskAliases = effective("tasks");
       const blockAliases = effective("blocks");
+      const captureAliases = effective("captures");
+      const mergedCaptures = mergePersistedRows(
+        action.payload.captures,
+        state.captureItems,
+        captureAliases,
+      );
+      // Bug hunt #6: a device capture retired here in favour of its account
+      // twin takes its drafts and tasks along, so none are orphaned on the
+      // old id.
+      const keptCaptureIds = new Set(mergedCaptures.map((item) => item.id));
+      const captureRenames = new Map<string, string>();
+      for (const item of state.captureItems) {
+        const accountId = captureAliases.get(item.id);
+        if (
+          accountId &&
+          !keptCaptureIds.has(item.id) &&
+          keptCaptureIds.has(accountId)
+        ) {
+          captureRenames.set(item.id, accountId);
+        }
+      }
+      const retargeted = retargetCaptureReferences(state, captureRenames);
       return {
-        ...state,
-        captureItems: mergePersistedRows(
-          action.payload.captures,
-          state.captureItems,
-          effective("captures"),
-        ),
+        ...retargeted,
+        captureItems: mergedCaptures,
         tasks: mergePersistedRows(
           action.payload.tasks,
-          state.tasks,
+          retargeted.tasks,
           taskAliases,
         ),
         timeBlockProposals: mergePersistedProposals(

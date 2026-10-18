@@ -1,5 +1,6 @@
 "use client";
 
+import { GOOGLE_BACKED_BLOCK_CHANGE_REFUSED } from "@/lib/statusVocabulary";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, Ref } from "react";
 import type { Task } from "@lifeos/schemas";
@@ -709,6 +710,12 @@ export function PlanSheet({
                   onClick={() => {
                     switch (row.action.kind) {
                       case "unplan":
+                        // Calendar hunt #2: a Google-backed block leaves the
+                        // rail only through "Cancel Google event".
+                        if (row.placement?.block.google_event_id) {
+                          onToast?.(GOOGLE_BACKED_BLOCK_CHANGE_REFUSED);
+                          return;
+                        }
                         unplanTask(row.action.blockId);
                         onToast?.("Taken off the rail");
                         return;

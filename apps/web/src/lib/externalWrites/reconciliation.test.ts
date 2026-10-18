@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   requireSupabaseServiceRoleClient: vi.fn(),
   updateCalendarBlockGoogleEventForAccessToken: vi.fn(),
   updateExternalWriteEventResultForAccessToken: vi.fn(),
+  recordGoogleCalendarPlacementForAccessToken: vi.fn(),
 }));
 
 vi.mock("@/lib/googleCalendar/server", () => ({
@@ -28,6 +29,8 @@ vi.mock("@/lib/planning/server", () => ({
   getTimeBlockProposalForAccessToken: mocks.getTimeBlockProposalForAccessToken,
   updateCalendarBlockGoogleEventForAccessToken:
     mocks.updateCalendarBlockGoogleEventForAccessToken,
+  recordGoogleCalendarPlacementForAccessToken:
+    mocks.recordGoogleCalendarPlacementForAccessToken,
 }));
 vi.mock("@/lib/supabase/server", () => ({
   requireSupabaseServerUser: mocks.requireSupabaseServerUser,
@@ -93,6 +96,11 @@ describe("external write reconciliation", () => {
     mocks.createCalendarBlockForProposalForAccessToken.mockResolvedValue({
       id: "550e8400-e29b-41d4-a716-446655440601",
     });
+    mocks.recordGoogleCalendarPlacementForAccessToken.mockResolvedValue({
+      block: { id: "550e8400-e29b-41d4-a716-446655440601" },
+      proposal,
+      task: null,
+    });
   });
 
   it("resolves a crash-window pending insert as succeeded when the deterministic remote event exists", async () => {
@@ -113,11 +121,13 @@ describe("external write reconciliation", () => {
         eventId: "lifeos550e8400e29b41d4a716446655440501",
       }),
     );
+    // Healed with the same one-transaction placement the route uses
+    // (calendar hunt #1/#7), so the task is scheduled too.
     expect(
-      mocks.createCalendarBlockForProposalForAccessToken,
+      mocks.recordGoogleCalendarPlacementForAccessToken,
     ).toHaveBeenCalledWith(
       "supabase-access-token",
-      proposal,
+      proposal.id,
       "lifeos550e8400e29b41d4a716446655440501",
     );
     expect(
@@ -133,6 +143,34 @@ describe("external write reconciliation", () => {
       leftPending: 0,
       succeeded: 1,
     });
+  });
+
+  // Calendar hunt #7: a cancelled Google event is not an event that exists.
+  it("does not count a cancelled remote event as a successful write", async () => {
+    mockPendingRows([auditRow]);
+    mocks.getGoogleCalendarEventForConnection.mockResolvedValue({
+      exists: true,
+      status: "cancelled",
+    });
+
+    const result =
+      await reconcilePendingGoogleCalendarInsertAuditsForAccessToken(
+        "supabase-access-token",
+        { now: () => new Date("2026-05-10T16:00:00.000Z") },
+      );
+
+    expect(
+      mocks.recordGoogleCalendarPlacementForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).toHaveBeenCalledWith(
+      "supabase-access-token",
+      auditRow.id,
+      expect.objectContaining({ resultStatus: "failed" }),
+    );
+    expect(result.succeeded).toBe(0);
+    expect(result.failed).toBe(1);
   });
 
   it("leaves stale pending rows pending when Google is unreachable", async () => {

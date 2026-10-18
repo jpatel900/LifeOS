@@ -1,3 +1,4 @@
+import { parseParseCaptureClock } from "@/lib/ai/parseCaptureClock";
 import {
   getParseCaptureStatus,
   parseCaptureWithFallback,
@@ -97,11 +98,14 @@ function parseRequestBody(body: unknown) {
   });
 
   const operatorProfile = parseOperatorProfile(record.operatorProfile);
+  // Bug hunt #16: optional; a malformed clock is dropped, never fatal.
+  const clock = parseParseCaptureClock(record.clock);
 
   return {
     rawText: record.rawText.trim(),
     areaContext,
     operatorProfile,
+    clock,
     parserMode,
   };
 }

@@ -174,6 +174,15 @@ export function syncWorkflowIdCounterFromState(state: WorkflowState): void {
   idCounter = maxWorkflowGeneratedIdSuffix(state);
 }
 
+/**
+ * Like `syncWorkflowIdCounterFromState`, but never LOWERS the counter. Used
+ * when rows minted in other tabs arrive (the device draft store), so a new
+ * local id cannot collide with one of them (bug hunt #12).
+ */
+export function raiseWorkflowIdCounterFromState(state: WorkflowState): void {
+  idCounter = Math.max(idCounter, maxWorkflowGeneratedIdSuffix(state));
+}
+
 export function nextId(prefix: string) {
   idCounter += 1;
   return `${prefix}-${idCounter}`;
@@ -339,6 +348,24 @@ export function workflowStateHasDemoSeed(state: WorkflowState): boolean {
     state.timeBlockProposals.some((proposal) => hasDemoSeedId(proposal.id)) ||
     state.executionSessions.some((session) => hasDemoSeedId(session.id)) ||
     state.reviewLog === lastDemoSeedReviewLog
+  );
+}
+
+/**
+ * Calendar hunt #2: does this task have an open (scheduled or running) block
+ * that is on Google Calendar? Such a block can only be moved or removed
+ * through the "Cancel Google event" approval step: the account refuses to
+ * cancel it any other way, because the Google event would be left behind.
+ */
+export function taskHasGoogleBackedOpenBlock(
+  state: WorkflowState,
+  taskId: string,
+): boolean {
+  return state.calendarBlocks.some(
+    (block) =>
+      block.task_id === taskId &&
+      (block.status === "scheduled" || block.status === "running") &&
+      Boolean(block.google_event_id),
   );
 }
 
