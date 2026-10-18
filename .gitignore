@@ -22,7 +22,10 @@ out/
 # IDE
 .vscode/
 .idea/
-.claude/
+.claude/*
+# Shared, committed Claude Code config (owner 2026-10-17); local settings stay ignored.
+!.claude/settings.json
+!.claude/hooks/
 
 # OS
 .DS_Store
