@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   journalCaptureWrite,
+  journalExecutionSessionWrite,
   journalPlanPlacementWrite,
   journalPlanUnplacementWrite,
   journalProposalEditWrite,
@@ -1267,5 +1268,59 @@ describe("journalProposalEditWrite / proposal edit replay (calendar hunt #4)", (
       proposed_end: "2026-05-08T16:00:00.000Z",
     });
     expect(await pendingWriteCount()).toBe(0);
+  });
+});
+
+describe("a Google-backed refusal of a session deferral (#1091 follow-up)", () => {
+  const sessionInput = {
+    workflowTaskId: "task-local-google",
+    persistedTaskId: "550e8400-e29b-41d4-a716-446655440401",
+    workflowBlockId: "block-local-google",
+    persistedBlockId: "550e8400-e29b-41d4-a716-446655440402",
+    outcome: "blocked",
+    actualMinutes: 25,
+    productivityRating: 1,
+    notes: "dod_cap.v1 deferred: synthetic carry note",
+    capOutcome: "deferred",
+    deferTask: true,
+  } as const;
+
+  it("records the session as Stuck without the deferral instead of retrying forever", async () => {
+    const journalled = await journalExecutionSessionWrite(sessionInput);
+    const syncExecutionSession = vi.fn(
+      async (args: { defer_task: boolean }) => {
+        if (args.defer_task) {
+          throw new Error(
+            "Google-backed blocks require calendar approval before changing this task.",
+          );
+        }
+        return { provider: "supabase" as const };
+      },
+    );
+
+    await replayDurableWrites(serverOps({ syncExecutionSession }));
+
+    expect(syncExecutionSession).toHaveBeenCalledTimes(2);
+    expect(syncExecutionSession).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        client_write_id: journalled.client_write_id,
+        outcome: "blocked",
+        cap_outcome: null,
+        defer_task: false,
+      }),
+    );
+    expect(await pendingWriteCount()).toBe(0);
+  });
+
+  it("keeps any other deferral failure queued for retry", async () => {
+    await journalExecutionSessionWrite(sessionInput);
+    const syncExecutionSession = vi.fn(async () => {
+      throw new Error("Synthetic network failure");
+    });
+
+    await replayDurableWrites(serverOps({ syncExecutionSession }));
+
+    expect(syncExecutionSession).toHaveBeenCalledOnce();
+    expect(await pendingWriteCount()).toBe(1);
   });
 });

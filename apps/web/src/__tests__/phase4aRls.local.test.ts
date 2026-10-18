@@ -1559,6 +1559,142 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     }
   });
 
+  // #1089 / #1091 follow-up (migration 20261018120000): "Stuck" keeps a
+  // Google-backed block scheduled and linked, and putting the task off from
+  // the session is refused, so its Google event is never left behind.
+  it("keeps a Google-backed block linked on Stuck and refuses a session defer", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const { data: task } = await userAClient
+      .from("tasks")
+      .insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        title: `rls-google-stuck-${suffix}`,
+        status: "active",
+      })
+      .select("id")
+      .single();
+    const { data: proposal } = await userAClient
+      .from("time_block_proposals")
+      .insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        task_id: task!.id,
+        proposed_start: "2026-05-09T09:00:00.000Z",
+        proposed_end: "2026-05-09T10:00:00.000Z",
+        status: "proposed",
+      })
+      .select("id")
+      .single();
+
+    try {
+      const { data: placed, error: placeError } = await userAClient.rpc(
+        "record_google_calendar_placement",
+        {
+          p_proposal_id: proposal!.id,
+          p_google_event_id: `lifeos-stuck-${suffix}`,
+        },
+      );
+      expect(placeError).toBeNull();
+      const blockId = placed.block.id as string;
+      const sessionArgs = (clientWriteId: string, deferTask: boolean) => ({
+        p_task_id: task!.id,
+        p_calendar_block_id: blockId,
+        p_outcome: "blocked",
+        p_actual_minutes: 12,
+        p_paused_minutes: 0,
+        p_distraction_minutes: 0,
+        p_productivity_rating: 1,
+        p_notes: `rls-google-stuck-${suffix}`,
+        p_cap_outcome: deferTask ? "deferred" : null,
+        p_client_write_id: clientWriteId,
+        p_defer_task: deferTask,
+      });
+
+      // Put off from the session: refused before anything is written.
+      const { error: deferError } = await userAClient.rpc(
+        "record_execution_session",
+        sessionArgs(`stuck-defer-${suffix}`, true),
+      );
+      expect(deferError?.message).toMatch(
+        /Google-backed blocks require calendar approval/,
+      );
+      const { data: refusedRows } = await userAClient
+        .from("execution_sessions")
+        .select("id")
+        .eq("client_write_id", `stuck-defer-${suffix}`);
+      expect(refusedRows).toHaveLength(0);
+      const { data: taskAfterRefusal } = await userAClient
+        .from("tasks")
+        .select("status")
+        .eq("id", task!.id)
+        .single();
+      expect(taskAfterRefusal?.status).toBe("scheduled");
+
+      // Another user cannot record a session on this task at all.
+      const { error: crossUserError } = await userBClient.rpc(
+        "record_execution_session",
+        sessionArgs(`stuck-cross-${suffix}`, false),
+      );
+      expect(crossUserError?.message).toMatch(/was not found/i);
+
+      // Stuck: the task is blocked, the block stays scheduled and linked.
+      const { data: stuck, error: stuckError } = await userAClient.rpc(
+        "record_execution_session",
+        sessionArgs(`stuck-${suffix}`, false),
+      );
+      expect(stuckError).toBeNull();
+      expect(stuck.session.outcome).toBe("blocked");
+      expect(stuck.task.status).toBe("blocked");
+      const { data: blockAfter } = await userAClient
+        .from("calendar_blocks")
+        .select("status,google_event_id")
+        .eq("id", blockId)
+        .single();
+      expect(blockAfter?.status).toBe("scheduled");
+      expect(blockAfter?.google_event_id).toBe(`lifeos-stuck-${suffix}`);
+
+      // The legacy row-update defer path refuses the same way.
+      const { error: legacyError } = await userAClient.rpc(
+        "apply_execution_session_defer",
+        {
+          p_session_id: stuck.session.id,
+          p_task_id: task!.id,
+          p_actual_minutes: 12,
+          p_paused_minutes: 0,
+          p_distraction_minutes: 0,
+          p_notes: "dod_cap.v1 deferred: refused",
+        },
+      );
+      expect(legacyError?.message).toMatch(
+        /Google-backed blocks require calendar approval/,
+      );
+      const { data: taskAfterLegacy } = await userAClient
+        .from("tasks")
+        .select("status")
+        .eq("id", task!.id)
+        .single();
+      expect(taskAfterLegacy?.status).toBe("blocked");
+    } finally {
+      await userAClient
+        .from("execution_sessions")
+        .delete()
+        .eq("task_id", task!.id);
+      await userAClient
+        .from("calendar_blocks")
+        .delete()
+        .eq("task_id", task!.id);
+      await userAClient
+        .from("time_block_proposals")
+        .delete()
+        .eq("task_id", task!.id);
+      await userAClient.from("tasks").delete().eq("id", task!.id);
+    }
+  });
+
   it("dedupes a replayed triage accept on tasks.client_write_id", async () => {
     const userAClient = await signIn(userA.email, userA.password);
     const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;

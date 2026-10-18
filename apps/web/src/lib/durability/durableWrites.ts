@@ -1292,7 +1292,7 @@ function executionSessionHandler(ops: DurableWriteServerOps) {
       );
     }
 
-    const result = await sync({
+    const request = {
       client_write_id: write.client_write_id,
       task_id: taskId,
       calendar_block_id: blockId,
@@ -1304,7 +1304,22 @@ function executionSessionHandler(ops: DurableWriteServerOps) {
       notes: payload.notes,
       cap_outcome: payload.cap_outcome,
       defer_task: payload.defer_task,
-    });
+    };
+    let result;
+    try {
+      result = await sync(request);
+    } catch (error) {
+      // #1091 follow-up: the account refuses to put off a task whose block
+      // is on Google Calendar (migration 20261018120000), and that refusal is
+      // PERMANENT — retrying the same deferral can only fail forever. The
+      // session itself still happened, so it is not thrown away: it is
+      // recorded as what it was (stuck, outcome "blocked") without the
+      // deferral, which leaves the task blocked and its Google block linked
+      // until the person cancels the Google event. Same client write id, so a
+      // replay of this fallback is still deduplicated.
+      if (!payload.defer_task || !isGoogleBackedRefusal(error)) throw error;
+      result = await sync({ ...request, cap_outcome: null, defer_task: false });
+    }
     requireAccountWrite(result);
   };
 }
