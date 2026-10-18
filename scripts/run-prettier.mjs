@@ -91,6 +91,37 @@ for (const batch of batches) {
   }
 }
 
+// A new file stays untracked until `git add`, so the pass above skips it
+// while CI, which sees the commit, checks it. Check untracked, non-ignored
+// files too and warn (never fail: #871 keeps scratch files out of the
+// verdict) so a new file is not first caught as a red CI run.
+if (mode === "check") {
+  const untracked = execFileSync(
+    "git",
+    ["ls-files", "--others", "--exclude-standard", "-z"],
+    { cwd: repoRoot, maxBuffer: 64 * 1024 * 1024 },
+  )
+    .toString("utf8")
+    .split("\0")
+    .filter(Boolean);
+  if (untracked.length > 0) {
+    try {
+      execFileSync(
+        process.execPath,
+        [prettierBin, "--list-different", "--ignore-unknown", ...untracked],
+        { cwd: repoRoot, stdio: ["ignore", "pipe", "inherit"] },
+      );
+    } catch (error) {
+      const unformatted = String(error.stdout ?? "").trim();
+      if (unformatted) {
+        console.warn(
+          `run-prettier check: WARNING -- untracked files that will fail CI once committed (run \`pnpm format\`):\n${unformatted}\n`,
+        );
+      }
+    }
+  }
+}
+
 if (failed) {
   console.error(
     `\nrun-prettier ${mode}: FAILED -- ${files.length} git-tracked files considered (untracked files were not walked).`,
