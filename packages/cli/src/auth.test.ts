@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getAccessToken, login } from "./auth";
+import { getAccessToken, login, whoami } from "./auth";
 import type { CliConfig } from "./config";
 
 const mocks = vi.hoisted(() => ({
@@ -117,6 +117,68 @@ describe.skipIf(process.platform === "win32")(
         expires_at: session.expires_at,
         user_email: session.user.email,
       });
+    });
+
+    it("tightens an existing, too-open ~/.lifeos directory on login (#670)", async () => {
+      const lifeosDir = path.join(privateDir, ".lifeos");
+      fs.mkdirSync(lifeosDir);
+      fs.chmodSync(lifeosDir, 0o755);
+      const sessionFile = path.join(lifeosDir, "session.json");
+
+      await login(
+        config(sessionFile),
+        "synthetic@example.invalid",
+        "SYNTHETIC_PASSWORD",
+      );
+
+      expect(mode(lifeosDir)).toBe(0o700);
+      expect(mode(sessionFile)).toBe(0o600);
+    });
+
+    it("tightens a too-open session file and ~/.lifeos directory on read, even when nothing is rewritten (#670)", async () => {
+      const lifeosDir = path.join(privateDir, ".lifeos");
+      fs.mkdirSync(lifeosDir);
+      fs.chmodSync(lifeosDir, 0o755);
+      const sessionFile = path.join(lifeosDir, "session.json");
+      fs.writeFileSync(
+        sessionFile,
+        JSON.stringify({ ...session, user_email: session.user.email }),
+      );
+      fs.chmodSync(sessionFile, 0o644);
+
+      // Fresh token: getAccessToken returns without refreshing or writing.
+      await expect(getAccessToken(config(sessionFile))).resolves.toBe(
+        session.access_token,
+      );
+      expect(mocks.refreshSession).not.toHaveBeenCalled();
+      expect(mode(sessionFile)).toBe(0o600);
+      expect(mode(lifeosDir)).toBe(0o700);
+
+      fs.chmodSync(sessionFile, 0o640);
+      expect(whoami(config(sessionFile))).toEqual({
+        signed_in: true,
+        email: session.user.email,
+      });
+      expect(mode(sessionFile)).toBe(0o600);
+    });
+
+    it("never changes a shared directory that only holds a custom session file (#670)", async () => {
+      const sharedDir = path.join(privateDir, "shared-temp");
+      fs.mkdirSync(sharedDir);
+      fs.chmodSync(sharedDir, 0o755);
+      const sessionFile = path.join(sharedDir, "session.json");
+      fs.writeFileSync(sessionFile, JSON.stringify(session));
+      fs.chmodSync(sessionFile, 0o644);
+
+      await getAccessToken(config(sessionFile));
+      await login(
+        config(sessionFile),
+        "synthetic@example.invalid",
+        "SYNTHETIC_PASSWORD",
+      );
+
+      expect(mode(sharedDir)).toBe(0o755);
+      expect(mode(sessionFile)).toBe(0o600);
     });
   },
 );
