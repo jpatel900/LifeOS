@@ -5,7 +5,10 @@ export type EndSessionAbortReason =
   | "invalid_cap_choice"
   | "missing_cut_scope"
   | "missing_carry_note"
-  | "missing_decision";
+  | "missing_decision"
+  // Follow-up to calendar hunt #2: the task's block is on Google Calendar, so
+  // the account refuses to put it off until its Google event is cancelled.
+  | "google_backed_block";
 
 export type EndSessionResult =
   | {
@@ -65,6 +68,13 @@ interface EndSessionPolicyDependencies {
     actualMinutes: number,
     notes: string | null,
   ): Promise<"persisted" | "local-only" | "failure">;
+  /**
+   * Follow-up to calendar hunt #2: true when the task has an open block on
+   * Google Calendar. Putting such a task off is refused (the Google event
+   * would be left behind), the same way the Review sheet refuses it, so the
+   * defer path stops before asking for a carry note.
+   */
+  hasGoogleBackedOpenBlock(taskId: string): boolean;
 }
 
 export function composeEndSessionNote(
@@ -117,6 +127,9 @@ export async function runEndSessionPolicy(
     }
 
     if (choice === "2" || choice === "defer" || choice === "deferred") {
+      if (dependencies.hasGoogleBackedOpenBlock(input.task.id)) {
+        return { status: "aborted", reason: "google_backed_block" };
+      }
       const carryNote = dependencies
         .prompt("Defer: write one carry note for the next block or backlog.")
         ?.trim();

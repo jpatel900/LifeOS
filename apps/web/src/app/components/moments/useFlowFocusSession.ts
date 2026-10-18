@@ -26,7 +26,11 @@ import type { MomentValue } from "./MomentSwitcher";
 import type { EndSessionOutcome } from "./EndSessionSheet";
 import type { ToastAction } from "./toast";
 import { runEndSessionPolicy, type EndSessionResult } from "./endSessionPolicy";
-import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
+import {
+  GOOGLE_BACKED_BLOCK_CHANGE_REFUSED,
+  SAVED_ON_THIS_DEVICE_SHORT,
+} from "@/lib/statusVocabulary";
+import { taskHasGoogleBackedOpenBlock } from "@/lib/workflow/shared";
 import {
   hasRunningSession,
   readRunningSession,
@@ -514,6 +518,8 @@ export function useFlowFocusSession({
                 : window.prompt(message, defaultValue),
             markSession,
             deferTaskWithSession,
+            hasGoogleBackedOpenBlock: (taskId) =>
+              taskHasGoogleBackedOpenBlock(state, taskId),
           },
         );
       } finally {
@@ -530,7 +536,9 @@ export function useFlowFocusSession({
               ? "Write a carry note before deferring"
               : result.reason === "missing_decision"
                 ? "Decision choice is required before closing"
-                : "Choose cut scope or defer at the cap",
+                : result.reason === "google_backed_block"
+                  ? GOOGLE_BACKED_BLOCK_CHANGE_REFUSED
+                  : "Choose cut scope or defer at the cap",
         );
         return;
       }
@@ -556,6 +564,7 @@ export function useFlowFocusSession({
       focusedTask,
       markSession,
       session.remaining,
+      state,
       showToast,
       closeEndOverlay,
     ],

@@ -4,7 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Moon, Plus, Sun } from "lucide-react";
 import { createArea, listAreas, updateAreaColor } from "@/lib/data/workflow";
-import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
+import {
+  GOOGLE_BACKED_BLOCK_CHANGE_REFUSED,
+  SAVED_ON_THIS_DEVICE_SHORT,
+} from "@/lib/statusVocabulary";
+import { taskHasGoogleBackedOpenBlock } from "@/lib/workflow/shared";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   persistedAreaIdForWorkflowAreaId,
@@ -330,6 +334,8 @@ export function LifeOSCockpit({
             ? markSession(outcome, minutes, composedNote, capOutcome)
             : finish(outcome, minutes, composedNote),
         deferTaskWithSession,
+        hasGoogleBackedOpenBlock: (taskId) =>
+          taskHasGoogleBackedOpenBlock(state, taskId),
       },
     );
 
@@ -341,7 +347,9 @@ export function LifeOSCockpit({
             ? "Write a carry note before deferring"
             : result.reason === "missing_decision"
               ? "Decision choice is required before closing"
-              : "Choose cut scope or defer at the cap",
+              : result.reason === "google_backed_block"
+                ? GOOGLE_BACKED_BLOCK_CHANGE_REFUSED
+                : "Choose cut scope or defer at the cap",
       );
       return result;
     }
