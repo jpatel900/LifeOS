@@ -11,6 +11,9 @@ function dependencies(promptAnswers: Array<string | null> = []) {
     // case); individual tests override the resolved value to exercise the
     // local-only/failure split-truth branches.
     deferTaskWithSession: vi.fn().mockResolvedValue("persisted"),
+    // Follow-up to calendar hunt #2: no Google-backed block unless a test
+    // says otherwise.
+    hasGoogleBackedOpenBlock: vi.fn((_taskId: string) => false),
   };
 }
 
@@ -83,6 +86,64 @@ describe("runEndSessionPolicy", () => {
       25,
       "Good first pass\n\ndod_cap.v1 deferred: Continue from section two",
     );
+  });
+
+  // Follow-up to calendar hunt #2: putting off a task whose block is on
+  // Google Calendar is refused before any write, the same way the Review
+  // sheet refuses it, and before the carry note is asked for.
+  it("refuses DEFER for a task with a Google-backed block and writes nothing", async () => {
+    const deps = dependencies(["defer", "Continue from section two"]);
+    deps.hasGoogleBackedOpenBlock.mockReturnValue(true);
+
+    const result = await runEndSessionPolicy(
+      {
+        outcome: "stuck",
+        actualMinutes: 25,
+        note: null,
+        capReached: true,
+        task: {
+          id: "task-1",
+          definitionOfDone: "Original DoD",
+          taskType: null,
+        },
+      },
+      deps,
+    );
+
+    expect(result).toEqual({
+      status: "aborted",
+      reason: "google_backed_block",
+    });
+    expect(deps.hasGoogleBackedOpenBlock).toHaveBeenCalledWith("task-1");
+    // Only the cap choice was asked; no carry note for a deferral that
+    // cannot happen.
+    expect(deps.prompt).toHaveBeenCalledOnce();
+    expect(deps.deferTaskWithSession).not.toHaveBeenCalled();
+    expect(deps.markSession).not.toHaveBeenCalled();
+  });
+
+  it("still lets CUT SCOPE close a task with a Google-backed block", async () => {
+    const deps = dependencies(["cut scope", "Smaller DoD"]);
+    deps.hasGoogleBackedOpenBlock.mockReturnValue(true);
+
+    const result = await runEndSessionPolicy(
+      {
+        outcome: "stuck",
+        actualMinutes: 25,
+        note: null,
+        capReached: true,
+        task: {
+          id: "task-1",
+          definitionOfDone: "Original DoD",
+          taskType: null,
+        },
+      },
+      deps,
+    );
+
+    expect(result).toMatchObject({ status: "closed", resolution: "cut_scope" });
+    expect(deps.markSession).toHaveBeenCalledOnce();
+    expect(deps.deferTaskWithSession).not.toHaveBeenCalled();
   });
 
   it("reports the split unconfirmed truth when the atomic defer resolves local-only", async () => {

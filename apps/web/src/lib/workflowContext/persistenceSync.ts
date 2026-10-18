@@ -688,7 +688,15 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
    * transition applied on top of it. Drop is the one that says "this should
    * not exist", which is the only intent an annulment can honestly represent.
    */
-  async function persistDroppedTask(localTaskId: string) {
+  /**
+   * Resolves with what happened to the drop, so Review can roll a refused
+   * drop back the same way it rolls back put off and carry forward. Only a
+   * direct account write can be refused; a queued drop is reported as
+   * local-only until it lands.
+   */
+  async function persistDroppedTask(
+    localTaskId: string,
+  ): Promise<TaskReviewPersistenceResult> {
     const persistedTaskId = persistedIdForLocalId(
       localTaskId,
       persistedTaskIdByLocalIdRef.current,
@@ -703,7 +711,9 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     // an ordinary transition with no compensating role, so it keeps the
     // established path rather than growing a second one.
     if (!supersedes && persistedTaskId) {
-      return persistTaskReviewTransition(localTaskId, "dropped");
+      return persistTaskReviewTransition(localTaskId, "dropped", {
+        settle: true,
+      });
     }
 
     let journalled;
@@ -715,7 +725,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       });
     } catch {
       markDeviceStorageBlocked();
-      return;
+      return { status: "local-only" };
     }
 
     try {
@@ -726,11 +736,12 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
 
     if (await hasPendingWrite(journalled.client_write_id)) {
       markLocalOnly(savedOnThisDeviceAndSendingBanner("Your change"));
-      return;
+      return { status: "local-only" };
     }
 
     const client = createSupabaseBrowserClient();
     if (client) await syncPersistedWorkflowRows(client);
+    return { status: "persisted" };
   }
 
   async function persistTaskReviewTransition(

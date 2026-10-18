@@ -324,6 +324,8 @@ Indexes:
 
 An approved Google Calendar event is a placement: its account half lands through the transactional `record_google_calendar_placement` function (`20261017120000_record_google_calendar_placement.sql`, 2026-10-17), which stores the block's `google_event_id`, accepts the proposal, supersedes the task's other pending proposals and schedules the task — the same semantics as `place_time_block`. A task has at most one scheduled Google-backed block.
 
+A focus session that ends "Stuck" leaves a Google-backed block `scheduled` and linked (2026-10-18, `20261018120000_refuse_session_defer_on_google_block.sql`): only an approved "Cancel Google event" may close it, because the guards that keep the event from being orphaned read open blocks only. Putting the task off from the session (`record_execution_session` with `p_defer_task`, or `apply_execution_session_defer`) is refused while such a block is open, like the Review choices.
+
 ---
 
 ### 4.8 `execution_sessions`

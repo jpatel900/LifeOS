@@ -286,15 +286,19 @@ export function ReviewSheet({
                       type="button"
                       size="sm"
                       variant="ghost"
-                      onClick={() => {
+                      onClick={async () => {
                         // Calendar hunt #2: never claim a change the
                         // account will refuse for a Google-backed block.
                         if (taskHasGoogleBackedOpenBlock(state, item.task.id)) {
                           onToast?.(GOOGLE_BACKED_BLOCK_CHANGE_REFUSED);
                           return;
                         }
-                        dropTask(item.task.id);
-                        onToast?.("Dropped");
+                        // #1089 follow-up: say "Dropped" only once the
+                        // account has it; a refused drop is rolled back.
+                        const result = await dropTask(item.task.id);
+                        onToast?.(
+                          reviewSaveMessage(result, "Dropped", "Not dropped."),
+                        );
                       }}
                       className={cn(
                         HIT_TARGET_MIN,

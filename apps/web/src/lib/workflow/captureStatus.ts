@@ -98,3 +98,23 @@ export function countUnsortedCaptures(
 ): number {
   return selectUnsortedCaptures(state, areaId).length;
 }
+
+/**
+ * #1091 follow-up: the id a capture goes by NOW. Sync can swap a capture's
+ * device id for its account id while a Sort is running (bug hunt #6), so a
+ * "Sorting…" or failure state that remembers the device id would point at a
+ * row that no longer exists. When the remembered id has been retired and its
+ * account twin is on screen, this returns the twin; otherwise the id itself.
+ */
+export function currentCaptureId(
+  state: Pick<WorkflowState, "captureItems" | "accountIdByLocalId">,
+  captureId: string,
+): string {
+  if (state.captureItems.some((item) => item.id === captureId)) {
+    return captureId;
+  }
+  const accountId = state.accountIdByLocalId?.captures?.[captureId];
+  return accountId && state.captureItems.some((item) => item.id === accountId)
+    ? accountId
+    : captureId;
+}

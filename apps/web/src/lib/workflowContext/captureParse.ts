@@ -34,7 +34,10 @@ import {
   submitRawCapture,
   type WorkflowState,
 } from "../workflow";
-import { captureHasTriageDecision } from "../workflow/captureStatus";
+import {
+  captureHasTriageDecision,
+  currentCaptureId,
+} from "../workflow/captureStatus";
 import { persistedAreaIdForWorkflowId } from "./reducerCore";
 import type { ApplyWorkflowState } from "./applyWorkflowState";
 import type { CaptureParseState } from "./types";
@@ -82,7 +85,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
         async (signal) => {
           setCaptureParse({
             phase: "parsing",
-            captureId: capture.id,
+            captureId: currentCaptureId(stateRef.current, capture.id),
             parserMode,
           });
           const ensureCurrentAttempt = () => {
@@ -95,7 +98,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
             if (stateRef.current.areas.length > 0) return false;
             setCaptureParse({
               phase: "failed",
-              captureId: capture.id,
+              captureId: currentCaptureId(stateRef.current, capture.id),
               status: "unknown",
               message:
                 "Add an area before sorting. Your thought remains in Capture.",
@@ -243,7 +246,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
               // Do not roll back concurrent work or offer a retry that adds duplicates.
               setCaptureParse({
                 phase: "parsed",
-                captureId: capture.id,
+                captureId: currentCaptureId(stateRef.current, capture.id),
                 parser: result.parser,
                 status: result.status,
                 warning:
@@ -302,11 +305,18 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
             return;
           }
 
+          // #1091 follow-up: sync may have swapped this capture's device id
+          // for its account id while the request was out; settle on the id
+          // the row has now.
+          const settledCaptureId = currentCaptureId(
+            stateRef.current,
+            capture.id,
+          );
           setCaptureParse(
             result.ok
               ? {
                   phase: "parsed",
-                  captureId: capture.id,
+                  captureId: settledCaptureId,
                   parser: result.parser,
                   // Bug hunt #10: a request the server auto-degraded to basic
                   // sorting (AI provider down) reports as AI unavailable, so
@@ -319,7 +329,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
                 }
               : {
                   phase: "failed",
-                  captureId: capture.id,
+                  captureId: settledCaptureId,
                   status: result.status,
                   message: result.error,
                   canRetryWithMock: result.canRetryWithMock,
@@ -331,7 +341,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
       if (activeParseCaptureIdRef.current !== attemptId) return;
       setCaptureParse({
         phase: "failed",
-        captureId: capture.id,
+        captureId: currentCaptureId(stateRef.current, capture.id),
         status: "unknown",
         message: AI_SORTING_FAILED_NOT_SORTED,
         canRetryWithMock: true,
@@ -454,7 +464,10 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
       return;
     }
 
-    sortCaptureIntoDrafts(captureParse.captureId, "mock");
+    sortCaptureIntoDrafts(
+      currentCaptureId(stateRef.current, captureParse.captureId),
+      "mock",
+    );
   }
 
   return {

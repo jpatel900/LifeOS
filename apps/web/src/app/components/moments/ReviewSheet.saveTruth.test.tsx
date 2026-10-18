@@ -403,6 +403,112 @@ describe("ReviewSheet account save truth", () => {
     },
   );
 
+  // #1089 follow-up: Drop is settled and rolled back exactly like put off
+  // and carry forward. The Google refusal here is one the screen could not
+  // foresee (the block was placed from another device), so it reaches the
+  // account and must come back as the real way out, not "try again".
+  it.each([
+    {
+      refusal: "Forced account refusal",
+      expected: "Could not save your choice to your account. Try again.",
+    },
+    {
+      refusal: GOOGLE_BLOCK_REFUSAL,
+      expected:
+        "Not dropped. This task still has an event on your Google Calendar. Cancel that event first, then choose again.",
+    },
+  ])(
+    "rolls a refused drop back and does not claim it ($refusal)",
+    async ({ refusal, expected }) => {
+      storedTask = accountTask("active");
+      const view = mountReview();
+      await waitFor(() =>
+        expect(screen.getByTestId("account-read-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      expect(screen.getByTestId("task-status")).toHaveTextContent("active");
+
+      fireEvent.click(screen.getByTestId(`review-sheet-drop-${TASK_ID}`));
+      await waitFor(() =>
+        expect(rpc).toHaveBeenCalledWith("apply_task_review_transition", {
+          p_task_id: TASK_ID,
+          p_target_status: "dropped",
+        }),
+      );
+      // Optimistic until the account answers, and no "Dropped" yet.
+      expect(screen.getByTestId("task-status")).toHaveTextContent("dropped");
+      expect(toast).not.toHaveBeenCalled();
+
+      await act(async () => {
+        finishAccountWrite({ data: null, error: { message: refusal } });
+      });
+
+      await waitFor(() => expect(toast).toHaveBeenCalledWith(expected));
+      expect(toast).not.toHaveBeenCalledWith("Dropped");
+      // Rolled back to what the account holds.
+      expect(screen.getByTestId("task-status")).toHaveTextContent("active");
+      expect(screen.getByTestId("account-message").textContent).not.toContain(
+        SAVED_ON_THIS_DEVICE_SHORT,
+      );
+
+      view.unmount();
+      mountReview();
+      await waitFor(() =>
+        expect(screen.getByTestId("account-read-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      expect(screen.getByTestId("task-status")).toHaveTextContent("active");
+      expect(rpc).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("says Dropped only after the account confirms the drop", async () => {
+    storedTask = accountTask("active");
+    mountReview();
+    await waitFor(() =>
+      expect(screen.getByTestId("account-read-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    fireEvent.click(screen.getByTestId(`review-sheet-drop-${TASK_ID}`));
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
+    expect(toast).not.toHaveBeenCalled();
+    storedTask = { ...accountTask("active"), status: "dropped" };
+    await act(async () => {
+      finishAccountWrite({
+        data: { task: storedTask, blocks: [] },
+        error: null,
+      });
+    });
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("Dropped"));
+  });
+
+  // #1091 follow-up: "put off" at the end of a focus session. The end-session
+  // policy refuses it first (endSessionPolicy.test.ts); this is the
+  // WorkflowContext backstop for any other caller.
+  it("refuses a session put-off for a Google-backed task and changes nothing", async () => {
+    storedTask = accountTask("blocked");
+    storedBlocks = [googleBackedBlock()];
+    mountReview();
+    await waitFor(() =>
+      expect(screen.getByTestId("account-read-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    const before = workflow.state;
+    let result: string | undefined;
+    await act(async () => {
+      result = await workflow.deferTaskWithSession(TASK_ID, 25, null);
+    });
+    expect(result).toBe("failure");
+    expect(workflow.state).toBe(before);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(screen.getByTestId("task-status")).toHaveTextContent("blocked");
+    expect(screen.getByTestId("block-status")).toHaveTextContent("scheduled");
+  });
+
   it("cancelling the stuck task's Google event clears the way to put it off", async () => {
     storedTask = accountTask("blocked");
     storedBlocks = [googleBackedBlock()];

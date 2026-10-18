@@ -10,7 +10,10 @@ import {
   sortFailureMessage,
 } from "@/lib/statusVocabulary";
 import { useAuthPresence } from "./useAuthPresence";
-import { selectUnsortedCaptures } from "@/lib/workflow/captureStatus";
+import {
+  currentCaptureId,
+  selectUnsortedCaptures,
+} from "@/lib/workflow/captureStatus";
 
 /**
  * #703 (owner-ratified 2026-07-19) — the Sort action, shared by every triage
@@ -58,12 +61,17 @@ export function UnsortedCaptures({
   // Progress/failure read straight off the shared `captureParse` state the
   // parse path already maintains — no second source of truth, and keyed by
   // capture id so a failure can only ever render on the row it belongs to.
+  // #1091 follow-up: the id is resolved through the device -> account swap,
+  // so a sort that started before sync renamed its capture still shows on
+  // the renamed row.
   const sortingCaptureId =
-    captureParse.phase === "parsing" ? captureParse.captureId : null;
+    captureParse.phase === "parsing"
+      ? currentCaptureId(state, captureParse.captureId)
+      : null;
   const failedSort =
     captureParse.phase === "failed"
       ? {
-          captureId: captureParse.captureId,
+          captureId: currentCaptureId(state, captureParse.captureId),
           status: captureParse.status,
           message: captureParse.message,
           canRetryWithMock: captureParse.canRetryWithMock,
