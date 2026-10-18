@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { listAreas } from "@/lib/data/workflow";
 import {
-  requireSupabaseServerUser,
-  SupabaseAuthRejectedError,
-} from "@/lib/supabase/server";
+  isGoogleCalendarRouteAuthFailure as isRouteAuthFailure,
+  logGoogleCalendarRouteFailure as logRouteFailure,
+} from "@/lib/googleCalendar/routeErrors";
+import { requireSupabaseServerUser } from "@/lib/supabase/server";
+
+// LOW-1 (#670): fixed, plain-language copy for every auth rejection (missing,
+// invalid or expired token). The raw Supabase Auth text never reaches the
+// caller; errorCategory stays for machine clients.
+const AUTH_REJECTED_COPY =
+  "Your sign-in is missing or has expired. Sign in again, then retry.";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +43,11 @@ export async function GET(request: Request) {
   // 401 body — never the raw Supabase Auth error string.
   if (!accessToken) {
     return NextResponse.json(
-      { ok: false, errorCategory: "auth_rejected" },
+      {
+        ok: false,
+        errorCategory: "auth_rejected",
+        error: AUTH_REJECTED_COPY,
+      },
       { status: 401 },
     );
   }
@@ -53,19 +64,23 @@ export async function GET(request: Request) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    if (error instanceof SupabaseAuthRejectedError) {
+    if (isRouteAuthFailure(error)) {
       return NextResponse.json(
-        { ok: false, errorCategory: "auth_rejected" },
+        {
+          ok: false,
+          errorCategory: "auth_rejected",
+          error: AUTH_REJECTED_COPY,
+        },
         { status: 401 },
       );
     }
 
     // LOW-1 (#670): log the detail server-side only; the caller gets a
     // generic message, never the raw data-layer/provider error string.
-    console.error("v1/areas GET failed:", error);
+    logRouteFailure("v1/areas GET", error);
 
     return NextResponse.json(
-      { ok: false, error: "Something went wrong." },
+      { ok: false, error: "Could not load your areas. Try again in a moment." },
       { status: 500 },
     );
   }
