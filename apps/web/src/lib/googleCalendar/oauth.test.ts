@@ -11,6 +11,18 @@ import {
   sealGoogleCalendarOAuthStateCookie,
 } from "./oauth";
 
+const secretsMatchSpy = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/security/secretsMatch", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/security/secretsMatch")>();
+  return {
+    secretsMatch: (...args: Parameters<typeof actual.secretsMatch>) => {
+      secretsMatchSpy(...args);
+      return actual.secretsMatch(...args);
+    },
+  };
+});
+
 describe("Google Calendar OAuth helpers", () => {
   beforeEach(() => {
     vi.useRealTimers();
@@ -64,6 +76,31 @@ describe("Google Calendar OAuth helpers", () => {
     const payload = readGoogleCalendarOAuthStateCookie(cookieValue);
 
     expect(isGoogleCalendarOAuthStateValid(payload, "wrong-state")).toBe(false);
+  });
+
+  it("compares the OAuth state with the constant-time secretsMatch, not !== (#670)", () => {
+    const cookieValue = sealGoogleCalendarOAuthStateCookie({
+      accessToken: "supabase-access-token",
+      state: "expected-state",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+    });
+    const payload = readGoogleCalendarOAuthStateCookie(cookieValue);
+    secretsMatchSpy.mockClear();
+
+    expect(isGoogleCalendarOAuthStateValid(payload, "expected-stat")).toBe(
+      false,
+    );
+    expect(isGoogleCalendarOAuthStateValid(payload, "expected-state!")).toBe(
+      false,
+    );
+    expect(isGoogleCalendarOAuthStateValid(payload, "expected-state")).toBe(
+      true,
+    );
+    expect(secretsMatchSpy).toHaveBeenCalledTimes(3);
+    expect(secretsMatchSpy).toHaveBeenLastCalledWith(
+      "expected-state",
+      "expected-state",
+    );
   });
 
   it("rejects expired OAuth state payloads", () => {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { secretsMatch } from "@/lib/security/secretsMatch";
 import { requireSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { loadOwnerWorkflowState } from "@/lib/data/workflowServerLoad";
 import { buildStartVM } from "@/app/components/moments/momentsViewModel";
@@ -71,7 +72,11 @@ export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   const providedToken = readBearerToken(request);
 
-  if (!cronSecret || !providedToken || providedToken !== cronSecret) {
+  if (
+    !cronSecret ||
+    !providedToken ||
+    !secretsMatch(providedToken, cronSecret)
+  ) {
     return NextResponse.json(
       { ok: false, error: "Unauthorized." },
       { status: 401 },

@@ -16,6 +16,10 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import { POST, maxDuration } from "./route";
+import {
+  AI_ROUTE_RATE_LIMIT,
+  resetAiRouteRateLimitsForTests,
+} from "@/lib/security/rateLimit";
 
 const draft = {
   highlights: ["Shipped the parser fix"],
@@ -44,6 +48,7 @@ const validBody = {
 describe("POST /api/rollup-prose", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetAiRouteRateLimitsForTests();
     createSupabaseServerClient.mockReturnValue({
       auth: {
         getUser: vi
@@ -124,6 +129,50 @@ describe("POST /api/rollup-prose", () => {
       summary: draft,
       degraded: true,
     });
+  });
+  it("returns the route's own validation message for a bad body (#670)", async () => {
+    const response = await POST(postRequest({ areaLabel: "X" }, "tok"));
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "periodType must be week or month.",
+    });
+  });
+
+  it("returns a plain 'Invalid request.' for unparseable JSON instead of the parser error text (#670)", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/rollup-prose", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer tok",
+        },
+        body: "{not json",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "Invalid request.",
+    });
+    expect(enhanceRollupProse).not.toHaveBeenCalled();
+  });
+
+  it("returns 429 with plain copy once a user passes the limit, before any provider call (#670)", async () => {
+    enhanceRollupProse.mockResolvedValue({ source: "ai", summary: draft });
+    for (let i = 0; i < AI_ROUTE_RATE_LIMIT.limit; i += 1) {
+      expect((await POST(postRequest(validBody, "tok"))).status).toBe(200);
+    }
+    enhanceRollupProse.mockClear();
+
+    const response = await POST(postRequest(validBody, "tok"));
+
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "Too many requests. Try again in a minute.",
+    });
+    expect(enhanceRollupProse).not.toHaveBeenCalled();
   });
 });
 

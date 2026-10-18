@@ -11,6 +11,10 @@ import {
   AI_SORTING_UNAVAILABLE_NOT_SORTED,
 } from "@/lib/statusVocabulary";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  rateLimitedResponse,
+  takeAiRouteRequest,
+} from "@/lib/security/rateLimit";
 
 // Bound authentication separately, leaving room for the 30-second provider deadline.
 const AUTH_DEADLINE_MS = 5_000;
@@ -31,16 +35,17 @@ function readBearerToken(request: Request) {
   return value.trim();
 }
 
+/** Returns the verified user's id, or null when the token is not accepted. */
 async function verifyBearerToken(accessToken: string) {
   const client = createSupabaseServerClient({ accessToken });
 
   if (!client) {
-    return false;
+    return null;
   }
 
   const { data, error } = await client.auth.getUser();
 
-  return !error && Boolean(data.user);
+  return !error && data.user ? data.user.id : null;
 }
 
 function parseRequestBody(body: unknown) {
@@ -203,9 +208,9 @@ export async function POST(request: Request) {
     );
   }
 
-  let authenticated: boolean;
+  let userId: string | null;
   try {
-    authenticated = await withRequestDeadline(AUTH_DEADLINE_MS, () =>
+    userId = await withRequestDeadline(AUTH_DEADLINE_MS, () =>
       verifyBearerToken(accessToken),
     );
   } catch {
@@ -221,7 +226,7 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
-  if (!authenticated) {
+  if (!userId) {
     return Response.json(
       { ok: false, errorCategory: "auth_rejected" },
       { status: 401 },
@@ -232,6 +237,17 @@ export async function POST(request: Request) {
     const input = parseRequestBody(await request.json());
     const forceMock =
       input.parserMode === "mock" || status.status === "ai_unavailable";
+
+    // #670: per-user cap on requests that can spend OpenAI credit. Mock-parser
+    // requests cost nothing and stay unlimited, so "retry with mock" is never
+    // blocked.
+    if (!forceMock && status.status === "ai_configured") {
+      const decision = takeAiRouteRequest("parse-capture", userId);
+      if (!decision.allowed) {
+        return rateLimitedResponse(decision.retryAfterSeconds);
+      }
+    }
+
     const result = await parseCaptureWithFallback(input, {
       forceMock,
       // The verified caller token also scopes fire-and-forget AI call tracing.

@@ -19,6 +19,12 @@ vi.mock("@/lib/googleCalendar/server", () => ({
 
 import { POST } from "./route";
 
+function authRejected(message: string) {
+  const error = new Error(message);
+  error.name = "SupabaseAuthRejectedError";
+  return error;
+}
+
 describe("google-calendar disconnect route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -108,5 +114,52 @@ describe("google-calendar disconnect route", () => {
         user_id: "550e8400-e29b-41d4-a716-446655440001",
       }),
     );
+  });
+
+  it("returns fixed sign-in copy, not raw Supabase Auth text, on auth rejection (#670)", async () => {
+    mocks.requireSupabaseServerUser.mockRejectedValue(
+      authRejected("invalid claim: missing sub claim"),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/google-calendar/disconnect", {
+        method: "POST",
+        headers: { Authorization: "Bearer supabase-access-token" },
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body).toEqual({
+      ok: false,
+      error: "Sign in before disconnecting Google Calendar.",
+    });
+  });
+
+  it("does not answer 401 or leak detail when the disconnect write fails (#670)", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.requireSupabaseServerUser.mockResolvedValue({
+      user: { id: "550e8400-e29b-41d4-a716-446655440001" },
+    });
+    mocks.getGoogleCalendarStoredConnectionForAccessToken.mockRejectedValue(
+      new Error("permission denied for table google_calendar_connections"),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/google-calendar/disconnect", {
+        method: "POST",
+        headers: { Authorization: "Bearer supabase-access-token" },
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toEqual({
+      ok: false,
+      error:
+        "Google Calendar could not be disconnected. Try again in a moment.",
+    });
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

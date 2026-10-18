@@ -64,6 +64,12 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { POST } from "./route";
 
+function authRejected(message: string) {
+  const error = new Error(message);
+  error.name = "SupabaseAuthRejectedError";
+  return error;
+}
+
 const user = { id: "550e8400-e29b-41d4-a716-446655440001" };
 const proposal = {
   id: "550e8400-e29b-41d4-a716-446655440501",
@@ -518,5 +524,46 @@ describe("google-calendar create-event route", () => {
 
     expect(response.status).toBe(409);
     expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+  });
+
+  it("logs an unexpected failure server-side without echoing it (#670)", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.getTaskForAccessToken.mockRejectedValue(
+      new Error("permission denied for table tasks"),
+    );
+
+    const response = await POST(
+      request({
+        proposal_id: proposal.id,
+        approved: true,
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body.error).toBe(
+      "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
+    );
+    expect(spy).toHaveBeenCalledWith(
+      "google-calendar/create-event failed:",
+      expect.objectContaining({ message: "permission denied for table tasks" }),
+    );
+    spy.mockRestore();
+  });
+
+  it("returns fixed sign-in copy for a typed auth rejection (#670)", async () => {
+    mocks.requireSupabaseServerUser.mockRejectedValue(
+      authRejected("invalid claim: missing sub claim"),
+    );
+
+    const response = await POST(
+      request({ proposal_id: proposal.id, approved: true }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Sign in before creating Google Calendar events.");
   });
 });

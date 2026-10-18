@@ -4,6 +4,7 @@ import {
   createHash,
   randomBytes,
 } from "node:crypto";
+import { secretsMatch } from "@/lib/security/secretsMatch";
 import { getGoogleCalendarConfig } from "./config";
 
 export const GOOGLE_CALENDAR_SCOPES = [
@@ -291,7 +292,9 @@ export function isGoogleCalendarOAuthStateValid(
   if (
     !payload ||
     !isNonEmptyString(expectedState) ||
-    payload.state !== expectedState
+    // Constant-time compare so response timing never leaks how much of the
+    // state value matched (#670).
+    !secretsMatch(payload.state, expectedState)
   ) {
     return false;
   }

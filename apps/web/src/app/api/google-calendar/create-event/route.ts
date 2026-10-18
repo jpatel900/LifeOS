@@ -17,6 +17,11 @@ import {
   getTimeBlockProposalForAccessToken,
   recordGoogleCalendarPlacementForAccessToken,
 } from "@/lib/planning/server";
+import {
+  isGoogleCalendarRouteAuthFailure,
+  isRequestValidationError,
+  logGoogleCalendarRouteFailure,
+} from "@/lib/googleCalendar/routeErrors";
 import { requireSupabaseServerUser } from "@/lib/supabase/server";
 
 function readBearerToken(request: Request) {
@@ -43,16 +48,24 @@ function safeErrorMessage(error: unknown) {
 }
 
 function mapCreateEventFailure(error: unknown) {
+  // #670: the raw message is only inspected to pick a status; the client
+  // always gets fixed copy, and unexpected failures are logged server-side.
   const rawMessage = safeErrorMessage(error);
 
-  if (/sign in|jwt|auth/i.test(rawMessage)) {
+  if (
+    isGoogleCalendarRouteAuthFailure(error) ||
+    /sign in|jwt|auth/i.test(rawMessage)
+  ) {
     return {
       status: 401,
       error: "Sign in before creating Google Calendar events.",
     };
   }
 
-  if (/proposal_id|approved/i.test(rawMessage)) {
+  if (
+    isRequestValidationError(error) ||
+    /proposal_id|approved/i.test(rawMessage)
+  ) {
     return {
       status: 400,
       error:
@@ -67,6 +80,8 @@ function mapCreateEventFailure(error: unknown) {
         "This proposal already has a Google Calendar event. Duplicate event creation is blocked.",
     };
   }
+
+  logGoogleCalendarRouteFailure("google-calendar/create-event", error);
 
   return {
     status: 502,

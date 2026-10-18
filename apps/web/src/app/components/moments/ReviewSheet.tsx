@@ -2,7 +2,7 @@
 
 import { GOOGLE_BACKED_BLOCK_CHANGE_REFUSED } from "@/lib/statusVocabulary";
 import { taskHasGoogleBackedOpenBlock } from "@/lib/workflow/shared";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
@@ -16,7 +16,13 @@ import {
   selectNeedsDecision,
 } from "@/lib/workflow/reviewStatus";
 import type { DayCloseRecord } from "@/lib/review/dayClose";
-import { savedOnThisDeviceAndSendingBanner } from "@/lib/statusVocabulary";
+import {
+  ACCOUNT_NEEDS_APP_UPDATE,
+  SAVED_ON_THIS_DEVICE_SHORT,
+  savedOnThisDeviceAndSendingBanner,
+} from "@/lib/statusVocabulary";
+import { isLifeOsOwnedGoogleEventIdShape } from "@/lib/cockpit/googleCalendarBridge";
+import type { Phase2MockCalendarBlock } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { MomentSheet } from "./MomentSheet";
 import { HIT_TARGET_MIN } from "./hitTarget";
@@ -97,21 +103,59 @@ const REASON_LABEL: Record<string, string> = {
   partial: "only partly done",
 };
 
-function reviewSaveMessage(result: TaskReviewSaveResult, success: string) {
+/**
+ * What a Review choice's toast says, from the SETTLED account result.
+ *
+ * Only a transient failure may say "try again". A deterministic refusal gets
+ * the same answer every time, so its copy names the real way out instead.
+ */
+function reviewSaveMessage(
+  result: TaskReviewSaveResult,
+  success: string,
+  notDone: string,
+) {
   switch (result) {
     case "persisted":
       return success;
     case "persisted-refresh-failed":
       return "Saved to your account. The latest view could not load. Try refreshing.";
     case "local-only":
-      return "Changed here. Account save is not confirmed.";
+      return `${success} — ${SAVED_ON_THIS_DEVICE_SHORT}`;
     case "refused":
       return "Your choice was not saved. Check the open-work limit notice.";
     case "unchanged":
       return "Nothing changed. Refresh to check this task.";
+    case "refused-google-event":
+      return `${notDone} This task still has an event on your Google Calendar. Cancel that event first, then choose again.`;
+    case "refused-task-missing":
+      return `${notDone} This task is no longer in your account. Refresh to see your current list.`;
+    case "refused-needs-app-update":
+      return `${notDone} ${ACCOUNT_NEEDS_APP_UPDATE}`;
     case "failed":
       return "Could not save your choice to your account. Try again.";
   }
+}
+
+const GOOGLE_EVENT_CANCELLED_FROM_REVIEW =
+  "Google Calendar event cancelled. You can put this task off or carry it forward now.";
+
+/**
+ * The open, LifeOS-created Google Calendar block that makes the account refuse
+ * every Review choice for this task (`apply_task_review_transition` refuses
+ * while one exists). A focus session ended "Stuck" leaves exactly this behind,
+ * and the Plan sheet's Google list only shows blocks of scheduled tasks, so
+ * Review is the one place the way out can be offered.
+ */
+function openGoogleBlockFor(
+  blocks: readonly Phase2MockCalendarBlock[],
+  taskId: string,
+) {
+  return blocks.find(
+    (block) =>
+      block.task_id === taskId &&
+      (block.status === "scheduled" || block.status === "running") &&
+      isLifeOsOwnedGoogleEventIdShape(block.google_event_id),
+  );
 }
 
 export function ReviewSheet({
@@ -130,7 +174,11 @@ export function ReviewSheet({
     dropTask,
     overridePolicyProposals,
     decideOverridePolicyProposal,
+    cancelGoogleCalendarBlock,
   } = useWorkflow();
+  const [cancellingBlockId, setCancellingBlockId] = useState<string | null>(
+    null,
+  );
 
   // The shipped derivation, not a second one — same reason PlanSheet uses it.
   // `dark` only picks card colors this surface does not read.
@@ -196,7 +244,13 @@ export function ReviewSheet({
                           return;
                         }
                         const result = await carryForwardTask(item.task.id);
-                        onToast?.(reviewSaveMessage(result, "Carried forward"));
+                        onToast?.(
+                          reviewSaveMessage(
+                            result,
+                            "Carried forward",
+                            "Not carried forward.",
+                          ),
+                        );
                       }}
                       className={cn(HIT_TARGET_MIN, "touch-manipulation")}
                       data-testid={`review-sheet-carry-forward-${item.task.id}`}
@@ -216,7 +270,11 @@ export function ReviewSheet({
                         }
                         const result = await deferTask(item.task.id);
                         onToast?.(
-                          reviewSaveMessage(result, "Put off for later"),
+                          reviewSaveMessage(
+                            result,
+                            "Put off for later",
+                            "Not put off.",
+                          ),
                         );
                       }}
                       className={cn(HIT_TARGET_MIN, "touch-manipulation")}
@@ -246,6 +304,46 @@ export function ReviewSheet({
                     >
                       Drop
                     </Button>
+                    {(() => {
+                      const googleBlock = openGoogleBlockFor(
+                        state.calendarBlocks,
+                        item.task.id,
+                      );
+                      if (!googleBlock) return null;
+                      // An explicit, labelled tap is the approval: this runs
+                      // the same approval-gated cancel the Plan sheet's
+                      // Google list uses, logged server-side.
+                      return (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={cancellingBlockId !== null}
+                          onClick={async () => {
+                            setCancellingBlockId(googleBlock.id);
+                            try {
+                              const result = await cancelGoogleCalendarBlock(
+                                googleBlock.id,
+                              );
+                              onToast?.(
+                                result.outcome === "cancelled"
+                                  ? GOOGLE_EVENT_CANCELLED_FROM_REVIEW
+                                  : result.message,
+                              );
+                            } finally {
+                              setCancellingBlockId(null);
+                            }
+                          }}
+                          aria-label={`Cancel Google event for ${item.task.title}`}
+                          className={cn(HIT_TARGET_MIN, "touch-manipulation")}
+                          data-testid={`review-sheet-cancel-google-${item.task.id}`}
+                        >
+                          {cancellingBlockId === googleBlock.id
+                            ? "Cancelling"
+                            : "Cancel Google event"}
+                        </Button>
+                      );
+                    })()}
                   </div>
                 </li>
               ))}

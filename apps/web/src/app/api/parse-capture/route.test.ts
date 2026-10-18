@@ -21,6 +21,10 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import { GET, POST } from "./route";
+import {
+  AI_ROUTE_RATE_LIMIT,
+  resetAiRouteRateLimitsForTests,
+} from "@/lib/security/rateLimit";
 
 // HIGH-1 (#670): every provider-reaching POST now requires a valid bearer
 // token, so the "happy path" requests carry this header. The beforeEach mock
@@ -30,6 +34,7 @@ const authHeaders = { Authorization: "Bearer user-a-access-token" };
 describe("parse-capture route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetAiRouteRateLimitsForTests();
     mocks.createSupabaseServerClient.mockReturnValue({
       auth: {
         getUser: vi
@@ -490,5 +495,90 @@ describe("basic Sort still uses the authenticated route", () => {
       errorCategory: "auth_rejected",
     });
     expect(mocks.parseCaptureWithFallback).not.toHaveBeenCalled();
+  });
+
+  describe("per-user rate limit (#670)", () => {
+    const parsedResponse = {
+      schema_version: "1.0",
+      prompt_version: "parse_capture.v1",
+      parse_status: "parsed",
+      overall_confidence: 0.8,
+      triage_required: false,
+      triage_reasons: [],
+      drafts: [],
+      clarification_questions: [],
+      ambiguity_assessment: null,
+    };
+
+    function parseRequest(
+      parserMode: "auto" | "mock" = "auto",
+      token = "user-a-access-token",
+    ) {
+      return new Request("http://localhost/api/parse-capture", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ rawText: "Call dentist", parserMode }),
+      });
+    }
+
+    function signInAs(userId: string) {
+      mocks.createSupabaseServerClient.mockReturnValue({
+        auth: {
+          getUser: vi
+            .fn()
+            .mockResolvedValue({ data: { user: { id: userId } }, error: null }),
+        },
+      });
+    }
+
+    beforeEach(() => {
+      mocks.getParseCaptureStatus.mockReturnValue({
+        status: "ai_configured",
+        preferredParser: "ai",
+      });
+      mocks.parseCaptureWithFallback.mockResolvedValue({
+        parser: "ai",
+        response: parsedResponse,
+      });
+    });
+
+    it("returns 429 with plain copy once a user passes the limit, before any provider call", async () => {
+      for (let i = 0; i < AI_ROUTE_RATE_LIMIT.limit; i += 1) {
+        expect((await POST(parseRequest())).status).toBe(200);
+      }
+      mocks.parseCaptureWithFallback.mockClear();
+
+      const response = await POST(parseRequest());
+
+      expect(response.status).toBe(429);
+      expect(await response.json()).toEqual({
+        ok: false,
+        error: "Too many requests. Try again in a minute.",
+      });
+      expect(response.headers.get("Retry-After")).toMatch(/^\d+$/);
+      expect(mocks.parseCaptureWithFallback).not.toHaveBeenCalled();
+    });
+
+    it("keeps a separate budget for each user", async () => {
+      for (let i = 0; i < AI_ROUTE_RATE_LIMIT.limit; i += 1) {
+        await POST(parseRequest());
+      }
+      expect((await POST(parseRequest())).status).toBe(429);
+
+      signInAs("user-b");
+      expect((await POST(parseRequest("auto", "user-b-token"))).status).toBe(
+        200,
+      );
+    });
+
+    it("does not count mock-parser requests, which spend no AI credit", async () => {
+      for (let i = 0; i < AI_ROUTE_RATE_LIMIT.limit + 5; i += 1) {
+        expect((await POST(parseRequest("mock"))).status).toBe(200);
+      }
+      expect((await POST(parseRequest("auto"))).status).toBe(200);
+    });
   });
 });

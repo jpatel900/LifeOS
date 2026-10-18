@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { CheckTimeBlockProposalConflictInputSchema } from "@lifeos/schemas";
 import { getGoogleCalendarConfig } from "@/lib/googleCalendar/config";
 import { checkGoogleCalendarFreeBusyForConnection } from "@/lib/googleCalendar/freebusy";
+import { isGoogleOAuthProviderError } from "@/lib/googleCalendar/oauth";
+import {
+  isGoogleCalendarRouteAuthFailure,
+  isRequestValidationError,
+  logGoogleCalendarRouteFailure,
+} from "@/lib/googleCalendar/routeErrors";
 import { getGoogleCalendarStoredConnectionForAccessToken } from "@/lib/googleCalendar/server";
 import {
   getTimeBlockProposalForAccessToken,
@@ -24,12 +30,32 @@ function readBearerToken(request: Request) {
   return value.trim();
 }
 
-function getSafeErrorMessage(error: unknown) {
-  if (error instanceof Error) {
-    return error.message;
+function mapFreeBusyFailure(error: unknown) {
+  // #670: only fixed copy, or the message of a known user-facing domain
+  // error class, ever reaches the client. Raw data-layer/provider text is
+  // logged server-side instead.
+  if (isGoogleCalendarRouteAuthFailure(error)) {
+    return {
+      status: 401,
+      error: "Sign in before checking Google Calendar conflicts.",
+    };
   }
 
-  return "Google Calendar conflict check failed.";
+  if (isRequestValidationError(error)) {
+    return {
+      status: 400,
+      error: "Google Calendar conflict check request was invalid.",
+    };
+  }
+
+  if (isGoogleOAuthProviderError(error)) {
+    // Fixed, user-facing copy set in the GoogleOAuthProviderError constructor.
+    return { status: 502, error: error.message };
+  }
+
+  logGoogleCalendarRouteFailure("google-calendar/freebusy", error);
+
+  return { status: 502, error: "Google Calendar conflict check failed." };
 }
 
 export async function POST(request: Request) {
@@ -118,20 +144,14 @@ export async function POST(request: Request) {
       all_day_contexts: result.allDayContexts,
     });
   } catch (error) {
-    const message = getSafeErrorMessage(error);
-    const status =
-      /sign in/i.test(message) || /jwt/i.test(message)
-        ? 401
-        : /proposal_id/i.test(message)
-          ? 400
-          : 502;
+    const failure = mapFreeBusyFailure(error);
 
     return NextResponse.json(
       {
         ok: false,
-        error: message,
+        error: failure.error,
       },
-      { status },
+      { status: failure.status },
     );
   }
 }

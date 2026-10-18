@@ -158,6 +158,10 @@ import { createCalendarApproval } from "./workflowContext/calendarApproval";
 import { createCaptureParseOps } from "./workflowContext/captureParse";
 import { useTaskMapDraftActions } from "./workflowContext/taskMapDraft";
 import {
+  classifyTaskReviewWriteFailure,
+  revertTaskReviewTransition,
+} from "./workflowContext/taskReviewRefusal";
+import {
   initialSyncStatus,
   type CaptureParseState,
   type DeferTaskWithSessionResult,
@@ -165,6 +169,7 @@ import {
   type ReviewSaveResult,
   type TaskEditResult,
   type TaskMapDraftState,
+  type TaskReviewSaveResult,
   type WinConfirmResult,
   type WorkflowContextValue,
   type WorkflowSyncStatus,
@@ -3020,22 +3025,53 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   async function settleTaskReviewTransition(
     taskId: string,
     targetStatus: "active" | "backlog",
-  ) {
+    previous: WorkflowState,
+    next: WorkflowState,
+  ): Promise<TaskReviewSaveResult> {
+    let error: unknown;
     try {
       const result = await persistenceOps.persistTaskReviewTransition(
         taskId,
         targetStatus,
         { settle: true },
       );
-      if (result.status === "failed") markPersistedSaveFailure(result.error);
       if (result.status === "persisted-refresh-failed") {
         markPersistedLoadFailure(result.error);
       }
-      return result.status;
-    } catch (error) {
-      markPersistedSaveFailure(error);
-      return "failed" as const;
+      if (result.status !== "failed") return result.status;
+      error = result.error;
+    } catch (caught) {
+      error = caught;
     }
+
+    const kind = classifyTaskReviewWriteFailure(error);
+    if (kind === "signed-out") {
+      // The ordinary device-only state, same as having no account client:
+      // the choice stays on this device and the banner says so plainly.
+      markPersistedLoadFailure(error);
+      return "local-only";
+    }
+
+    // The write did not land and nothing will re-send it, so the screen goes
+    // back to what the account holds. Leaving the refused choice up would
+    // show a state a reload silently undoes.
+    const reverted = revertTaskReviewTransition(
+      stateRef.current,
+      previous,
+      next,
+      taskId,
+    );
+    if (reverted) {
+      applyWorkflowState(reverted);
+      // Only the app-update case has a banner-sized next step; the others
+      // leave nothing on this device, so the banner has nothing to report.
+      if (kind === "refused-needs-app-update") markPersistedSaveFailure(error);
+    } else {
+      // The task changed again while the write was out: keep the newer
+      // state and report, truthfully, that it is not in the account.
+      markPersistedSaveFailure(error);
+    }
+    return kind === "transient" ? "failed" : kind;
   }
 
   const value: WorkflowContextValue = {
@@ -3292,7 +3328,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       if (next.wipRefusal && next.wipRefusal !== previous.wipRefusal) {
         return "refused";
       }
-      return settleTaskReviewTransition(taskId, "active");
+      return settleTaskReviewTransition(taskId, "active", previous, next);
     },
     deferTask: async (taskId) => {
       const previous = stateRef.current;
@@ -3300,7 +3336,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (next === previous) return "unchanged";
-      return settleTaskReviewTransition(taskId, "backlog");
+      return settleTaskReviewTransition(taskId, "backlog", previous, next);
     },
     deferTaskWithSession: deferTaskWithSessionWithPersistence,
     dropTask: (taskId) => {

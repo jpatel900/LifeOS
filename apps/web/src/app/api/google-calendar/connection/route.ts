@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getGoogleCalendarConfig } from "@/lib/googleCalendar/config";
 import { describeGoogleCalendarConnectionError } from "@/lib/googleCalendar/connectionErrorCopy";
+import {
+  isGoogleCalendarRouteAuthFailure,
+  logGoogleCalendarRouteFailure,
+} from "@/lib/googleCalendar/routeErrors";
 import { getGoogleCalendarConnectionForAccessToken } from "@/lib/googleCalendar/server";
 import { requireSupabaseServerUser } from "@/lib/supabase/server";
 import { reconcilePendingGoogleCalendarInsertAuditsForAccessToken } from "@/lib/externalWrites/reconciliation";
@@ -102,7 +106,13 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     const message = safeErrorMessage(error);
-    const unauthenticated = /sign in|auth|jwt|session/i.test(message);
+    const unauthenticated =
+      isGoogleCalendarRouteAuthFailure(error) ||
+      /sign in|auth|jwt|session/i.test(message);
+
+    if (!unauthenticated) {
+      logGoogleCalendarRouteFailure("google-calendar/connection", error);
+    }
 
     return NextResponse.json(
       {
