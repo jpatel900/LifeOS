@@ -17,6 +17,11 @@ import {
   getCalendarBlockForAccessToken,
   markCalendarBlockCancelledForAccessToken,
 } from "@/lib/planning/server";
+import {
+  isGoogleCalendarRouteAuthFailure,
+  isRequestValidationError,
+  logGoogleCalendarRouteFailure,
+} from "@/lib/googleCalendar/routeErrors";
 import { requireSupabaseServerUser } from "@/lib/supabase/server";
 
 function readBearerToken(request: Request) {
@@ -51,16 +56,24 @@ function mapCancelEventFailure(error: unknown) {
     return { status: 409, error: error.message };
   }
 
+  // #670: the raw message is only inspected to pick a status; the client
+  // always gets fixed copy, and unexpected failures are logged server-side.
   const rawMessage = safeErrorMessage(error);
 
-  if (/sign in|jwt|auth/i.test(rawMessage)) {
+  if (
+    isGoogleCalendarRouteAuthFailure(error) ||
+    /sign in|jwt|auth/i.test(rawMessage)
+  ) {
     return {
       status: 401,
       error: "Sign in before cancelling Google Calendar events.",
     };
   }
 
-  if (/calendar_block_id|approved/i.test(rawMessage)) {
+  if (
+    isRequestValidationError(error) ||
+    /calendar_block_id|approved/i.test(rawMessage)
+  ) {
     return {
       status: 400,
       error:
@@ -75,6 +88,8 @@ function mapCancelEventFailure(error: unknown) {
         "Only calendar events created by LifeOS can be cancelled. Events you created elsewhere stay untouched.",
     };
   }
+
+  logGoogleCalendarRouteFailure("google-calendar/cancel-event", error);
 
   return {
     status: 502,
