@@ -622,6 +622,12 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
       await expect(page.getByText(choice.success, { exact: true })).toHaveCount(
         0,
       );
+      // The refused choice is taken back off the row before any reload.
+      await expect(
+        page.getByTestId(`review-sheet-decision-${taskId}`),
+      ).toContainText(
+        choice.initial === "backlog" ? "put off for later" : "on today's list",
+      );
 
       // Classify exactly the response this test injected. Other failures stay fatal.
       expect(await refusal.json()).toEqual({

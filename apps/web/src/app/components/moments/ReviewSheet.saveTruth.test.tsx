@@ -7,10 +7,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Area, Task } from "@lifeos/schemas";
+import type { Area, CalendarBlock, Task } from "@lifeos/schemas";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import {
   acceptLatestDraft,
   backlogLatestDraft,
@@ -53,6 +54,11 @@ vi.mock("@/lib/data/workflow", async (importOriginal) => ({
 const USER_ID = "22222222-2222-4222-8222-222222222222";
 const AREA_ID = "11111111-1111-4111-8111-111111111111";
 const TASK_ID = "33333333-3333-4333-8333-333333333333";
+const BLOCK_ID = "44444444-4444-4444-8444-444444444444";
+// The exact refusal `apply_task_review_transition` raises (migration
+// 20260929120000) for a task whose open block is on Google Calendar.
+const GOOGLE_BLOCK_REFUSAL =
+  "Google-backed blocks require calendar approval before changing this task.";
 const area = {
   id: AREA_ID,
   user_id: USER_ID,
@@ -67,7 +73,7 @@ const area = {
   updated_at: "2026-09-01T12:00:00.000Z",
 } satisfies Area;
 
-function accountTask(status: "active" | "backlog"): Task {
+function accountTask(status: "active" | "backlog" | "blocked"): Task {
   return {
     id: TASK_ID,
     user_id: USER_ID,
@@ -91,6 +97,27 @@ function accountTask(status: "active" | "backlog"): Task {
   };
 }
 
+// What `record_execution_session` leaves behind after a focus session on an
+// approved Google block ends "Stuck": the task is blocked, the block is still
+// scheduled and still carries its LifeOS-created Google event.
+function googleBackedBlock(
+  status: "scheduled" | "cancelled" = "scheduled",
+): CalendarBlock {
+  return {
+    id: BLOCK_ID,
+    user_id: USER_ID,
+    area_id: AREA_ID,
+    proposal_id: null,
+    task_id: TASK_ID,
+    google_event_id: "lifeos0123456789abcdef0123456789abcdef",
+    start_at: "2026-09-29T15:00:00.000Z",
+    end_at: "2026-09-29T16:00:00.000Z",
+    status,
+    created_at: "2026-09-29T12:00:00.000Z",
+    updated_at: "2026-09-29T12:00:00.000Z",
+  };
+}
+
 let workflow: ReturnType<typeof useWorkflow>;
 function TaskStatusProbe() {
   workflow = useWorkflow();
@@ -104,6 +131,10 @@ function TaskStatusProbe() {
       <span data-testid="account-status">{syncStatus.account}</span>
       <span data-testid="task-status">
         {state.tasks.find((task) => task.id === TASK_ID)?.status ?? "missing"}
+      </span>
+      <span data-testid="block-status">
+        {state.calendarBlocks.find((block) => block.id === BLOCK_ID)?.status ??
+          "missing"}
       </span>
     </div>
   );
@@ -129,6 +160,7 @@ function mountReview() {
 
 describe("ReviewSheet account save truth", () => {
   let storedTask: Task;
+  let storedBlocks: CalendarBlock[] = [];
   let finishAccountWrite: (result: {
     data: { task: Task; blocks: [] } | null;
     error: { message: string } | null;
@@ -172,10 +204,11 @@ describe("ReviewSheet account save truth", () => {
       proposals: [],
       blocks: [],
     });
+    storedBlocks = [];
     mocks.listExecution.mockImplementation(async () => ({
       provider: "supabase",
       tasks: [{ ...storedTask }],
-      blocks: [],
+      blocks: storedBlocks.map((block) => ({ ...block })),
       sessions: [],
       reviewEntries: [],
     }));
@@ -272,24 +305,37 @@ describe("ReviewSheet account save truth", () => {
         ([message]) => message,
       );
 
+      // From here on the account is modelled: any further transition call
+      // really changes the stored row. So a silent retry or replay of the
+      // refused choice would show up in `storedTask` below.
+      rpc.mockImplementation(
+        async (
+          _name: string,
+          args: { p_target_status: "active" | "backlog" },
+        ) => {
+          storedTask = accountTask(args.p_target_status);
+          return { data: { task: storedTask, blocks: [] }, error: null };
+        },
+      );
       await act(async () => {
         finishAccountWrite({
           data: null,
           error: { message: "Forced account refusal" },
         });
       });
-      expect(storedTask).toEqual(accountTask(initial));
-      expect(screen.getByTestId("account-status")).toHaveTextContent(
-        "sync-error",
-      );
-      expect(screen.getByTestId("account-message").textContent).not.toBe("");
       expect(toast).toHaveBeenCalledWith(
         "Could not save your choice to your account. Try again.",
+      );
+      // The refused choice is taken back off the screen at once: the row
+      // shows what the account holds, not what was asked for.
+      expect(screen.getByTestId("task-status")).toHaveTextContent(initial);
+      // Nothing is left only on this device, so the banner must not say so.
+      expect(screen.getByTestId("account-message").textContent).not.toContain(
+        SAVED_ON_THIS_DEVICE_SHORT,
       );
 
       view.unmount();
       // A fresh document reads the account, not the optimistic tab copy.
-      window.sessionStorage.clear();
       mountReview();
       await waitFor(() =>
         expect(screen.getByTestId("account-read-settled")).toHaveTextContent(
@@ -297,10 +343,119 @@ describe("ReviewSheet account save truth", () => {
         ),
       );
       expect(screen.getByTestId("task-status")).toHaveTextContent(initial);
+      expect(rpc).toHaveBeenCalledTimes(1);
+      expect(storedTask.status).toBe(initial);
       expect(toastBeforeAccountAnswer).not.toContain(success);
       expect(toast).not.toHaveBeenCalledWith(success);
     },
   );
+
+  it.each([
+    { action: "defer", label: "put off" },
+    { action: "carry-forward", label: "carried forward" },
+  ] as const)(
+    "a stuck task's Google event refusal ($action) rolls back and names the real recovery",
+    async ({ action, label }) => {
+      storedTask = accountTask("blocked");
+      storedBlocks = [googleBackedBlock()];
+      mountReview();
+      await waitFor(() =>
+        expect(screen.getByTestId("account-read-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      const row = screen.getByTestId(`review-sheet-decision-${TASK_ID}`);
+      expect(row).toHaveTextContent("got stuck");
+      // The recovery is offered on the row itself, before any refusal.
+      expect(
+        screen.getByTestId(`review-sheet-cancel-google-${TASK_ID}`),
+      ).toBeVisible();
+
+      fireEvent.click(screen.getByTestId(`review-sheet-${action}-${TASK_ID}`));
+      await waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        finishAccountWrite({
+          data: null,
+          error: { message: GOOGLE_BLOCK_REFUSAL },
+        });
+      });
+
+      const message =
+        `Not ${label}. This task still has an event on your Google ` +
+        "Calendar. Cancel that event first, then choose again.";
+      await waitFor(() =>
+        expect(toast).toHaveBeenCalledExactlyOnceWith(message),
+      );
+      expect(message).not.toMatch(/try again/i);
+      // Rolled back: the task and its block read as the account holds them.
+      expect(screen.getByTestId("task-status")).toHaveTextContent("blocked");
+      expect(screen.getByTestId("block-status")).toHaveTextContent("scheduled");
+      expect(screen.getByTestId("account-status")).not.toHaveTextContent(
+        "sync-error",
+      );
+      expect(screen.getByTestId("account-message").textContent).not.toContain(
+        SAVED_ON_THIS_DEVICE_SHORT,
+      );
+      expect(storedTask.status).toBe("blocked");
+      expect(
+        screen.getByTestId(`review-sheet-cancel-google-${TASK_ID}`),
+      ).toBeVisible();
+    },
+  );
+
+  it("cancelling the stuck task's Google event clears the way to put it off", async () => {
+    storedTask = accountTask("blocked");
+    storedBlocks = [googleBackedBlock()];
+    const getSession = vi.fn(async () => ({
+      data: { session: { access_token: "synthetic-token" } },
+      error: null,
+    }));
+    (client as { auth: Record<string, unknown> }).auth.getSession = getSession;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe("/api/google-calendar/cancel-event");
+      storedBlocks = [googleBackedBlock("cancelled")];
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      mountReview();
+      await waitFor(() =>
+        expect(screen.getByTestId("account-read-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      fireEvent.click(
+        screen.getByTestId(`review-sheet-cancel-google-${TASK_ID}`),
+      );
+      await waitFor(() =>
+        expect(toast).toHaveBeenCalledWith(
+          "Google Calendar event cancelled. You can put this task off or carry it forward now.",
+        ),
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [, init] = fetchMock.mock.calls[0] as unknown as [
+        string,
+        RequestInit,
+      ];
+      expect(JSON.parse(String(init.body))).toEqual({
+        calendar_block_id: BLOCK_ID,
+        approved: true,
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId("block-status")).toHaveTextContent(
+          "cancelled",
+        ),
+      );
+      expect(
+        screen.queryByTestId(`review-sheet-cancel-google-${TASK_ID}`),
+      ).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it.each([
     {
       action: "carry-forward",
@@ -452,7 +607,7 @@ describe("ReviewSheet account save truth", () => {
       );
       await waitFor(() =>
         expect(toast).toHaveBeenCalledWith(
-          "Changed here. Account save is not confirmed.",
+          `${action === "defer" ? "Put off for later" : "Carried forward"} — ${SAVED_ON_THIS_DEVICE_SHORT}`,
         ),
       );
       expect(rpc).not.toHaveBeenCalled();
@@ -549,7 +704,7 @@ describe("ReviewSheet account save truth", () => {
     );
     await waitFor(() =>
       expect(toast).toHaveBeenCalledExactlyOnceWith(
-        "Changed here. Account save is not confirmed.",
+        `Carried forward — ${SAVED_ON_THIS_DEVICE_SHORT}`,
       ),
     );
     expect(

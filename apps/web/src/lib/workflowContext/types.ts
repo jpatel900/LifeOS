@@ -40,7 +40,19 @@ export type TaskReviewSaveResult =
   | "local-only"
   | "refused"
   | "unchanged"
-  | "failed";
+  | "failed"
+  // The account said no for a reason that a retry cannot change. Each one is
+  // its own value so the caller can name the real way out, never "try again".
+  | TaskReviewAccountRefusal;
+
+/** Deterministic account refusals of a Review task transition. */
+export type TaskReviewAccountRefusal =
+  /** The task still has an open block on Google Calendar. */
+  | "refused-google-event"
+  /** The account no longer has this task. */
+  | "refused-task-missing"
+  /** The account is missing the server function this write needs. */
+  | "refused-needs-app-update";
 
 /**
  * UI-facing status of the async capture parse round-trip. The raw capture is
