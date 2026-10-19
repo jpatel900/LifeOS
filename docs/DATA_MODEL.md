@@ -324,7 +324,7 @@ Indexes:
 
 An approved Google Calendar event is a placement: its account half lands through the transactional `record_google_calendar_placement` function (`20261017120000_record_google_calendar_placement.sql`, 2026-10-17), which stores the block's `google_event_id`, accepts the proposal, supersedes the task's other pending proposals and schedules the task — the same semantics as `place_time_block`. A task has at most one scheduled Google-backed block.
 
-A focus session that ends "Stuck" leaves a Google-backed block `scheduled` and linked (2026-10-18, `20261018120000_refuse_session_defer_on_google_block.sql`): only an approved "Cancel Google event" may close it, because the guards that keep the event from being orphaned read open blocks only. Putting the task off from the session (`record_execution_session` with `p_defer_task`, or `apply_execution_session_defer`) is refused while such a block is open, like the Review choices.
+A focus session that ends "Stuck", skipped (the device's "missed") or partial leaves a Google-backed block `scheduled` and linked (2026-10-18, `20261018120000_refuse_session_defer_on_google_block.sql` for Stuck; `20261018140000_keep_google_block_on_session_outcomes.sql`, #1096, for the rest): only an approved "Cancel Google event" may close it, because the guards that keep the event from being orphaned read open blocks only. Skipped and partial mark an ordinary block `missed`, the same on the device and the account. Putting the task off from the session (`record_execution_session` with `p_defer_task`, or `apply_execution_session_defer`) is refused while such a block is open, like the Review choices; otherwise it cancels the task's open ordinary blocks in the same transaction as the move to `backlog`.
 
 ---
 
