@@ -217,7 +217,26 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
   ).toBeVisible({
     timeout: 30_000,
   });
-  console.log("[smoke] PASS capture: raw capture saved without a parse.");
+  // The Start card can name an older thought, and the secondary pending
+  // control only shows a count. Follow that control and prove THIS run's
+  // thought is present before navigating away. Keep the current area scope:
+  // changing to All areas here would hide a capture/sheet scope mismatch.
+  await page
+    .getByTestId("start-pending-triage-action")
+    .or(page.getByTestId("start-pending-triage"))
+    .click();
+  const startCaptureRow = page
+    .getByTestId("moment-sheet")
+    .getByTestId(/^triage-sheet-capture-/)
+    .filter({ hasText: marker(runId) });
+  await expect(
+    startCaptureRow,
+    "this run's capture must be reachable from Start before reloading",
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(startCaptureRow.locator("p").first()).toHaveText(captureText);
+  console.log(
+    "[smoke] PASS capture: this run's raw capture is reachable from Start without a parse; reload continuity is checked next.",
+  );
 
   // ---- Journey: triage Sort -> parse --------------------------------------
   // #713: navigate by URL rather than `goToStage()`. The "Workflow stages"
