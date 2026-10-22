@@ -7,6 +7,7 @@ import { HIT_TARGET_MIN } from "./hitTarget";
 import {
   AI_SORTING_FAILED_NOT_SORTED,
   AI_SORTING_UNAVAILABLE_NOT_SORTED,
+  SORTING_TIMED_OUT_NOT_SORTED,
   sortFailureMessage,
 } from "@/lib/statusVocabulary";
 import { useAuthPresence } from "./useAuthPresence";
@@ -99,11 +100,13 @@ export function UnsortedCaptures({
           );
           const sorting = sortingCaptureId === item.id;
           const failure = failedSort?.captureId === item.id ? failedSort : null;
-          const failureHeadline = failure?.canRetryWithMock
-            ? failure.status === "ai_unavailable"
-              ? AI_SORTING_UNAVAILABLE_NOT_SORTED
-              : AI_SORTING_FAILED_NOT_SORTED
-            : (failure?.message ?? "");
+          const failureHeadline =
+            failure?.canRetryWithMock &&
+            failure.message !== SORTING_TIMED_OUT_NOT_SORTED
+              ? failure.status === "ai_unavailable"
+                ? AI_SORTING_UNAVAILABLE_NOT_SORTED
+                : AI_SORTING_FAILED_NOT_SORTED
+              : (failure?.message ?? "");
 
           return (
             <li
@@ -127,14 +130,14 @@ export function UnsortedCaptures({
                 >
                   {/* Generic glance follows status and live auth. Specific details stay below. */}
                   <p className="font-semibold">
-                    {sortFailureMessage(failureHeadline, signedIn)}
+                    {sortFailureMessage(failureHeadline, presence.status)}
                   </p>
                   <details>
                     <summary className="cursor-pointer font-semibold underline-offset-2 hover:underline">
                       What happened?
                     </summary>
                     <p className="mt-1 font-normal">
-                      {sortFailureMessage(failure.message, signedIn)}
+                      {sortFailureMessage(failure.message, presence.status)}
                     </p>
                   </details>
                 </div>

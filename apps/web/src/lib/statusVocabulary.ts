@@ -343,6 +343,7 @@ const THOUGHT_STILL_SAVED_AFTER_SORT_FAILURE =
   "Your thought is still saved, exactly as you wrote it.";
 const SORT_RETRY_RECOVERY = "Try again, or use basic sorting.";
 const SORT_SIGN_IN_RECOVERY = "Sorting requires you to be signed in.";
+const SORT_ACCOUNT_NOT_CONFIGURED = "This build has no account set up.";
 
 // The route reaches these failures only after authentication. The client also
 // uses them for transport/timeouts; renderers adapt that recovery to live auth.
@@ -350,15 +351,30 @@ export const AI_SORTING_UNAVAILABLE_NOT_SORTED = `AI sorting is unavailable righ
 
 export const AI_SORTING_FAILED_NOT_SORTED = `LifeOS couldn't sort this one just now. ${THOUGHT_STILL_SAVED_AFTER_SORT_FAILURE} ${SORT_RETRY_RECOVERY}`;
 
-export function sortFailureMessage(message: string, signedIn: boolean) {
+export const SORTING_TIMED_OUT_NOT_SORTED = `Sorting took too long. ${THOUGHT_STILL_SAVED_AFTER_SORT_FAILURE} ${SORT_RETRY_RECOVERY}`;
+
+export const SORT_SIGN_IN_REQUIRED = `Sign in, then try sorting again. ${THOUGHT_STILL_SAVED_AFTER_SORT_FAILURE}`;
+
+export function sortFailureMessage(
+  message: string,
+  presence: "loading" | "unconfigured" | "signed-out" | "signed-in",
+) {
   // Preserve useful specific errors, such as a missing area or an auth-check
   // failure. Only the shared generic messages offer basic sorting.
   if (
-    signedIn ||
+    presence === "signed-in" ||
     (message !== AI_SORTING_FAILED_NOT_SORTED &&
-      message !== AI_SORTING_UNAVAILABLE_NOT_SORTED)
+      message !== AI_SORTING_UNAVAILABLE_NOT_SORTED &&
+      message !== SORTING_TIMED_OUT_NOT_SORTED &&
+      message !== SORT_SIGN_IN_REQUIRED)
   )
     return message;
+  if (presence === "loading") return THOUGHT_STILL_SAVED_AFTER_SORT_FAILURE;
+  if (presence === "unconfigured") {
+    return message === SORT_SIGN_IN_REQUIRED
+      ? `${SORT_ACCOUNT_NOT_CONFIGURED} ${THOUGHT_STILL_SAVED_AFTER_SORT_FAILURE}`
+      : message.replace(SORT_RETRY_RECOVERY, SORT_ACCOUNT_NOT_CONFIGURED);
+  }
   return message.replace(SORT_RETRY_RECOVERY, SORT_SIGN_IN_RECOVERY);
 }
 

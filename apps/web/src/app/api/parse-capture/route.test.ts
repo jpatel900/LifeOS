@@ -122,7 +122,13 @@ describe("parse-capture route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(401);
-    expect(body).toEqual({ ok: false, errorCategory: "auth_rejected" });
+    expect(body).toEqual({
+      ok: false,
+      errorCategory: "auth_rejected",
+      error:
+        "Sign in, then try sorting again. Your thought is still saved, exactly as you wrote it.",
+      can_retry_with_mock: false,
+    });
     expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
     expect(mocks.parseCaptureWithFallback).not.toHaveBeenCalled();
   });
@@ -154,7 +160,13 @@ describe("parse-capture route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(401);
-    expect(body).toEqual({ ok: false, errorCategory: "auth_rejected" });
+    expect(body).toEqual({
+      ok: false,
+      errorCategory: "auth_rejected",
+      error:
+        "Sign in, then try sorting again. Your thought is still saved, exactly as you wrote it.",
+      can_retry_with_mock: false,
+    });
     expect(mocks.createSupabaseServerClient).toHaveBeenCalledWith({
       accessToken: "invalid-access-token",
     });
@@ -493,6 +505,9 @@ describe("basic Sort still uses the authenticated route", () => {
     expect(await response.json()).toEqual({
       ok: false,
       errorCategory: "auth_rejected",
+      error:
+        "Sign in, then try sorting again. Your thought is still saved, exactly as you wrote it.",
+      can_retry_with_mock: false,
     });
     expect(mocks.parseCaptureWithFallback).not.toHaveBeenCalled();
   });
