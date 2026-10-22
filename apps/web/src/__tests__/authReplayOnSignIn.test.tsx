@@ -2312,6 +2312,7 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
 
     it("excludes unfailed rows from an invalid-write aggregate", async () => {
       const failed = {
+        seq: 1,
         entity: "review",
         client_write_id: "invalid-review-snapshot",
         payload: {
@@ -2325,6 +2326,7 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       } as Awaited<ReturnType<typeof listPendingWrites>>[number];
       const unfailed = {
         ...failed,
+        seq: 2,
         client_write_id: "unattempted-review-snapshot",
         last_attempt_failed: false,
         last_attempt_failure_kind: undefined,

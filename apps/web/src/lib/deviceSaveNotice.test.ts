@@ -328,6 +328,28 @@ describe("resolveDeviceSaveNotice (#734)", () => {
   // message; any mix, any unknown row, or a legacy/absent aggregate must
   // never be blanket-hidden and keeps the generic alarm.
   describe("pendingSaveFailureKind (#967 typed failure category)", () => {
+    it.each(["local-only", "synced", "sync-error"] as const)(
+      "directs a proven invalid write to a recovery copy while account status is %s",
+      (account) => {
+        expect(
+          resolveDeviceSaveNotice(
+            status({
+              account,
+              message: SOME_WORK_ON_THIS_DEVICE,
+              pendingLocalChanges: true,
+              pendingSaveFailed: true,
+              pendingSaveFailureKind: "invalid-write",
+            }),
+          ),
+        ).toEqual({
+          tone: "alarm",
+          message:
+            "Some saved work needs a repair before LifeOS can send it to your account. Keep a copy in Health.",
+          signedOut: false,
+        });
+      },
+    );
+
     it("shows the specific app-update message, calm, when every failed row is known server-capability-missing (local-only)", () => {
       const notice = resolveDeviceSaveNotice(
         status({
@@ -450,6 +472,18 @@ describe("resolveDeviceSaveNotice (#734)", () => {
         message: SIGNED_OUT_SAVING_ON_THIS_DEVICE,
         signedOut: true,
       });
+      expect(
+        resolveDeviceSaveNotice(
+          status({
+            account: "local-only",
+            signedOut: true,
+            message: SIGNED_OUT_SAVING_ON_THIS_DEVICE,
+            pendingLocalChanges: true,
+            pendingSaveFailed: true,
+            pendingSaveFailureKind: "invalid-write",
+          }),
+        ),
+      ).toEqual(notice);
     });
 
     it("preserves device-storage-blocked priority over a known-only aggregate", () => {
@@ -468,6 +502,17 @@ describe("resolveDeviceSaveNotice (#734)", () => {
         message: DEVICE_STORAGE_BLOCKED,
         signedOut: false,
       });
+      expect(
+        resolveDeviceSaveNotice(
+          status({
+            storage: "blocked",
+            account: "local-only",
+            pendingLocalChanges: true,
+            pendingSaveFailed: true,
+            pendingSaveFailureKind: "invalid-write",
+          }),
+        ),
+      ).toEqual(notice);
     });
   });
 });
