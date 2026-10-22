@@ -276,27 +276,33 @@ describe("persistCapture falls back to a direct POST when the device journal ref
     });
   });
 
-  it("still rejects when the fallback account write fails and does not forward to persisted-load failure", async () => {
+  it("marks refused device storage and rethrows the same failed fallback account write", async () => {
     journalCaptureWriteMock.mockRejectedValue(
       new Error("IndexedDB is unavailable"),
     );
-    createCaptureItemMock.mockRejectedValue(new Error("Provider write failed"));
+    const accountError = new Error("Provider write failed");
+    createCaptureItemMock.mockRejectedValue(accountError);
     const {
       ops,
       markPersistedLoadFailure,
       markDeviceStorageBlocked,
       syncPersistedWorkflowRows,
+      recordAccountAlias,
+      replayJournaledWrites,
     } = makeSync({
       persistedAreaId: AREA_ID,
     });
 
-    await expect(ops.persistCapture(localCapture())).rejects.toThrow(
-      "Provider write failed",
-    );
+    await expect(ops.persistCapture(localCapture())).rejects.toBe(accountError);
 
     expect(markPersistedLoadFailure).not.toHaveBeenCalled();
     expect(syncPersistedWorkflowRows).not.toHaveBeenCalled();
-    expect(markDeviceStorageBlocked).not.toHaveBeenCalled();
+    expect(recordAccountAlias).not.toHaveBeenCalled();
+    expect(replayJournaledWrites).not.toHaveBeenCalled();
+    expect(createCaptureItemMock).toHaveBeenCalledTimes(1);
+    expect(markDeviceStorageBlocked).toHaveBeenCalledExactlyOnceWith({
+      preservePendingLocalChanges: true,
+    });
   });
 });
 
