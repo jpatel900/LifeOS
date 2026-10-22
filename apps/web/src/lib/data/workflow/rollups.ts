@@ -7,6 +7,7 @@ import {
   type CreateRollupSummaryInput,
   type CreateWinRecordInput,
 } from "@lifeos/schemas";
+import { parsePersistenceWriteInput } from "../../persistenceFailureKind";
 import { normalizeSupabaseRows } from "../supabaseRowNormalization";
 import {
   type DurationProfileUpsertResult,
@@ -244,7 +245,10 @@ export async function syncJournaledWin(
   client: MinimalSupabaseClient | null,
   input: SyncJournaledWinInput,
 ): Promise<{ provider: "mock" | "supabase" }> {
-  const parsedInput = CreateWinRecordInputSchema.parse(input);
+  const parsedInput = parsePersistenceWriteInput(
+    CreateWinRecordInputSchema,
+    input,
+  );
   const clientWriteId = input.client_write_id?.trim();
   if (!clientWriteId) {
     throw new Error("A journalled win needs a client write id.");
@@ -371,7 +375,10 @@ export async function syncJournaledRollup(
   client: MinimalSupabaseClient | null,
   input: SyncJournaledRollupInput,
 ): Promise<{ provider: "mock" | "supabase" }> {
-  const parsedInput = CreateRollupSummaryInputSchema.parse(input);
+  const parsedInput = parsePersistenceWriteInput(
+    CreateRollupSummaryInputSchema,
+    input,
+  );
   const clientWriteId = input.client_write_id?.trim();
   if (!clientWriteId) {
     throw new Error("A journalled rollup needs a client write id.");

@@ -313,6 +313,40 @@ describe("persistCapture gives every capture its own account key (bug hunt #1)",
     createSupabaseBrowserClientMock.mockReset();
   });
 
+  it.each(["55555555-5555-4555-8555-555555555555", null])(
+    "shares the journal key with the fallback account write (capture key %s)",
+    async (clientCaptureId) => {
+      journalCaptureWriteMock.mockRejectedValue(
+        new Error("Device journal refused"),
+      );
+      createCaptureItemMock.mockResolvedValue({
+        provider: "supabase",
+        capture: { id: PERSISTED_CAPTURE_ID },
+      });
+      const { ops, markDeviceStorageBlocked } = makeSync();
+
+      await ops.persistCapture(
+        localCapture({ client_capture_id: clientCaptureId }),
+      );
+
+      const journalKey =
+        journalCaptureWriteMock.mock.calls[0]?.[0].clientCaptureId;
+      expect(journalKey).toEqual(expect.any(String));
+      expect(journalKey).not.toBe("capture-local-1");
+      if (clientCaptureId) expect(journalKey).toBe(clientCaptureId);
+      expect(createCaptureItemMock).toHaveBeenCalledExactlyOnceWith(
+        expect.anything(),
+        expect.objectContaining({ client_capture_id: journalKey }),
+      );
+      expect(journalCaptureWriteMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ workflowCaptureId: "capture-local-1" }),
+      );
+      expect(markDeviceStorageBlocked).toHaveBeenCalledExactlyOnceWith({
+        preservePendingLocalChanges: true,
+      });
+    },
+  );
+
   it("does not reuse the per-tab local id, so a new tab's 'capture-1' cannot overwrite an earlier 'capture-1' in the account", async () => {
     journalCaptureWriteMock.mockImplementation(
       async (input: { clientCaptureId: string }) => ({

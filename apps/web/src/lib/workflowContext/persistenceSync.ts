@@ -197,6 +197,9 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         )
       : null;
 
+    // Both device replay and direct fallback identify the same capture.
+    const clientCaptureId =
+      localCapture.client_capture_id ?? generateClientWriteId();
     let journalled;
     try {
       journalled = await journalCaptureWrite({
@@ -212,8 +215,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         // that counter, and reusing it here overwrote an earlier capture's
         // raw text in the account (bug hunt #1). `persistCapture` runs once
         // per capture; journal replays reuse the key stored in the journal.
-        clientCaptureId:
-          localCapture.client_capture_id ?? generateClientWriteId(),
+        clientCaptureId,
       });
     } catch {
       // #960 review finding 3: the device itself refused to hold the journal
@@ -235,6 +237,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
             raw_text: localCapture.raw_text,
             return_hook: localCapture.return_hook ?? null,
             area_id: persistedAreaId,
+            client_capture_id: clientCaptureId,
           });
         } catch (error) {
           markDeviceStorageBlocked({ preservePendingLocalChanges: true });

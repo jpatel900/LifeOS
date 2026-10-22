@@ -218,9 +218,9 @@ export { decidedPolicyKeysFromSuggestionRecords, mergePersistedCalendarBlocks };
 /**
  * #967 typed failure category: a SAFE AGGREGATE derived from only the
  * CURRENTLY FAILED rows of the pending-write journal — never the whole
- * queue, never a raw thrown value. `"server-capability-missing"` only when
+ * queue, never a raw thrown value. A recognized kind only when
  * at least one row is failed AND every failed row's own
- * `last_attempt_failure_kind` is exactly that value; any mix, any
+ * `last_attempt_failure_kind` is exactly that kind; any mix, any
  * `"unknown"` row, or any legacy/invalid stored value forces `"unknown"`.
  * Zero failed rows leaves the category `undefined` (absent), matching how
  * `pendingSaveFailed` itself reads as false with nothing failed. Shared by
@@ -236,12 +236,12 @@ function derivePendingSaveFailureAggregate(pending: PendingWrite[]): {
     (write) => write.last_attempt_failed === true,
   );
   const pendingSaveFailed = failedRows.length > 0;
+  const firstKind = failedRows[0]?.last_attempt_failure_kind;
   const pendingSaveFailureKind = pendingSaveFailed
-    ? failedRows.every(
-        (write) =>
-          write.last_attempt_failure_kind === "server-capability-missing",
-      )
-      ? "server-capability-missing"
+    ? (firstKind === "server-capability-missing" ||
+        firstKind === "invalid-write") &&
+      failedRows.every((write) => write.last_attempt_failure_kind === firstKind)
+      ? firstKind
       : "unknown"
     : undefined;
   return { pendingSaveFailed, pendingSaveFailureKind };
