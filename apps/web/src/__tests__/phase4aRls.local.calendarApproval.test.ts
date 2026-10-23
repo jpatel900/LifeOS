@@ -97,7 +97,7 @@ local("calendar approval claim — real local PostgreSQL", () => {
     let connectionId: string | null = null;
     try {
       await must(
-        service.from("tasks").insert([
+        userClient.from("tasks").insert([
           { id: taskId, user_id: userId, area_id: areaA, title: "Synthetic" },
           {
             id: otherTaskId,
@@ -108,7 +108,7 @@ local("calendar approval claim — real local PostgreSQL", () => {
         ]),
       );
       await must(
-        service.from("time_block_proposals").insert(
+        userClient.from("time_block_proposals").insert(
           [
             [winner, taskId],
             [sibling, taskId],
@@ -175,13 +175,15 @@ local("calendar approval claim — real local PostgreSQL", () => {
       );
       expect(otherTask.error).toBeNull();
 
-      const moved = await service
+      // The signed-in "Move later" path: once a Google insert was attempted,
+      // the proposal's time is frozen.
+      const moved = await userClient
         .from("time_block_proposals")
         .update({ proposed_start: "2026-05-10T15:00:00.000Z" })
         .eq("id", winner);
       expect(moved.error?.code).toBe("PCA01");
 
-      const statusOnly = await service
+      const statusOnly = await userClient
         .from("time_block_proposals")
         .update({ status: "accepted" })
         .eq("id", winner);
@@ -194,10 +196,10 @@ local("calendar approval claim — real local PostgreSQL", () => {
           .in("target_id", proposalIds),
       );
       await must(
-        service.from("time_block_proposals").delete().in("id", proposalIds),
+        userClient.from("time_block_proposals").delete().in("id", proposalIds),
       );
       await must(
-        service.from("tasks").delete().in("id", [taskId, otherTaskId]),
+        userClient.from("tasks").delete().in("id", [taskId, otherTaskId]),
       );
       if (connectionId) {
         await must(
