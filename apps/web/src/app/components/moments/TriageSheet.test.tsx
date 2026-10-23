@@ -772,8 +772,8 @@ describe("TriageSheet", () => {
       const failure = await screen.findByTestId(/^triage-sheet-sort-failed-/);
       // Glance line: truthful for the unreachable-AI state, reused verbatim
       // from `lib/statusVocabulary.ts` (#739), not a new sentence.
-      expect(failure).toHaveTextContent(
-        "AI sorting is unavailable right now, so this one hasn't been sorted. Your thought is still saved, exactly as you wrote it. Sorting requires you to be signed in.",
+      expect(failure.querySelector("p")?.textContent).toBe(
+        "AI sorting is unavailable right now, so this one hasn't been sorted. Your thought is still saved, exactly as you wrote it. This build has no account set up.",
       );
       // Detail layer ("What happened?") still carries the server's literal
       // wording, which this test deliberately made different from the
@@ -822,8 +822,8 @@ describe("TriageSheet", () => {
       const failure = await screen.findByTestId(/^triage-sheet-sort-failed-/);
       // Glance line: truthful for the reached-but-failed state, reused
       // verbatim from `lib/statusVocabulary.ts` (#739).
-      expect(failure).toHaveTextContent(
-        "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. Sorting requires you to be signed in.",
+      expect(failure.querySelector("p")?.textContent).toBe(
+        "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. This build has no account set up.",
       );
       // It must NOT show the "unavailable" line — that would be the #740 bug.
       expect(failure).not.toHaveTextContent(

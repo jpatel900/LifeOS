@@ -3,10 +3,14 @@ import {
   ParseCaptureResponseSchema,
   type ParseCaptureResponse,
 } from "@lifeos/schemas";
-import { AI_SORTING_FAILED_NOT_SORTED } from "../statusVocabulary";
+import {
+  AI_SORTING_FAILED_NOT_SORTED,
+  SORTING_TIMED_OUT_NOT_SORTED,
+} from "../statusVocabulary";
 import type { ParseCaptureRuntimeStatus } from "./parseCaptureService";
 import {
   PARSE_CAPTURE_CLIENT_DEADLINE_MS,
+  RequestDeadlineError,
   withRequestDeadline,
 } from "./requestDeadline";
 
@@ -129,11 +133,14 @@ export async function requestParseCapture(input: {
         );
     httpOk = result.httpOk;
     body = result.body;
-  } catch {
+  } catch (error) {
     return {
       ok: false,
       status: "unknown",
-      error: SAFE_FAILURE_MESSAGE,
+      error:
+        error instanceof RequestDeadlineError
+          ? SORTING_TIMED_OUT_NOT_SORTED
+          : SAFE_FAILURE_MESSAGE,
       canRetryWithMock: true,
     };
   }

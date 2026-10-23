@@ -101,7 +101,7 @@ export function CaptureParseNotice({
           ]
             .filter(Boolean)
             .join(" ")
-        : sortFailureMessage(state.message, signedIn);
+        : sortFailureMessage(state.message, presence.status);
 
   return (
     <div

@@ -118,6 +118,9 @@ describe("parse-capture bounded authentication", () => {
     expect(await response.json()).toEqual({
       ok: false,
       errorCategory: "auth_rejected",
+      error:
+        "Sign in, then try sorting again. Your thought is still saved, exactly as you wrote it.",
+      can_retry_with_mock: false,
     });
     expect(mocks.parse).not.toHaveBeenCalled();
   });

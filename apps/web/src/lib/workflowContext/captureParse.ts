@@ -10,9 +10,13 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { Area, Person } from "@lifeos/schemas";
 import { getOperatorProfile, listPeople } from "../data/workflow";
-import { AI_SORTING_FAILED_NOT_SORTED } from "../statusVocabulary";
+import {
+  AI_SORTING_FAILED_NOT_SORTED,
+  SORTING_TIMED_OUT_NOT_SORTED,
+} from "../statusVocabulary";
 import {
   PARSE_CAPTURE_CLIENT_DEADLINE_MS,
+  RequestDeadlineError,
   withRequestDeadline,
 } from "../ai/requestDeadline";
 import { normalizePersonName, resolvePersonMention } from "../data/personLinks";
@@ -337,13 +341,16 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
           );
         },
       );
-    } catch {
+    } catch (error) {
       if (activeParseCaptureIdRef.current !== attemptId) return;
       setCaptureParse({
         phase: "failed",
         captureId: currentCaptureId(stateRef.current, capture.id),
         status: "unknown",
-        message: AI_SORTING_FAILED_NOT_SORTED,
+        message:
+          error instanceof RequestDeadlineError
+            ? SORTING_TIMED_OUT_NOT_SORTED
+            : AI_SORTING_FAILED_NOT_SORTED,
         canRetryWithMock: true,
       });
     }

@@ -9,6 +9,7 @@ import { captureError } from "@/lib/observability";
 import {
   AI_SORTING_FAILED_NOT_SORTED,
   AI_SORTING_UNAVAILABLE_NOT_SORTED,
+  SORT_SIGN_IN_REQUIRED,
 } from "@/lib/statusVocabulary";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -203,7 +204,12 @@ export async function POST(request: Request) {
   // token -> 401, only then proceed.
   if (!accessToken) {
     return Response.json(
-      { ok: false, errorCategory: "auth_rejected" },
+      {
+        ok: false,
+        errorCategory: "auth_rejected",
+        error: SORT_SIGN_IN_REQUIRED,
+        can_retry_with_mock: false,
+      },
       { status: 401 },
     );
   }
@@ -228,7 +234,12 @@ export async function POST(request: Request) {
   }
   if (!userId) {
     return Response.json(
-      { ok: false, errorCategory: "auth_rejected" },
+      {
+        ok: false,
+        errorCategory: "auth_rejected",
+        error: SORT_SIGN_IN_REQUIRED,
+        can_retry_with_mock: false,
+      },
       { status: 401 },
     );
   }

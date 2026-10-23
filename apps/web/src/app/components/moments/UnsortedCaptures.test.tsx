@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AI_SORTING_FAILED_NOT_SORTED,
   AI_SORTING_UNAVAILABLE_NOT_SORTED,
+  SORT_SIGN_IN_REQUIRED,
+  SORTING_TIMED_OUT_NOT_SORTED,
 } from "@/lib/statusVocabulary";
 import { UnsortedCaptures } from "./UnsortedCaptures";
 const mocks = vi.hoisted(() => ({
@@ -71,6 +73,42 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe("Sort recovery follows current sign-in state", () => {
+  it("names a timeout in both the headline and the details", async () => {
+    workflow("unknown", SORTING_TIMED_OUT_NOT_SORTED);
+    render(<UnsortedCaptures areaId={null} />);
+    await waitFor(() => {
+      const paragraphs = screen.getByRole("status").querySelectorAll("p");
+      expect(Array.from(paragraphs, (item) => item.textContent)).toEqual([
+        "Sorting took too long. Your thought is still saved, exactly as you wrote it. Try again, or use basic sorting.",
+        "Sorting took too long. Your thought is still saved, exactly as you wrote it. Try again, or use basic sorting.",
+      ]);
+    });
+  });
+  it.each([
+    ["loading", "Your thought is still saved, exactly as you wrote it."],
+    [
+      "unconfigured",
+      "This build has no account set up. Your thought is still saved, exactly as you wrote it.",
+    ],
+  ] as const)(
+    "adapts a route sign-in error while auth is %s",
+    (presence, message) => {
+      if (presence === "loading")
+        mocks.getUser.mockReturnValueOnce(new Promise(() => {}));
+      else mocks.configured.mockReturnValueOnce(false);
+      workflow("unknown", SORT_SIGN_IN_REQUIRED, false);
+      render(<UnsortedCaptures areaId={null} />);
+      const paragraphs = screen.getByRole("status").querySelectorAll("p");
+      expect(Array.from(paragraphs, (item) => item.textContent)).toEqual([
+        message,
+        message,
+      ]);
+      expect(
+        screen.queryByRole("button", { name: "Try basic sorting" }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
   it.each(["unknown", "ai_configured", "ai_unavailable"] as const)(
     "offers working basic recovery for signed-in %s",
     async (status) => {
@@ -129,14 +167,25 @@ describe("Sort recovery follows current sign-in state", () => {
       expect(retry).not.toHaveBeenCalled();
     },
   );
-  it.each(["loading", "unconfigured"] as const)(
-    "hides basic recovery while auth is %s",
-    (presence) => {
+  it.each([
+    ["loading", "Your thought is still saved, exactly as you wrote it."],
+    [
+      "unconfigured",
+      "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. This build has no account set up.",
+    ],
+  ] as const)(
+    "uses truthful recovery while auth is %s",
+    (presence, message) => {
       if (presence === "loading")
         mocks.getUser.mockReturnValueOnce(new Promise(() => {}));
       else mocks.configured.mockReturnValueOnce(false);
       workflow("unknown", AI_SORTING_FAILED_NOT_SORTED);
       render(<UnsortedCaptures areaId={null} />);
+      const paragraphs = screen.getByRole("status").querySelectorAll("p");
+      expect(Array.from(paragraphs, (item) => item.textContent)).toEqual([
+        message,
+        message,
+      ]);
       expect(
         screen.queryByRole("button", { name: "Try basic sorting" }),
       ).not.toBeInTheDocument();

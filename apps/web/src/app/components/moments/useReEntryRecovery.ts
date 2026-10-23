@@ -54,12 +54,11 @@ export function useReEntryRecovery(input: {
     null;
   const onAcceptRecovery = (taskId: string) => {
     const task = state.tasks.find((item) => item.id === taskId);
-    if (
-      !task ||
-      recovery?.taskId !== taskId ||
-      !hasLaunchSequenceStep(recovery.firstStep)
-    )
+    if (!task || recovery?.taskId !== taskId) return;
+    if (!hasLaunchSequenceStep(recovery.firstStep)) {
+      input.showToast("Add a first step, then try again.");
       return;
+    }
     input.updateTaskFirstTinyStep(taskId, recovery.firstStep);
     if (task.status === "backlog") input.clearWipRefusal();
     const next =
