@@ -203,7 +203,12 @@ export async function syncJournaledTaskDraftAccept(
   const { data, error } = await client.rpc("accept_task_draft", {
     p_task: taskInput,
     p_person_mentions: mentions,
-    p_accepted_at: z.string().datetime().parse(input.accepted_at),
+    // Journals and PostgREST can carry "+00:00"; Z-only parsing would poison
+    // a valid queued accept (2026-07-25 incident, .semgrep rule).
+    p_accepted_at: z
+      .string()
+      .datetime({ offset: true })
+      .parse(input.accepted_at),
     p_proposal: input.task_status === "active" ? input.proposal : null,
   });
   if (error) throw toPersistenceWriteError(error);

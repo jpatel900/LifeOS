@@ -128,6 +128,15 @@ describe("draft acceptance transaction boundary", () => {
       deduplicated: true,
     });
   });
+  it("accepts a numeric-offset accepted_at, as PostgREST and older journals write it", async () => {
+    const { db, rpc } = client();
+    const accepted_at = "2026-10-23T00:00:00+00:00";
+    await syncJournaledTaskDraftAccept(db, { ...input, accepted_at });
+    expect(rpc).toHaveBeenCalledWith(
+      "accept_task_draft",
+      expect.objectContaining({ p_accepted_at: accepted_at }),
+    );
+  });
   it("keeps the no-account accept queued", async () => {
     expect(await syncJournaledTaskDraftAccept(null, input)).toEqual({
       provider: "mock",
