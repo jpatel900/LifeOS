@@ -158,6 +158,34 @@ local("atomic draft acceptance — real local PostgreSQL", () => {
     }
   });
 
+  it("accepts a backlog draft with no proposal and still resolves its capture", async () => {
+    const client = await signIn("a");
+    const key = randomUUID();
+    const captureId = await capture(client);
+    try {
+      const input = args(key, areaA, captureId);
+      const { data, error } = await client.rpc("accept_task_draft", {
+        ...input,
+        p_task: { ...input.p_task, status: "backlog" },
+        p_proposal: null,
+      });
+      expect(error).toBeNull();
+      expect(data.task.status).toBe("backlog");
+      // An unassigned proposal row must come back as null, not an object of
+      // nulls that the client would then fail to parse after the commit.
+      expect(data.proposal).toBeNull();
+      const state = await client
+        .from("capture_items")
+        .select("status")
+        .eq("id", captureId)
+        .single();
+      expect(state.error).toBeNull();
+      expect(state.data?.status).toBe("resolved");
+    } finally {
+      await clean(client, key, captureId);
+    }
+  });
+
   it("repairs a legacy partial accept, preserves later task edits and links a late capture", async () => {
     const client = await signIn("a");
     const key = randomUUID();
