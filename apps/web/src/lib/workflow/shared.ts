@@ -27,6 +27,7 @@ import type {
   Phase2MockProject,
   Phase2MockTask,
 } from "../types";
+import type { SnapshotOwnership } from "../workflowContext/snapshotOwnership";
 
 export const WIP_ENFORCEMENT_POLICY_ID = "wip_enforcement.v1";
 export const WIP_ENFORCEMENT_LIMIT = 3;
@@ -108,6 +109,7 @@ export interface WorkflowState {
   reviewLog: string[];
   wipRefusal: WipRefusal | null;
   accountIdByLocalId: AccountIdAliases;
+  snapshotOwnership?: SnapshotOwnership;
 }
 
 export interface ParseCaptureInput {

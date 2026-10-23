@@ -13,15 +13,17 @@ import {
   type WorkflowState,
 } from "../workflow";
 import type { WorkflowAction } from "./reducerCore";
+import { trackSnapshotChanges } from "./snapshotOwnership";
 
 export function createApplyWorkflowState(
   stateRef: MutableRefObject<WorkflowState>,
   dispatch: Dispatch<WorkflowAction>,
 ) {
   return function applyWorkflowState(nextState: WorkflowState) {
-    stateRef.current = nextState;
+    const tracked = trackSnapshotChanges(stateRef.current, nextState);
+    stateRef.current = tracked;
     syncWorkflowIdCounterFromState(nextState);
-    dispatch({ type: "hydrate", state: nextState });
+    dispatch({ type: "hydrate", state: tracked });
   };
 }
 

@@ -12,6 +12,7 @@ import type {
   Task,
 } from "@lifeos/schemas";
 import type { WorkflowState } from "../workflow";
+import type { SnapshotCursor, SnapshotReceipt } from "./snapshotOwnership";
 // Issue #984: a direct submodule import, not an addition to the frozen
 // `workflow.ts` barrel — see that file's own comment.
 import type {
@@ -111,7 +112,7 @@ export interface WorkflowContextValue {
   selectedAreaId: string | null;
   setSelectedAreaId: (areaId: string | null) => void;
   syncStatus: WorkflowSyncStatus;
-  syncPersistedAreas: (areas: Area[]) => void;
+  syncPersistedAreas: (areas: Area[], cursor?: SnapshotCursor) => void;
   refreshPersistedWorkflow: () => Promise<void>;
   // #967 manual retry: a thin, public wrapper around the EXISTING
   // `runAccountSync({ replayAfter: true })` pass — the same ordered
@@ -127,8 +128,13 @@ export interface WorkflowContextValue {
   // `syncStatus` afterward, never treat promise settlement as proof of
   // delivery.
   retryPendingAccountWrites: () => Promise<void>;
-  addArea: (name: string, color: string) => void;
-  updateAreaColor: (areaId: string, color: string) => void;
+  addArea: (name: string, color: string) => SnapshotReceipt | undefined;
+  updateAreaColor: (areaId: string, color: string) => SnapshotReceipt;
+  acknowledgeAreaSave: (receipt: SnapshotReceipt, area: Area) => boolean;
+  runAreaWrite: (
+    receipt: SnapshotReceipt,
+    write: () => Promise<void>,
+  ) => Promise<void>;
   // #703: the one capture path. Persists the thought verbatim and never
   // parses — sorting is the separate `sortCaptureIntoDrafts` step below.
   // (Absorbed the former `submitCaptureRaw`, which did exactly this.)

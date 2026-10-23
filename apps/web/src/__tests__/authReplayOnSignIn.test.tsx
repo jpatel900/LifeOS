@@ -123,6 +123,9 @@ function seedSessionStorageWithPresyncedTask() {
     reviewLog: [],
     wipRefusal: null,
     accountIdByLocalId: {},
+    // This fixture explicitly represents delivered account state. Legacy
+    // snapshots without receipts are conservatively covered in ownership tests.
+    snapshotOwnership: { version: 1, epoch: 0, revision: 0, rows: {} },
   };
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(seededState));
 }

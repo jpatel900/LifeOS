@@ -103,14 +103,20 @@ vi.mock("@/lib/data/workflow", async () => {
   };
 });
 
+let observedWorkflow: ReturnType<typeof useWorkflow>;
 function Harness() {
+  observedWorkflow = useWorkflow();
   const {
     state,
     selectedAreaId,
     submitCaptureText,
+    addArea,
+    updateAreaColor,
+    acknowledgeAreaSave,
+    syncPersistedAreas,
     syncStatus,
     areasReadbackSettled,
-  } = useWorkflow();
+  } = observedWorkflow;
   const capture = state.captureItems[0];
   const notice = resolveDeviceSaveNotice(syncStatus);
   const captureAlias = capture
@@ -131,6 +137,48 @@ function Harness() {
       <span data-testid="capture-count">{state.captureItems.length}</span>
       <span data-testid="capture-text">{capture?.raw_text ?? ""}</span>
       <span data-testid="capture-alias">{captureAlias ?? ""}</span>
+      <span data-testid="area-colors">
+        {state.areas.map((area) => area.color).join(",")}
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          const receipt = addArea("Batched area", "#111111");
+          if (!receipt) return;
+          acknowledgeAreaSave(receipt, {
+            ...PERSISTED_AREA,
+            id: "66666666-6666-4666-8666-666666666666",
+            slug: "batched-area",
+            name: "Batched area",
+            color: "#111111",
+          });
+          updateAreaColor(receipt.id, "#222222");
+          syncPersistedAreas(
+            [
+              PERSISTED_AREA,
+              {
+                ...PERSISTED_AREA,
+                id: "66666666-6666-4666-8666-666666666666",
+                slug: "batched-area",
+                name: "Batched area",
+                color: "#111111",
+              },
+            ],
+            receipt,
+          );
+        }}
+      >
+        Save area and edit in one batch
+      </button>
+      <span data-testid="area-names">
+        {state.areas.map((area) => area.name).join(",")}
+      </span>
+      <span data-testid="capture-aliases">
+        {Object.values(state.accountIdByLocalId.captures ?? {}).join(",")}
+      </span>
+      <button type="button" onClick={() => addArea("Local area", "#4c80cd")}>
+        Add local area
+      </button>
       <button
         type="button"
         onClick={() =>
@@ -276,6 +324,254 @@ function expectMemoryAndSnapshot(savedInSession: boolean) {
 }
 
 describe("capture storage and account notice truth (#967)", () => {
+  it("W5-4: another capture's receipt cannot clear an area created while it was in flight", async () => {
+    await renderSettled();
+    const restoreDb = makeIndexedDbUnavailable();
+    const restoreSession = makeSessionStorageSnapshotWriteFail();
+    let resolveCapture!: (value: unknown) => void;
+    mockCreateCaptureItem.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCapture = resolve;
+      }),
+    );
+    try {
+      fireEvent.click(screen.getByText("Capture"));
+      await waitFor(() =>
+        expect(mockCreateCaptureItem).toHaveBeenCalledTimes(1),
+      );
+      fireEvent.click(screen.getByText("Add local area"));
+      await act(async () =>
+        resolveCapture({
+          provider: "supabase",
+          capture: { id: PERSISTED_CAPTURE_ID },
+        }),
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("sync-account").textContent).toBe("synced"),
+      );
+      expect(screen.getByTestId("sync-pending").textContent).toBe("true");
+      expect(screen.getByTestId("area-names").textContent).toContain(
+        "Local area",
+      );
+      restoreSession();
+      fireEvent.click(screen.getByText("Add local area"));
+      expect(window.sessionStorage.getItem(STORAGE_KEY)).toContain(
+        "Local area",
+      );
+      expect(screen.getByTestId("sync-pending").textContent).toBe("true");
+    } finally {
+      restoreSession();
+      restoreDb();
+    }
+  });
+
+  it("W5-4: receipt metadata survives a later local apply in the same React batch", async () => {
+    await renderSettled();
+    fireEvent.click(screen.getByText("Save area and edit in one batch"));
+    expect(
+      screen.getByTestId("area-names").textContent.match(/Batched area/g),
+    ).toHaveLength(1);
+    expect(screen.getByTestId("area-colors").textContent).toContain("#222222");
+    expect(screen.getByTestId("sync-pending").textContent).toBe("true");
+    const saved = JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!);
+    const owner = Object.values(saved.snapshotOwnership.rows.areas).find(
+      (entry) =>
+        (entry as { accountId?: string }).accountId ===
+        "66666666-6666-4666-8666-666666666666",
+    ) as { creation: { pending: boolean } };
+    expect(owner.creation.pending).toBe(false);
+  });
+
+  it.each([false, true])(
+    "W5-4: orders area writes and delivers the latest color after earlier failure=%s",
+    async (failFirst) => {
+      await renderSettled();
+      const areaId = observedWorkflow.state.areas.find(
+        (area) => area.name === PERSISTED_AREA.name,
+      )!.id;
+      let storedColor = PERSISTED_AREA.color;
+      const deliveries: Array<() => void> = [];
+      const write = vi.fn(async (color: string) => {
+        await new Promise<void>((resolve) => deliveries.push(resolve));
+        if (failFirst && color === "#111111")
+          throw new Error("Synthetic area write refused");
+        storedColor = color;
+      });
+      const saveColor = (color: string) => {
+        const receipt = observedWorkflow.updateAreaColor(areaId, color);
+        return observedWorkflow
+          .runAreaWrite(receipt, async () => {
+            await write(color);
+            observedWorkflow.acknowledgeAreaSave(receipt, {
+              ...PERSISTED_AREA,
+              color,
+            });
+            observedWorkflow.syncPersistedAreas([{ ...PERSISTED_AREA, color }]);
+          })
+          .catch(() => undefined);
+      };
+      let first!: Promise<void>;
+      let second!: Promise<void>;
+      act(() => {
+        first = saveColor("#111111");
+        second = saveColor("#222222");
+      });
+      expect(write).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        deliveries[0]();
+        await first;
+      });
+      expect(screen.getByTestId("area-colors").textContent).toContain(
+        "#222222",
+      );
+      expect(screen.getByTestId("sync-pending").textContent).toBe("true");
+      expect(write).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        deliveries[1]();
+        await second;
+      });
+      expect(storedColor).toBe("#222222");
+      expect(screen.getByTestId("area-colors").textContent).toContain(
+        "#222222",
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("sync-pending").textContent).toBe("false"),
+      );
+    },
+  );
+
+  it("W5-4: reset cancels a queued area write", async () => {
+    await renderSettled();
+    const areaId = observedWorkflow.state.areas[0].id;
+    let deliver!: () => void;
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    const queuedWrite = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      const receipt = observedWorkflow.updateAreaColor(areaId, "#111111");
+      first = observedWorkflow.runAreaWrite(
+        receipt,
+        () =>
+          new Promise<void>((resolve) => {
+            deliver = resolve;
+          }),
+      );
+      const next = observedWorkflow.updateAreaColor(areaId, "#222222");
+      second = observedWorkflow.runAreaWrite(next, queuedWrite);
+    });
+    await act(async () => {
+      await observedWorkflow.resetWorkflow();
+    });
+    await act(async () => {
+      deliver();
+      await Promise.all([first, second]);
+    });
+    expect(queuedWrite).not.toHaveBeenCalled();
+  });
+
+  it("R-967 target: account acknowledgment with both local stores blocked owes no capture write", async () => {
+    await renderSettled();
+    const restoreDb = makeIndexedDbUnavailable();
+    const restoreSession = makeSessionStorageSnapshotWriteFail();
+    const readsBefore = mockListCaptureItems.mock.calls.length;
+    try {
+      mockCreateCaptureItem.mockResolvedValueOnce({
+        provider: "supabase",
+        capture: { id: PERSISTED_CAPTURE_ID },
+      });
+      fireEvent.click(screen.getByText("Capture"));
+      await waitFor(() =>
+        expect(screen.getByTestId("capture-alias").textContent).toBe(
+          PERSISTED_CAPTURE_ID,
+        ),
+      );
+      await waitFor(() =>
+        expect(mockListCaptureItems).toHaveBeenCalledTimes(readsBefore + 1),
+      );
+      await act(async () => {});
+      expect(screen.getByTestId("sync-account").textContent).toBe("synced");
+      expect(screen.getByTestId("sync-storage").textContent).toBe("blocked");
+      expect(mockCreateCaptureItem).toHaveBeenCalledTimes(1);
+      expectMemoryAndSnapshot(false);
+      expect(screen.getByTestId("sync-pending").textContent).toBe("false");
+      expect(screen.getByTestId("notice-message").textContent).toBe(
+        ACCOUNT_SAVED_DEVICE_STORAGE_BLOCKED,
+      );
+    } finally {
+      restoreSession();
+      restoreDb();
+    }
+  });
+
+  it("R-967 safety: a new memory-only area must not claim account delivery", async () => {
+    await renderSettled();
+    expect(screen.getByTestId("sync-pending").textContent).toBe("false");
+    const restoreSession = makeSessionStorageSnapshotWriteFail();
+    try {
+      fireEvent.click(screen.getByText("Add local area"));
+      await waitFor(() =>
+        expect(screen.getByTestId("area-names").textContent).toContain(
+          "Local area",
+        ),
+      );
+      expect(screen.getByTestId("sync-storage").textContent).toBe("blocked");
+      expect(window.sessionStorage.getItem(STORAGE_KEY)).not.toContain(
+        "Local area",
+      );
+      expect(screen.getByTestId("sync-pending").textContent).toBe("true");
+      expect(screen.getByTestId("notice-message").textContent).toBe(
+        DEVICE_STORAGE_BLOCKED,
+      );
+    } finally {
+      restoreSession();
+    }
+  });
+
+  it("R-967 safety: a successful capture must retain an earlier memory-only failed capture warning", async () => {
+    await renderSettled();
+    const restoreDb = makeIndexedDbUnavailable();
+    const restoreSession = makeSessionStorageSnapshotWriteFail();
+    const readsBefore = mockListCaptureItems.mock.calls.length;
+    try {
+      mockCreateCaptureItem.mockRejectedValueOnce(
+        new Error("First capture account save refused"),
+      );
+      fireEvent.click(screen.getByText("Capture"));
+      await waitFor(() =>
+        expect(screen.getByTestId("sync-account").textContent).toBe(
+          "sync-error",
+        ),
+      );
+      expect(screen.getByTestId("capture-count").textContent).toBe("1");
+      expect(screen.getByTestId("sync-pending").textContent).toBe("true");
+      mockCreateCaptureItem.mockResolvedValueOnce({
+        provider: "supabase",
+        capture: { id: PERSISTED_CAPTURE_ID },
+      });
+      fireEvent.click(screen.getByText("Capture"));
+      await waitFor(() =>
+        expect(screen.getByTestId("capture-aliases").textContent).toContain(
+          PERSISTED_CAPTURE_ID,
+        ),
+      );
+      await waitFor(() =>
+        expect(mockListCaptureItems).toHaveBeenCalledTimes(readsBefore + 1),
+      );
+      await act(async () => {});
+      expect(mockCreateCaptureItem).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId("capture-count").textContent).toBe("2");
+      expect(screen.getByTestId("sync-account").textContent).toBe("synced");
+      expect(screen.getByTestId("sync-storage").textContent).toBe("blocked");
+      expect(screen.getByTestId("sync-pending").textContent).toBe("true");
+      expect(screen.getByTestId("notice-message").textContent).toBe(
+        DEVICE_STORAGE_BLOCKED,
+      );
+    } finally {
+      restoreSession();
+      restoreDb();
+    }
+  });
+
   it("D: failed journal plus account success/readback keeps storage truth without inventing pending work", async () => {
     await renderSettled();
     const restore = makeIndexedDbUnavailable();
