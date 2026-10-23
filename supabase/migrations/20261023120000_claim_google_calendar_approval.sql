@@ -143,6 +143,14 @@ $$;
 
 revoke all on function public.claim_google_calendar_approval(uuid,uuid,uuid,timestamptz,timestamptz,uuid,timestamptz,text,jsonb) from public, anon, authenticated;
 grant execute on function public.claim_google_calendar_approval(uuid,uuid,uuid,timestamptz,timestamptz,uuid,timestamptz,text,jsonb) to service_role;
+-- The claim runs as service_role (SECURITY INVOKER). This project grants
+-- service_role table access explicitly, per table (see
+-- 20260509231500_harden_google_calendar_security.sql). A service-key client
+-- in the real-schema CI run hit "permission denied for table
+-- time_block_proposals". Grant the read-only minimum the claim needs, so it
+-- never depends on platform default privileges. Idempotent if already held.
+grant select on table public.time_block_proposals, public.areas, public.tasks,
+  public.calendar_blocks to service_role;
 
 -- Freeze an approved provider identity while HTTP is in flight and afterward.
 -- A changed time needs a fresh proposal after confirmed cancellation. Status
