@@ -195,6 +195,52 @@ export async function createPendingExternalWriteEventForAccessToken(
   return parseExternalWriteEvent(data);
 }
 
+/** Commit the durable winner and audit before attempting a provider write.
+ * A failed audit is not proof that Google received nothing, so only the RPC
+ * may decide whether a different approval can proceed.
+ */
+export async function claimGoogleCalendarApprovalForAccessToken(
+  accessToken: string,
+  row: {
+    userId: string;
+    proposalId: string;
+    taskId: string | null;
+    proposedStart: string;
+    proposedEnd: string;
+    connectionId: string;
+    connectedAt: string | null;
+    calendarId: string;
+    requestSummary: Record<string, unknown>;
+  },
+) {
+  assertServerRuntime();
+  const { user } = await requireSupabaseServerUser(accessToken);
+  if (user.id !== row.userId) {
+    throw new Error("External write audit user mismatch.");
+  }
+  const client = requireSupabaseServiceRoleClient();
+  const { data, error } = await client.rpc("claim_google_calendar_approval", {
+    p_user_id: user.id,
+    p_proposal_id: row.proposalId,
+    p_task_id: row.taskId,
+    p_start: row.proposedStart,
+    p_end: row.proposedEnd,
+    p_connection_id: row.connectionId,
+    p_connected_at: row.connectedAt,
+    p_calendar_id: row.calendarId,
+    p_request_summary: row.requestSummary,
+  });
+  if (error) {
+    if (error.code === "PCA01") {
+      throw Object.assign(new Error("Calendar approval conflict."), {
+        code: "CALENDAR_APPROVAL_CONFLICT",
+      });
+    }
+    throw new Error(getSupabaseMessage(error));
+  }
+  return parseExternalWriteEvent(data);
+}
+
 export async function updateExternalWriteEventResultForAccessToken(
   accessToken: string,
   auditEventId: string,
