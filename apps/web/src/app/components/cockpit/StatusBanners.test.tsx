@@ -13,6 +13,7 @@ import type {
 import {
   AI_SORTING_FAILED_NOT_SORTED,
   AI_SORTING_UNAVAILABLE_NOT_SORTED,
+  SORT_SIGN_IN_REQUIRED,
 } from "@/lib/statusVocabulary";
 const sortAuth = vi.hoisted(() => ({ getUser: vi.fn(), configured: vi.fn() }));
 vi.mock("@/lib/supabase/config", () => ({
@@ -379,6 +380,68 @@ describe("SyncNotice tone (#734)", () => {
 });
 
 describe("legacy Sort recovery follows current sign-in state", () => {
+  it.each([
+    ["loading", "Your thought is still saved, exactly as you wrote it."],
+    [
+      "unconfigured",
+      "This build has no account set up. Your thought is still saved, exactly as you wrote it.",
+    ],
+  ] as const)(
+    "adapts a route sign-in error while auth is %s",
+    (presence, message) => {
+      if (presence === "loading")
+        sortAuth.getUser.mockReturnValueOnce(new Promise(() => {}));
+      else sortAuth.configured.mockReturnValueOnce(false);
+      render(
+        <CaptureParseNotice
+          state={{
+            phase: "failed",
+            captureId: "synthetic-capture",
+            status: "unknown",
+            message: SORT_SIGN_IN_REQUIRED,
+            canRetryWithMock: false,
+          }}
+          onRetryWithMock={() => {}}
+        />,
+      );
+      expect(screen.getByRole("status").textContent).toBe(message);
+      expect(
+        screen.queryByRole("button", { name: "Try basic sorting" }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ["loading", "Your thought is still saved, exactly as you wrote it."],
+    [
+      "unconfigured",
+      "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. This build has no account set up.",
+    ],
+  ] as const)(
+    "uses truthful recovery while auth is %s",
+    (presence, message) => {
+      if (presence === "loading")
+        sortAuth.getUser.mockReturnValueOnce(new Promise(() => {}));
+      else sortAuth.configured.mockReturnValueOnce(false);
+      render(
+        <CaptureParseNotice
+          state={{
+            phase: "failed",
+            captureId: "synthetic-capture",
+            status: "unknown",
+            message: AI_SORTING_FAILED_NOT_SORTED,
+            canRetryWithMock: true,
+          }}
+          onRetryWithMock={() => {}}
+        />,
+      );
+      expect(screen.getByRole("status").textContent).toBe(message);
+      expect(
+        screen.queryByRole("button", { name: "Try basic sorting" }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
   it.each(["unknown", "ai_configured", "ai_unavailable"] as const)(
     "offers signed-in recovery for %s",
     async (status) => {

@@ -4,6 +4,13 @@ export const TASK_MAP_DRAFT_PROVIDER_DEADLINE_MS = 50_000;
 export const ROLLUP_PROSE_PROVIDER_DEADLINE_MS = 50_000;
 export const PARSE_CAPTURE_CLIENT_DEADLINE_MS = 35_000;
 
+export class RequestDeadlineError extends Error {
+  constructor() {
+    super("AI request deadline exceeded.");
+    this.name = "RequestDeadlineError";
+  }
+}
+
 /** Bounds the whole request, including body reading, and cancels its transport. */
 export async function withRequestDeadline<T>(
   timeoutMs: number,
@@ -13,7 +20,7 @@ export async function withRequestDeadline<T>(
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
-      const error = new Error("AI request deadline exceeded.");
+      const error = new RequestDeadlineError();
       // Reject first so transport abort listeners cannot replace the deadline.
       reject(error);
       controller.abort();

@@ -16,7 +16,6 @@ import {
   type CaptureParseDeps,
 } from "./workflowContext/captureParse";
 import type { CaptureParseState } from "./workflowContext/types";
-import { AI_SORTING_FAILED_NOT_SORTED } from "./statusVocabulary";
 import { PARSE_CAPTURE_CLIENT_DEADLINE_MS } from "./ai/requestDeadline";
 
 /**
@@ -212,7 +211,8 @@ describe("the complete Sort deadline", () => {
       phase: "failed",
       captureId: harness.capture.id,
       status: "unknown",
-      message: AI_SORTING_FAILED_NOT_SORTED,
+      message:
+        "Sorting took too long. Your thought is still saved, exactly as you wrote it. Try again, or use basic sorting.",
       canRetryWithMock: true,
     });
     expect(settled).toBe(true);

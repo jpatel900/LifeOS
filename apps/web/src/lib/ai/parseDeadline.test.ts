@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { requestParseCapture } from "./parseCaptureClient";
-import { AI_SORTING_FAILED_NOT_SORTED } from "../statusVocabulary";
 import { openAiStructuredOutputProvider } from "./provider/openai";
 
 const PROVIDER_DEADLINE_MS = 30_000;
@@ -61,7 +60,8 @@ describe.each([false, true])(
       expect(result).toEqual({
         ok: false,
         status: "unknown",
-        error: AI_SORTING_FAILED_NOT_SORTED,
+        error:
+          "Sorting took too long. Your thought is still saved, exactly as you wrote it. Try again, or use basic sorting.",
         canRetryWithMock: true,
       });
       expect(stalled.signal()?.aborted).toBe(true);
