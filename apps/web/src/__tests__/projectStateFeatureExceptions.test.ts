@@ -20,7 +20,10 @@ function featureExceptionIds(text: string) {
 }
 
 function currentObjective() {
-  const state = readFileSync(resolve(repoRoot, "docs/PROJECT_STATE.md"), "utf8");
+  const state = readFileSync(
+    resolve(repoRoot, "docs/PROJECT_STATE.md"),
+    "utf8",
+  );
   const start = state.indexOf("## Current objective");
   expect(start, "PROJECT_STATE.md lost its Current objective section").not.toBe(
     -1,
