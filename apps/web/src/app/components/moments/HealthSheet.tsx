@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Check,
   ChevronDown,
+  Download,
   HeartPulse,
   RefreshCw,
   TriangleAlert,
@@ -14,8 +15,11 @@ import {
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
-import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
-import { ACCOUNT_NEEDS_APP_UPDATE } from "@/lib/statusVocabulary";
+import {
+  resolveDeviceSaveNotice,
+  resolvePendingWriteRecoveryAction,
+} from "@/lib/deviceSaveNotice";
+import { downloadPendingWriteRecoveryCopy } from "@/lib/durability/pendingWriteRecovery";
 import {
   getHealthDashboard,
   type HealthDashboardCheck,
@@ -148,9 +152,7 @@ type LocalConcern = {
   id: string;
   label: string;
   details: string;
-  // #967 manual retry: true only for an UNCLASSIFIED failed pending write —
-  // see `canRetryPendingAccountWrite`'s own comment for the exact gate.
-  canRetry?: boolean;
+  recoveryAction?: ReturnType<typeof resolvePendingWriteRecoveryAction>;
 };
 
 export interface HealthSheetProps {
@@ -204,6 +206,39 @@ function OpenHealthSheet({
   // while the existing `retryPendingAccountWrites` pass is in flight.
   const [isRetryingPendingAccountWrites, setIsRetryingPendingAccountWrites] =
     useState(false);
+  const preparingRecoveryCopyRef = useRef(false);
+  const [isPreparingRecoveryCopy, setIsPreparingRecoveryCopy] = useState(false);
+  const [recoveryCopyMessage, setRecoveryCopyMessage] = useState<string | null>(
+    null,
+  );
+
+  async function handleDownloadRecoveryCopy() {
+    // Guard before React can render the disabled button: two immediate clicks
+    // must still start only one local read and one download.
+    if (preparingRecoveryCopyRef.current) return;
+    preparingRecoveryCopyRef.current = true;
+    setIsPreparingRecoveryCopy(true);
+    setRecoveryCopyMessage(null);
+    try {
+      const result = await downloadPendingWriteRecoveryCopy();
+      if (mountedRef.current) {
+        setRecoveryCopyMessage(
+          result === "empty"
+            ? "There are no saved changes to copy here."
+            : "Download started. The originals are still on this device.",
+        );
+      }
+    } catch {
+      if (mountedRef.current) {
+        setRecoveryCopyMessage(
+          "The copy could not be prepared. Your saved changes are unchanged.",
+        );
+      }
+    } finally {
+      preparingRecoveryCopyRef.current = false;
+      if (mountedRef.current) setIsPreparingRecoveryCopy(false);
+    }
+  }
 
   async function handleRetryPendingAccountWrites() {
     setIsRetryingPendingAccountWrites(true);
@@ -279,27 +314,13 @@ function OpenHealthSheet({
   const saveNotice =
     syncStatus.pendingSaveFailed && resolveDeviceSaveNotice(syncStatus);
 
-  // #967 manual retry: an unclassified failed pending write only. Checked
-  // against `syncStatus`'s own fields, not the resolved notice's tone or
-  // text — `signedOut` and a blocked `storage` are their OWN, higher-
-  // priority reasons `resolveDeviceSaveNotice` already reports, and a retry
-  // fixes neither. `ACCOUNT_NEEDS_APP_UPDATE` (imported, not re-typed) is
-  // the one message that names a capability mismatch a replay cannot repair.
-  const canRetryPendingAccountWrite = Boolean(
-    saveNotice &&
-    syncStatus.pendingSaveFailed &&
-    !syncStatus.signedOut &&
-    syncStatus.storage !== "blocked" &&
-    saveNotice.message !== ACCOUNT_NEEDS_APP_UPDATE,
-  );
-
   const localConcerns: Array<LocalConcern> = saveNotice
     ? [
         {
           id: "health-save-concern",
           label: "Saving your work",
           details: saveNotice.message,
-          canRetry: canRetryPendingAccountWrite,
+          recoveryAction: resolvePendingWriteRecoveryAction(syncStatus),
         },
       ]
     : [];
@@ -464,7 +485,7 @@ function OpenHealthSheet({
                     <p className="mt-0.5 text-sm text-muted-foreground">
                       {concern.details}
                     </p>
-                    {concern.canRetry ? (
+                    {concern.recoveryAction === "retry" ? (
                       <button
                         type="button"
                         onClick={() => {
@@ -482,6 +503,42 @@ function OpenHealthSheet({
                           ? "Trying to save..."
                           : "Try saving again"}
                       </button>
+                    ) : null}
+                    {concern.recoveryAction === "download" ? (
+                      <>
+                        <p
+                          id="health-save-copy-details"
+                          className="mt-2 text-sm text-muted-foreground"
+                        >
+                          Keep a copy of these saved changes. The originals stay
+                          on this device.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleDownloadRecoveryCopy();
+                          }}
+                          disabled={isPreparingRecoveryCopy}
+                          aria-describedby="health-save-copy-details"
+                          className={cn(
+                            HIT_TARGET_MIN,
+                            "mt-2 inline-flex touch-manipulation items-center justify-center gap-2 rounded-full bg-[var(--btn)] px-5 font-bold text-[var(--btn-fg)] disabled:cursor-not-allowed disabled:opacity-50",
+                          )}
+                          data-testid="health-sheet-download-copy"
+                        >
+                          <Download size={18} aria-hidden />
+                          {isPreparingRecoveryCopy
+                            ? "Preparing copy..."
+                            : "Download a copy"}
+                        </button>
+                        <p
+                          role="status"
+                          aria-live="polite"
+                          className="mt-2 text-sm text-muted-foreground"
+                        >
+                          {recoveryCopyMessage}
+                        </p>
+                      </>
                     ) : null}
                   </div>
                 ))}

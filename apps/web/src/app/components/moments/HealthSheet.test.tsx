@@ -1,10 +1,13 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { IDBFactory } from "fake-indexeddb";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 import * as WorkflowContext from "@/lib/WorkflowContext";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
 import type { HealthDashboardCheck } from "@/lib/data/health";
 import type { WorkflowSyncStatus } from "@/lib/workflowContext/types";
+import * as pendingWriteJournal from "@/lib/durability/pendingWriteJournal";
+import type { PendingWrite } from "@/lib/durability/pendingWriteJournal";
 import {
   ACCOUNT_SAVE_FAILED,
   ACCOUNT_NEEDS_APP_UPDATE,
@@ -414,6 +417,9 @@ describe("HealthSheet — the ported Health surface", () => {
       expect(
         screen.queryByTestId("health-sheet-retry-save"),
       ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Download a copy" }),
+      ).not.toBeInTheDocument();
     },
   );
 
@@ -706,6 +712,9 @@ describe("HealthSheet — manual retry action (#967)", () => {
     renderSheet();
 
     const button = await screen.findByTestId("health-sheet-retry-save");
+    expect(
+      screen.queryByRole("button", { name: "Download a copy" }),
+    ).not.toBeInTheDocument();
     button.click();
 
     await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
@@ -797,6 +806,249 @@ describe("HealthSheet — manual retry action (#967)", () => {
       expect(screen.queryByTestId("health-sheet-retry-save")).toBeNull(),
     );
     expect(screen.queryByText("Saving your work")).not.toBeInTheDocument();
+  });
+});
+
+describe("HealthSheet — a local recovery copy for invalid writes (#967)", () => {
+  const INVALID_WRITE_STATUS: WorkflowSyncStatus = {
+    storage: "available",
+    account: "local-only",
+    message: null,
+    pendingLocalChanges: true,
+    pendingSaveFailed: true,
+    pendingSaveFailureKind: "invalid-write",
+  };
+  const REPAIR_NOTICE =
+    "Some saved work needs a repair before LifeOS can send it to your account. Keep a copy in Health.";
+  const ORIGINAL_WRITES: PendingWrite[] = [
+    {
+      seq: 1,
+      client_write_id: "test-recovery-invalid-write",
+      entity: "rollup",
+      payload: { text: "Synthetic saved change" },
+      created_at: "2026-10-22T10:00:00.000Z",
+      last_attempt_failed: true,
+      last_attempt_failure_kind: "invalid-write",
+    },
+    {
+      seq: 2,
+      client_write_id: "test-recovery-unattempted-write",
+      entity: "win",
+      payload: { text: "Synthetic later change" },
+      created_at: "2026-10-22T10:01:00.000Z",
+    },
+  ];
+  const createObjectURL = vi.fn<(blob: Blob) => string>();
+  const revokeObjectURL = vi.fn<(url: string) => void>();
+  const downloads: Array<{ filename: string; href: string }> = [];
+
+  beforeEach(() => {
+    createObjectURL.mockReset().mockReturnValue("blob:test-local-copy");
+    revokeObjectURL.mockReset();
+    downloads.length = 0;
+    vi.stubGlobal("indexedDB", new IDBFactory());
+    vi.stubGlobal(
+      "URL",
+      class extends URL {
+        static createObjectURL = createObjectURL;
+        static revokeObjectURL = revokeObjectURL;
+      },
+    );
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push({ filename: this.download, href: this.href });
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function renderRecoverySheet() {
+    const retry = vi.fn().mockResolvedValue(undefined);
+    spySyncStatus(INVALID_WRITE_STATUS, retry);
+    // The provider is already represented by the hook seam. Rendering the
+    // sheet alone keeps journal reads attributable to the recovery action.
+    render(
+      <HealthSheet open onClose={vi.fn()} selectedAreaId={AREA} now={NOW} />,
+    );
+    return retry;
+  }
+
+  async function readDownload(index: number) {
+    const blob = createObjectURL.mock.calls[index][0];
+    expect(blob.type).toBe("application/json");
+    const text = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
+    });
+    return JSON.parse(text);
+  }
+
+  it("downloads fresh pending changes on each click and leaves the originals and failed-save concern intact", async () => {
+    const list = vi
+      .spyOn(pendingWriteJournal, "listPendingWrites")
+      .mockResolvedValue(ORIGINAL_WRITES);
+    const dequeue = vi.spyOn(pendingWriteJournal, "markPendingWriteSynced");
+    const originalSnapshot = JSON.stringify(ORIGINAL_WRITES);
+    const retry = renderRecoverySheet();
+
+    const button = await screen.findByRole("button", {
+      name: "Download a copy",
+    });
+    expect(list).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("health-sheet-retry-save")).toBeNull();
+    expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+      REPAIR_NOTICE,
+    );
+    expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+      "Keep a copy of these saved changes. The originals stay on this device.",
+    );
+
+    await act(async () => {
+      button.click();
+    });
+    await screen.findByText(
+      "Download started. The originals are still on this device.",
+    );
+    expect(list).toHaveBeenCalledTimes(1);
+    expect((await readDownload(0)).pending_writes).toEqual(ORIGINAL_WRITES);
+    expect(downloads[0]).toEqual({
+      filename: expect.stringMatching(/^lifeos-saved-changes-.*\.json$/),
+      href: "blob:test-local-copy",
+    });
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:test-local-copy");
+
+    const freshWrites = [
+      ...ORIGINAL_WRITES,
+      {
+        ...ORIGINAL_WRITES[1],
+        seq: 3,
+        client_write_id: "test-recovery-newer-write",
+      },
+    ];
+    list.mockResolvedValue(freshWrites);
+    await act(async () => {
+      button.click();
+    });
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(2));
+    expect(list).toHaveBeenCalledTimes(2);
+    expect((await readDownload(1)).pending_writes).toEqual(freshWrites);
+    expect(JSON.stringify(ORIGINAL_WRITES)).toBe(originalSnapshot);
+    expect(dequeue).not.toHaveBeenCalled();
+    expect(retry).not.toHaveBeenCalled();
+    expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+      REPAIR_NOTICE,
+    );
+    expect(document.querySelector("a[download]")).toBeNull();
+  });
+
+  it.each(["read", "prepare", "access unavailable storage"])(
+    "keeps the concern and reusable recovery action when the copy cannot %s",
+    async (failureStage) => {
+      const list = vi
+        .spyOn(pendingWriteJournal, "listPendingWrites")
+        .mockResolvedValue(ORIGINAL_WRITES);
+      if (failureStage === "read") {
+        list.mockRejectedValue(new Error("Synthetic local read failure"));
+      } else if (failureStage === "prepare") {
+        createObjectURL.mockImplementation(() => {
+          throw new Error("Synthetic download preparation failure");
+        });
+      } else {
+        // Use the real journal API here: without IndexedDB it returns [],
+        // which is not evidence that accessible storage contains no work.
+        list.mockRestore();
+        vi.stubGlobal("indexedDB", undefined);
+      }
+      const dequeue = vi.spyOn(pendingWriteJournal, "markPendingWriteSynced");
+      const retry = renderRecoverySheet();
+      const button = await screen.findByRole("button", {
+        name: "Download a copy",
+      });
+
+      await act(async () => {
+        button.click();
+      });
+      await screen.findByText(
+        "The copy could not be prepared. Your saved changes are unchanged.",
+      );
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveTextContent("Download a copy");
+      expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+        REPAIR_NOTICE,
+      );
+      expect(downloads).toEqual([]);
+      expect(dequeue).not.toHaveBeenCalled();
+      expect(retry).not.toHaveBeenCalled();
+      expect(
+        screen.queryByText(
+          "Download started. The originals are still on this device.",
+        ),
+      ).toBeNull();
+    },
+  );
+
+  it("reports an empty fresh journal without starting a download or claiming an account save", async () => {
+    const list = vi
+      .spyOn(pendingWriteJournal, "listPendingWrites")
+      .mockResolvedValue([]);
+    const retry = renderRecoverySheet();
+    const button = await screen.findByRole("button", {
+      name: "Download a copy",
+    });
+
+    await act(async () => {
+      button.click();
+    });
+    await screen.findByText("There are no saved changes to copy here.");
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(downloads).toEqual([]);
+    expect(retry).not.toHaveBeenCalled();
+    expect(button).not.toBeDisabled();
+    expect(screen.getByTestId("health-sheet-group-work")).toHaveTextContent(
+      REPAIR_NOTICE,
+    );
+    expect(
+      screen.queryByText(
+        "Download started. The originals are still on this device.",
+      ),
+    ).toBeNull();
+  });
+
+  it("prepares one copy while a read is held open, even for two immediate clicks", async () => {
+    let releaseRead!: (writes: PendingWrite[]) => void;
+    const list = vi
+      .spyOn(pendingWriteJournal, "listPendingWrites")
+      .mockReturnValue(
+        new Promise((resolve) => {
+          releaseRead = resolve;
+        }),
+      );
+    renderRecoverySheet();
+    const button = await screen.findByRole("button", {
+      name: "Download a copy",
+    });
+
+    act(() => {
+      button.click();
+      button.click();
+    });
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent("Preparing copy...");
+
+    releaseRead(ORIGINAL_WRITES);
+    await screen.findByText(
+      "Download started. The originals are still on this device.",
+    );
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveTextContent("Download a copy");
   });
 });
 
