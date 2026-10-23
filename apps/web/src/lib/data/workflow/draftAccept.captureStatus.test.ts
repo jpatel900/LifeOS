@@ -1,246 +1,87 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   findJournaledTaskIdByClientWriteId,
   syncJournaledTaskDraftAccept,
 } from "./draftAccept";
-import type { MinimalSupabaseClient } from "./shared";
+import {
+  draftAcceptClient,
+  draftAcceptInput as input,
+  draftAcceptTask,
+} from "@/testing/draftAcceptRpc";
 
-/**
- * Final UX Loop C1, Target Card 1 (audit P0#3) — "sorted/accepted work never
- * resurrects as unsorted (capture status transitions pinned)".
- *
- * RE-ANCHORED, NOT REWRITTEN, BY SLICE S3
- * ---------------------------------------
- * These assertions arrived with #771 against
- * `persistenceSync.persistAcceptedTaskDraft`, which then ran the whole account
- * sequence inline. S3 makes a triage accept device-durable, so that sequence
- * moved: `persistAcceptedTaskDraft` now only journals, and the account writes
- * happen when the journal entry is REPLAYED, through
- * `syncJournaledTaskDraftAccept`. The guarantee did not change and neither did
- * any assertion below — only the module that owns it, which is why this file
- * moved with `git mv` rather than being deleted and re-authored.
- *
- * This is still the WIRING tier: does accepting a draft issue the capture
- * status write at all? On `origin/main` @ 6cc76ade it did not, and
- * `capture_items.status` stayed `"new"` forever.
- *
- * The other tiers live elsewhere and prove different things:
- *  - ACCOUNT (`src/__tests__/phase4aRls.local.test.ts`, real Postgres): the
- *    update lands, is ownership-bounded, and never drags a decided row back.
- *  - SURFACE (`src/lib/workflow/captureStatus.test.ts`): no screen presents an
- *    item as both unsorted and an accepted task.
- *  - DEVICE (`src/__tests__/durablePlansDraftsGuard.test.tsx`): the accept
- *    reaches IndexedDB before any of this is attempted.
- */
+vi.mock("./planning", () => ({ recordTaskAcceptance: vi.fn() }));
+vi.mock("./people", () => ({ recordPersonLinkAcceptance: vi.fn() }));
 
-const createTaskMock = vi.hoisted(() => vi.fn());
-const resolveCaptureItemsMock = vi.hoisted(() => vi.fn());
-const recordPersonLinkAcceptanceMock = vi.hoisted(() => vi.fn());
-const findOrCreatePersonMock = vi.hoisted(() => vi.fn());
-
-vi.mock("./planning", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./planning")>()),
-  createTask: createTaskMock,
-}));
-
-vi.mock("./capture", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./capture")>()),
-  resolveCaptureItems: resolveCaptureItemsMock,
-}));
-
-vi.mock("./people", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./people")>()),
-  recordPersonLinkAcceptance: recordPersonLinkAcceptanceMock,
-  findOrCreatePerson: findOrCreatePersonMock,
-}));
-
-const AREA_ID = "44444444-4444-4444-8444-444444444444";
-const CAPTURE_ID = "55555555-5555-4555-8555-555555555555";
-const PERSISTED_TASK_ID = "66666666-6666-4666-8666-666666666666";
-const USER_ID = "11111111-1111-4111-8111-111111111111";
-const CLIENT_WRITE_ID = "journal-accept-1";
-
-/**
- * A client whose `tasks` lookup finds nothing — the ordinary first attempt.
- * The replay short-circuit has its own coverage in the RLS suite, where a real
- * index rather than a stub decides it.
- */
-function client(): MinimalSupabaseClient {
-  const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-  const eqInner = vi.fn().mockReturnValue({ maybeSingle });
-  const eqOuter = vi.fn().mockReturnValue({ eq: eqInner });
-  const select = vi.fn().mockReturnValue({ eq: eqOuter });
-  const upsert = vi.fn().mockResolvedValue({ error: null });
-
-  return {
-    from: vi.fn().mockReturnValue({ select, upsert }),
-    auth: {
-      getUser: vi
-        .fn()
-        .mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }),
-    },
-  } as unknown as MinimalSupabaseClient;
-}
-
-type AcceptInput = Parameters<typeof syncJournaledTaskDraftAccept>[1];
-
-function input(overrides: Partial<AcceptInput> = {}): AcceptInput {
-  return {
-    client_write_id: CLIENT_WRITE_ID,
-    area_id: AREA_ID,
-    source_capture_item_id: CAPTURE_ID,
-    draft_id: "draft-1",
-    title: "Call the accountant about the quarterly filing",
-    description: null,
-    confidence: 0.8,
-    task_type: null,
-    is_reversible: null,
-    due_at: null,
-    estimated_minutes_low: 25,
-    estimated_minutes_high: 40,
-    first_tiny_step: "Find the filing reference",
-    is_commitment: false,
-    person_mentions: [],
-    task_status: "active",
-    accepted_at: "2026-07-04T09:00:00.000Z",
-    proposal: null,
-    ...overrides,
-  };
-}
-
-describe("journalled triage accept — capture status truth (C1 card 1)", () => {
-  beforeEach(() => {
-    createTaskMock.mockReset();
-    createTaskMock.mockResolvedValue({
-      provider: "supabase",
-      task: { id: PERSISTED_TASK_ID },
-    });
-    resolveCaptureItemsMock.mockReset();
-    resolveCaptureItemsMock.mockResolvedValue({
-      provider: "supabase",
-      captures: [],
-    });
-    recordPersonLinkAcceptanceMock.mockReset();
-    findOrCreatePersonMock.mockReset();
-  });
-
-  it("advances the source capture to resolved when a draft is accepted", async () => {
-    await syncJournaledTaskDraftAccept(client(), input());
-
-    expect(resolveCaptureItemsMock).toHaveBeenCalledOnce();
-    expect(resolveCaptureItemsMock.mock.calls[0][1]).toEqual([CAPTURE_ID]);
-  });
-
-  it("does the same for a backlogged accept — the thought is decided either way", async () => {
-    await syncJournaledTaskDraftAccept(
-      client(),
-      input({ task_status: "backlog" }),
-    );
-
-    expect(resolveCaptureItemsMock.mock.calls[0][1]).toEqual([CAPTURE_ID]);
-  });
-
-  it("writes the status only after the task it came from actually landed", async () => {
-    // Ordering matters: the task is what MAKES the capture resolved. A failed
-    // insert must leave the thought waiting rather than resolve a capture that
-    // produced nothing.
-    createTaskMock.mockResolvedValue({ provider: "mock", task: { id: "x" } });
-
-    await syncJournaledTaskDraftAccept(client(), input());
-
-    expect(resolveCaptureItemsMock).not.toHaveBeenCalled();
-  });
-
-  it("fails loudly when the status write fails — never silently", async () => {
-    // Unlike the person-link writes in the same path (best-effort by design,
-    // NS-INV-4), a dropped status write IS the bug. It must propagate — which
-    // under S3 means the journal entry stays queued and the next replay
-    // retries it, rather than the accept being reported as delivered.
-    resolveCaptureItemsMock.mockRejectedValue(new Error("update denied"));
-
-    await expect(
-      syncJournaledTaskDraftAccept(client(), input()),
-    ).rejects.toThrow("update denied");
-  });
-
-  it("is a no-op, not a crash, when the capture never reached the account", async () => {
-    await syncJournaledTaskDraftAccept(
-      client(),
-      input({ source_capture_item_id: null }),
-    );
-
-    expect(resolveCaptureItemsMock).toHaveBeenCalledOnce();
-    expect(resolveCaptureItemsMock.mock.calls[0][1]).toEqual([null]);
-  });
-
-  it("never writes anything when there is no account to write to", async () => {
-    // Mock mode must not report success: the journal entry has to stay queued
-    // until an account is genuinely reachable. This is what stops a signed-out
-    // replay from silently deleting the user's decision.
-    const result = await syncJournaledTaskDraftAccept(null, input());
-
-    expect(result.provider).toBe("mock");
-    expect(createTaskMock).not.toHaveBeenCalled();
-    expect(resolveCaptureItemsMock).not.toHaveBeenCalled();
-  });
-
-  it("recovers the accepted task through the owner's original client write id", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({
-      data: {
-        id: PERSISTED_TASK_ID,
-        user_id: USER_ID,
-        area_id: AREA_ID,
-        project_id: null,
-        source_capture_item_id: CAPTURE_ID,
-        title: "Call the accountant about the quarterly filing",
-        description: null,
-        status: "active",
-        priority_score: null,
-        priority_confidence: 0.8,
-        task_type: null,
-        energy_type: null,
-        estimated_minutes_low: 25,
-        estimated_minutes_high: 40,
-        due_at: null,
-        definition_of_done: null,
-        first_tiny_step: "Find the filing reference",
-        created_at: "2026-07-04T09:00:00.000Z",
-        updated_at: "2026-07-04T09:00:00.000Z",
-      },
-      error: null,
-    });
-    const clientWriteEq = vi.fn().mockReturnValue({ maybeSingle });
-    const userEq = vi.fn().mockReturnValue({ eq: clientWriteEq });
-    const select = vi.fn().mockReturnValue({ eq: userEq });
-    const from = vi.fn().mockReturnValue({ select });
-    const lookupClient = {
-      from,
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: USER_ID } },
-          error: null,
+// Wiring tier: task and capture travel through one transaction, never two
+// client writes. PostgreSQL rollback/isolation belong to the local RLS suite.
+describe("journalled triage accept — capture status truth", () => {
+  it.each(["active", "backlog"] as const)(
+    "resolves the source capture in the same transaction as a %s task",
+    async (status) => {
+      const { db, rpc, from } = draftAcceptClient();
+      await syncJournaledTaskDraftAccept(db, { ...input, task_status: status });
+      expect(rpc).toHaveBeenCalledOnce();
+      expect(rpc).toHaveBeenCalledWith(
+        "accept_task_draft",
+        expect.objectContaining({
+          p_task: expect.objectContaining({
+            source_capture_item_id: input.source_capture_item_id,
+            status,
+          }),
         }),
-      },
-    } as unknown as MinimalSupabaseClient;
-
-    const result = await findJournaledTaskIdByClientWriteId(
-      lookupClient,
-      ` ${CLIENT_WRITE_ID} `,
+      );
+      expect(from).not.toHaveBeenCalled();
+    },
+  );
+  it("cannot report delivery when the capture write rejects the transaction", async () => {
+    const { db, rpc, from } = draftAcceptClient();
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "capture update denied", code: "42501" },
+    });
+    await expect(syncJournaledTaskDraftAccept(db, input)).rejects.toThrow(
+      "capture update denied",
     );
-
-    expect(result).toBe(PERSISTED_TASK_ID);
-    expect(userEq).toHaveBeenCalledWith("user_id", USER_ID);
-    expect(clientWriteEq).toHaveBeenCalledWith(
-      "client_write_id",
-      CLIENT_WRITE_ID,
-    );
+    expect(from).not.toHaveBeenCalled();
   });
-
-  it("returns no accepted task when the owner's client write id has no row", async () => {
-    const lookupClient = client();
-
-    await expect(
-      findJournaledTaskIdByClientWriteId(lookupClient, "missing-task-write"),
-    ).resolves.toBeNull();
+  it("allows a capture that has not reached the account yet", async () => {
+    const { db, rpc } = draftAcceptClient();
+    await syncJournaledTaskDraftAccept(db, {
+      ...input,
+      source_capture_item_id: null,
+    });
+    expect(rpc.mock.calls[0][1].p_task.source_capture_item_id).toBeNull();
+  });
+  it("keeps signed-out acceptance queued without claiming delivery", async () => {
+    expect(await syncJournaledTaskDraftAccept(null, input)).toEqual({
+      provider: "mock",
+      task: null,
+      proposal: null,
+      deduplicated: false,
+    });
+  });
+  it("fails before any write when the atomic server capability is missing", async () => {
+    const { db, from } = draftAcceptClient();
+    delete db.rpc;
+    await expect(syncJournaledTaskDraftAccept(db, input)).rejects.toMatchObject(
+      { failureKind: "server-capability-missing" },
+    );
+    expect(from).not.toHaveBeenCalled();
+  });
+  it("recovers the accepted task through the owner's original client write id", async () => {
+    const { db, from } = draftAcceptClient();
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValue({ data: draftAcceptTask, error: null });
+    const keyEq = vi.fn(() => ({ maybeSingle }));
+    const userEq = vi.fn(() => ({ eq: keyEq }));
+    from.mockReturnValue({ select: vi.fn(() => ({ eq: userEq })) });
+    expect(
+      await findJournaledTaskIdByClientWriteId(db, " journal-accept-1 "),
+    ).toBe(draftAcceptTask.id);
+    expect(userEq).toHaveBeenCalledWith("user_id", draftAcceptTask.user_id);
+    expect(keyEq).toHaveBeenCalledWith("client_write_id", "journal-accept-1");
+    maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    expect(await findJournaledTaskIdByClientWriteId(db, "missing")).toBeNull();
   });
 });
