@@ -103,6 +103,37 @@ describe("Google Calendar event insert helper", () => {
     expect(body.recurrence).toBeUndefined();
   });
 
+  it("uses an access token resolved before the approval claim without refreshing again", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: "lifeos550e8400e29b41d4a716446655440501" }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await insertGoogleCalendarEventForConnection({
+      connection,
+      description: null,
+      proposalId: "550e8400-e29b-41d4-a716-446655440501",
+      proposedEnd: "2026-05-10T17:00:00.000Z",
+      proposedStart: "2026-05-10T16:00:00.000Z",
+      providerAccessToken: "pre-resolved-google-token",
+      supabaseAccessToken: "supabase-access-token",
+      timezone: "America/Toronto",
+      title: "Call dentist tomorrow",
+    });
+
+    expect(mocks.resolveGoogleCalendarAccessToken).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer pre-resolved-google-token",
+        }),
+      }),
+    );
+  });
+
   it("treats a deterministic Google event id conflict as an idempotent insert result", async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify({ error: { code: 409 } }), {

@@ -5,7 +5,10 @@ import {
   getGoogleCalendarStoredConnectionForAccessToken,
 } from "@/lib/googleCalendar/server";
 import { getGoogleCalendarConfig } from "@/lib/googleCalendar/config";
-import { insertGoogleCalendarEventForConnection } from "@/lib/googleCalendar/events";
+import {
+  insertGoogleCalendarEventForConnection,
+  resolveGoogleCalendarWriteAccessToken,
+} from "@/lib/googleCalendar/events";
 import {
   claimGoogleCalendarApprovalForAccessToken,
   updateExternalWriteEventResultForAccessToken,
@@ -266,6 +269,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Resolve Google access BEFORE the durable claim. A refresh failure means
+    // no request reached Google, so it must not leave a reservation that
+    // blocks this task after the person reconnects.
+    const providerAccessToken = await resolveGoogleCalendarWriteAccessToken({
+      connection,
+      supabaseAccessToken: accessToken,
+    });
+
     const auditEvent = await claimGoogleCalendarApprovalForAccessToken(
       accessToken,
       {
@@ -299,6 +310,7 @@ export async function POST(request: Request) {
       proposalId: proposal.id,
       proposedEnd: proposal.proposed_end,
       proposedStart: proposal.proposed_start,
+      providerAccessToken,
       supabaseAccessToken: accessToken,
       timezone: input.timezone,
       title,

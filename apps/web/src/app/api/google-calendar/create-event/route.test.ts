@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getTaskForAccessToken: vi.fn(),
   getTimeBlockProposalForAccessToken: vi.fn(),
   insertGoogleCalendarEventForConnection: vi.fn(),
+  resolveGoogleCalendarWriteAccessToken: vi.fn(),
   markTimeBlockProposalAcceptedForAccessToken: vi.fn(),
   recordGoogleCalendarPlacementForAccessToken: vi.fn(),
   findGoogleBackedScheduledBlockForTaskForAccessToken: vi.fn(),
@@ -33,6 +34,8 @@ vi.mock("@/lib/googleCalendar/server", () => ({
 vi.mock("@/lib/googleCalendar/events", () => ({
   insertGoogleCalendarEventForConnection:
     mocks.insertGoogleCalendarEventForConnection,
+  resolveGoogleCalendarWriteAccessToken:
+    mocks.resolveGoogleCalendarWriteAccessToken,
 }));
 
 vi.mock("@/lib/externalWrites/server", () => ({
@@ -165,6 +168,9 @@ describe("google-calendar create-event route", () => {
     mocks.insertGoogleCalendarEventForConnection.mockResolvedValue({
       googleEventId: "google-event-1",
     });
+    mocks.resolveGoogleCalendarWriteAccessToken.mockResolvedValue(
+      "google-access-token",
+    );
     mocks.createCalendarBlockForProposalForAccessToken.mockResolvedValue(block);
     mocks.markTimeBlockProposalAcceptedForAccessToken.mockResolvedValue({
       ...proposal,
@@ -300,6 +306,57 @@ describe("google-calendar create-event route", () => {
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
     ).not.toHaveBeenCalled();
+  });
+
+  // Review fix: a Google sign-in that cannot be refreshed means no request
+  // reached Google. Reserving the approval first would keep the task blocked
+  // after the person reconnects (a new connection generation), with nothing
+  // on their calendar to cancel.
+  it("does not reserve the approval when Google access cannot be refreshed", async () => {
+    mocks.resolveGoogleCalendarWriteAccessToken.mockRejectedValue(
+      new Error("Google Calendar token refresh failed."),
+    );
+    const response = await POST(
+      request({
+        proposal_id: proposal.id,
+        approved: true,
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
+      }),
+    );
+    expect(response.status).toBe(502);
+    expect(
+      mocks.claimGoogleCalendarApprovalForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("sends the access token resolved before the claim to the Google insert", async () => {
+    const response = await POST(
+      request({
+        proposal_id: proposal.id,
+        approved: true,
+        approved_start: proposal.proposed_start,
+        approved_end: proposal.proposed_end,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.resolveGoogleCalendarWriteAccessToken).toHaveBeenCalledWith({
+      connection,
+      supabaseAccessToken: "supabase-access-token",
+    });
+    expect(
+      mocks.resolveGoogleCalendarWriteAccessToken.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      mocks.claimGoogleCalendarApprovalForAccessToken.mock
+        .invocationCallOrder[0]!,
+    );
+    expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ providerAccessToken: "google-access-token" }),
+    );
   });
 
   it.each(["provider timeout", "placement failure"])(
