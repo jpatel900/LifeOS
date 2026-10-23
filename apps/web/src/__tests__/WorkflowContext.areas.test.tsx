@@ -21,6 +21,7 @@ import {
 import CapturePage from "../app/capture/page";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
+import { clearStoredTaskDrafts } from "@/lib/durability/draftStore";
 import { stubParseCaptureFetch } from "./helpers/parseCaptureFetch";
 
 // #687: the demoted stage pages (/capture, /triage, /execute, ...) are
@@ -330,6 +331,9 @@ beforeEach(async () => {
   // test's `WorkflowProvider` mount effect. Same clear
   // `durableWinsReviewsGuard.test.tsx` has always done.
   await clearPendingWrites();
+  // Drafts are another real module-global store. A prior Sort must not become
+  // unrelated pending work in a later test that claims only a capture exists.
+  await clearStoredTaskDrafts();
 });
 
 afterEach(async () => {
