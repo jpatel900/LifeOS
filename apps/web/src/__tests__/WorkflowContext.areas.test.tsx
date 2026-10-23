@@ -1,6 +1,6 @@
 // #737 C1 S3: a triage accept is journalled to IndexedDB BEFORE any account
 // write, so a run with no IndexedDB exercises the device-blocked branch and
-// never reaches `createTask` at all.
+// never reaches the account acceptance RPC.
 import "fake-indexeddb/auto";
 import {
   act,
@@ -54,6 +54,7 @@ const {
   mockListExecutionReviewItems,
   mockCreateCaptureItem,
   mockSyncJournaledCapture,
+  mockAcceptRpc,
   mockCreateTask,
   mockCreateTimeBlockProposal,
   mockCreateSupabaseBrowserClient,
@@ -68,18 +69,18 @@ const {
   // not a direct `createCaptureItem` call — see `persistCapture` in
   // `lib/workflowContext/persistenceSync.ts`.
   mockSyncJournaledCapture: vi.fn(),
+  mockAcceptRpc: vi.fn(),
   mockCreateTask: vi.fn(),
   mockCreateTimeBlockProposal: vi.fn(),
-  // #737 C1 S3: the replay path calls `requireSupabaseUser` and looks the task
-  // up by `client_write_id` before deciding to insert, so the stand-in client
-  // needs those two surfaces. The lookup finds nothing, which is the ordinary
-  // first attempt.
+  // Replay authenticates and calls the transaction RPC. Query stubs remain
+  // for snapshot loading and compensation lookup.
   mockCreateSupabaseBrowserClient: vi.fn(() => {
     const maybeSingle = vi.fn(async () => ({ data: null, error: null }));
     const eqInner = vi.fn(() => ({ maybeSingle }));
     const eqOuter = vi.fn(() => ({ eq: eqInner }));
     return {
       mocked: true,
+      rpc: (...args: unknown[]) => mockAcceptRpc(...args),
       from: vi.fn(() => ({
         select: vi.fn(() => ({ eq: eqOuter })),
         upsert: vi.fn(async () => ({ error: null })),
@@ -112,15 +113,13 @@ vi.mock("@/lib/data/workflow", async () => {
   };
 });
 
-// #737 C1 S3: `syncJournaledTaskDraftAccept` imports its writes from the LEAF
-// modules rather than the barrel, so the barrel mock above no longer
-// intercepts them. The barrel mock stays for the `list*` reads, which
-// WorkflowContext still imports from it.
+// Stub optional post-commit learning. The barrel mock serves snapshot reads.
 vi.mock("@/lib/data/workflow/planning", async () => ({
   ...(await vi.importActual<typeof import("@/lib/data/workflow/planning")>(
     "@/lib/data/workflow/planning",
   )),
   createTask: mockCreateTask,
+  recordTaskAcceptance: vi.fn(),
 }));
 
 vi.mock("@/lib/data/workflow/calendar", async () => ({
@@ -475,6 +474,18 @@ describe("WorkflowProvider persisted area sync", () => {
   });
 
   it("persists Someday triage decisions as backlog tasks when signed in", async () => {
+    mockAcceptRpc.mockImplementation(
+      async (_fn: string, args: { p_task: Record<string, unknown> }) => ({
+        data: {
+          task: { ...persistedTask, ...args.p_task },
+          proposal: null,
+          deduplicated: false,
+          accepted_links: [],
+        },
+        error: null,
+      }),
+    );
+
     // The capture already exists on the account — this test is about what
     // triage does with it, not about capturing it.
     mockListCaptureItems.mockResolvedValue({
@@ -531,12 +542,15 @@ describe("WorkflowProvider persisted area sync", () => {
     fireEvent.click(screen.getByRole("button", { name: "Someday" }));
 
     await waitFor(() => {
-      expect(mockCreateTask).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(mockAcceptRpc).toHaveBeenCalledWith(
+        "accept_task_draft",
         expect.objectContaining({
-          area_id: persistedArea.id,
-          status: "backlog",
-          title: "Review the future idea",
+          p_task: expect.objectContaining({
+            area_id: persistedArea.id,
+            status: "backlog",
+            title: "Review the future idea",
+          }),
+          p_proposal: null,
         }),
       );
     });
@@ -669,6 +683,7 @@ describe("WorkflowProvider persisted area sync", () => {
       const eqOuter = vi.fn(() => ({ eq: eqInner }));
       return {
         mocked: true,
+        rpc: (...args: unknown[]) => mockAcceptRpc(...args),
         from: vi.fn(() => ({
           select: vi.fn(() => ({ eq: eqOuter })),
           upsert: vi.fn(async () => ({ error: null })),
