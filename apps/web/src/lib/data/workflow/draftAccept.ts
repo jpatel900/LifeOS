@@ -146,6 +146,27 @@ const mentionSchema = z.object({
   name: z.string(),
   role: z.enum(["waiting_on", "committed_to", "mention"]),
 });
+const acceptProposalSchema = z
+  .object({
+    proposed_start: z.string().datetime({ offset: true }),
+    proposed_end: z.string().datetime({ offset: true }),
+    rationale: z.string(),
+  })
+  .refine(
+    (proposal) =>
+      Date.parse(proposal.proposed_end) > Date.parse(proposal.proposed_start),
+  );
+/**
+ * The proposal is an optional suggestion minted with the accept. One the
+ * database would reject must not roll back, and so block forever, the task
+ * the person decided on: drop it and accept the task alone.
+ */
+function validAcceptProposal(
+  proposal: JournaledAcceptProposal | null,
+): JournaledAcceptProposal | null {
+  if (!proposal) return null;
+  return acceptProposalSchema.safeParse(proposal).success ? proposal : null;
+}
 const acceptanceResultSchema = z.object({
   task: z.unknown(),
   proposal: z.unknown(),
@@ -209,7 +230,10 @@ export async function syncJournaledTaskDraftAccept(
       .string()
       .datetime({ offset: true })
       .parse(input.accepted_at),
-    p_proposal: input.task_status === "active" ? input.proposal : null,
+    p_proposal:
+      input.task_status === "active"
+        ? validAcceptProposal(input.proposal)
+        : null,
   });
   if (error) throw toPersistenceWriteError(error);
   const result = acceptanceResultSchema.parse(data);

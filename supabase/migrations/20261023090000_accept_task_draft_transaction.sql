@@ -140,20 +140,26 @@ begin
     select status into v_capture_status from public.capture_items
       where id = v_capture and user_id = v_user for update;
     if not found then
-      raise exception 'Draft capture was not found.' using errcode = '42501';
-    end if;
-    if v_capture_status in ('new', 'parsed', 'triage_required') then
-      update public.capture_items set status = 'resolved'
-        where id = v_capture and user_id = v_user;
-      if not found then
-        raise exception 'Draft capture could not be resolved.' using errcode = '42501';
+      -- On a replay the task already landed. Its capture may since have been
+      -- deleted (the FK nulls the link), so there is nothing left to resolve.
+      -- Raising here would retry this journal entry forever.
+      if not v_deduplicated then
+        raise exception 'Draft capture was not found.' using errcode = '42501';
       end if;
-    end if;
-    if v_task.source_capture_item_id is null then
-      update public.tasks set source_capture_item_id = v_capture
-        where id = v_task.id and user_id = v_user returning * into v_task;
-      if not found then
-        raise exception 'Draft task could not be linked.' using errcode = '42501';
+    else
+      if v_capture_status in ('new', 'parsed', 'triage_required') then
+        update public.capture_items set status = 'resolved'
+          where id = v_capture and user_id = v_user;
+        if not found then
+          raise exception 'Draft capture could not be resolved.' using errcode = '42501';
+        end if;
+      end if;
+      if v_task.source_capture_item_id is null then
+        update public.tasks set source_capture_item_id = v_capture
+          where id = v_task.id and user_id = v_user returning * into v_task;
+        if not found then
+          raise exception 'Draft task could not be linked.' using errcode = '42501';
+        end if;
       end if;
     end if;
   end if;

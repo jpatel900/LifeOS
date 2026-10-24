@@ -137,6 +137,43 @@ describe("draft acceptance transaction boundary", () => {
       expect.objectContaining({ p_accepted_at: accepted_at }),
     );
   });
+  // Review round 2: a malformed optional proposal must not roll back (and
+  // so block forever) the accept itself.
+  it.each([
+    {
+      proposed_start: "2026-10-24T16:00:00.000Z",
+      proposed_end: "2026-10-24T15:00:00.000Z",
+      rationale: "End before start",
+    },
+    {
+      proposed_start: "not a time",
+      proposed_end: "2026-10-24T15:00:00.000Z",
+      rationale: "Bad start",
+    },
+  ])(
+    "drops an invalid optional proposal and still accepts the task",
+    async (proposal) => {
+      const { db, rpc } = client();
+      await syncJournaledTaskDraftAccept(db, { ...input, proposal });
+      expect(rpc).toHaveBeenCalledWith(
+        "accept_task_draft",
+        expect.objectContaining({ p_proposal: null }),
+      );
+    },
+  );
+  it("keeps a valid offset-form proposal", async () => {
+    const { db, rpc } = client();
+    const proposal = {
+      proposed_start: "2026-10-24T16:00:00+00:00",
+      proposed_end: "2026-10-24T16:30:00+00:00",
+      rationale: "Fits the morning",
+    };
+    await syncJournaledTaskDraftAccept(db, { ...input, proposal });
+    expect(rpc).toHaveBeenCalledWith(
+      "accept_task_draft",
+      expect.objectContaining({ p_proposal: proposal }),
+    );
+  });
   it("keeps the no-account accept queued", async () => {
     expect(await syncJournaledTaskDraftAccept(null, input)).toEqual({
       provider: "mock",

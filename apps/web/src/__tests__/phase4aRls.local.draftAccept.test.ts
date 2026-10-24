@@ -158,6 +158,35 @@ local("atomic draft acceptance — real local PostgreSQL", () => {
     }
   });
 
+  it("replays an already-landed accept after its source capture was deleted", async () => {
+    const client = await signIn("a");
+    const key = randomUUID();
+    const captureId = await capture(client);
+    try {
+      const first = await client.rpc(
+        "accept_task_draft",
+        args(key, areaA, captureId),
+      );
+      expect(first.error).toBeNull();
+      const removed = await client
+        .from("capture_items")
+        .delete()
+        .eq("id", captureId);
+      expect(removed.error).toBeNull();
+      const replay = await client.rpc(
+        "accept_task_draft",
+        args(key, areaA, captureId),
+      );
+      expect(replay.error).toBeNull();
+      expect(replay.data).toMatchObject({
+        deduplicated: true,
+        task: { id: first.data.task.id, source_capture_item_id: null },
+      });
+    } finally {
+      await clean(client, key);
+    }
+  });
+
   it("accepts a backlog draft with no proposal and still resolves its capture", async () => {
     const client = await signIn("a");
     const key = randomUUID();
