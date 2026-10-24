@@ -2086,6 +2086,182 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const adoptDeviceAccount = useCallback(
+    (account: DeviceAccount) => {
+      if (getDeviceAccount() === account) return;
+      setDeviceAccount(account);
+      deviceVisibilityRefreshRef.current = Promise.all([
+        refreshUnsyncedCount(),
+        refreshJournalledDurableState(),
+      ]).then(() => undefined);
+    },
+    [refreshUnsyncedCount, refreshJournalledDurableState],
+  );
+
+  // W3-16 #4: the replay -> account readback -> device-evidence release
+  // sequence, moved out of `runAccountSync` unchanged so the reconnect
+  // (`online`) path can run the SAME sequence instead of releasing device
+  // evidence the account never confirmed. Every comment below is from its
+  // original home; "this pass" means one call of this function.
+  const replayAndReleaseJournal = useCallback(
+    async (client: MinimalSupabaseClient): Promise<void> => {
+      // #967 follow-up review, finding 1: the identity this pass is
+      // accountable to, captured BEFORE the pending-period snapshot and
+      // replay even start — see `readbackAccountReviewClosedDays`'s own
+      // comment for why capturing it any later cannot detect a session
+      // change that happens during replay itself.
+      let expectedUserId: string | null = null;
+      try {
+        const identityGeneration = deviceIdentityGenerationRef.current;
+        const currentUser = await client.auth?.getUser();
+        if (!mountedRef.current) return;
+        expectedUserId = currentUser?.data.user?.id ?? null;
+        // W3-16 #1: the replay below sends only this account's own
+        // device-held work (see `durability/deviceAccount.ts`). Only a
+        // clean answer moves it: supabase-js reports a network or
+        // auth-server failure as `{ user: null, error }`, which means
+        // "not known", never "signed out".
+        // An auth event or provider cleanup supersedes this read,
+        // even if it eventually returns a clean but older identity.
+        if (
+          currentUser &&
+          !currentUser.error &&
+          identityGeneration === deviceIdentityGenerationRef.current
+        ) {
+          adoptDeviceAccount(expectedUserId);
+        }
+      } catch {
+        expectedUserId = null;
+      }
+
+      // An auth event can also establish the owner while getUser is
+      // pending. Snapshot its visible device evidence before replay
+      // removes rows. If another event starts a newer refresh, wait
+      // for that one too.
+      let visibilityRefresh: Promise<void>;
+      do {
+        visibilityRefresh = deviceVisibilityRefreshRef.current;
+        await visibilityRefresh;
+        if (!mountedRef.current) return;
+      } while (visibilityRefresh !== deviceVisibilityRefreshRef.current);
+
+      // #967 review: the specific daily-review periods this pass is
+      // responsible for confirming, snapshotted IMMEDIATELY BEFORE
+      // replay removes them from the journal — a successful account
+      // read afterward is only trusted to release journal-derived
+      // evidence for periods THIS list names (see
+      // `readbackAccountReviewClosedDays`'s own comment).
+      //
+      // #967 follow-up review, finding 2: a failed snapshot must NOT be
+      // treated as "nothing pending" — `expectedDailyPeriods` staying
+      // `[]` makes the readback's own `every(...)` vacuously true, which
+      // would authorize clearing journal-derived evidence for a day this
+      // pass never actually confirmed. `expectedDailyPeriodsSnapshotFailed`
+      // tracks that distinction separately from an honestly-empty list.
+      let expectedDailyPeriods: string[] = [];
+      let expectedDailyPeriodsSnapshotFailed = false;
+      try {
+        // W3-16 #1: only this account's own (or unowned) closes. Another
+        // account's held close can never be confirmed by this account's
+        // readback, and must not block this account's own release.
+        expectedDailyPeriods = visibleToAccount(
+          await listPendingWrites("review"),
+        )
+          .map(
+            (write) =>
+              write.payload as {
+                review_type?: unknown;
+                period_start?: unknown;
+              },
+          )
+          .filter(
+            (
+              payload,
+            ): payload is {
+              review_type: "daily";
+              period_start: string;
+            } =>
+              payload.review_type === "daily" &&
+              typeof payload.period_start === "string",
+          )
+          .map((payload) => payload.period_start);
+      } catch {
+        expectedDailyPeriodsSnapshotFailed = true;
+      }
+
+      // ORDERING IS LOAD-BEARING (#960 defect 1) — this must run AFTER
+      // the two calls above have populated `persistedAreasRef`.
+      try {
+        await replayJournaledWrites();
+      } catch {
+        // Best-effort: the journal stays populated and the next
+        // mount, reconnect, or sign-in retries it.
+      }
+      // #960 review finding 1: this was the only `replayJournaledWrites`
+      // call site with no matching refresh (compare the "sync on mount"
+      // effect and `persistCapture`/`persistMarkedSession` and friends,
+      // every one of which re-reads the journal right after draining
+      // it). Without this, a fully successful drain left
+      // `pendingLocalChanges` stale — `markAccountSynced` below reads it
+      // SYNCHRONOUSLY, so a stale `true` kept the masthead claiming
+      // "some work is saved on this device" even though nothing was.
+      // Awaited (not fire-and-forget) so `markAccountSynced` sees the
+      // POST-drain count on this very call, not one refresh cycle late.
+      if (!mountedRef.current) return;
+      await refreshPendingLocalChanges();
+      // #967 follow-up review, finding 2: refresh ONLY
+      // `pendingSaveFailed` unconditionally right after replay — a
+      // write that just failed to reach the account, by definition,
+      // cannot have its day confirmed by the review readback below,
+      // so gating this specific flag behind that confirmation would
+      // mean it never updates on the pass that most needs it. The
+      // other four journalled arrays (closed days, logged wins,
+      // completed session days, rollup keys) each have their own real
+      // account tier — see `refreshJournalledDurableState`'s own
+      // comment — and stay gated behind the confirmation below exactly
+      // as before; `refreshPendingSaveFailed` is a narrower sibling
+      // that touches none of them.
+      if (!mountedRef.current) return;
+      await refreshPendingSaveFailed(client, expectedUserId);
+      // #967: transfer a successfully replayed daily close to the
+      // account tier BEFORE the journal refresh below can clear its
+      // device-tier evidence — see `readbackAccountReviewClosedDays`'s
+      // own comment. A failed readback must not invent account
+      // confirmation, so `refreshJournalledDurableState` (the only
+      // thing that can drop `journalledClosedDays`) is skipped this
+      // pass rather than let a review with no account-tier evidence
+      // yet lose its device-tier evidence too; the next mount,
+      // reconnect, or sign-in reconciles it.
+      //
+      // #967 follow-up review, finding 2: the readback still runs even
+      // when the snapshot failed — it is truthful about what the
+      // account currently holds and worth recording — but its boolean
+      // is not enough by itself to authorize the journal refresh when
+      // the snapshot itself is the reason `expectedDailyPeriods` is
+      // empty, rather than there honestly being nothing to confirm.
+      const accountConfirmedExpectedDays =
+        await readbackAccountReviewClosedDays(
+          client,
+          expectedDailyPeriods,
+          expectedUserId,
+        );
+      if (
+        accountConfirmedExpectedDays &&
+        !expectedDailyPeriodsSnapshotFailed
+      ) {
+        await refreshJournalledDurableState();
+      }
+    },
+    [
+      adoptDeviceAccount,
+      replayJournaledWrites,
+      refreshPendingLocalChanges,
+      refreshJournalledDurableState,
+      refreshPendingSaveFailed,
+      readbackAccountReviewClosedDays,
+    ],
+  );
+
   // #960 defects 1/2: extracted so both the mount effect below and the
   // auth-state listener effect after it can run the SAME account-sync body.
   // This used to be inline in one effect with an all-`[]` mount trigger;
@@ -2107,18 +2283,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // Owner changes must reveal retained device evidence even while offline.
   // Same-owner events do not refresh: a drained close may still be awaiting
   // account confirmation under the post-replay readback gate below.
-  const adoptDeviceAccount = useCallback(
-    (account: DeviceAccount) => {
-      if (getDeviceAccount() === account) return;
-      setDeviceAccount(account);
-      deviceVisibilityRefreshRef.current = Promise.all([
-        refreshUnsyncedCount(),
-        refreshJournalledDurableState(),
-      ]).then(() => undefined);
-    },
-    [refreshUnsyncedCount, refreshJournalledDurableState],
-  );
-
   const runAccountSync = useCallback(
     async (options?: { replayAfter?: boolean }): Promise<void> => {
       // #960 defect 1: the mount effect and a `SIGNED_IN` event can land in
@@ -2150,152 +2314,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           });
           if (!mountedRef.current) return;
           if (options?.replayAfter) {
-            // #967 follow-up review, finding 1: the identity this pass is
-            // accountable to, captured BEFORE the pending-period snapshot and
-            // replay even start — see `readbackAccountReviewClosedDays`'s own
-            // comment for why capturing it any later cannot detect a session
-            // change that happens during replay itself.
-            let expectedUserId: string | null = null;
-            try {
-              const identityGeneration = deviceIdentityGenerationRef.current;
-              const currentUser = await client.auth?.getUser();
-              if (!mountedRef.current) return;
-              expectedUserId = currentUser?.data.user?.id ?? null;
-              // W3-16 #1: the replay below sends only this account's own
-              // device-held work (see `durability/deviceAccount.ts`). Only a
-              // clean answer moves it: supabase-js reports a network or
-              // auth-server failure as `{ user: null, error }`, which means
-              // "not known", never "signed out".
-              // An auth event or provider cleanup supersedes this read,
-              // even if it eventually returns a clean but older identity.
-              if (
-                currentUser &&
-                !currentUser.error &&
-                identityGeneration === deviceIdentityGenerationRef.current
-              ) {
-                adoptDeviceAccount(expectedUserId);
-              }
-            } catch {
-              expectedUserId = null;
-            }
-
-            // An auth event can also establish the owner while getUser is
-            // pending. Snapshot its visible device evidence before replay
-            // removes rows. If another event starts a newer refresh, wait
-            // for that one too.
-            let visibilityRefresh: Promise<void>;
-            do {
-              visibilityRefresh = deviceVisibilityRefreshRef.current;
-              await visibilityRefresh;
-              if (!mountedRef.current) return;
-            } while (visibilityRefresh !== deviceVisibilityRefreshRef.current);
-
-            // #967 review: the specific daily-review periods this pass is
-            // responsible for confirming, snapshotted IMMEDIATELY BEFORE
-            // replay removes them from the journal — a successful account
-            // read afterward is only trusted to release journal-derived
-            // evidence for periods THIS list names (see
-            // `readbackAccountReviewClosedDays`'s own comment).
-            //
-            // #967 follow-up review, finding 2: a failed snapshot must NOT be
-            // treated as "nothing pending" — `expectedDailyPeriods` staying
-            // `[]` makes the readback's own `every(...)` vacuously true, which
-            // would authorize clearing journal-derived evidence for a day this
-            // pass never actually confirmed. `expectedDailyPeriodsSnapshotFailed`
-            // tracks that distinction separately from an honestly-empty list.
-            let expectedDailyPeriods: string[] = [];
-            let expectedDailyPeriodsSnapshotFailed = false;
-            try {
-              // W3-16 #1: only this account's own (or unowned) closes. Another
-              // account's held close can never be confirmed by this account's
-              // readback, and must not block this account's own release.
-              expectedDailyPeriods = visibleToAccount(
-                await listPendingWrites("review"),
-              )
-                .map(
-                  (write) =>
-                    write.payload as {
-                      review_type?: unknown;
-                      period_start?: unknown;
-                    },
-                )
-                .filter(
-                  (
-                    payload,
-                  ): payload is {
-                    review_type: "daily";
-                    period_start: string;
-                  } =>
-                    payload.review_type === "daily" &&
-                    typeof payload.period_start === "string",
-                )
-                .map((payload) => payload.period_start);
-            } catch {
-              expectedDailyPeriodsSnapshotFailed = true;
-            }
-
-            // ORDERING IS LOAD-BEARING (#960 defect 1) — this must run AFTER
-            // the two calls above have populated `persistedAreasRef`.
-            try {
-              await replayJournaledWrites();
-            } catch {
-              // Best-effort: the journal stays populated and the next
-              // mount, reconnect, or sign-in retries it.
-            }
-            // #960 review finding 1: this was the only `replayJournaledWrites`
-            // call site with no matching refresh (compare the "sync on mount"
-            // effect and `persistCapture`/`persistMarkedSession` and friends,
-            // every one of which re-reads the journal right after draining
-            // it). Without this, a fully successful drain left
-            // `pendingLocalChanges` stale — `markAccountSynced` below reads it
-            // SYNCHRONOUSLY, so a stale `true` kept the masthead claiming
-            // "some work is saved on this device" even though nothing was.
-            // Awaited (not fire-and-forget) so `markAccountSynced` sees the
-            // POST-drain count on this very call, not one refresh cycle late.
-            if (!mountedRef.current) return;
-            await refreshPendingLocalChanges();
-            // #967 follow-up review, finding 2: refresh ONLY
-            // `pendingSaveFailed` unconditionally right after replay — a
-            // write that just failed to reach the account, by definition,
-            // cannot have its day confirmed by the review readback below,
-            // so gating this specific flag behind that confirmation would
-            // mean it never updates on the pass that most needs it. The
-            // other four journalled arrays (closed days, logged wins,
-            // completed session days, rollup keys) each have their own real
-            // account tier — see `refreshJournalledDurableState`'s own
-            // comment — and stay gated behind the confirmation below exactly
-            // as before; `refreshPendingSaveFailed` is a narrower sibling
-            // that touches none of them.
-            if (!mountedRef.current) return;
-            await refreshPendingSaveFailed(client, expectedUserId);
-            // #967: transfer a successfully replayed daily close to the
-            // account tier BEFORE the journal refresh below can clear its
-            // device-tier evidence — see `readbackAccountReviewClosedDays`'s
-            // own comment. A failed readback must not invent account
-            // confirmation, so `refreshJournalledDurableState` (the only
-            // thing that can drop `journalledClosedDays`) is skipped this
-            // pass rather than let a review with no account-tier evidence
-            // yet lose its device-tier evidence too; the next mount,
-            // reconnect, or sign-in reconciles it.
-            //
-            // #967 follow-up review, finding 2: the readback still runs even
-            // when the snapshot failed — it is truthful about what the
-            // account currently holds and worth recording — but its boolean
-            // is not enough by itself to authorize the journal refresh when
-            // the snapshot itself is the reason `expectedDailyPeriods` is
-            // empty, rather than there honestly being nothing to confirm.
-            const accountConfirmedExpectedDays =
-              await readbackAccountReviewClosedDays(
-                client,
-                expectedDailyPeriods,
-                expectedUserId,
-              );
-            if (
-              accountConfirmedExpectedDays &&
-              !expectedDailyPeriodsSnapshotFailed
-            ) {
-              await refreshJournalledDurableState();
-            }
+            await replayAndReleaseJournal(client);
           }
           if (!mountedRef.current) return;
           markAccountSynced({ preserveLocalOnlyWhilePending: true });
@@ -2312,17 +2331,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     },
     [
-      adoptDeviceAccount,
       applyPersistedAreas,
       markAccountSynced,
       markPersistedLoadFailure,
       markLocalOnly,
       syncPersistedWorkflowRows,
-      replayJournaledWrites,
-      refreshPendingLocalChanges,
-      refreshJournalledDurableState,
-      refreshPendingSaveFailed,
-      readbackAccountReviewClosedDays,
+      replayAndReleaseJournal,
     ],
   );
 
