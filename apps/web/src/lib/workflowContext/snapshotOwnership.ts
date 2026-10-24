@@ -79,10 +79,18 @@ const collections: SnapshotCollection[] = [
   ...deviceCollections,
 ];
 type Row = { id: string; [key: string]: unknown };
-type Stamp = { revision: number; pending: boolean; acknowledgedAt?: number };
+type Stamp = {
+  revision: number;
+  pending: boolean;
+  acknowledgedAt?: number;
+  /** Came from a saved copy (page reload), not from an edit in this page. */
+  restored?: boolean;
+};
 type Owner = {
   creation?: Stamp;
   fields: Record<string, Stamp>;
+  /** The account row version (`updated_at`) this device last read. */
+  base?: string;
   accountId?: string;
   inferredIdentity?: boolean;
   transfers?: SnapshotReceipt[];
@@ -230,6 +238,10 @@ export function trackSnapshotChanges(
       for (const field of fieldsFor(collection, row)) {
         if (equal(old[field], row[field])) continue;
         const owner = (group[key] ??= { fields: {} });
+        // The edit was made against the row version the device held. Later
+        // reads keep this current; it decides whether a saved copy is older.
+        if (owner.base === undefined && typeof old.updated_at === "string")
+          owner.base = old.updated_at;
         owner.fields[field] = { revision, pending: true };
         changed = true;
       }
@@ -389,11 +401,16 @@ export function reconcileSnapshotRead(
       )?.find((row) => row.id === persistedId);
       // A retained local row from the old merge is not account evidence.
       if (!remote) {
+        // A saved copy cannot resurrect a row the account no longer returns.
+        for (const stamp of Object.values(owner.fields))
+          if (stamp.restored && stamp.pending) acknowledge(stamp);
         const mustKeep =
           owner.creation?.pending ||
           (owner.creation && watermark(owner.creation) > cursor.revision) ||
           Object.values(owner.fields).some(
-            (stamp) => stamp.pending || watermark(stamp) > cursor.revision,
+            (stamp) =>
+              !stamp.restored &&
+              (stamp.pending || watermark(stamp) > cursor.revision),
           );
         if (mustKeep) {
           const at = output.findIndex((row) => row.id === local.id);
@@ -423,13 +440,27 @@ export function reconcileSnapshotRead(
       if (unconfirmedCreation)
         for (const field of fieldsFor(collection, local))
           resolved[field] = canonical(before, field, local[field]);
+      // An older saved copy never overwrites newer account data: a restored,
+      // unsent edit keeps its value only while the account row is provably
+      // the version this device last read. No recorded version means no proof.
+      const remoteVersion =
+        typeof remote.updated_at === "string" ? remote.updated_at : undefined;
+      const accountNewer =
+        !owner.base ||
+        !remoteVersion ||
+        !(Date.parse(remoteVersion) <= Date.parse(owner.base));
       for (const [field, stamp] of Object.entries(owner.fields)) {
         const localValue = canonical(before, field, local[field]);
         const remoteValue = canonical(before, field, remote[field]);
         const protect = watermark(stamp) > cursor.revision;
+        if (stamp.restored && stamp.pending && accountNewer && !protect) {
+          acknowledge(stamp);
+          continue;
+        }
         if (!protect && equal(localValue, remoteValue)) acknowledge(stamp);
         if (stamp.pending || protect) resolved[field] = localValue;
       }
+      if (remoteVersion) owner.base = remoteVersion;
       if (index < 0) output.push(resolved);
       else output[index] = resolved;
       if (id !== persistedId) {
@@ -491,6 +522,7 @@ export function normalizeSnapshotOwnership(
     counter(stamp.revision) &&
     stamp.revision <= (value.revision as number) &&
     typeof stamp.pending === "boolean" &&
+    (stamp.restored === undefined || typeof stamp.restored === "boolean") &&
     (stamp.acknowledgedAt === undefined ||
       (counter(stamp.acknowledgedAt) &&
         stamp.acknowledgedAt <= (value.revision as number)));
@@ -533,6 +565,11 @@ export function normalizeSnapshotOwnership(
       if (owner.accountId !== undefined && typeof owner.accountId !== "string")
         return undefined;
       if (
+        owner.base !== undefined &&
+        (typeof owner.base !== "string" || Number.isNaN(Date.parse(owner.base)))
+      )
+        return undefined;
+      if (
         owner.inferredIdentity !== undefined &&
         typeof owner.inferredIdentity !== "boolean"
       )
@@ -554,11 +591,20 @@ export function normalizeSnapshotOwnership(
   return value as unknown as SnapshotOwnership;
 }
 
-/** Older snapshots have no receipts. Keep their user payload until readback
- * agrees, rather than infer delivery from UUID shape or empty queues. */
+/** A saved copy is older evidence than the account. Its unsent edits are
+ * marked restored, so a newer account row wins on the next read. Snapshots
+ * without valid bookkeeping keep only never-delivered local rows pending; rows
+ * the account already holds take the account's values (the pre-#967 merge). */
 export function restoreSnapshotOwnership(state: WorkflowState): WorkflowState {
   const valid = normalizeSnapshotOwnership(state.snapshotOwnership);
-  if (valid) return { ...state, snapshotOwnership: valid };
+  if (valid) {
+    const marked = structuredClone(valid);
+    for (const group of Object.values(marked.rows))
+      for (const owner of Object.values(group ?? {}))
+        for (const stamp of Object.values(owner.fields))
+          if (stamp.pending) stamp.restored = true;
+    return { ...state, snapshotOwnership: marked };
+  }
   // Rejected bookkeeping must not influence either access or inferred identity.
   // The user rows and independently validated account aliases remain intact.
   const recovered = { ...state, snapshotOwnership: undefined };
@@ -573,20 +619,19 @@ export function restoreSnapshotOwnership(state: WorkflowState): WorkflowState {
         !/^[0-9a-f]{8}-/i.test(row.id)
       )
         continue;
-      const owner: Owner = { fields: {} };
+      // Only a row that never reached the account carries delivery debt.
+      // Account-held rows get no stamps, so the next read is authoritative.
       if (
         /^(area|capture|task-draft|project-draft|proposal-draft|project|task|proposal|block|session)-\d+$/.test(
           row.id,
         ) &&
         accountId(recovered, collection, row.id) === row.id
       ) {
-        owner.creation = { revision: 1, pending: true };
-      } else {
-        for (const field of fieldsFor(collection, row))
-          if (row[field] !== undefined)
-            owner.fields[field] = { revision: 1, pending: true };
+        (metadata.rows[collection] ??= {})[row.id] = {
+          creation: { revision: 1, pending: true },
+          fields: {},
+        };
       }
-      (metadata.rows[collection] ??= {})[row.id] = owner;
     }
   }
   return { ...recovered, snapshotOwnership: metadata };

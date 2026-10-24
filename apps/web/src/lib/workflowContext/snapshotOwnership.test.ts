@@ -305,23 +305,73 @@ describe("snapshot state ownership (#967)", () => {
     expect(hasSnapshotWork(repaired)).toBe(true);
   });
 
-  it("preserves a legacy account task's differing intent until a matching read arrives", () => {
+  // Review rework (#1106): an older saved copy must never overwrite newer
+  // account data. A legacy snapshot carries no delivery evidence, so the
+  // account read wins for rows the account already holds (the pre-#967 merge).
+  it("never lets a legacy saved copy overwrite a newer account value", () => {
     const legacy = accountTask();
     delete legacy.snapshotOwnership;
     const original = legacy.tasks[0];
     const restored = reloadWorkflowState(legacy);
-    const different = readTasks(restored, [
-      { ...original, title: "Different account title" },
+    // The account-held task carries no delivery debt from the legacy copy.
+    // (Its never-delivered local capture still does, correctly.)
+    expect(restored.snapshotOwnership?.rows.tasks).toBeUndefined();
+    const newer = readTasks(restored, [
+      {
+        ...original,
+        title: "Edited on another device",
+        updated_at: "2099-01-01T00:00:00.000Z",
+      },
     ]);
-    expect(different.tasks[0].title).toBe(original.title);
-    expect(hasSnapshotWork(different)).toBe(true);
-    const taskOwner = readTasks(different, [original]).snapshotOwnership?.rows
-      .tasks;
-    expect(
-      Object.values(taskOwner ?? {}).every((owner) =>
-        Object.values(owner.fields).every((field) => !field.pending),
-      ),
-    ).toBe(true);
+    expect(newer.tasks[0].title).toBe("Edited on another device");
+    expect(newer.snapshotOwnership?.rows.tasks).toBeUndefined();
+  });
+
+  it("does not resurrect an account row deleted elsewhere from a legacy saved copy", () => {
+    const legacy = accountTask();
+    delete legacy.snapshotOwnership;
+    const restored = reloadWorkflowState(legacy);
+    expect(readTasks(restored, []).tasks).toEqual([]);
+  });
+
+  it("a restored unsent edit yields to a newer account version of the row", () => {
+    const initial = accountTask();
+    const original = initial.tasks[0];
+    const seen = readTasks(initial, [
+      { ...original, updated_at: "2026-10-01T00:00:00.000Z" },
+    ]);
+    const edited = workflowReducer(seen, {
+      type: "updateTaskFirstTinyStep",
+      taskId: TASK_ID,
+      firstTinyStep: "Unsent device edit",
+    });
+    const restored = reloadWorkflowState(edited);
+    expect(hasSnapshotWork(restored)).toBe(true);
+    const newer = readTasks(restored, [
+      {
+        ...original,
+        first_tiny_step: "Newer account edit",
+        updated_at: "2026-10-02T00:00:00.000Z",
+      },
+    ]);
+    expect(newer.tasks[0].first_tiny_step).toBe("Newer account edit");
+    expect(hasSnapshotWork(newer)).toBe(false);
+  });
+
+  it("a restored unsent edit survives while the account row is unchanged since it was seen", () => {
+    const initial = accountTask();
+    const original = initial.tasks[0];
+    const accountRow = { ...original, updated_at: "2026-10-01T00:00:00.000Z" };
+    const seen = readTasks(initial, [accountRow]);
+    const edited = workflowReducer(seen, {
+      type: "updateTaskFirstTinyStep",
+      taskId: TASK_ID,
+      firstTinyStep: "Unsent device edit",
+    });
+    const restored = reloadWorkflowState(edited);
+    const same = readTasks(restored, [accountRow]);
+    expect(same.tasks[0].first_tiny_step).toBe("Unsent device edit");
+    expect(hasSnapshotWork(same)).toBe(true);
   });
 
   it("an echo with different block intent stays pending without reintroducing a duplicate", () => {
