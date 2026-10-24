@@ -3,14 +3,17 @@
 // must never be sent through account B's session. It waits on the device
 // for A, untouched.
 import "fake-indexeddb/auto";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 import {
   enqueueCapture,
   listPendingCaptures,
 } from "@/lib/capture/offlineQueue";
-import { setDeviceAccount } from "@/lib/durability/deviceAccount";
+import {
+  getDeviceAccount,
+  setDeviceAccount,
+} from "@/lib/durability/deviceAccount";
 
 const ACCOUNT_A = "44444444-4444-4444-8444-444444444444";
 const ACCOUNT_B = "55555555-5555-4555-8555-555555555555";
@@ -26,9 +29,13 @@ const {
   mockListSuggestionRecords,
   mockSyncQueuedCapture,
   mockGetUser,
+  authListener,
   mockCreateSupabaseBrowserClient,
 } = vi.hoisted(() => {
   const getUser = vi.fn();
+  const listener: {
+    callback: ((event: string, session: unknown) => void) | null;
+  } = { callback: null };
   return {
     mockListAreas: vi.fn(),
     mockListCaptureItems: vi.fn(),
@@ -40,9 +47,18 @@ const {
     mockListSuggestionRecords: vi.fn(),
     mockSyncQueuedCapture: vi.fn(async () => ({ provider: "supabase" })),
     mockGetUser: getUser,
+    authListener: listener,
     mockCreateSupabaseBrowserClient: vi.fn(() => ({
       mocked: true,
-      auth: { getUser },
+      auth: {
+        getUser,
+        onAuthStateChange: (
+          callback: (event: string, session: unknown) => void,
+        ) => {
+          listener.callback = callback;
+          return { data: { subscription: { unsubscribe: () => undefined } } };
+        },
+      },
     })),
   };
 });
@@ -154,6 +170,44 @@ describe("W3-16 #1 sibling: the offline queue holds a capture for its own accoun
     expect(left.map((capture) => capture.raw_text)).toEqual([
       "Account A offline thought",
     ]);
+  });
+
+  it("a failed identity read is 'not known', never 'signed out': A keeps ownership", async () => {
+    // An unowned signal capture: once it is sent, the mount's account sync
+    // (and its identity read) has finished.
+    await enqueueCapture({ rawText: "Signal capture", areaId: null });
+    // supabase-js answers a network or auth-server failure with an error
+    // object, not a throw.
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
+      error: { message: "fetch failed" },
+    });
+    // The account read answers after the auth event below, so the failed
+    // identity read really comes AFTER the device learned it is A.
+    mockListAreas.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ provider: "supabase", areas: [] }), 50),
+        ),
+    );
+
+    render(
+      <WorkflowProvider>
+        <div />
+      </WorkflowProvider>,
+    );
+    await act(async () => {
+      authListener.callback?.("INITIAL_SESSION", { user: { id: ACCOUNT_A } });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(sentTexts()).toContain("Signal capture"), {
+      timeout: 3000,
+    });
+    expect(getDeviceAccount()).toBe(ACCOUNT_A);
+    // A capture made now is still stamped as A's.
+    const made = await enqueueCapture({ rawText: "after", areaId: null });
+    expect(made.owner_user_id).toBe(ACCOUNT_A);
   });
 
   it("control: the same capture is sent once A is signed in again", async () => {

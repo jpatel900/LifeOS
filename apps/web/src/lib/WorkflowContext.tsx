@@ -2126,8 +2126,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               const currentUser = await client.auth?.getUser();
               expectedUserId = currentUser?.data.user?.id ?? null;
               // W3-16 #1: the replay below sends only this account's own
-              // device-held work (see `durability/deviceAccount.ts`).
-              if (currentUser) setDeviceAccount(expectedUserId);
+              // device-held work (see `durability/deviceAccount.ts`). Only a
+              // clean answer moves it: supabase-js reports a network or
+              // auth-server failure as `{ user: null, error }`, which means
+              // "not known", never "signed out".
+              if (currentUser && !currentUser.error) {
+                setDeviceAccount(expectedUserId);
+              }
             } catch {
               expectedUserId = null;
             }
