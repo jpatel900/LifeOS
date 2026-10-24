@@ -262,38 +262,32 @@ describe("offline drain when the chosen area is gone (W3-16 #8)", () => {
     );
   });
 
-  // KNOWN BUG (W3-16 #8): expected failure. A successful read with zero
-  // areas is treated as "not loaded yet", so the capture never leaves the
-  // queue. Flip to `it` once the drain tells the two apart.
-  it.fails(
-    "the account read succeeds with no areas, so the capture goes up once with no area",
-    async () => {
-      mockListAreas.mockResolvedValue({ provider: "supabase", areas: [] });
-      const { subject, signal } = await queueSubjectAndSignal();
+  // W3-16 #8: a successful read with zero areas counts as "areas known", so
+  // the capture whose area is gone goes up once with no area.
+  it("the account read succeeds with no areas, so the capture goes up once with no area", async () => {
+    mockListAreas.mockResolvedValue({ provider: "supabase", areas: [] });
+    const { subject, signal } = await queueSubjectAndSignal();
 
-      render(
-        <WorkflowProvider>
-          <div />
-        </WorkflowProvider>,
-      );
+    render(
+      <WorkflowProvider>
+        <div />
+      </WorkflowProvider>,
+    );
 
-      await waitForDrainSignal(signal.client_capture_id);
-      await waitFor(() =>
-        expect(sentIds()).toContain(subject.client_capture_id),
-      );
-      const subjectCalls = (mockSyncQueuedCapture.mock.calls as unknown[][])
-        .map((call) => call[1] as Record<string, unknown>)
-        .filter((args) => args.client_capture_id === subject.client_capture_id);
-      expect(subjectCalls).toHaveLength(1);
-      expect(subjectCalls[0]).toMatchObject({
-        raw_text: "Book physio",
-        area_id: null,
-        return_hook: "after lunch",
-        client_capture_id: subject.client_capture_id,
-      });
-      await waitFor(async () =>
-        expect(await listPendingCaptures()).toHaveLength(0),
-      );
-    },
-  );
+    await waitForDrainSignal(signal.client_capture_id);
+    await waitFor(() => expect(sentIds()).toContain(subject.client_capture_id));
+    const subjectCalls = (mockSyncQueuedCapture.mock.calls as unknown[][])
+      .map((call) => call[1] as Record<string, unknown>)
+      .filter((args) => args.client_capture_id === subject.client_capture_id);
+    expect(subjectCalls).toHaveLength(1);
+    expect(subjectCalls[0]).toMatchObject({
+      raw_text: "Book physio",
+      area_id: null,
+      return_hook: "after lunch",
+      client_capture_id: subject.client_capture_id,
+    });
+    await waitFor(async () =>
+      expect(await listPendingCaptures()).toHaveLength(0),
+    );
+  });
 });

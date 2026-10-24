@@ -366,6 +366,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const activeParseCaptureIdRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   const persistedAreasRef = useRef<Area[]>([]);
+  // W3-16 #8: true once an account area read has succeeded, even with zero
+  // areas. An empty `persistedAreasRef` alone cannot tell "not read yet" from
+  // "read, and the account has no areas".
+  const persistedAreasKnownRef = useRef(false);
   const persistedCaptureIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedTaskIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedProposalIdByLocalIdRef = useRef(new Map<string, string>());
@@ -558,6 +562,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
   const applyPersistedAreas = useCallback((areas: Area[]) => {
     persistedAreasRef.current = areas;
+    persistedAreasKnownRef.current = true;
     // The reactive twin of the ref above, set in the same beat so the two can
     // never disagree. Consumers that must RECOMPUTE when areas land (the
     // rollup suppression key) read this; everything that only needs the value
@@ -2580,10 +2585,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             persistedAreasRef.current,
           )
         : null;
+      // W3-16 #8: "the areas are known" is its own fact. An account read that
+      // succeeded with zero areas is known too, so a capture whose area is
+      // gone goes up with no area instead of staying queued forever.
       if (
         queued.area_id &&
         !persistedAreaId &&
-        persistedAreasRef.current.length === 0
+        !persistedAreasKnownRef.current
       ) {
         continue;
       }
