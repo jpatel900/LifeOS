@@ -10,7 +10,12 @@
 // which function each call is textually nested in), so this is called from
 // WorkflowProvider at the same relative position the four useCallbacks used
 // to occupy, unconditionally, every render.
-import { useCallback, type Dispatch, type MutableRefObject } from "react";
+import {
+  useCallback,
+  useRef,
+  type Dispatch,
+  type MutableRefObject,
+} from "react";
 import type { Area } from "@lifeos/schemas";
 import { requestTaskMapDraft as fetchTaskMapDraft } from "../ai/taskMapDraftClient";
 import { validateTaskMapForPersistence } from "../taskmap/persistence";
@@ -57,6 +62,13 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
     syncPersistedWorkflowRows,
   } = deps;
 
+  // W3-16 #9: monotonically increasing request id. Each request takes the
+  // next id; dismissing bumps it too, so a dismissed request can never match.
+  // `phase` + `taskId` alone cannot tell two requests for the SAME task
+  // apart (dismiss, then ask again). Kept in a ref, not in TaskMapDraftState,
+  // so the draft shapes consumers read stay unchanged.
+  const latestRequestIdRef = useRef(0);
+
   // #590 slice 4: these dep arrays are copied verbatim from the original
   // inline useCallback hooks in WorkflowContext.tsx (mechanical extraction —
   // no dependency-array changes allowed). eslint's exhaustive-deps can no
@@ -97,6 +109,8 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
         options?.revisionSignals && options.revisionSignals.length > 0
           ? ("revision" as const)
           : undefined;
+
+      const requestId = ++latestRequestIdRef.current;
 
       const setDraft = (next: TaskMapDraftState) => {
         taskMapDraftRef.current = next;
@@ -182,8 +196,10 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
             : null,
       });
 
-      // Ignore a stale response if the focused task changed mid-flight.
+      // Ignore a stale response: this request was dismissed or superseded by
+      // a newer one (even for the same task), or the focused task changed.
       if (
+        requestId !== latestRequestIdRef.current ||
         taskMapDraftRef.current.phase !== "pending" ||
         taskMapDraftRef.current.taskId !== taskId
       ) {
@@ -234,6 +250,8 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
       }
     }
 
+    // Invalidate any in-flight request so its late answer cannot land.
+    latestRequestIdRef.current += 1;
     taskMapDraftRef.current = { phase: "idle" };
     setTaskMapDraft({ phase: "idle" });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see note above
