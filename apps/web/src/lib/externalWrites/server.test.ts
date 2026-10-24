@@ -103,12 +103,10 @@ describe("external write audit helpers", () => {
   });
 
   it("propagates a typed conflict without leaking database copy", async () => {
-    const rpc = vi
-      .fn()
-      .mockResolvedValue({
-        data: null,
-        error: { code: "PCA01", message: "private database detail" },
-      });
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "PCA01", message: "private database detail" },
+    });
     mocks.requireSupabaseServiceRoleClient.mockReturnValue({ rpc });
     await expect(
       claimGoogleCalendarApprovalForAccessToken("token", approval),
