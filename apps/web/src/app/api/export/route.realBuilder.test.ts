@@ -31,22 +31,41 @@ const makeRequest = () =>
 const EARLY_TABLE = USER_DATA_EXPORT_TABLES[0];
 const FAILING_TABLE = USER_DATA_EXPORT_TABLES[4];
 
+// The builder reads each table in pages (`.order()` then `.range()`), the
+// way the real PostgREST client does. This fake answers the same calls.
+function pagedSelect(result: {
+  data: unknown[] | null;
+  error: { message: string; code?: string } | null;
+}) {
+  const query = {
+    order: vi.fn((): typeof query => query),
+    range: vi.fn(async (from: number, to: number) =>
+      result.error
+        ? { data: null, error: result.error }
+        : { data: (result.data ?? []).slice(from, to + 1), error: null },
+    ),
+  };
+  return query;
+}
+
 function clientFailingAt(error: { message: string; code?: string }) {
   const queried: string[] = [];
   const client = {
     from: vi.fn((table: string) => {
       queried.push(table);
       return {
-        select: vi.fn(async () =>
-          table === FAILING_TABLE
-            ? { data: null, error }
-            : {
-                data:
-                  table === EARLY_TABLE
-                    ? [{ id: "early-row", note: "synthetic" }]
-                    : [],
-                error: null,
-              },
+        select: vi.fn(() =>
+          pagedSelect(
+            table === FAILING_TABLE
+              ? { data: null, error }
+              : {
+                  data:
+                    table === EARLY_TABLE
+                      ? [{ id: "early-row", note: "synthetic" }]
+                      : [],
+                  error: null,
+                },
+          ),
         ),
       };
     }),
@@ -64,10 +83,12 @@ describe("GET /api/export with the real export builder (W3-16 #7)", () => {
     // No table fails in this control.
     const client = {
       from: vi.fn((table: string) => ({
-        select: vi.fn(async () => ({
-          data: table === EARLY_TABLE ? [{ id: "early-row" }] : [],
-          error: null,
-        })),
+        select: vi.fn(() =>
+          pagedSelect({
+            data: table === EARLY_TABLE ? [{ id: "early-row" }] : [],
+            error: null,
+          }),
+        ),
       })),
     };
     mocks.requireSupabaseServerUser.mockResolvedValue({
