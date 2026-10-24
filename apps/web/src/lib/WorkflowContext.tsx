@@ -107,7 +107,7 @@ import {
   clearQueue,
   listPendingCaptures,
   markCaptureSynced,
-  pendingCaptureCount,
+  visiblePendingCaptureCount,
 } from "./capture/offlineQueue";
 import {
   clearStoredTaskDrafts,
@@ -194,11 +194,15 @@ import {
 import {
   clearPendingWrites,
   listPendingWrites,
-  pendingWriteCount,
+  visiblePendingWriteCount,
   type PendingWrite,
   type ReplaySummary,
 } from "./durability/pendingWriteJournal";
-import { setDeviceAccount } from "./durability/deviceAccount";
+import {
+  maySendAs,
+  setDeviceAccount,
+  visibleToAccount,
+} from "./durability/deviceAccount";
 import type { PersistenceFailureKind } from "./persistenceFailureKind";
 // Final UX Loop C1, Target Cards 1+7 (audit P0#4): one definition of which
 // calendar day a close belongs to, and one answer to "is it closed already?".
@@ -663,7 +667,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const refreshPendingLocalChanges = useCallback(async () => {
     let queued: number;
     try {
-      queued = (await pendingWriteCount()) + (await pendingCaptureCount());
+      // W3-16 #1: only this account's own (or unowned) device-held work.
+      queued =
+        (await visiblePendingWriteCount()) +
+        (await visiblePendingCaptureCount());
     } catch {
       return;
     }
@@ -1763,7 +1770,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const myPendingSaveFailedGeneration =
       ++pendingSaveFailedGenerationRef.current;
     try {
-      const pending = await listPendingWrites();
+      // W3-16 #1: another account's held work is never shown to this one.
+      const pending = visibleToAccount(await listPendingWrites());
       // See `mountedRef`'s note above the ref/refs block — a provider
       // unmounted while this read was in flight must not touch state. One
       // check covers every setter below: none of them awaits between here
@@ -1929,7 +1937,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     ) => {
       const myGeneration = ++pendingSaveFailedGenerationRef.current;
       try {
-        const pending = await listPendingWrites();
+        const pending = visibleToAccount(await listPendingWrites());
         if (!mountedRef.current) return;
         if (pendingSaveFailedGenerationRef.current !== myGeneration) return;
 
@@ -2140,7 +2148,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             let expectedDailyPeriods: string[] = [];
             let expectedDailyPeriodsSnapshotFailed = false;
             try {
-              expectedDailyPeriods = (await listPendingWrites("review"))
+              // W3-16 #1: only this account's own (or unowned) closes. Another
+              // account's held close can never be confirmed by this account's
+              // readback, and must not block this account's own release.
+              expectedDailyPeriods = visibleToAccount(
+                await listPendingWrites("review"),
+              )
                 .map(
                   (write) =>
                     write.payload as {
@@ -2464,7 +2477,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // FR-027 (F-G1a): refresh the unsynced-count signal from the device queue.
   const refreshUnsyncedCount = useCallback(async () => {
     try {
-      const count = await pendingCaptureCount();
+      const count = await visiblePendingCaptureCount();
       // See `mountedRef`'s note above the ref/refs block — a provider
       // unmounted while this read was in flight must not touch state.
       if (!mountedRef.current) return;
@@ -2493,6 +2506,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     let syncedAny = false;
     for (const queued of pending) {
+      // W3-16 #1: a capture queued while another account was signed in waits
+      // on this device for that account. It is never sent through this one.
+      // Checked per item, so an account switch mid-drain holds the rest back.
+      if (!maySendAs(queued.owner_user_id)) {
+        continue;
+      }
       // Bug hunt #5: an item whose chosen area cannot be resolved while the
       // account's areas are not known yet stays queued — sending it now would
       // file it with no area and delete the person's choice for good. Once

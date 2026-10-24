@@ -2957,94 +2957,88 @@ describe("W3-16 #1: pending work never crosses to another account", () => {
   };
   const ACCOUNT_A_TEXT = "Call the landlord back";
 
-  // KNOWN BUG (W3-16 #1): expected failure. A's undelivered capture is
-  // replayed under B. Flip to `it` once pending work is purged, or held for
-  // its owner, at sign-out.
-  it.fails(
-    "a capture account A could not deliver is never sent through account B's session",
-    async () => {
-      mockListAreas.mockResolvedValue({
-        provider: "supabase",
-        areas: [PERSISTED_AREA],
-      });
-      mockSyncJournaledCapture.mockRejectedValue(
-        new TypeError("Failed to fetch"),
-      );
+  // A's undelivered capture is held on the device for A (see
+  // `durability/deviceAccount.ts`), never replayed under B.
+  it("a capture account A could not deliver is never sent through account B's session", async () => {
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    mockSyncJournaledCapture.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
 
-      const firstMount = render(
-        <WorkflowProvider>
-          <Harness />
-        </WorkflowProvider>,
-      );
-      await waitFor(() =>
-        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
-          "true",
-        ),
-      );
+    const firstMount = render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
 
-      // Account A captures. The account write fails, so it waits on device.
-      fireEvent.click(screen.getByText("Capture"));
-      await waitFor(async () => {
-        expect(await listPendingWrites("capture")).toHaveLength(1);
-      });
-      await waitFor(() => expect(mockSyncJournaledCapture).toHaveBeenCalled());
+    // Account A captures. The account write fails, so it waits on device.
+    fireEvent.click(screen.getByText("Capture"));
+    await waitFor(async () => {
+      expect(await listPendingWrites("capture")).toHaveLength(1);
+    });
+    await waitFor(() => expect(mockSyncJournaledCapture).toHaveBeenCalled());
 
-      // A signs out.
-      mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
-      mockListAreas.mockRejectedValue(SIGNED_OUT_ERROR());
-      await act(async () => {
-        authListener.callback?.("SIGNED_OUT", null);
-        await Promise.resolve();
-      });
+    // A signs out.
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+    mockListAreas.mockRejectedValue(SIGNED_OUT_ERROR());
+    await act(async () => {
+      authListener.callback?.("SIGNED_OUT", null);
+      await Promise.resolve();
+    });
 
-      // B signs in on the same device, without a remount ...
-      mockGetUser.mockResolvedValue({
-        data: { user: { id: ACCOUNT_B_USER } },
-        error: null,
+    // B signs in on the same device, without a remount ...
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: ACCOUNT_B_USER } },
+      error: null,
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [ACCOUNT_B_AREA],
+    });
+    mockSyncJournaledCapture.mockReset().mockResolvedValue({
+      provider: "supabase",
+      captureId: "77777777-7777-4777-8777-777777777777",
+    });
+    await act(async () => {
+      authListener.callback?.("SIGNED_IN", {
+        user: { id: ACCOUNT_B_USER },
       });
-      mockListAreas.mockResolvedValue({
-        provider: "supabase",
-        areas: [ACCOUNT_B_AREA],
-      });
-      mockSyncJournaledCapture.mockReset().mockResolvedValue({
-        provider: "supabase",
-        captureId: "77777777-7777-4777-8777-777777777777",
-      });
-      await act(async () => {
-        authListener.callback?.("SIGNED_IN", {
-          user: { id: ACCOUNT_B_USER },
-        });
-        await Promise.resolve();
-        await Promise.resolve();
-      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
-      // ... and then the page reloads as B.
-      firstMount.unmount();
-      render(
-        <WorkflowProvider>
-          <Harness />
-        </WorkflowProvider>,
-      );
-      await waitFor(() =>
-        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
-          "true",
-        ),
-      );
-      // One explicit, fully settled replay pass as B: a deterministic
-      // boundary, so the check below never races the mount's own replay.
-      fireEvent.click(screen.getByText("Retry pending writes"));
-      await waitFor(() =>
-        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
-          "1",
-        ),
-      );
+    // ... and then the page reloads as B.
+    firstMount.unmount();
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    // One explicit, fully settled replay pass as B: a deterministic
+    // boundary, so the check below never races the mount's own replay.
+    fireEvent.click(screen.getByText("Retry pending writes"));
+    await waitFor(() =>
+      expect(screen.getByTestId("retry-settled-count")).toHaveTextContent("1"),
+    );
 
-      const sentTexts = mockSyncJournaledCapture.mock.calls.map(
-        (call) => (call[1] as { raw_text?: string }).raw_text,
-      );
-      expect(sentTexts).not.toContain(ACCOUNT_A_TEXT);
-    },
-  );
+    const sentTexts = mockSyncJournaledCapture.mock.calls.map(
+      (call) => (call[1] as { raw_text?: string }).raw_text,
+    );
+    expect(sentTexts).not.toContain(ACCOUNT_A_TEXT);
+  });
 });
 
 // W3-16 finding 4: a daily close queued offline is delivered by the

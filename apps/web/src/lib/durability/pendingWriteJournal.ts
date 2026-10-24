@@ -76,6 +76,11 @@
 
 import { getPersistenceFailureKind } from "../persistenceFailureKind";
 import type { PersistenceFailureKind } from "../persistenceFailureKind";
+import {
+  maySendAs,
+  ownerStampForNewEntry,
+  visibleToAccount,
+} from "./deviceAccount";
 
 const DB_NAME = "lifeos-pending-writes";
 /**
@@ -164,6 +169,13 @@ export interface PendingWrite<
   entity: PendingWriteEntity;
   payload: TPayload;
   created_at: string;
+  /**
+   * W3-16 #1: the account that was signed in when this write was made. Absent
+   * for a write made signed out (or before the account was known), which the
+   * next account to sign in receives (#960). An owned write is sent only
+   * through its own account's session; see `./deviceAccount.ts`.
+   */
+  owner_user_id?: string;
   /** Factual replay evidence only; absent until a handler has thrown. */
   last_attempt_failed?: true;
   /** ISO time for the failed attempt; never contains a raw handler error. */
@@ -277,7 +289,10 @@ export async function enqueuePendingWrite<
   }
 
   const clientWriteId = input.clientWriteId ?? generateClientWriteId();
-  const fields = {
+  // W3-16 #1: read before any await, so the owner is the account signed in
+  // at the moment the user made this write.
+  const ownerStamp = ownerStampForNewEntry();
+  const baseFields = {
     client_write_id: clientWriteId,
     entity: input.entity,
     payload: input.payload,
@@ -298,6 +313,14 @@ export async function enqueuePendingWrite<
         PendingWrite<TPayload> | undefined
       >,
     );
+
+    // W3-16 #1: a retry of an existing write keeps that write's owner, so a
+    // re-enqueue can never move one account's work to another account.
+    const owner = existing ? existing.owner_user_id : ownerStamp;
+    const fields =
+      owner !== undefined
+        ? { ...baseFields, owner_user_id: owner }
+        : baseFields;
 
     // A retry of the same logical write keeps its original queue position:
     // reuse the stored `seq` rather than appending a fresh one, so replay
@@ -348,6 +371,25 @@ export async function listPendingWrites(
   } finally {
     db.close();
   }
+}
+
+/**
+ * W3-16 #1: the journalled writes this account may see — its own, plus
+ * writes with no owner. A write known to belong to another account is left
+ * out, so this account never sees or counts it. Used for what the UI shows;
+ * `listPendingWrites` stays the whole-device view.
+ */
+export async function listVisiblePendingWrites(
+  entity?: PendingWriteEntity,
+): Promise<PendingWrite[]> {
+  return visibleToAccount(await listPendingWrites(entity));
+}
+
+/** W3-16 #1: `pendingWriteCount` for the account signed in now. */
+export async function visiblePendingWriteCount(
+  entity?: PendingWriteEntity,
+): Promise<number> {
+  return (await listVisiblePendingWrites(entity)).length;
 }
 
 /** Drop one journalled write once its server write has landed. */
@@ -532,6 +574,14 @@ async function replayPendingWritesUnlocked(
   const writes = await listPendingWrites();
 
   for (const write of writes) {
+    // W3-16 #1: never send one account's write through another account's
+    // session. Checked per write, right before its handler, so an account
+    // switch part-way through a pass holds back the rest of the pass too.
+    // The write stays queued, untouched, for its own account.
+    if (!maySendAs(write.owner_user_id)) {
+      continue;
+    }
+
     const handler = handlers[write.entity];
     if (!handler) {
       summary.skipped += 1;

@@ -73,3 +73,13 @@ export function isHeldForAnotherAccount(
   if (account === undefined) return false;
   return owner !== account;
 }
+
+/** The device entries `account` may see: its own, plus unowned ones. */
+export function visibleToAccount<T extends { owner_user_id?: string }>(
+  entries: readonly T[],
+  account: DeviceAccount = currentAccount,
+): T[] {
+  return entries.filter(
+    (entry) => !isHeldForAnotherAccount(entry.owner_user_id, account),
+  );
+}
