@@ -198,6 +198,7 @@ import {
   type PendingWrite,
   type ReplaySummary,
 } from "./durability/pendingWriteJournal";
+import { setDeviceAccount } from "./durability/deviceAccount";
 import type { PersistenceFailureKind } from "./persistenceFailureKind";
 // Final UX Loop C1, Target Cards 1+7 (audit P0#4): one definition of which
 // calendar day a close belongs to, and one answer to "is it closed already?".
@@ -383,6 +384,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+    };
+  }, []);
+  // W3-16 #1: the account that owns device-held work is not known until this
+  // provider reads the session, so a fresh mount starts at "not known", never
+  // at whatever an earlier provider in this document last saw. See
+  // `durability/deviceAccount.ts`.
+  useEffect(() => {
+    setDeviceAccount(undefined);
+    return () => {
+      setDeviceAccount(undefined);
     };
   }, []);
   // #960 defect 1: guards `runAccountSync` against running twice at once —
@@ -2106,6 +2117,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             try {
               const currentUser = await client.auth?.getUser();
               expectedUserId = currentUser?.data.user?.id ?? null;
+              // W3-16 #1: the replay below sends only this account's own
+              // device-held work (see `durability/deviceAccount.ts`).
+              if (currentUser) setDeviceAccount(expectedUserId);
             } catch {
               expectedUserId = null;
             }
@@ -2276,6 +2290,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     const { data: subscription } = client.auth.onAuthStateChange(
       (event, session) => {
+        // W3-16 #1: keep the owner of device-held work current on EVERY auth
+        // event, before the early returns below. A sign-out means no account
+        // may receive the last account's queued work.
+        if (event === "SIGNED_OUT") {
+          setDeviceAccount(null);
+        } else if (session?.user?.id) {
+          setDeviceAccount(session.user.id);
+        } else if (event === "INITIAL_SESSION") {
+          setDeviceAccount(null);
+        }
         if (!session) return;
         if (
           event !== "SIGNED_IN" &&
