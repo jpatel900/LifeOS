@@ -66,6 +66,21 @@ export class GoogleCalendarMissingEtagError extends Error {
   }
 }
 
+/**
+ * Google answered the insert with a definitive client error (4xx other than
+ * 409). The request was refused, so no event exists. Timeouts, network
+ * errors and 5xx stay plain errors: Google may have created the event.
+ */
+export class GoogleCalendarInsertRejectedError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super("Google Calendar event insert failed.");
+    this.name = "GoogleCalendarInsertRejectedError";
+    this.status = status;
+  }
+}
+
 export class GoogleCalendarEventDriftError extends Error {
   constructor() {
     super(
@@ -247,6 +262,10 @@ export async function insertGoogleCalendarEventForConnection(
       googleEventEtag: null,
       eventSnapshot: null,
     };
+  }
+
+  if (response.status >= 400 && response.status < 500) {
+    throw new GoogleCalendarInsertRejectedError(response.status);
   }
 
   if (!response.ok) {

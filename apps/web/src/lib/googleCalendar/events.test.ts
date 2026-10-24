@@ -10,6 +10,7 @@ vi.mock("./freebusy", () => ({
 
 import {
   GoogleCalendarEventDriftError,
+  GoogleCalendarInsertRejectedError,
   deleteGoogleCalendarEventForConnection,
   insertGoogleCalendarEventForConnection,
 } from "./events";
@@ -132,6 +133,45 @@ describe("Google Calendar event insert helper", () => {
         }),
       }),
     );
+  });
+
+  it.each([400, 401, 403, 404, 429])(
+    "marks a definitive Google %s insert rejection as proven not created",
+    async (status) => {
+      vi.mocked(fetch).mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: status } }), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      const error = await insertGoogleCalendarEventForConnection({
+        connection,
+        description: null,
+        proposalId: "550e8400-e29b-41d4-a716-446655440501",
+        proposedEnd: "2026-05-10T17:00:00.000Z",
+        proposedStart: "2026-05-10T16:00:00.000Z",
+        supabaseAccessToken: "supabase-access-token",
+        timezone: "America/Toronto",
+        title: "Call dentist tomorrow",
+      }).catch((failure: unknown) => failure);
+      expect(error).toBeInstanceOf(GoogleCalendarInsertRejectedError);
+    },
+  );
+
+  it("keeps a Google 5xx insert failure ambiguous", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response("", { status: 503 }));
+    const error = await insertGoogleCalendarEventForConnection({
+      connection,
+      description: null,
+      proposalId: "550e8400-e29b-41d4-a716-446655440501",
+      proposedEnd: "2026-05-10T17:00:00.000Z",
+      proposedStart: "2026-05-10T16:00:00.000Z",
+      supabaseAccessToken: "supabase-access-token",
+      timezone: "America/Toronto",
+      title: "Call dentist tomorrow",
+    }).catch((failure: unknown) => failure);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(GoogleCalendarInsertRejectedError);
   });
 
   it("treats a deterministic Google event id conflict as an idempotent insert result", async () => {

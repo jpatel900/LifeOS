@@ -138,4 +138,60 @@ begin
   exception when sqlstate 'PCA01' then null; end;
 end;
 $$;
+
+-- Review fix round 2: only open Google-backed blocks and possibly-created
+-- attempts reserve a task. A closed block or a proven-not-created failure
+-- does not strand the task.
+do $$
+declare
+  u uuid := gen_random_uuid();
+  a uuid := gen_random_uuid();
+  t3 uuid := gen_random_uuid();
+  t4 uuid := gen_random_uuid();
+  t5 uuid := gen_random_uuid();
+  p3 uuid := gen_random_uuid();
+  s3 uuid := gen_random_uuid();
+  p4 uuid := gen_random_uuid();
+  s4 uuid := gen_random_uuid();
+  p5 uuid := gen_random_uuid();
+  s5 uuid := gen_random_uuid();
+  c uuid := gen_random_uuid();
+  claim3 jsonb;
+  claim4 jsonb;
+  claim5 jsonb;
+begin
+  insert into public.areas(id,user_id,name,slug) values (a,u,'Fixture','approval-guard-2');
+  insert into public.tasks(id,user_id,area_id,title) values
+    (t3,u,a,'Rejected'), (t4,u,a,'Completed'), (t5,u,a,'Open');
+  insert into public.time_block_proposals(id,user_id,area_id,task_id,proposed_start,proposed_end)
+  select id,u,a,task,'2026-05-10T16:00:00Z','2026-05-10T17:00:00Z'
+  from (values (p3,t3),(s3,t3),(p4,t4),(s4,t4),(p5,t5),(s5,t5)) as v(id,task);
+  insert into public.google_calendar_connections(id,user_id,status,connected_at,first_write_warning_acknowledged_at,encrypted_refresh_token)
+  values (c,u,'connected','2026-05-09T00:00:00Z','2026-05-09T00:00:00Z','fixture-only');
+
+  claim3 := pg_temp.claim(u,p3,t3,c);
+  update public.external_write_events
+    set result_status='failed', result_summary_json='{"provider_event_created":false}'
+    where id=(claim3->>'id')::uuid;
+  update public.time_block_proposals set proposed_start='2026-05-10T15:30:00Z' where id=p3;
+  perform pg_temp.claim(u,s3,t3,c);
+
+  claim4 := pg_temp.claim(u,p4,t4,c);
+  update public.external_write_events set result_status='succeeded'
+    where id=(claim4->>'id')::uuid;
+  insert into public.calendar_blocks(id,user_id,area_id,proposal_id,task_id,google_event_id,start_at,end_at,status)
+  values(gen_random_uuid(),u,a,p4,t4,'lifeos'||replace(p4::text,'-',''),'2026-05-10T16:00:00Z','2026-05-10T17:00:00Z','completed');
+  perform pg_temp.claim(u,s4,t4,c);
+
+  claim5 := pg_temp.claim(u,p5,t5,c);
+  update public.external_write_events set result_status='succeeded'
+    where id=(claim5->>'id')::uuid;
+  insert into public.calendar_blocks(id,user_id,area_id,proposal_id,task_id,google_event_id,start_at,end_at,status)
+  values(gen_random_uuid(),u,a,p5,t5,'lifeos'||replace(p5::text,'-',''),'2026-05-10T16:00:00Z','2026-05-10T17:00:00Z','scheduled');
+  begin
+    perform pg_temp.claim(u,s5,t5,c);
+    raise exception 'An open Google-backed block did not reserve its task';
+  exception when sqlstate 'PCA01' then null; end;
+end;
+$$;
 rollback;

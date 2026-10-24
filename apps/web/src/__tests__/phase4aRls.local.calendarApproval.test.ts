@@ -211,4 +211,153 @@ local("calendar approval claim — real local PostgreSQL", () => {
       }
     }
   });
+
+  it("frees the task after a proven-not-created attempt or a completed event", async () => {
+    const { client: userClient, userId } = await signInUserA();
+    const service = serviceClient();
+    const rejectedTask = randomUUID();
+    const completedTask = randomUUID();
+    const [rejected, rejectedSibling, completed, completedSibling] = [
+      randomUUID(),
+      randomUUID(),
+      randomUUID(),
+      randomUUID(),
+    ];
+    const proposalIds = [
+      rejected,
+      rejectedSibling,
+      completed,
+      completedSibling,
+    ];
+    const blockId = randomUUID();
+    let connectionId: string | null = null;
+    try {
+      await must(
+        userClient.from("tasks").insert(
+          [rejectedTask, completedTask].map((id) => ({
+            id,
+            user_id: userId,
+            area_id: areaA,
+            title: "Synthetic",
+          })),
+        ),
+      );
+      await must(
+        userClient.from("time_block_proposals").insert(
+          [
+            [rejected, rejectedTask],
+            [rejectedSibling, rejectedTask],
+            [completed, completedTask],
+            [completedSibling, completedTask],
+          ].map(([id, task]) => ({
+            id,
+            user_id: userId,
+            area_id: areaA,
+            task_id: task,
+            proposed_start: start,
+            proposed_end: end,
+          })),
+        ),
+      );
+      const connection = await must(
+        service
+          .from("google_calendar_connections")
+          .insert({
+            user_id: userId,
+            calendar_id: "primary",
+            status: "connected",
+            connected_at: connectedAt,
+            first_write_warning_acknowledged_at: connectedAt,
+            encrypted_refresh_token: "synthetic-fixture-only",
+          })
+          .select("id")
+          .single(),
+      );
+      connectionId = (connection as { id: string }).id;
+
+      // Google refused the insert outright: nothing to reserve.
+      const first = await must(
+        service.rpc(
+          "claim_google_calendar_approval",
+          claimArgs(userId, rejected, rejectedTask, connectionId),
+        ),
+      );
+      await must(
+        service
+          .from("external_write_events")
+          .update({
+            result_status: "failed",
+            result_summary_json: { provider_event_created: false },
+          })
+          .eq("id", (first as { id: string }).id),
+      );
+      const moved = await userClient
+        .from("time_block_proposals")
+        .update({ proposed_start: "2026-05-10T15:30:00.000Z" })
+        .eq("id", rejected);
+      expect(moved.error).toBeNull();
+      const sibling = await service.rpc(
+        "claim_google_calendar_approval",
+        claimArgs(userId, rejectedSibling, rejectedTask, connectionId),
+      );
+      expect(sibling.error).toBeNull();
+
+      // The earlier event ran its course: a new time may go to Google.
+      const done = await must(
+        service.rpc(
+          "claim_google_calendar_approval",
+          claimArgs(userId, completed, completedTask, connectionId),
+        ),
+      );
+      await must(
+        service
+          .from("external_write_events")
+          .update({ result_status: "succeeded" })
+          .eq("id", (done as { id: string }).id),
+      );
+      await must(
+        userClient.from("calendar_blocks").insert({
+          id: blockId,
+          user_id: userId,
+          area_id: areaA,
+          proposal_id: completed,
+          task_id: completedTask,
+          google_event_id: `lifeos${completed.replace(/-/g, "")}`,
+          start_at: start,
+          end_at: end,
+          status: "completed",
+        }),
+      );
+      const next = await service.rpc(
+        "claim_google_calendar_approval",
+        claimArgs(userId, completedSibling, completedTask, connectionId),
+      );
+      expect(next.error).toBeNull();
+    } finally {
+      await must(
+        service
+          .from("external_write_events")
+          .delete()
+          .in("target_id", proposalIds),
+      );
+      await must(userClient.from("calendar_blocks").delete().eq("id", blockId));
+      await must(
+        userClient.from("time_block_proposals").delete().in("id", proposalIds),
+      );
+      await must(
+        userClient
+          .from("tasks")
+          .delete()
+          .in("id", [rejectedTask, completedTask]),
+      );
+      if (connectionId) {
+        await must(
+          service
+            .from("google_calendar_connections")
+            .delete()
+            .eq("id", connectionId),
+        );
+      }
+    }
+  });
 });

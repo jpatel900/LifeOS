@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   requireSupabaseServerUser: vi.fn(),
   updateCalendarBlockGoogleEventForAccessToken: vi.fn(),
   updateExternalWriteEventResultForAccessToken: vi.fn(),
+  InsertRejected: class GoogleCalendarInsertRejectedError extends Error {},
 }));
 
 vi.mock("@/lib/googleCalendar/config", () => ({
@@ -36,6 +37,7 @@ vi.mock("@/lib/googleCalendar/events", () => ({
     mocks.insertGoogleCalendarEventForConnection,
   resolveGoogleCalendarWriteAccessToken:
     mocks.resolveGoogleCalendarWriteAccessToken,
+  GoogleCalendarInsertRejectedError: mocks.InsertRejected,
 }));
 
 vi.mock("@/lib/externalWrites/server", () => ({
@@ -333,6 +335,43 @@ describe("google-calendar create-event route", () => {
       mocks.updateExternalWriteEventResultForAccessToken,
     ).not.toHaveBeenCalled();
   });
+
+  // Review fix round 2: a definitive Google rejection proves no event exists,
+  // so the failed audit says so and the claim can stop reserving the task.
+  it.each([
+    ["a definitive Google rejection", true],
+    ["an ambiguous failure", false],
+  ])(
+    "records whether %s proved no event was created",
+    async (_label, definitive) => {
+      mocks.insertGoogleCalendarEventForConnection.mockRejectedValue(
+        definitive
+          ? new mocks.InsertRejected("Google Calendar event insert failed.")
+          : new Error("timeout after possible insert"),
+      );
+      const response = await POST(
+        request({
+          proposal_id: proposal.id,
+          approved: true,
+          approved_start: proposal.proposed_start,
+          approved_end: proposal.proposed_end,
+        }),
+      );
+      expect(response.status).toBe(502);
+      const [, , result] =
+        mocks.updateExternalWriteEventResultForAccessToken.mock.calls[0]!;
+      expect(result.resultStatus).toBe("failed");
+      if (definitive) {
+        expect(result.resultSummary).toMatchObject({
+          provider_event_created: false,
+        });
+      } else {
+        expect(result.resultSummary).not.toHaveProperty(
+          "provider_event_created",
+        );
+      }
+    },
+  );
 
   it("sends the access token resolved before the claim to the Google insert", async () => {
     const response = await POST(

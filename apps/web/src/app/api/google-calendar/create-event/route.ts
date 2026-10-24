@@ -6,6 +6,7 @@ import {
 } from "@/lib/googleCalendar/server";
 import { getGoogleCalendarConfig } from "@/lib/googleCalendar/config";
 import {
+  GoogleCalendarInsertRejectedError,
   insertGoogleCalendarEventForConnection,
   resolveGoogleCalendarWriteAccessToken,
 } from "@/lib/googleCalendar/events";
@@ -399,6 +400,11 @@ export async function POST(request: Request) {
           resultStatus: "failed",
           resultSummary: {
             google_event_id_stored: false,
+            // Only a definitive Google refusal proves no event exists. The
+            // claim RPC then stops reserving the task for this attempt.
+            ...(error instanceof GoogleCalendarInsertRejectedError
+              ? { provider_event_created: false }
+              : {}),
           },
         },
       ).catch(() => null);

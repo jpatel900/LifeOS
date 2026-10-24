@@ -62,7 +62,9 @@ begin
     select 1 from public.calendar_blocks b
     where b.user_id = p_user_id and b.google_event_id is not null
       and (b.proposal_id = p_proposal_id
-        or (b.task_id = p_task_id and b.status <> 'cancelled'))
+        -- Same rule as the route precheck: only an OPEN Google-backed block
+        -- reserves its task. A completed or missed one does not.
+        or (b.task_id = p_task_id and b.status in ('scheduled', 'running')))
   ) then
     raise exception using errcode = 'PCA01', message = 'Calendar approval conflict';
   end if;
@@ -75,6 +77,12 @@ begin
     where e.user_id = p_user_id and e.provider = 'google_calendar'
       and e.operation = 'calendar.events.insert' and e.target_type = 'time_block_proposal'
   loop
+    -- A definitive Google refusal (recorded by the route) proves no event
+    -- exists, so that attempt reserves nothing.
+    if v_prior.result_status = 'failed'
+       and v_prior.result_summary_json->>'provider_event_created' = 'false' then
+      continue;
+    end if;
     -- Explicit JSON null is a taskless scope, not missing legacy metadata.
     -- New claims survive proposal deletion/reassignment. Legacy orphaned
     -- attempts fail closed because their original task cannot be recovered.
@@ -113,6 +121,17 @@ begin
       if v_prior.target_id = p_proposal_id::text then
         raise exception using errcode = 'PCA01', message = 'Calendar approval conflict';
       end if;
+      continue;
+    end if;
+
+    -- The prior event already ran its course (completed or missed block).
+    -- It no longer competes with a new time for the same task.
+    if v_prior.target_id is distinct from p_proposal_id::text and exists (
+      select 1 from public.calendar_blocks b
+      where b.user_id = p_user_id
+        and b.google_event_id = 'lifeos' || replace(v_prior.target_id, '-', '')
+        and b.status in ('completed', 'missed')
+    ) then
       continue;
     end if;
 
@@ -177,6 +196,9 @@ begin
     where user_id = old.user_id and target_id = old.id::text
       and provider = 'google_calendar' and operation = 'calendar.events.insert'
       and target_type = 'time_block_proposal'
+      -- A proven-not-created attempt left nothing on Google to keep in sync.
+      and not (result_status = 'failed'
+        and coalesce(result_summary_json->>'provider_event_created', '') = 'false')
   ) then
     raise exception using errcode = 'PCA01', message = 'Calendar approval identity cannot change';
   end if;
