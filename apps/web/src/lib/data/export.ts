@@ -62,6 +62,37 @@ function assertServerRuntime() {
   }
 }
 
+/** A table read failed: the whole export stops, nothing partial leaves. */
+function tableReadFailure(
+  table: UserDataExportTable,
+  error: { message?: string; code?: string },
+): Error {
+  // A sign-in that expires mid-export keeps its typed auth signal so the
+  // route answers the 401 sign-in-again response. The raw text and any
+  // rows read so far never leave this function.
+  if (isTableReadAuthRejection(error)) {
+    return new SupabaseAuthRejectedError();
+  }
+
+  return new Error(
+    `Data export failed while reading ${table}. Nothing was exported; try again.`,
+  );
+}
+
+/** Every row of one table the signed-in user can read. */
+async function readWholeTable(
+  client: MinimalExportClient,
+  table: UserDataExportTable,
+): Promise<unknown[]> {
+  const { data, error } = await client.from(table).select("*");
+
+  if (error) {
+    throw tableReadFailure(table, error);
+  }
+
+  return Array.isArray(data) ? data : [];
+}
+
 /**
  * Assemble a full JSON export of the signed-in user's data. The client must
  * be a user-scoped (anon key + user access token) client so RLS bounds every
@@ -75,22 +106,7 @@ export async function buildUserDataExport(
   const tables = {} as Record<UserDataExportTable, unknown[]>;
 
   for (const table of USER_DATA_EXPORT_TABLES) {
-    const { data, error } = await client.from(table).select("*");
-
-    if (error) {
-      // A sign-in that expires mid-export keeps its typed auth signal so the
-      // route answers the 401 sign-in-again response. The raw text and any
-      // rows read so far never leave this function.
-      if (isTableReadAuthRejection(error)) {
-        throw new SupabaseAuthRejectedError();
-      }
-
-      throw new Error(
-        `Data export failed while reading ${table}. Nothing was exported; try again.`,
-      );
-    }
-
-    tables[table] = Array.isArray(data) ? data : [];
+    tables[table] = await readWholeTable(client, table);
   }
 
   return {
