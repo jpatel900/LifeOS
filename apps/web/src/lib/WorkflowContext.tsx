@@ -2682,10 +2682,22 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
     const onOnline = () => {
       void syncOfflineQueue();
-      void replayJournaledWrites().finally(() => {
-        void refreshJournalledDurableState();
-        void refreshPendingLocalChanges();
-      });
+      const client = createSupabaseBrowserClient();
+      if (!client) {
+        // No account tier at all (demo, Supabase unconfigured): nothing is
+        // sent, so there is nothing for an account to confirm.
+        void replayJournaledWrites().finally(() => {
+          void refreshJournalledDurableState();
+          void refreshPendingLocalChanges();
+        });
+        return;
+      }
+      // W3-16 #4: the SAME replay -> readback -> release sequence the mount
+      // and sign-in paths run. Refreshing device evidence straight after the
+      // replay dropped a delivered daily close before the account confirmed
+      // it, so a closed day read open. Device evidence now goes only once the
+      // account holds the day; a failed or incomplete read keeps it.
+      void replayAndReleaseJournal(client);
     };
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
@@ -2694,6 +2706,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     refreshJournalledDurableState,
     refreshPendingLocalChanges,
     replayJournaledWrites,
+    replayAndReleaseJournal,
     syncOfflineQueue,
   ]);
 

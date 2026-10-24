@@ -3115,54 +3115,75 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
     };
   }
 
-  // KNOWN BUG (W3-16 #4): expected failure. Flip to `it` once the reconnect
-  // path hands off device evidence only after the account confirms the day.
-  it.fails(
-    "the account read omits the day: the day still reads closed after reconnect",
-    async () => {
-      await mountWithUndeliveredClose();
-      // Every later account read answers without the day.
-      mockListExecutionReviewItems.mockResolvedValue({
-        provider: "supabase",
-        tasks: [],
-        blocks: [],
-        sessions: [],
-        reviewEntries: [],
-      });
+  // The reconnect path hands off device evidence only after the account
+  // confirms the day (W3-16 #4).
+  it("control: the account read holds the day, so the account tier takes it over on reconnect", async () => {
+    await mountWithUndeliveredClose();
+    mockListExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [
+        {
+          id: "66666666-6666-4666-8666-666666666666",
+          user_id: PERSISTED_AREA.user_id,
+          review_type: "daily",
+          period_start: day,
+          period_end: day,
+        },
+      ],
+    });
 
-      await reconnectAndDeliver();
+    await reconnectAndDeliver();
 
-      // The device tier must keep the day: the account never confirmed it.
-      // A wait (not a one-off check) so the post-replay journal refresh has
-      // run before the final read.
-      await waitFor(() => {
-        expect(closedDayTiers().journalled).not.toContain(day);
-      }).catch(() => undefined);
-      const tiers = closedDayTiers();
-      expect(
-        tiers.journalled?.includes(day) || tiers.account?.includes(day),
-      ).toBe(true);
-    },
-  );
+    await waitFor(() => {
+      expect(closedDayTiers().account).toContain(day);
+    });
+    await waitFor(() => {
+      expect(closedDayTiers().journalled).not.toContain(day);
+    });
+  });
 
-  // KNOWN BUG (W3-16 #4): expected failure, same cause.
-  it.fails(
-    "the account read fails: the day still reads closed after reconnect",
-    async () => {
-      await mountWithUndeliveredClose();
-      mockListExecutionReviewItems.mockRejectedValue(
-        new TypeError("Failed to fetch"),
-      );
+  it("the account read omits the day: the day still reads closed after reconnect", async () => {
+    await mountWithUndeliveredClose();
+    // Every later account read answers without the day.
+    mockListExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
 
-      await reconnectAndDeliver();
+    await reconnectAndDeliver();
 
-      await waitFor(() => {
-        expect(closedDayTiers().journalled).not.toContain(day);
-      }).catch(() => undefined);
-      const tiers = closedDayTiers();
-      expect(
-        tiers.journalled?.includes(day) || tiers.account?.includes(day),
-      ).toBe(true);
-    },
-  );
+    // The device tier must keep the day: the account never confirmed it.
+    // A wait (not a one-off check) so the post-replay journal refresh has
+    // run before the final read.
+    await waitFor(() => {
+      expect(closedDayTiers().journalled).not.toContain(day);
+    }).catch(() => undefined);
+    const tiers = closedDayTiers();
+    expect(
+      tiers.journalled?.includes(day) || tiers.account?.includes(day),
+    ).toBe(true);
+  });
+
+  it("the account read fails: the day still reads closed after reconnect", async () => {
+    await mountWithUndeliveredClose();
+    mockListExecutionReviewItems.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+
+    await reconnectAndDeliver();
+
+    await waitFor(() => {
+      expect(closedDayTiers().journalled).not.toContain(day);
+    }).catch(() => undefined);
+    const tiers = closedDayTiers();
+    expect(
+      tiers.journalled?.includes(day) || tiers.account?.includes(day),
+    ).toBe(true);
+  });
 });
