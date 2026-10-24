@@ -13,9 +13,24 @@ interface InsertGoogleCalendarEventParams {
   proposalId: string;
   proposedEnd: string;
   proposedStart: string;
+  /**
+   * Google access token already resolved by the caller. The approval route
+   * resolves it BEFORE reserving the approval, so a sign-in refresh failure
+   * (no request ever reached Google) never leaves a durable reservation.
+   */
+  providerAccessToken?: string;
   supabaseAccessToken: string;
   timezone: string;
   title: string;
+}
+
+/** Resolve (refreshing if needed) the Google token for a calendar write. */
+export function resolveGoogleCalendarWriteAccessToken(params: {
+  connection: GoogleCalendarStoredConnection;
+  supabaseAccessToken: string;
+}): Promise<string> {
+  assertServerRuntime();
+  return resolveGoogleCalendarAccessToken(params);
 }
 
 export interface InsertGoogleCalendarEventResult {
@@ -184,10 +199,12 @@ export async function insertGoogleCalendarEventForConnection(
   assertServerRuntime();
 
   const eventId = buildDeterministicGoogleEventId(params.proposalId);
-  const accessToken = await resolveGoogleCalendarAccessToken({
-    connection: params.connection,
-    supabaseAccessToken: params.supabaseAccessToken,
-  });
+  const accessToken =
+    params.providerAccessToken ??
+    (await resolveGoogleCalendarAccessToken({
+      connection: params.connection,
+      supabaseAccessToken: params.supabaseAccessToken,
+    }));
   const calendarId = encodeURIComponent(params.connection.calendar_id);
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`,

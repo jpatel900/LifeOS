@@ -5,9 +5,12 @@ import {
   getGoogleCalendarStoredConnectionForAccessToken,
 } from "@/lib/googleCalendar/server";
 import { getGoogleCalendarConfig } from "@/lib/googleCalendar/config";
-import { insertGoogleCalendarEventForConnection } from "@/lib/googleCalendar/events";
 import {
-  createPendingExternalWriteEventForAccessToken,
+  insertGoogleCalendarEventForConnection,
+  resolveGoogleCalendarWriteAccessToken,
+} from "@/lib/googleCalendar/events";
+import {
+  claimGoogleCalendarApprovalForAccessToken,
   updateExternalWriteEventResultForAccessToken,
 } from "@/lib/externalWrites/server";
 import {
@@ -48,6 +51,18 @@ function safeErrorMessage(error: unknown) {
 }
 
 function mapCreateEventFailure(error: unknown) {
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "CALENDAR_APPROVAL_CONFLICT"
+  ) {
+    return {
+      status: 409,
+      error:
+        "This calendar approval conflicts with an earlier approval or its saved details changed. Retry the original proposal with the same calendar connection, or cancel its event before approving another time.",
+    };
+  }
   // #670: the raw message is only inspected to pick a status; the client
   // always gets fixed copy, and unexpected failures are logged server-side.
   const rawMessage = safeErrorMessage(error);
@@ -254,11 +269,24 @@ export async function POST(request: Request) {
       );
     }
 
-    const auditEvent = await createPendingExternalWriteEventForAccessToken(
+    // Resolve Google access BEFORE the durable claim. A refresh failure means
+    // no request reached Google, so it must not leave a reservation that
+    // blocks this task after the person reconnects.
+    const providerAccessToken = await resolveGoogleCalendarWriteAccessToken({
+      connection,
+      supabaseAccessToken: accessToken,
+    });
+
+    const auditEvent = await claimGoogleCalendarApprovalForAccessToken(
       accessToken,
       {
-        areaId: proposal.area_id,
-        operation: "calendar.events.insert",
+        proposalId: proposal.id,
+        taskId: proposal.task_id,
+        proposedStart: proposal.proposed_start,
+        proposedEnd: proposal.proposed_end,
+        connectionId: connection.id,
+        connectedAt: connection.connected_at,
+        calendarId: connection.calendar_id,
         requestSummary: {
           calendar_id: connection.calendar_id,
           first_write_warning_acknowledged:
@@ -270,8 +298,6 @@ export async function POST(request: Request) {
           timezone: input.timezone,
           title_source: task ? "task.title" : "fallback",
         },
-        targetId: proposal.id,
-        targetType: "time_block_proposal",
         userId: user.id,
       },
     );
@@ -284,6 +310,7 @@ export async function POST(request: Request) {
       proposalId: proposal.id,
       proposedEnd: proposal.proposed_end,
       proposedStart: proposal.proposed_start,
+      providerAccessToken,
       supabaseAccessToken: accessToken,
       timezone: input.timezone,
       title,

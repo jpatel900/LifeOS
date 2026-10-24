@@ -263,7 +263,19 @@ describe("source-of-truth boundaries", () => {
       "apps/web/src/app/api/google-calendar/create-event/route.ts",
     );
     expect(createEventRoute).toContain("approved");
-    expect(createEventRoute).toContain("createPendingExternalWriteEvent");
+    // The pending external_write_events audit row is now written by the
+    // approval claim, in one transaction with the sibling check, before Google.
+    expect(createEventRoute).toContain(
+      "claimGoogleCalendarApprovalForAccessToken",
+    );
+    expect(readRepoFile("apps/web/src/lib/externalWrites/server.ts")).toContain(
+      'rpc("claim_google_calendar_approval"',
+    );
+    expect(
+      readRepoFile(
+        "supabase/migrations/20261023120000_claim_google_calendar_approval.sql",
+      ),
+    ).toMatch(/insert into public\.external_write_events[\s\S]*'pending'/);
     expect(createEventRoute).not.toMatch(/from ["']@\/lib\/ai\//);
   });
 

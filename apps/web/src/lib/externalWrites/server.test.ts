@@ -11,6 +11,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import {
+  claimGoogleCalendarApprovalForAccessToken,
   createPendingExternalWriteEventForAccessToken,
   updateExternalWriteEventResultForAccessToken,
 } from "./server";
@@ -56,9 +57,80 @@ function makeIncidentEq() {
 
 describe("external write audit helpers", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mocks.requireSupabaseServerUser.mockResolvedValue({ user });
   });
+
+  const approval = {
+    userId: user.id,
+    proposalId: "550e8400-e29b-41d4-a716-446655440501",
+    taskId: "550e8400-e29b-41d4-a716-446655440301",
+    proposedStart: "2026-05-10T16:00:00.000Z",
+    proposedEnd: "2026-05-10T17:00:00.000Z",
+    connectionId: "550e8400-e29b-41d4-a716-446655440901",
+    connectedAt: "2026-05-09T00:00:00.000Z",
+    calendarId: "primary",
+    requestSummary: { timezone: "America/Toronto" },
+  };
+
+  it("reserves approval and its pending audit in one service-only RPC", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: auditRow, error: null });
+    mocks.requireSupabaseServiceRoleClient.mockReturnValue({ rpc });
+    expect(
+      await claimGoogleCalendarApprovalForAccessToken("token", approval),
+    ).toEqual(auditRow);
+    expect(rpc).toHaveBeenCalledWith("claim_google_calendar_approval", {
+      p_user_id: user.id,
+      p_proposal_id: approval.proposalId,
+      p_task_id: approval.taskId,
+      p_start: approval.proposedStart,
+      p_end: approval.proposedEnd,
+      p_connection_id: approval.connectionId,
+      p_connected_at: approval.connectedAt,
+      p_calendar_id: "primary",
+      p_request_summary: approval.requestSummary,
+    });
+  });
+
+  it("rejects a forged owner before obtaining the privileged client", async () => {
+    await expect(
+      claimGoogleCalendarApprovalForAccessToken("token", {
+        ...approval,
+        userId: "550e8400-e29b-41d4-a716-446655440002",
+      }),
+    ).rejects.toThrow("user mismatch");
+    expect(mocks.requireSupabaseServiceRoleClient).not.toHaveBeenCalled();
+  });
+
+  it("propagates a typed conflict without leaking database copy", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "PCA01", message: "private database detail" },
+    });
+    mocks.requireSupabaseServiceRoleClient.mockReturnValue({ rpc });
+    await expect(
+      claimGoogleCalendarApprovalForAccessToken("token", approval),
+    ).rejects.toMatchObject({
+      code: "CALENDAR_APPROVAL_CONFLICT",
+      message: "Calendar approval conflict.",
+    });
+  });
+
+  it.each([
+    { data: null, error: { message: "database unavailable" } },
+    { data: null, error: null },
+    { data: {}, error: null },
+  ])(
+    "fails closed on a failed or malformed claim response: %j",
+    async (result) => {
+      mocks.requireSupabaseServiceRoleClient.mockReturnValue({
+        rpc: vi.fn().mockResolvedValue(result),
+      });
+      await expect(
+        claimGoogleCalendarApprovalForAccessToken("token", approval),
+      ).rejects.toThrow();
+    },
+  );
 
   it("creates audit rows through the service-role client after matching the authenticated user", async () => {
     const single = vi.fn().mockResolvedValue({ data: auditRow, error: null });
