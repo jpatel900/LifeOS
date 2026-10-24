@@ -404,7 +404,8 @@ describe("source-of-truth boundaries", () => {
 
     expect(cockpit).toContain("const result = await createArea(client");
     expect(cockpit).toContain("const areasResult = await listAreas(client)");
-    expect(cockpit).toContain("syncPersistedAreas(areasResult.areas)");
+    // #967: the read now also carries the area-save receipt as its cursor.
+    expect(cockpit).toContain("syncPersistedAreas(areasResult.areas");
     expect(cockpit).toContain("workflowAreaIdForPersistedArea(result.area)");
     expect(cockpit).toContain(
       "await updateAreaColor(createSupabaseBrowserClient()",
