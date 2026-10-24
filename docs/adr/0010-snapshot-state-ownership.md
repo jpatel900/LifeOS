@@ -92,9 +92,18 @@ metadata is carried through subsequent snapshots. Initial demo seed and account
 hydration are not new user mutations.
 
 Rejected bookkeeping is removed before recovery reads it or infers identity.
-Legacy UUID rows without receipts keep their fields pending until account values
-agree. This may retain a warning longer than older code, but avoids silently
-discarding edits whose delivery is unknown.
+
+An older saved copy never overwrites newer account data (review, 2026-10-24):
+
+- Legacy or invalid bookkeeping keeps only never-delivered local rows pending.
+  Rows the account already holds take the account's values on the next read,
+  as the pre-#967 merge did, and are not resurrected if the account no longer
+  returns them.
+- Each owner records the account row version (`updated_at`) it last saw.
+  Pending edits restored from a saved copy are marked `restored`. They keep
+  their value only while the account row is provably that same version. A
+  newer, missing or unknown account version wins and releases them. Edits made
+  in the current page are unaffected.
 
 The focused checks must include the exact saved R-967 successful-capture target
 and both safety controls, then new field/race, hydration, reset and provider cases.
