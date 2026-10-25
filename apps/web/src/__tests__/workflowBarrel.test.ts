@@ -13,6 +13,7 @@ const INTENTIONALLY_INTERNAL_EXPORTS = new Set<string>([
   "metaLearning:recordOverrideFireAndForget",
   "metaLearning:recordSuggestionFireAndForget",
   "metaLearning:uuidPattern",
+  "planning:recordTaskAcceptance",
   "shared:durationProfileColumns",
   "shared:getSupabaseMessage",
   "shared:toPersistenceWriteError",

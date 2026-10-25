@@ -3083,225 +3083,45 @@ describe("workflow data provider", () => {
     });
   });
 
-  it("keeps nested task lookup boundary failures typed for syncJournaledTaskDraftAccept", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: {
-        code: "42703",
-        message: "column client_write_id missing",
-      },
-    });
-    const eqClientWrite = vi.fn().mockReturnValue({ maybeSingle });
-    const eqUser = vi.fn().mockReturnValue({ eq: eqClientWrite });
-    const selectTasks = vi.fn().mockReturnValue({ eq: eqUser });
-
-    const from = vi.fn((table) => {
-      if (table === "tasks") {
-        return { select: selectTasks };
-      }
-      if (table === "time_block_proposals") {
-        return { select: vi.fn(), upsert: vi.fn() };
-      }
-      return {};
-    });
-
-    const promise = syncJournaledTaskDraftAccept(authenticatedClient(from), {
-      client_write_id: "journal-task-draft-1",
-      area_id: areaId,
-      source_capture_item_id: null,
-      draft_id: "draft-1",
-      title: "Finish this draft",
-      description: null,
-      confidence: null,
-      task_type: "task",
-      is_reversible: null,
-      due_at: null,
-      estimated_minutes_low: null,
-      estimated_minutes_high: null,
-      first_tiny_step: null,
-      is_commitment: false,
-      person_mentions: [],
-      task_status: "active",
-      accepted_at: "2026-05-08T16:00:00.000Z",
-      proposal: null,
-    });
-
-    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
-    await expect(promise).rejects.toMatchObject({
-      failureKind: "server-capability-missing",
-      message: "column client_write_id missing",
-    });
-  });
-
-  it("keeps proposal upsert boundary typed for syncJournaledTaskDraftAccept", async () => {
-    const existingTask = {
-      id: taskId,
-      user_id: userId,
-      area_id: areaId,
-      project_id: null,
-      source_capture_item_id: null,
-      title: "Draft task from local",
-      description: null,
-      status: "backlog",
-      priority_score: null,
-      priority_confidence: null,
-      task_type: "task",
-      energy_type: null,
-      estimated_minutes_low: null,
-      estimated_minutes_high: null,
-      due_at: null,
-      definition_of_done: null,
-      first_tiny_step: null,
-      is_reversible: null,
-      is_commitment: false,
-      waiting_on_person_id: null,
-      waiting_on_since: null,
-      committed_to_person_id: null,
-      created_at: "2026-05-08T15:00:00.000Z",
-      updated_at: "2026-05-08T15:00:00.000Z",
-    };
-    const taskMaybeSingle = vi
-      .fn()
-      .mockResolvedValue({ data: existingTask, error: null });
-    const taskEqClient = vi
-      .fn()
-      .mockReturnValue({ maybeSingle: taskMaybeSingle });
-    const taskEqUser = vi.fn().mockReturnValue({ eq: taskEqClient });
-    const taskSelect = vi.fn().mockReturnValue({ eq: taskEqUser });
-
-    const proposalUpsert = vi.fn().mockResolvedValue({
-      error: {
-        code: "42883",
-        message: "upsert proposal rejected",
-      },
-    });
-    const proposalSelect = vi.fn().mockReturnValue({ eq: vi.fn() });
-
-    const from = vi.fn((table) => {
-      if (table === "tasks") {
-        return { select: taskSelect };
-      }
-      return { upsert: proposalUpsert, select: proposalSelect };
-    });
-
-    const promise = syncJournaledTaskDraftAccept(authenticatedClient(from), {
-      client_write_id: "journal-task-draft-upsert-2",
-      area_id: areaId,
-      source_capture_item_id: null,
-      draft_id: "draft-3",
-      title: "Draft task from local",
-      description: null,
-      confidence: null,
-      task_type: "task",
-      is_reversible: null,
-      due_at: null,
-      estimated_minutes_low: null,
-      estimated_minutes_high: null,
-      first_tiny_step: null,
-      is_commitment: false,
-      person_mentions: [],
-      task_status: "active",
-      accepted_at: "2026-05-08T16:00:00.000Z",
-      proposal: {
-        proposed_start: start,
-        proposed_end: end,
-        rationale: "Do this task.",
-      },
-    });
-
-    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
-    await expect(promise).rejects.toMatchObject({
-      failureKind: "server-capability-missing",
-      message: "upsert proposal rejected",
-    });
-  });
-
-  it("keeps proposal readback boundary typed for syncJournaledTaskDraftAccept", async () => {
-    const existingTask = {
-      id: taskId,
-      user_id: userId,
-      area_id: areaId,
-      project_id: null,
-      source_capture_item_id: null,
-      title: "Draft task from local",
-      description: null,
-      status: "backlog",
-      priority_score: null,
-      priority_confidence: null,
-      task_type: "task",
-      energy_type: null,
-      estimated_minutes_low: null,
-      estimated_minutes_high: null,
-      due_at: null,
-      definition_of_done: null,
-      first_tiny_step: null,
-      is_reversible: null,
-      is_commitment: false,
-      waiting_on_person_id: null,
-      waiting_on_since: null,
-      committed_to_person_id: null,
-      created_at: "2026-05-08T15:00:00.000Z",
-      updated_at: "2026-05-08T15:00:00.000Z",
-    };
-    const taskMaybeSingle = vi
-      .fn()
-      .mockResolvedValue({ data: existingTask, error: null });
-    const taskEqClient = vi
-      .fn()
-      .mockReturnValue({ maybeSingle: taskMaybeSingle });
-    const taskEqUser = vi.fn().mockReturnValue({ eq: taskEqClient });
-    const taskSelect = vi.fn().mockReturnValue({ eq: taskEqUser });
-
-    const proposalMaybeSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: {
-        code: "42883",
-        message: "function place_time_block missing",
-      },
-    });
-    const proposalEqClient = vi
-      .fn()
-      .mockReturnValue({ maybeSingle: proposalMaybeSingle });
-    const proposalEqUser = vi.fn().mockReturnValue({ eq: proposalEqClient });
-    const proposalSelect = vi.fn().mockReturnValue({ eq: proposalEqUser });
-    const proposalUpsert = vi.fn().mockResolvedValue({ error: null });
-
-    const from = vi.fn((table) => {
-      if (table === "tasks") {
-        return { select: taskSelect };
-      }
-      return { upsert: proposalUpsert, select: proposalSelect };
-    });
-
-    const promise = syncJournaledTaskDraftAccept(authenticatedClient(from), {
-      client_write_id: "journal-task-draft-2",
-      area_id: areaId,
-      source_capture_item_id: null,
-      draft_id: "draft-2",
-      title: "Draft task from local",
-      description: null,
-      confidence: null,
-      task_type: "task",
-      is_reversible: null,
-      due_at: null,
-      estimated_minutes_low: null,
-      estimated_minutes_high: null,
-      first_tiny_step: null,
-      is_commitment: false,
-      person_mentions: [],
-      task_status: "active",
-      accepted_at: "2026-05-08T16:00:00.000Z",
-      proposal: {
-        proposed_start: start,
-        proposed_end: end,
-        rationale: "Do this task.",
-      },
-    });
-
-    await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
-    await expect(promise).rejects.toMatchObject({
-      failureKind: "server-capability-missing",
-      message: "function place_time_block missing",
-    });
-  });
+  it.each([
+    ["42703", "column client_write_id missing"],
+    ["42883", "accept_task_draft function missing"],
+    ["PGRST202", "accept_task_draft absent from schema cache"],
+  ])(
+    "keeps atomic acceptance failure %s typed for the durable queue",
+    async (code, message) => {
+      const from = vi.fn();
+      const rpc = vi
+        .fn()
+        .mockResolvedValue({ data: null, error: { code, message } });
+      const client = { ...authenticatedClient(from), rpc };
+      const promise = syncJournaledTaskDraftAccept(client, {
+        client_write_id: "journal-task-draft-1",
+        area_id: areaId,
+        source_capture_item_id: null,
+        draft_id: "draft-1",
+        title: "Finish this draft",
+        description: null,
+        confidence: null,
+        task_type: "task",
+        is_reversible: null,
+        due_at: null,
+        estimated_minutes_low: null,
+        estimated_minutes_high: null,
+        first_tiny_step: null,
+        is_commitment: false,
+        person_mentions: [],
+        task_status: "active",
+        accepted_at: "2026-05-08T16:00:00.000Z",
+        proposal: null,
+      });
+      await expect(promise).rejects.toBeInstanceOf(PersistenceWriteError);
+      await expect(promise).rejects.toMatchObject({
+        failureKind: "server-capability-missing",
+        message,
+      });
+      expect(rpc).toHaveBeenCalledOnce();
+      expect(from).not.toHaveBeenCalled();
+    },
+  );
 });
