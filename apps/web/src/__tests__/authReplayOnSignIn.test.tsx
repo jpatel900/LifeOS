@@ -48,6 +48,12 @@ import {
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
 import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
 import { PersistenceWriteError } from "@/lib/persistenceFailureKind";
+import { snapshotCursor } from "@/lib/workflowContext/snapshotOwnership";
+import {
+  acceptLatestDraft,
+  captureWorkflow,
+  workflowSeed,
+} from "./helpers/workflowReachability";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/today",
@@ -236,7 +242,10 @@ function SIGNED_OUT_ERROR() {
   return new Error("Sign in before loading areas from Supabase.");
 }
 
+let observedWorkflow: ReturnType<typeof useWorkflow>;
+
 function Harness() {
+  observedWorkflow = useWorkflow();
   const {
     state,
     selectedAreaId,
@@ -250,7 +259,7 @@ function Harness() {
     journalledRollupKeys,
     retryPendingAccountWrites,
     areasReadbackSettled,
-  } = useWorkflow();
+  } = observedWorkflow;
   const unsortedCapture = state.captureItems[0];
   // #967 root/independent review: assert the ACTUAL composed notice
   // (`resolveDeviceSaveNotice`), not only the raw `pendingSaveFailed` flag —
@@ -2826,6 +2835,162 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
   // themselves are already proven above (and are not re-proven here, per
   // scope).
   describe("retryPendingAccountWrites (#967 manual retry)", () => {
+    it("reschedules a stale area retry before hydrating workflow and replaying queued writes", async () => {
+      const day = "2026-10-25";
+      const firstArea = {
+        ...PERSISTED_AREA,
+        color: "#abcdef",
+      };
+      const secondArea = {
+        ...PERSISTED_AREA,
+        id: "88888888-8888-4888-8888-888888888888",
+        name: "Synthetic second area",
+        slug: "synthetic-second-area",
+      };
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+
+      // A successful cockpit recolor leaves its acknowledged field stamp
+      // until a later account read covers the acknowledgment.
+      act(() => {
+        const receipt = observedWorkflow.updateAreaColor(
+          "area-main-job",
+          firstArea.color,
+        );
+        expect(observedWorkflow.acknowledgeAreaSave(receipt, firstArea)).toBe(
+          true,
+        );
+      });
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+      expect(await listPendingWrites("review")).toHaveLength(1);
+      const heldCursor = snapshotCursor(observedWorkflow.state);
+      let releaseOldAreas!: (result: unknown) => void;
+      let releaseFreshAreas!: (result: unknown) => void;
+      mockListAreas
+        .mockReturnValueOnce(
+          new Promise((resolve) => {
+            releaseOldAreas = resolve;
+          }),
+        )
+        .mockReturnValueOnce(
+          new Promise((resolve) => {
+            releaseFreshAreas = resolve;
+          }),
+        );
+      const workflowReads = mockListExecutionReviewItems.mock.calls.length;
+      let retry!: Promise<void>;
+      act(() => {
+        retry = observedWorkflow.retryPendingAccountWrites();
+      });
+      await waitFor(() => expect(mockListAreas).toHaveBeenCalledTimes(2));
+      act(() => {
+        const receipt = observedWorkflow.addArea(
+          secondArea.name,
+          secondArea.color,
+        )!;
+        expect(observedWorkflow.acknowledgeAreaSave(receipt, secondArea)).toBe(
+          true,
+        );
+        observedWorkflow.syncPersistedAreas([firstArea, secondArea], receipt);
+      });
+      expect(
+        observedWorkflow.state.snapshotOwnership!.prunedThrough?.areas,
+      ).toBeGreaterThan(heldCursor.revision);
+      await act(async () => {
+        releaseOldAreas({ provider: "supabase", areas: [PERSISTED_AREA] });
+        await retry;
+      });
+      expect(
+        observedWorkflow.state.areas.some((area) => area.id === secondArea.id),
+      ).toBe(true);
+      expect(
+        observedWorkflow.state.areas.find((area) => area.id === "area-main-job")
+          ?.color,
+      ).toBe(firstArea.color);
+      expect(observedWorkflow.workflowAreaIdByPersistedId[secondArea.id]).toBe(
+        secondArea.id,
+      );
+      expect(mockListExecutionReviewItems).toHaveBeenCalledTimes(workflowReads);
+      expect(mockSyncJournaledReviewEntry).not.toHaveBeenCalled();
+      await waitFor(() => expect(mockListAreas).toHaveBeenCalledTimes(3));
+
+      const accountTask = {
+        ...acceptLatestDraft(
+          captureWorkflow(workflowSeed(), "Fresh retry task"),
+        ).tasks[0],
+        id: PRESYNCED_TASK_ID,
+        user_id: PERSISTED_AREA.user_id,
+        area_id: PERSISTED_AREA.id,
+      };
+      let reviewSaved = false;
+      mockSyncJournaledReviewEntry.mockImplementation(async () => {
+        reviewSaved = true;
+        return { provider: "supabase" };
+      });
+      mockListExecutionReviewItems.mockImplementation(async () => ({
+        provider: "supabase",
+        tasks: [accountTask],
+        blocks: [],
+        sessions: [],
+        reviewEntries: reviewSaved
+          ? [
+              {
+                id: "55555555-5555-4555-8555-555555555555",
+                user_id: PERSISTED_AREA.user_id,
+                area_id: null,
+                review_type: "daily",
+                period_start: day,
+                period_end: day,
+                summary_json: {},
+                created_at: "2026-10-25T00:00:00.000Z",
+              },
+            ]
+          : [],
+      }));
+      await act(async () =>
+        releaseFreshAreas({
+          provider: "supabase",
+          areas: [firstArea, secondArea],
+        }),
+      );
+      await waitFor(async () =>
+        expect(await listPendingWrites("review")).toHaveLength(0),
+      );
+      await waitFor(() => {
+        expect(observedWorkflow.state.tasks).toContainEqual(
+          expect.objectContaining({
+            id: accountTask.id,
+            title: accountTask.title,
+          }),
+        );
+        expect(observedWorkflow.accountClosedDays).toContain(day);
+        expect(observedWorkflow.syncStatus.pendingLocalChanges).toBe(false);
+        expect(observedWorkflow.syncStatus.account).toBe("synced");
+      });
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+      expect(mockListAreas).toHaveBeenCalledTimes(3);
+      expect(screen.getByTestId("notice-message")).toBeEmptyDOMElement();
+    });
+
     it("drains a real failed pending write and clears its evidence, through the exact same pass a mount uses", async () => {
       const day = "2026-09-20";
 

@@ -121,6 +121,9 @@ Bookkeeping limits (review, 2026-10-24):
   read that would have needed them is then ignored for that collection.
   Area reads use the same acceptance check before changing persistence caches,
   reactive mappings or selection, keeping those representations consistent.
+  If a newer area-only read makes an account retry stale, the rejected pass
+  requests a clean replacement so workflow hydration and journal replay still
+  run. The replacement retains the existing identity and unmount guards.
 - Binding a different authenticated account drops the previous account's rows,
   ownership and delivered local aliases, even when the new account is empty.
   Only never-delivered local creations keep their debt. Retained draft-transfer

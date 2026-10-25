@@ -2250,8 +2250,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           }
           if (
             applyPersistedAreas(result.areas, areaCursor, read.userId) === false
-          )
+          ) {
+            // The newer area-only read did not hydrate workflow or replay
+            // queued writes. Request a clean pass after releasing this one.
+            accountSyncRequestedRef.current = true;
             return;
+          }
           await syncPersistedWorkflowRows(client, result.areas, {
             preserveLocalOnlyWhilePending: true,
           });
