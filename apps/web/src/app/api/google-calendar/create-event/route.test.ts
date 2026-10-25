@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   updateExternalWriteEventResultForAccessToken: vi.fn(),
   InsertRejected: class GoogleCalendarInsertRejectedError extends Error {},
   isProposalEventGoneFromGoogle: vi.fn(),
+  ExistingEventMismatch: class GoogleCalendarExistingEventMismatchError extends Error {},
 }));
 
 vi.mock("@/lib/googleCalendar/config", () => ({
@@ -40,6 +41,7 @@ vi.mock("@/lib/googleCalendar/events", () => ({
     mocks.resolveGoogleCalendarWriteAccessToken,
   GoogleCalendarInsertRejectedError: mocks.InsertRejected,
   isProposalEventGoneFromGoogle: mocks.isProposalEventGoneFromGoogle,
+  GoogleCalendarExistingEventMismatchError: mocks.ExistingEventMismatch,
 }));
 
 vi.mock("@/lib/externalWrites/server", () => ({
