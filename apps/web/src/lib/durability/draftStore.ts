@@ -282,7 +282,11 @@ async function claimAnonymousTaskDraftsOnce(
     );
     const byId = new Map(records.map((record) => [record.id, record]));
     for (const record of records) {
-      if (!record.draft || !record.scope || !isUnownedWorkflowScope(record.scope))
+      if (
+        !record.draft ||
+        !record.scope ||
+        !isUnownedWorkflowScope(record.scope)
+      )
         continue;
       const owner = reservedOwners[record.scope] ?? accountScope;
       const id = JSON.stringify([owner, record.draft.id]);

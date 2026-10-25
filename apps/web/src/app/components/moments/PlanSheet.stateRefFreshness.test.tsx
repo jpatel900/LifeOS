@@ -355,6 +355,15 @@ describe("#853 guard: a tap right after a sync's commit acts on what is on scree
   ])("Accept a drafted block, tapped %s", (_label, inWindow) => {
     it("puts the block on the rail", async () => {
       const seed = seedLocalProposal();
+      // This task already belongs to the account. Keep it in the initial
+      // account read while the local proposal is waiting for its own twin.
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [accountTask(seed.tasks[0])],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
       renderPlan(seed);
       await waitFor(() =>
         expect(

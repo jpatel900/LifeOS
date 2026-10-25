@@ -123,7 +123,10 @@ async function renderPlanStage(
   state: ReturnType<typeof stateWithSyncedProposal>,
   scope = `account:${ACCOUNT_USER_ID}`,
 ) {
-  window.sessionStorage.setItem(accountSnapshotKey(scope), JSON.stringify(state));
+  window.sessionStorage.setItem(
+    accountSnapshotKey(scope),
+    JSON.stringify(state),
+  );
   const calendarPageElement = await CalendarPage({
     searchParams: Promise.resolve({}),
   });

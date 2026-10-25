@@ -11,6 +11,7 @@ import {
   accountSnapshotKey,
   claimAnonymousSnapshots,
   storeAccountSnapshot,
+  unverifiedWorkflowScope,
 } from "./accountSnapshot";
 import { loadStoredStateFromSession } from "./reducerCore";
 
@@ -32,6 +33,16 @@ function captured(rawText: string) {
 }
 
 describe("account snapshots", () => {
+  it("starts a fresh unverified generation after retiring an account even when storage is blocked", () => {
+    const initial = unverifiedWorkflowScope();
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    const next = unverifiedWorkflowScope("account:A");
+    expect(next).not.toBe(initial);
+    expect(next).toMatch(/^unverified:/);
+  });
+
   it("never reads the unattributed legacy snapshot as a signed-in account", () => {
     const legacy = captured("Old private capture");
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(legacy));

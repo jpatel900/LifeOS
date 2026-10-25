@@ -17,7 +17,11 @@ import {
 import {
   clearPendingWrites,
   enqueuePendingWrite,
+  listPendingWrites,
 } from "@/lib/durability/pendingWriteJournal";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
+import { createSyncedInitialState } from "@/lib/workflowContext/reducerCore";
+import { createRawCaptureItem } from "@/lib/workflow/capture";
 
 const ACCOUNT_A = "44444444-4444-4444-8444-444444444444";
 const ACCOUNT_B = "55555555-5555-4555-8555-555555555555";
@@ -32,6 +36,7 @@ const {
   mockListDurationProfiles,
   mockListSuggestionRecords,
   mockSyncQueuedCapture,
+  mockSyncJournaledCapture,
   mockGetUser,
   authListener,
   mockCreateSupabaseBrowserClient,
@@ -50,6 +55,7 @@ const {
     mockListDurationProfiles: vi.fn(),
     mockListSuggestionRecords: vi.fn(),
     mockSyncQueuedCapture: vi.fn(async () => ({ provider: "supabase" })),
+    mockSyncJournaledCapture: vi.fn(async () => ({ provider: "supabase" })),
     mockGetUser: getUser,
     authListener: listener,
     mockCreateSupabaseBrowserClient: vi.fn(() => ({
@@ -82,6 +88,7 @@ vi.mock("@/lib/data/workflow", async () => {
     listDurationProfiles: mockListDurationProfiles,
     listSuggestionRecords: mockListSuggestionRecords,
     syncQueuedCapture: mockSyncQueuedCapture,
+    syncJournaledCapture: mockSyncJournaledCapture,
   };
 });
 
@@ -155,6 +162,139 @@ async function queueAccountACaptureAndSignal() {
 }
 
 describe("W3-16 #1 sibling: the offline queue holds a capture for its own account", () => {
+  it("holds A's journal and queue when a fresh identity read finds B without an auth event", async () => {
+    const savedA = {
+      ...createSyncedInitialState(),
+      captureItems: [
+        createRawCaptureItem({ rawText: "A saved reducer capture" }),
+      ],
+    };
+    window.sessionStorage.setItem(
+      accountSnapshotKey(`account:${ACCOUNT_A}`),
+      JSON.stringify(savedA),
+    );
+    await queueAccountACaptureAndSignal();
+    const heldCapture = (await listPendingCaptures()).find(
+      (capture) => capture.owner_user_id === ACCOUNT_A,
+    );
+    expect(heldCapture).toBeDefined();
+    const journalCapture = (rawText: string) => {
+      const id = crypto.randomUUID();
+      return enqueuePendingWrite({
+        entity: "capture",
+        clientWriteId: id,
+        payload: {
+          workflow_capture_id: id,
+          workflow_area_id: null,
+          persisted_area_id: null,
+          raw_text: rawText,
+          return_hook: null,
+        },
+      });
+    };
+    setDeviceAccount(ACCOUNT_A);
+    const heldWrite = await journalCapture("A journal capture");
+    setDeviceAccount(null);
+    await journalCapture("Journal signal");
+    setDeviceAccount(undefined);
+
+    const areaReadOwners: unknown[] = [];
+    mockListAreas.mockImplementation(async () => {
+      areaReadOwners.push(getDeviceAccount());
+      return {
+        provider: "supabase",
+        areas: [
+          {
+            id: "66666666-6666-4666-8666-666666666666",
+            user_id: ACCOUNT_B,
+            name: "B only area",
+            slug: "b-only-area",
+            description: null,
+            color: null,
+            icon: null,
+            sort_order: 0,
+            is_active: true,
+            created_at: "2026-08-01T00:00:00.000Z",
+            updated_at: "2026-08-01T00:00:00.000Z",
+          },
+        ],
+      };
+    });
+    // Startup sees A. Every fresh read sees B, with no auth event.
+    mockGetUser
+      .mockReset()
+      .mockResolvedValue({
+        data: { user: { id: ACCOUNT_B } },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { user: { id: ACCOUNT_A } },
+        error: null,
+      });
+    function Areas() {
+      const { state } = useWorkflow();
+      return (
+        <>
+          <output data-testid="identity-areas">
+            {state.areas.map((area) => area.name).join(",")}
+          </output>
+          <output data-testid="identity-captures">
+            {state.captureItems.map((capture) => capture.raw_text).join(",")}
+          </output>
+        </>
+      );
+    }
+    render(
+      <WorkflowProvider>
+        <Areas />
+      </WorkflowProvider>,
+    );
+    // Positive signals prove both drains ran through B's account.
+    await waitFor(() =>
+      expect(mockSyncJournaledCapture).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ raw_text: "Journal signal" }),
+      ),
+    );
+    await waitFor(() => expect(sentTexts()).toContain("Signal capture"));
+    expect(mockSyncJournaledCapture).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ raw_text: "A journal capture" }),
+    );
+    expect(sentTexts()).not.toContain("Account A offline thought");
+    expect(getDeviceAccount()).toBe(ACCOUNT_B);
+    expect(areaReadOwners).not.toContain(ACCOUNT_A);
+    expect(
+      window.sessionStorage.getItem(accountSnapshotKey(`account:${ACCOUNT_A}`)),
+    ).not.toContain("B only area");
+    await waitFor(async () => {
+      expect(await listPendingWrites("capture")).toEqual([heldWrite]);
+      expect(await listPendingCaptures()).toEqual([heldCapture]);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("identity-areas")).toHaveTextContent(
+        "B only area",
+      ),
+    );
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: ACCOUNT_A } },
+      error: null,
+    });
+    // Hold new account reads so this proves A's retained snapshot, not a refresh.
+    mockListAreas.mockImplementation(() => new Promise(() => {}));
+    await act(async () => {
+      authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_A } });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("identity-areas")).not.toHaveTextContent(
+        "B only area",
+      ),
+    );
+    expect(screen.getByTestId("identity-captures")).toHaveTextContent(
+      "A saved reducer capture",
+    );
+  });
+
   it.each(["read", "event"])(
     "reveals retained offline projections when the owner is established by %s",
     async (source) => {
@@ -183,7 +323,11 @@ describe("W3-16 #1 sibling: the offline queue holds a capture for its own accoun
       );
       let retryIdentity!: () => Promise<void>;
       function Projection() {
-        const { unsyncedCaptureCount, journalledClosedDays, retryPendingAccountWrites } = useWorkflow();
+        const {
+          unsyncedCaptureCount,
+          journalledClosedDays,
+          retryPendingAccountWrites,
+        } = useWorkflow();
         retryIdentity = retryPendingAccountWrites;
         return (
           <output data-testid="projection">
@@ -200,7 +344,9 @@ describe("W3-16 #1 sibling: the offline queue holds a capture for its own accoun
       await waitFor(() =>
         expect(screen.getByTestId("projection").textContent).toBe("1:"),
       );
-      act(() => { void retryIdentity(); });
+      act(() => {
+        void retryIdentity();
+      });
       await waitFor(() => expect(resolveIdentity).toBeTypeOf("function"));
       await act(async () => {
         if (source === "event") {

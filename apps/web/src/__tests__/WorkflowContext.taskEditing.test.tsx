@@ -631,7 +631,9 @@ describe("editBacklogTask — configured account", () => {
       </WorkflowProvider>,
     );
     await waitFor(() =>
-      expect(screen.getByTestId("target-title")).toHaveTextContent(target.title),
+      expect(screen.getByTestId("target-title")).toHaveTextContent(
+        target.title,
+      ),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -683,7 +685,9 @@ describe("editBacklogTask — configured account", () => {
       </WorkflowProvider>,
     );
     await waitFor(() =>
-      expect(screen.getByTestId("target-title")).toHaveTextContent(target.title),
+      expect(screen.getByTestId("target-title")).toHaveTextContent(
+        target.title,
+      ),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));

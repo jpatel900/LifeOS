@@ -13,21 +13,32 @@ export function anonymousWorkflowScope(previousScope: string): string {
   return unownedScope(previousScope, "anonymous");
 }
 
-export function unverifiedWorkflowScope(): string {
-  return unownedScope("pending", "unverified");
+export function unverifiedWorkflowScope(previousScope = "pending"): string {
+  return unownedScope(previousScope, "unverified");
 }
 
-function unownedScope(previousScope: string, kind: "anonymous" | "unverified"): string {
-  const matches = (scope: string) => scope === kind || scope.startsWith(`${kind}:`);
+function unownedScope(
+  previousScope: string,
+  kind: "anonymous" | "unverified",
+): string {
+  const matches = (scope: string) =>
+    scope === kind || scope.startsWith(`${kind}:`);
   if (matches(previousScope)) return previousScope;
   const pointer = `${STORAGE_KEY}:${kind}-scope`;
-  let scope = previousScope === "pending" ? kind : `${kind}:${crypto.randomUUID()}`;
+  let scope =
+    previousScope === "pending" ? kind : `${kind}:${crypto.randomUUID()}`;
   try {
     const storedScope = window.sessionStorage.getItem(pointer);
     if (previousScope === "pending") {
-      const candidate = storedScope && matches(storedScope) ? storedScope : kind;
-      const stored = window.sessionStorage.getItem(accountSnapshotKey(candidate));
-      scope = stored && JSON.parse(stored)?.heldFor ? `${kind}:${crypto.randomUUID()}` : candidate;
+      const candidate =
+        storedScope && matches(storedScope) ? storedScope : kind;
+      const stored = window.sessionStorage.getItem(
+        accountSnapshotKey(candidate),
+      );
+      scope =
+        stored && JSON.parse(stored)?.heldFor
+          ? `${kind}:${crypto.randomUUID()}`
+          : candidate;
     }
     window.sessionStorage.setItem(pointer, scope);
   } catch {
@@ -42,7 +53,9 @@ function anonymousScopes(liveScope?: string): string[] {
   const prefix = `${STORAGE_KEY}:scoped-v1:`;
   for (let index = 0; index < window.sessionStorage.length; index += 1) {
     const key = window.sessionStorage.key(index);
-    const scope = key?.startsWith(prefix) ? key.slice(prefix.length) : undefined;
+    const scope = key?.startsWith(prefix)
+      ? key.slice(prefix.length)
+      : undefined;
     if (scope && isUnownedWorkflowScope(scope)) scopes.add(scope);
   }
   if (liveScope && isUnownedWorkflowScope(liveScope)) scopes.add(liveScope);

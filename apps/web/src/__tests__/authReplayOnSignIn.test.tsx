@@ -1736,13 +1736,14 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         new Error("server rejected the review"),
       );
 
-      // getUser sequence: call 1 = `expectedUserId` capture (A, before
-      // replay); call 2 = `refreshPendingSaveFailed`'s own post-read
+      // getUser sequence: call 1 = outer identity, call 2 = sync identity
+      // (both A); call 3 = `refreshPendingSaveFailed`'s own post-read
       // recheck (B — the narrowest possible window, a session change
-      // spanning exactly this one read); call 3+ = the later review
+      // spanning exactly this one read); call 4+ = the later review
       // readback's own recheck (A again — out of scope for this test).
       mockGetUser
         .mockReset()
+        .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
         .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
         .mockResolvedValueOnce({ data: { user: { id: userB } }, error: null })
         .mockResolvedValue({ data: { user: { id: userA } }, error: null });
@@ -1772,16 +1773,6 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     // completion, even when the older one started FIRST but resolves LAST.
     it("a newer failed-write read wins over an older, slower pre-failure read that resolves after it", async () => {
       const day = "2026-09-13";
-
-      await journalReviewWrite({
-        workflowAreaId: null,
-        persistedAreaId: null,
-        reviewType: "daily",
-        periodStart: day,
-        periodEnd: day,
-        summaryJson: {},
-      });
-
       mockListAreas.mockResolvedValue({
         provider: "supabase",
         areas: [PERSISTED_AREA],
@@ -1793,18 +1784,22 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         sessions: [],
         reviewEntries: [],
       });
-      // This pass's own replay attempt genuinely fails the write.
       mockSyncJournaledReviewEntry.mockRejectedValue(
         new Error("server rejected the review"),
       );
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
 
-      // Intercept ONLY the very first no-arg `listPendingWrites()` call —
-      // structurally, that is the unconditional "sync on mount" effect's
-      // own `refreshJournalledDurableState()` call, which starts almost
-      // immediately and does not depend on replay; `refreshPendingSaveFailed`
-      // (the NEWER read, by construction — it only starts once replay has
-      // resolved) reaches its own `listPendingWrites()` call several awaits
-      // later. Held open here, so it is the one that resolves LAST.
+      // Hold a later full refresh, after the bootstrap visibility barrier has
+      // settled. A manual retry can overtake it in this same provider.
       let releaseOlderRead!: (
         value: Awaited<ReturnType<typeof listPendingWrites>>,
       ) => void;
@@ -1818,48 +1813,34 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         }
         return listPendingWritesActual(entity);
       });
-
-      render(
-        <WorkflowProvider>
-          <Harness />
-        </WorkflowProvider>,
+      act(() => {
+        window.dispatchEvent(new Event("online"));
+      });
+      await waitFor(() => expect(releaseOlderRead).toBeTypeOf("function"));
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+      fireEvent.click(
+        screen.getByRole("button", { name: "Retry pending writes" }),
       );
-
-      // The newer read (`refreshPendingSaveFailed`, gated behind replay)
-      // completes normally and applies `true`.
-      await waitFor(() => {
+      await waitFor(() =>
         expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
           "true",
-        );
+        ),
+      );
+
+      // The old refresh saw an empty journal before the failed write existed.
+      await act(async () => {
+        releaseOlderRead([]);
       });
-
-      // NOW resolve the older, slower read — with the STALE snapshot it
-      // actually captured: the write BEFORE this pass's replay failed it.
-      releaseOlderRead([
-        {
-          entity: "review",
-          client_write_id: "stale-pre-failure-snapshot",
-          payload: {
-            review_type: "daily",
-            period_start: day,
-            period_end: day,
-          },
-          created_at: new Date().toISOString(),
-          // deliberately no `last_attempt_failed` — the state as it was
-          // before this pass's replay ran.
-        },
-      ] as unknown as Awaited<ReturnType<typeof listPendingWrites>>);
-
-      // Give the now-resolved older read a tick to (wrongly, if the
-      // generation guard were missing) apply.
-      await new Promise((resolve) => setTimeout(resolve, 50));
       expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
         "true",
       );
-      // #967 typed failure category: the same generation guard covers this
-      // field too — the stale, pre-failure snapshot (with no
-      // `last_attempt_failure_kind` at all) must not overwrite the newer
-      // read's own result.
       expect(screen.getByTestId("pending-save-failure-kind")).toHaveTextContent(
         "unknown",
       );
@@ -1870,7 +1851,6 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     // read resurrect the flag after a newer, confirmed successful drain.
     it("an older, slower failed-write read does not resurrect a stale failure after a newer successful drain resolves first", async () => {
       const day = "2026-09-14";
-
       await journalReviewWrite({
         workflowAreaId: null,
         persistedAreaId: null,
@@ -1879,7 +1859,6 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         periodEnd: day,
         summaryJson: {},
       });
-
       mockListAreas.mockResolvedValue({
         provider: "supabase",
         areas: [PERSISTED_AREA],
@@ -1891,34 +1870,27 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         sessions: [],
         reviewEntries: [],
       });
-
-      // FIRST mount: the write genuinely fails once — establishes real,
-      // durable `last_attempt_failed: true` ground truth in the journal.
-      mockSyncJournaledReviewEntry.mockRejectedValueOnce(
+      mockSyncJournaledReviewEntry.mockRejectedValue(
         new Error("server rejected the review"),
       );
-      const first = render(
+      render(
         <WorkflowProvider>
           <Harness />
         </WorkflowProvider>,
       );
-      await waitFor(() => {
+      await waitFor(() =>
         expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
           "true",
-        );
-      });
-      first.unmount();
+        ),
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
 
-      // SECOND mount: this pass's OWN replay attempt succeeds, draining the
-      // write for real. The OLDER read (the unconditional mount effect,
-      // structurally the first no-arg call — see the test above) is held
-      // open so it captures the STILL-true pre-drain snapshot, while the
-      // NEWER read (`refreshPendingSaveFailed`, gated behind replay)
-      // resolves normally, ahead of it, with the correct `false`.
-      mockSyncJournaledReviewEntry.mockResolvedValue({
-        provider: "supabase",
-      });
-
+      // Keep the same provider so the shared generation counter, rather than
+      // unmount cancellation, must reject the delayed pre-recovery result.
       let releaseOlderRead!: (
         value: Awaited<ReturnType<typeof listPendingWrites>>,
       ) => void;
@@ -1932,50 +1904,31 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         }
         return listPendingWritesActual(entity);
       });
-
-      render(
-        <WorkflowProvider>
-          <Harness />
-        </WorkflowProvider>,
-      );
-
-      // The newer read applies the correct `false` — the successful drain.
-      await waitFor(async () => {
-        const pending = await listPendingWritesActual("review");
-        expect(pending).toHaveLength(0);
+      act(() => {
+        window.dispatchEvent(new Event("online"));
       });
-      await waitFor(() => {
+      await waitFor(() => expect(releaseOlderRead).toBeTypeOf("function"));
+      const staleFailed = await listPendingWritesActual("review");
+      expect(staleFailed[0]?.last_attempt_failed).toBe(true);
+      mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
+      fireEvent.click(
+        screen.getByRole("button", { name: "Retry pending writes" }),
+      );
+      await waitFor(async () =>
+        expect(await listPendingWritesActual("review")).toHaveLength(0),
+      );
+      await waitFor(() =>
         expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
           "false",
-        );
+        ),
+      );
+
+      await act(async () => {
+        releaseOlderRead(staleFailed);
       });
-
-      // NOW resolve the older, slower read with the STALE still-failed
-      // snapshot it actually captured on this mount — it started FIRST but
-      // is completing LAST.
-      releaseOlderRead([
-        {
-          entity: "review",
-          client_write_id: "stale-still-failed-snapshot",
-          payload: {
-            review_type: "daily",
-            period_start: day,
-            period_end: day,
-          },
-          created_at: new Date().toISOString(),
-          last_attempt_failed: true,
-          last_attempt_failed_at: new Date().toISOString(),
-        },
-      ] as unknown as Awaited<ReturnType<typeof listPendingWrites>>);
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
       expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
         "false",
       );
-      // #967 provider/journal review, omission 1: the same generation guard
-      // must reject the stale category too — recovery already cleared it to
-      // absent, and the stale (legacy-shaped, no kind field) snapshot must
-      // not resurrect one.
       expect(screen.getByTestId("pending-save-failure-kind")).toHaveTextContent(
         "",
       );
@@ -2515,6 +2468,7 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       mockGetUser
         .mockReset()
         .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
+        .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
         .mockResolvedValueOnce({ data: { user: { id: userB } }, error: null })
         .mockResolvedValue({ data: { user: { id: userA } }, error: null });
 
@@ -2987,87 +2941,127 @@ describe("W3-16 #1: pending work never crosses to another account", () => {
   };
   const ACCOUNT_A_TEXT = "Call the landlord back";
 
-  it.each(["account", "anonymous"])("retains a %s capture across A/B/A when session storage refuses writes", async (startingScope) => {
-    if (startingScope === "anonymous") mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
-    if (startingScope === "anonymous") {
-      const saved = createSyncedInitialState();
-      saved.captureItems = [createRawCaptureItem({ rawText: "Already saved for A" })];
-      sessionStorage.setItem(accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`), JSON.stringify(saved));
-    }
-    mockListAreas.mockResolvedValue({
-      provider: "supabase",
-      areas: [PERSISTED_AREA],
-    });
-    mockSyncJournaledCapture.mockRejectedValue(
-      new TypeError("Failed to fetch"),
-    );
-    render(
-      <WorkflowProvider>
-        <Harness />
-      </WorkflowProvider>,
-    );
-    await waitFor(() =>
-      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
-        "true",
-      ),
-    );
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new DOMException("Quota", "QuotaExceededError");
-    });
-    fireEvent.click(screen.getByText("Capture"));
-    await waitFor(() =>
-      expect(screen.getByTestId("capture-texts")).toHaveTextContent(
-        ACCOUNT_A_TEXT,
-      ),
-    );
-    if (startingScope === "anonymous") {
-      mockGetUser.mockResolvedValue({ data: { user: { id: PERSISTED_AREA.user_id } }, error: null });
-      await act(async () => { authListener.callback?.("SIGNED_IN", { user: { id: PERSISTED_AREA.user_id } }); });
-      await waitFor(() => expect(screen.getByTestId("capture-texts")).toHaveTextContent(ACCOUNT_A_TEXT));
-      expect(screen.getByTestId("capture-texts")).toHaveTextContent("Already saved for A");
-      mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
-      await act(async () => { authListener.callback?.("SIGNED_OUT", null); });
-      expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(ACCOUNT_A_TEXT);
-      fireEvent.click(screen.getByText("Capture B"));
-      await waitFor(() => expect(screen.getByTestId("capture-texts")).toHaveTextContent("B's private thought"));
-    }
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: ACCOUNT_B_USER } },
-      error: null,
-    });
-    mockListAreas.mockResolvedValue({
-      provider: "supabase",
-      areas: [ACCOUNT_B_AREA],
-    });
-    await act(async () => {
-      authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_B_USER } });
-    });
-    expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
-      ACCOUNT_A_TEXT,
-    );
-    if (startingScope === "anonymous") expect(screen.getByTestId("capture-texts")).toHaveTextContent("B's private thought");
-    expect(screen.getByTestId("capture-texts")).not.toHaveTextContent("Already saved for A");
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: PERSISTED_AREA.user_id } },
-      error: null,
-    });
-    mockListAreas.mockResolvedValue({
-      provider: "supabase",
-      areas: [PERSISTED_AREA],
-    });
-    await act(async () => {
-      authListener.callback?.("SIGNED_IN", {
-        user: { id: PERSISTED_AREA.user_id },
+  it.each(["account", "anonymous"])(
+    "retains a %s capture across A/B/A when session storage refuses writes",
+    async (startingScope) => {
+      if (startingScope === "anonymous")
+        mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+      if (startingScope === "anonymous") {
+        const saved = createSyncedInitialState();
+        saved.captureItems = [
+          createRawCaptureItem({ rawText: "Already saved for A" }),
+        ];
+        sessionStorage.setItem(
+          accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`),
+          JSON.stringify(saved),
+        );
+      }
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
       });
-    });
-    await waitFor(() =>
-      expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+      mockSyncJournaledCapture.mockRejectedValue(
+        new TypeError("Failed to fetch"),
+      );
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+        throw new DOMException("Quota", "QuotaExceededError");
+      });
+      fireEvent.click(screen.getByText("Capture"));
+      await waitFor(() =>
+        expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+          ACCOUNT_A_TEXT,
+        ),
+      );
+      if (startingScope === "anonymous") {
+        mockGetUser.mockResolvedValue({
+          data: { user: { id: PERSISTED_AREA.user_id } },
+          error: null,
+        });
+        await act(async () => {
+          authListener.callback?.("SIGNED_IN", {
+            user: { id: PERSISTED_AREA.user_id },
+          });
+        });
+        await waitFor(() =>
+          expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+            ACCOUNT_A_TEXT,
+          ),
+        );
+        expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+          "Already saved for A",
+        );
+        mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+        await act(async () => {
+          authListener.callback?.("SIGNED_OUT", null);
+        });
+        expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+          ACCOUNT_A_TEXT,
+        );
+        fireEvent.click(screen.getByText("Capture B"));
+        await waitFor(() =>
+          expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+            "B's private thought",
+          ),
+        );
+      }
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: ACCOUNT_B_USER } },
+        error: null,
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [ACCOUNT_B_AREA],
+      });
+      await act(async () => {
+        authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_B_USER } });
+      });
+      expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
         ACCOUNT_A_TEXT,
-      ),
-    );
-    expect(screen.getByTestId("capture-texts")).not.toHaveTextContent("B's private thought");
-    if (startingScope === "anonymous") expect(screen.getByTestId("capture-texts")).toHaveTextContent("Already saved for A");
-  });
+      );
+      if (startingScope === "anonymous")
+        expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+          "B's private thought",
+        );
+      expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+        "Already saved for A",
+      );
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: PERSISTED_AREA.user_id } },
+        error: null,
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      await act(async () => {
+        authListener.callback?.("SIGNED_IN", {
+          user: { id: PERSISTED_AREA.user_id },
+        });
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+          ACCOUNT_A_TEXT,
+        ),
+      );
+      expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+        "B's private thought",
+      );
+      if (startingScope === "anonymous")
+        expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+          "Already saved for A",
+        );
+    },
+  );
 
   it("does not sort with a cached account session while identity is unverified", async () => {
     mockGetUser.mockResolvedValue({

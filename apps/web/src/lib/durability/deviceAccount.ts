@@ -38,7 +38,10 @@ export function isAnonymousWorkflowScope(scope: string): boolean {
 }
 
 export function isUnownedWorkflowScope(scope: string | undefined): boolean {
-  return scope !== undefined && (isUnverifiedWorkflowScope(scope) || isAnonymousWorkflowScope(scope));
+  return (
+    scope !== undefined &&
+    (isUnverifiedWorkflowScope(scope) || isAnonymousWorkflowScope(scope))
+  );
 }
 
 export function isUnverifiedWorkflowScope(scope: string): boolean {
