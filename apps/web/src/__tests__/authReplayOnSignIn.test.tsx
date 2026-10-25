@@ -1237,17 +1237,16 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     });
     mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
 
-    // The provider now calls `getUser()` exactly twice per pass: once in
-    // `runAccountSync`, BEFORE the pending-period snapshot and replay even
-    // start (captured as `expectedUserId`), and once inside
-    // `readbackAccountReviewClosedDays`, immediately after its own account
-    // read. Answering A the first time and B every time after means the
-    // switch spans the ENTIRE gap between those two calls — snapshot,
+    // The first identity lookup binds the area read. The next lookup in
+    // `runAccountSync` captures `expectedUserId` before replay. Answer A
+    // for both, then B during post-replay confirmation. The switch still
+    // spans the ENTIRE gap between the replay and readback calls — snapshot,
     // replay, and the readback's own read all happen while this mock is
     // already answering B, matching the follow-up review's "replay-to-read
     // gap" scenario rather than a change during the read alone.
     mockGetUser
       .mockReset()
+      .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
       .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
       .mockResolvedValue({ data: { user: { id: userB } }, error: null });
 
@@ -1707,13 +1706,14 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         new Error("server rejected the review"),
       );
 
-      // getUser sequence: call 1 = `expectedUserId` capture (A, before
-      // replay); call 2 = `refreshPendingSaveFailed`'s own post-read
-      // recheck (B — the narrowest possible window, a session change
-      // spanning exactly this one read); call 3+ = the later review
+      // getUser sequence: call 1 binds areas to A; call 2 captures
+      // `expectedUserId` (A, before replay); call 3 is the post-read
+      // `refreshPendingSaveFailed` recheck (B — a session change
+      // spanning exactly this one read); call 4+ = the later review
       // readback's own recheck (A again — out of scope for this test).
       mockGetUser
         .mockReset()
+        .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
         .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
         .mockResolvedValueOnce({ data: { user: { id: userB } }, error: null })
         .mockResolvedValue({ data: { user: { id: userA } }, error: null });
@@ -2485,6 +2485,7 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
 
       mockGetUser
         .mockReset()
+        .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
         .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
         .mockResolvedValueOnce({ data: { user: { id: userB } }, error: null })
         .mockResolvedValue({ data: { user: { id: userA } }, error: null });
