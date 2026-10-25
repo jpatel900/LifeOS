@@ -34,13 +34,31 @@
 export type DeviceAccount = string | null | undefined;
 
 let currentAccount: DeviceAccount = undefined;
+let accountRevision = 0;
 
 export function setDeviceAccount(account: DeviceAccount): void {
+  if (account !== currentAccount) accountRevision += 1;
   currentAccount = account;
 }
 
 export function getDeviceAccount(): DeviceAccount {
   return currentAccount;
+}
+
+/** Keep an async operation bound to this session, including A -> B -> A. */
+export function guardDeviceAccount(): {
+  account: DeviceAccount;
+  assertCurrent: () => void;
+} {
+  const revision = accountRevision;
+  return {
+    account: currentAccount,
+    assertCurrent: () => {
+      if (accountRevision !== revision) {
+        throw new Error("Your account changed. Try again.");
+      }
+    },
+  };
 }
 
 /** The owner to stamp on a NEW device entry, or none when no account is known. */

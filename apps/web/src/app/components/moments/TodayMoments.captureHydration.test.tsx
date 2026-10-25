@@ -47,9 +47,28 @@ const { listAreas, listCaptures, listExecution, upsert, account } = vi.hoisted(
 vi.mock("@/lib/supabase/browser", () => {
   const client = {
     auth: {
-      onAuthStateChange: () => ({
-        data: { subscription: { unsubscribe: vi.fn() } },
-      }),
+      onAuthStateChange: (
+        callback: (event: string, session: { user: { id: string } }) => void,
+      ) => {
+        let subscribed = true;
+        // Auth becomes known independently of area inventory, as in the SDK.
+        queueMicrotask(() => {
+          if (subscribed) {
+            callback("INITIAL_SESSION", {
+              user: { id: "22222222-2222-4222-8222-222222222222" },
+            });
+          }
+        });
+        return {
+          data: {
+            subscription: {
+              unsubscribe: () => {
+                subscribed = false;
+              },
+            },
+          },
+        };
+      },
       getUser: async () => ({
         data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
         error: null,
@@ -184,7 +203,7 @@ beforeEach(async () => {
   // transport/readback are synthetic; failed sends cannot clear the journal.
   upsert.mockImplementation((input: Record<string, unknown>) => ({
     select: () => ({
-      single: async () => {
+      maybeSingle: async () => {
         if (!account.available)
           return {
             data: null,

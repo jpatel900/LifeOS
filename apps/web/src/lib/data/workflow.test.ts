@@ -579,7 +579,7 @@ describe("workflow data provider", () => {
   // window #960 defect 1 could leave open indefinitely. It is now journalled
   // and replayed through `syncJournaledCapture`, this function.
   it("syncs a journalled capture and returns its account id, so the local optimistic row can be aliased", async () => {
-    const single = vi.fn().mockResolvedValue({
+    const maybeSingle = vi.fn().mockResolvedValue({
       data: {
         id: "77777777-7777-4777-8777-777777777777",
         user_id: userId,
@@ -595,7 +595,7 @@ describe("workflow data provider", () => {
       },
       error: null,
     });
-    const select = vi.fn().mockReturnValue({ single });
+    const select = vi.fn().mockReturnValue({ maybeSingle });
     const upsert = vi.fn().mockReturnValue({ select });
     const from = vi.fn().mockReturnValue({ upsert });
 
@@ -625,7 +625,10 @@ describe("workflow data provider", () => {
       capture_mode: "text",
     });
     expect(upsertedRow).not.toHaveProperty("status");
-    expect(upsertOptions).toEqual({ onConflict: "user_id,client_capture_id" });
+    expect(upsertOptions).toEqual({
+      onConflict: "user_id,client_capture_id",
+      ignoreDuplicates: true,
+    });
   });
 
   it("refuses to sync a journalled capture without a client capture id", async () => {
@@ -2992,14 +2995,14 @@ describe("workflow data provider", () => {
   });
 
   it("preserves typed failure for syncJournaledCapture", async () => {
-    const single = vi.fn().mockResolvedValue({
+    const maybeSingle = vi.fn().mockResolvedValue({
       data: null,
       error: {
         code: "42703",
         message: "column capture_mode missing",
       },
     });
-    const select = vi.fn().mockReturnValue({ single });
+    const select = vi.fn().mockReturnValue({ maybeSingle });
     const upsert = vi.fn().mockReturnValue({ select });
     const from = vi.fn().mockReturnValue({ upsert });
 
