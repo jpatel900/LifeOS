@@ -4,7 +4,7 @@
 // from the queue, losing the choice for good. The drain must wait for the
 // areas, and an item whose area is not known yet must stay queued.
 import "fake-indexeddb/auto";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 import {
@@ -33,7 +33,15 @@ const {
   mockListDurationProfiles: vi.fn(),
   mockListSuggestionRecords: vi.fn(),
   mockSyncQueuedCapture: vi.fn(async () => ({ provider: "supabase" })),
-  mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
+  mockCreateSupabaseBrowserClient: vi.fn(() => ({
+    mocked: true,
+    auth: {
+      getUser: async () => ({
+        data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+        error: null,
+      }),
+    },
+  })),
 }));
 
 vi.mock("@/lib/data/workflow", async () => {
@@ -225,7 +233,10 @@ describe("offline drain when the chosen area is gone (W3-16 #8)", () => {
         <div />
       </WorkflowProvider>,
     );
-    window.dispatchEvent(new Event("online"));
+    await waitFor(() => expect(mockListAreas).toHaveBeenCalled());
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
 
     await waitForDrainSignal(signal.client_capture_id);
     expect(sentIds()).not.toContain(subject.client_capture_id);

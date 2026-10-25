@@ -156,7 +156,15 @@ const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
 beforeEach(() => {
   window.sessionStorage.clear();
   vi.clearAllMocks();
-  mockCreateSupabaseBrowserClient.mockReturnValue({ mocked: true });
+  mockCreateSupabaseBrowserClient.mockReturnValue({
+    mocked: true,
+    auth: {
+      getUser: async () => ({
+        data: { user: { id: persistedArea.user_id } },
+        error: null,
+      }),
+    },
+  });
   mockNoWorkflowRows();
   process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
 });

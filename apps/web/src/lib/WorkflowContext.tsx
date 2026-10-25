@@ -270,18 +270,20 @@ function derivePendingSaveFailureAggregate(pending: PendingWrite[]): {
 const WorkflowContext = createContext<WorkflowContextValue | null>(null);
 
 export function WorkflowProvider({ children }: { children: ReactNode }) {
-  const [account, setAccount] = useState({
-    scope: "pending",
+  const [account, setAccount] = useState(() => ({
+    // Demo has no identity to resolve. Keep its empty server/client first
+    // render intact, then let the existing hydration effect restore its seed.
+    scope: createSupabaseBrowserClient() ? "pending" : "demo",
     revision: 0,
     storageBlocked: false,
-  });
+  }));
   const snapshot = useRef<{
     scope: string;
     stateRef: { current: WorkflowState };
   } | null>(null);
   const heldSnapshots = useRef(new Map<string, { current: WorkflowState }>());
   const memorySourceOwners = useRef<Record<string, string>>({});
-  const selectedScope = useRef("pending");
+  const selectedScope = useRef(account.scope);
   const isScopeActive = useCallback(
     (scope: string) => selectedScope.current === scope,
     [],
@@ -2910,7 +2912,7 @@ function AccountWorkflowProvider({
     void refreshPendingLocalChanges();
     if (typeof window === "undefined") return;
     const onOnline = () => {
-      if (!scope.startsWith("account:")) return;
+      if (!scope.startsWith("account:") && scope !== "demo") return;
       void syncOfflineQueue();
       void replayJournaledWrites().finally(() => {
         void refreshJournalledDurableState();

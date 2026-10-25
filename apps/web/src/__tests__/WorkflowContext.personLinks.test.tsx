@@ -6,6 +6,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
+import { clearStoredTaskDrafts } from "@/lib/durability/draftStore";
 import type { ParsedWorkflowResult } from "@/lib/ai/parseCaptureWorkflow";
 
 // S3 (#255): accept-path person/commitment persistence. These tests drive the
@@ -336,11 +337,13 @@ beforeEach(async () => {
   // mocked. Left uncleared, an earlier test's write is read back by the next
   // test's `WorkflowProvider` mount effect. Same clear
   // `durableWinsReviewsGuard.test.tsx` has always done.
+  await clearStoredTaskDrafts();
   await clearPendingWrites();
 });
 
 afterEach(async () => {
   vi.clearAllMocks();
+  await clearStoredTaskDrafts();
   await clearPendingWrites();
 });
 
