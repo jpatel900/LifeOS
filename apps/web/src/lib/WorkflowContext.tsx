@@ -304,8 +304,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   //  - ACCOUNT: `period_start` of every daily `review_entries` row loaded for
   //    this user. Outlives the device; this is what a second machine sees.
   //  - DEVICE: `period_start` of every daily review still sitting in the
-  //    pending-write journal. Durable (IndexedDB survives a reload and is
-  //    visible to a new tab) but the account does not have it yet.
+  //    pending-write journal, plus delivered days awaiting confirmation in
+  //    this provider. Queued rows survive reload through IndexedDB; the
+  //    delivered-but-unconfirmed obligations below last for this mount.
   //
   // Provider state rather than reducer state on purpose: both are FETCHED
   // (one from Supabase, one from IndexedDB), the same tier as
@@ -315,6 +316,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [journalledClosedDays, setJournalledClosedDays] = useState<string[]>(
     [],
   );
+  // Delivery removes the journal row before account readback can confirm
+  // it. Retain that obligation across reconnects for this provider's life,
+  // partitioned by owner so an account change only changes visibility.
+  const unconfirmedClosedDaysRef = useRef(new Map<string, Set<string>>());
+  const reviewReadbackGenerationRef = useRef(0);
   // #737 C1 re-score GAP 1 — the same two tiers, for the same reason, one
   // question over: "has this win already been logged?". Before these, the
   // Close moment answered it from React state initialised empty on every
@@ -1788,23 +1794,50 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // see `pendingSaveFailedGenerationRef`'s own comment.
     const myPendingSaveFailedGeneration =
       ++pendingSaveFailedGenerationRef.current;
+    const account = getDeviceAccount();
     try {
       // W3-16 #1: another account's held work is never shown to this one.
-      const pending = visibleToAccount(await listPendingWrites());
+      const pending = visibleToAccount(await listPendingWrites(), account);
       // See `mountedRef`'s note above the ref/refs block — a provider
       // unmounted while this read was in flight must not touch state. One
       // check covers every setter below: none of them awaits between here
       // and the end of this try block.
-      if (!mountedRef.current) return;
-      setJournalledClosedDays(
-        pending
-          .filter((write) => write.entity === "review")
-          .map(
-            (write) =>
-              (write.payload as { period_start?: unknown }).period_start,
-          )
-          .filter((day): day is string => typeof day === "string"),
-      );
+      if (!mountedRef.current || account !== getDeviceAccount()) return;
+      // Keep evidence from this owner-bound read too: the narrower period
+      // snapshot before replay can fail even when this read succeeded.
+      if (typeof account === "string") {
+        const unconfirmed =
+          unconfirmedClosedDaysRef.current.get(account) ?? new Set<string>();
+        for (const write of pending) {
+          if (write.entity !== "review") continue;
+          const payload = write.payload as {
+            review_type?: unknown;
+            period_start?: unknown;
+          };
+          if (
+            payload.review_type === "daily" &&
+            typeof payload.period_start === "string"
+          ) {
+            unconfirmed.add(payload.period_start);
+          }
+        }
+        if (unconfirmed.size > 0)
+          unconfirmedClosedDaysRef.current.set(account, unconfirmed);
+      }
+      setJournalledClosedDays([
+        ...new Set([
+          ...pending
+            .filter((write) => write.entity === "review")
+            .map(
+              (write) =>
+                (write.payload as { period_start?: unknown }).period_start,
+            )
+            .filter((day): day is string => typeof day === "string"),
+          ...(typeof account === "string"
+            ? (unconfirmedClosedDaysRef.current.get(account) ?? [])
+            : []),
+        ]),
+      ]);
       // #737 C1 re-score GAP 1. Read out of the SAME `listPendingWrites()`
       // pass, and therefore on exactly the same lifecycle as the closed days
       // above (mount, after every replay drain, and on `online`). That is not
@@ -2014,8 +2047,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
    * point the caller clearing journal-derived evidence on this boolean alone
    * would leave NEITHER tier reporting the day closed. Two guards close
    * that gap:
-   *  - `expectedDailyPeriods` — the daily-review periods still pending
-   *    immediately BEFORE replay ran (the caller's snapshot) — must ALL
+   *  - `expectedDailyPeriods` — the daily-review periods pending before
+   *    replay, including earlier unconfirmed deliveries — must ALL
    *    appear in this read's own daily reviews. A read that succeeds but
    *    omits one is treated the same as a failed read.
    *  - `expectedUserId` — the authenticated user id the CALLER captured
@@ -2054,9 +2087,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       client: MinimalSupabaseClient | null,
       expectedDailyPeriods: string[],
       expectedUserId: string | null,
+      releaseDeviceEvidence: boolean,
     ): Promise<boolean> => {
       if (!client?.auth) return false;
       if (!expectedUserId) return false;
+      const readbackGeneration = ++reviewReadbackGenerationRef.current;
+      const identityGeneration = deviceIdentityGenerationRef.current;
       try {
         const result = await listExecutionReviewItems(client);
         if (!mountedRef.current) return false;
@@ -2064,7 +2100,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
         const after = await client.auth.getUser();
         const afterUserId = after.data.user?.id ?? null;
-        if (afterUserId !== expectedUserId) return false;
+        if (
+          !mountedRef.current ||
+          after.error ||
+          afterUserId !== expectedUserId ||
+          getDeviceAccount() !== expectedUserId ||
+          identityGeneration !== deviceIdentityGenerationRef.current ||
+          readbackGeneration !== reviewReadbackGenerationRef.current
+        )
+          return false;
 
         const dailyReviews = result.reviewEntries.filter(
           (entry) => entry.review_type === "daily",
@@ -2075,10 +2119,33 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
         const dailyClosedDays = dailyReviews.map((entry) => entry.period_start);
         setAccountClosedDays(dailyClosedDays);
-
-        return expectedDailyPeriods.every((period) =>
+        const allExpectedDaysConfirmed = expectedDailyPeriods.every((period) =>
           dailyClosedDays.includes(period),
         );
+
+        // A partial read releases only the periods it actually confirms.
+        // Never clear the shared set from this pass's older snapshot: another
+        // reconnect may have added an obligation while this read was pending.
+        const unconfirmed =
+          unconfirmedClosedDaysRef.current.get(expectedUserId);
+        const confirmed = new Set(
+          dailyClosedDays.filter((day) => unconfirmed?.has(day)),
+        );
+        if (releaseDeviceEvidence && unconfirmed && confirmed.size > 0) {
+          for (const day of confirmed) unconfirmed.delete(day);
+          if (unconfirmed.size === 0)
+            unconfirmedClosedDaysRef.current.delete(expectedUserId);
+          // Full confirmation keeps the existing overlap until the normal
+          // journal refresh settles. Partial confirmation cannot wait for
+          // that all-period gate, so transfer just its confirmed periods.
+          if (!allExpectedDaysConfirmed) {
+            setJournalledClosedDays((days) =>
+              days.filter((day) => !confirmed.has(day)),
+            );
+          }
+        }
+
+        return allExpectedDaysConfirmed;
       } catch {
         return false;
       }
@@ -2086,6 +2153,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // Owner changes must reveal retained device evidence even while offline.
+  // Same-owner events do not need another device visibility refresh.
   const adoptDeviceAccount = useCallback(
     (account: DeviceAccount) => {
       if (getDeviceAccount() === account) return;
@@ -2145,6 +2214,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         if (!mountedRef.current) return;
       } while (visibilityRefresh !== deviceVisibilityRefreshRef.current);
 
+      // A newer auth event outranks the getUser answer above. A failed read
+      // also leaves that trusted owner intact. Without a known signed-in
+      // owner, keep the journal for a later sign-in/reconnect.
+      const account = getDeviceAccount();
+      if (typeof account !== "string") return;
+      expectedUserId = account;
+      const identityGeneration = deviceIdentityGenerationRef.current;
+
       // #967 review: the specific daily-review periods this pass is
       // responsible for confirming, snapshotted IMMEDIATELY BEFORE
       // replay removes them from the journal — a successful account
@@ -2166,6 +2243,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         // readback, and must not block this account's own release.
         expectedDailyPeriods = visibleToAccount(
           await listPendingWrites("review"),
+          account,
         )
           .map(
             (write) =>
@@ -2188,6 +2266,22 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       } catch {
         expectedDailyPeriodsSnapshotFailed = true;
       }
+
+      if (
+        !mountedRef.current ||
+        getDeviceAccount() !== account ||
+        identityGeneration !== deviceIdentityGenerationRef.current
+      )
+        return;
+
+      // Register synchronously BEFORE replay can drain the rows. An empty
+      // journal on a later pass does not erase an earlier confirmation debt.
+      const unconfirmed =
+        unconfirmedClosedDaysRef.current.get(account) ?? new Set<string>();
+      for (const period of expectedDailyPeriods) unconfirmed.add(period);
+      if (unconfirmed.size > 0)
+        unconfirmedClosedDaysRef.current.set(account, unconfirmed);
+      expectedDailyPeriods = [...unconfirmed];
 
       // ORDERING IS LOAD-BEARING (#960 defect 1) — this must run AFTER
       // the two calls above have populated `persistedAreasRef`.
@@ -2227,8 +2321,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // account tier BEFORE the journal refresh below can clear its
       // device-tier evidence — see `readbackAccountReviewClosedDays`'s
       // own comment. A failed readback must not invent account
-      // confirmation, so `refreshJournalledDurableState` (the only
-      // thing that can drop `journalledClosedDays`) is skipped this
+      // confirmation, so `refreshJournalledDurableState` is skipped this
       // pass rather than let a review with no account-tier evidence
       // yet lose its device-tier evidence too; the next mount,
       // reconnect, or sign-in reconciles it.
@@ -2244,11 +2337,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           client,
           expectedDailyPeriods,
           expectedUserId,
+          !expectedDailyPeriodsSnapshotFailed,
         );
-      if (
-        accountConfirmedExpectedDays &&
-        !expectedDailyPeriodsSnapshotFailed
-      ) {
+      if (accountConfirmedExpectedDays && !expectedDailyPeriodsSnapshotFailed) {
         await refreshJournalledDurableState();
       }
     },
@@ -2280,9 +2371,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // mount replay has been removed (see its effect's own comment): this is
   // now the ONE mechanism that owns "replay the journal on mount", ordered
   // strictly after the refs populate, on every mount, signed in or not.
-  // Owner changes must reveal retained device evidence even while offline.
-  // Same-owner events do not refresh: a drained close may still be awaiting
-  // account confirmation under the post-replay readback gate below.
   const runAccountSync = useCallback(
     async (options?: { replayAfter?: boolean }): Promise<void> => {
       // #960 defect 1: the mount effect and a `SIGNED_IN` event can land in
