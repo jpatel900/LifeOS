@@ -3186,4 +3186,106 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
       tiers.journalled?.includes(day) || tiers.account?.includes(day),
     ).toBe(true);
   });
+
+  function accountReviewRead(confirmedDays: string[] = []) {
+    return {
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: confirmedDays.map((period) => ({
+        id: "66666666-6666-4666-8666-666666666666",
+        user_id: PERSISTED_AREA.user_id,
+        review_type: "daily",
+        period_start: period,
+        period_end: period,
+      })),
+    };
+  }
+
+  async function settleJournalReads(from: number) {
+    // Follow the actual asynchronous journal reads started by this pass.
+    // A drained queue alone precedes account readback and evidence refresh.
+    await act(async () => {
+      for (let index = from; index < mockListPendingWrites.mock.results.length; index += 1) {
+        const result = mockListPendingWrites.mock.results[index];
+        if (result?.type === "return") {
+          await Promise.allSettled([result.value]);
+        }
+      }
+    });
+  }
+
+  async function settledReconnect(confirmedDays: string[], failRead = false) {
+    const journalReadsBefore = mockListPendingWrites.mock.results.length;
+    const accountReadsBefore = mockListExecutionReviewItems.mock.calls.length;
+    let reachedReadback!: () => void;
+    const readbackStarted = new Promise<void>((resolve) => {
+      reachedReadback = resolve;
+    });
+    mockListExecutionReviewItems.mockImplementationOnce(async () => {
+      reachedReadback();
+      if (failRead) throw new TypeError("Failed to fetch");
+      return accountReviewRead(confirmedDays);
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await readbackStarted;
+    });
+    await settleJournalReads(journalReadsBefore);
+    expect(mockListExecutionReviewItems).toHaveBeenCalledTimes(accountReadsBefore + 1);
+  }
+
+  it.each([false, true])(
+    "W7-10: a second reconnect retains a drained close until confirmation (first read fails: %s)",
+    async (failFirstRead) => {
+      await mountWithUndeliveredClose();
+      mockSyncJournaledReviewEntry.mockReset().mockResolvedValue({ provider: "supabase" });
+
+      await settledReconnect([], failFirstRead);
+      expect(await listPendingWritesActual("review")).toHaveLength(0);
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+      expect(closedDayTiers().journalled).toContain(day);
+      expect(closedDayTiers().account).not.toContain(day);
+
+      // The journal is already empty. This read must still confirm day.
+      await settledReconnect([]);
+      expect(closedDayTiers().journalled).toContain(day);
+      expect(closedDayTiers().account).not.toContain(day);
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+
+      await settledReconnect([day]);
+      expect(closedDayTiers().account).toContain(day);
+      expect(closedDayTiers().journalled).not.toContain(day);
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("W7-10: overlapping reconnects cannot release an older unconfirmed close", async () => {
+    await mountWithUndeliveredClose();
+    mockSyncJournaledReviewEntry.mockReset().mockResolvedValue({ provider: "supabase" });
+    let releaseFirstRead!: (value: ReturnType<typeof accountReviewRead>) => void;
+    let reachedFirstRead!: () => void;
+    const firstReadStarted = new Promise<void>((resolve) => { reachedFirstRead = resolve; });
+    mockListExecutionReviewItems.mockImplementationOnce(() => {
+      reachedFirstRead();
+      return new Promise<ReturnType<typeof accountReviewRead>>((resolve) => { releaseFirstRead = resolve; });
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await firstReadStarted;
+    });
+    expect(await listPendingWritesActual("review")).toHaveLength(0);
+
+    await settledReconnect([]);
+    expect(closedDayTiers().journalled).toContain(day);
+    await act(async () => { releaseFirstRead(accountReviewRead()); });
+    await settleJournalReads(0);
+    expect(closedDayTiers().journalled).toContain(day);
+
+    await settledReconnect([day]);
+    expect(closedDayTiers().account).toContain(day);
+    expect(closedDayTiers().journalled).not.toContain(day);
+    expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+  });
 });
