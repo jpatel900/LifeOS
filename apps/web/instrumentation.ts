@@ -2,6 +2,9 @@ import { captureError } from "./src/lib/observability";
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    console.info(
+      JSON.stringify({ event: "runtime_start", node: process.version }),
+    );
     await import("./langfuse.server.config");
     await import("./sentry.server.config");
   }
