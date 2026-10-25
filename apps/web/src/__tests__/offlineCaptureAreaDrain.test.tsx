@@ -353,6 +353,45 @@ describe("W7-8: offline area readiness belongs to the active account", () => {
     expect(sends[0]![1]).toMatchObject({ area_id: persistedArea.id });
   });
 
+  it("remembers a manual retry while an older account read is still pending", async () => {
+    let rejectFirst!: (error: Error) => void;
+    mockListAreas
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectFirst = reject;
+          }),
+      )
+      .mockResolvedValue({ provider: "supabase", areas: [persistedArea] });
+    const subject = await enqueueCapture({
+      rawText: "Retry after the pending account read",
+      areaId: "area-main-job",
+    });
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(rejectFirst).toBeTypeOf("function"));
+    await act(async () => {
+      await workflow.retryPendingAccountWrites();
+    });
+    await act(async () => {
+      rejectFirst(new Error("Older account read failed"));
+    });
+    await waitFor(async () =>
+      expect(await listPendingCaptures()).toHaveLength(0),
+    );
+    expect(mockListAreas).toHaveBeenCalledTimes(2);
+    const sends = (mockSyncQueuedCapture.mock.calls as unknown[][]).filter(
+      (call) =>
+        (call[1] as { client_capture_id: string }).client_capture_id ===
+        subject.client_capture_id,
+    );
+    expect(sends).toHaveLength(1);
+    expect(sends[0]![1]).toMatchObject({ area_id: persistedArea.id });
+  });
+
   it.each([accountB, accountA])(
     "ignores A's old read after switching through B to %s",
     async (destination) => {
