@@ -103,34 +103,28 @@ describe("GET /api/export with the real export builder (W3-16 #7)", () => {
     expect(text).not.toContain("early-row");
   });
 
-  // KNOWN BUG (W3-16 #7): expected failure. The builder turns
-  // "JWT expired" into generic copy, so the route answers 500 instead of the
-  // 401 sign-in recovery. Flip to `it` when the builder keeps the auth signal.
-  it.fails(
-    "a sign-in that expires mid-export reaches the caller as the 401 recovery response",
-    async () => {
-      const { client, queried } = clientFailingAt({
-        message: "JWT expired",
-        code: "PGRST301",
-      });
-      mocks.requireSupabaseServerUser.mockResolvedValue({
-        client,
-        user: { id: "user-1" },
-      });
+  it("a sign-in that expires mid-export reaches the caller as the 401 recovery response", async () => {
+    const { client, queried } = clientFailingAt({
+      message: "JWT expired",
+      code: "PGRST301",
+    });
+    mocks.requireSupabaseServerUser.mockResolvedValue({
+      client,
+      user: { id: "user-1" },
+    });
 
-      const response = await GET(makeRequest());
+    const response = await GET(makeRequest());
 
-      // The early table really was read before the failure.
-      expect(queried).toContain(EARLY_TABLE);
-      const text = await response.text();
-      expect(text).not.toContain("early-row");
-      expect(text).not.toContain("PGRST301");
-      expect(response.status).toBe(401);
-      expect(JSON.parse(text)).toEqual({
-        ok: false,
-        errorCategory: "auth_rejected",
-        error: AUTH_REJECTED_COPY,
-      });
-    },
-  );
+    // The early table really was read before the failure.
+    expect(queried).toContain(EARLY_TABLE);
+    const text = await response.text();
+    expect(text).not.toContain("early-row");
+    expect(text).not.toContain("PGRST301");
+    expect(response.status).toBe(401);
+    expect(JSON.parse(text)).toEqual({
+      ok: false,
+      errorCategory: "auth_rejected",
+      error: AUTH_REJECTED_COPY,
+    });
+  });
 });
