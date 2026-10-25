@@ -1,8 +1,10 @@
+import "fake-indexeddb/auto";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
 import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
+import { clearStoredTaskDrafts } from "@/lib/durability/draftStore";
 import { buildPipelineCounts } from "./pipelineCounts";
 import {
   acceptLatestDraft,
@@ -173,7 +175,8 @@ function saveFirstMove() {
 }
 
 describe("PlanSheet — the ported Plan surface", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await clearStoredTaskDrafts();
     window.sessionStorage.clear();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");

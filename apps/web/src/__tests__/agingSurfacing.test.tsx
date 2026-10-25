@@ -1,3 +1,4 @@
+import "fake-indexeddb/auto";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ReviewPage from "../app/review/page";
