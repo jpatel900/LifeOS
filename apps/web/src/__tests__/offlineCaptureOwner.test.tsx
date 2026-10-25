@@ -290,8 +290,10 @@ describe("W3-16 #1 sibling: the offline queue holds a capture for its own accoun
         "B only area",
       ),
     );
-    expect(screen.getByTestId("identity-captures")).toHaveTextContent(
-      "A saved reducer capture",
+    await waitFor(() =>
+      expect(screen.getByTestId("identity-captures")).toHaveTextContent(
+        "A saved reducer capture",
+      ),
     );
   });
 
@@ -446,7 +448,7 @@ describe("W3-16 #1 sibling: the offline queue holds a capture for its own accoun
         authListener.callback?.("SIGNED_OUT", null);
         authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_B } });
       });
-      expect(getDeviceAccount()).toBe(ACCOUNT_B);
+      await waitFor(() => expect(getDeviceAccount()).toBe(ACCOUNT_B));
       await act(async () => {
         resolveIdentity({
           data: { user: staleAccount ? { id: staleAccount } : null },

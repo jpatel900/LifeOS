@@ -157,11 +157,11 @@ import { createApplyWorkflowState } from "./workflowContext/applyWorkflowState";
 import {
   accountSnapshotKey,
   claimAnonymousSnapshots,
+  safeUnownedWorkflowScope,
   storeAccountSnapshot,
   anonymousSnapshotOwners,
   anonymousWorkflowScope,
   unverifiedWorkflowScope,
-  mergeAnonymousSnapshot,
 } from "./workflowContext/accountSnapshot";
 import {
   createPersistenceSync,
@@ -290,6 +290,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [],
   );
   const draftClaimReady = useRef<Promise<boolean>>(Promise.resolve(true));
+  const pendingSnapshotClaim = useRef<{
+    owner: string;
+    live: { scope: string; state: WorkflowState };
+  } | null>(null);
+  const [ownershipBlocked, setOwnershipBlocked] = useState(false);
   const refreshIdentityRef = useRef<(previousScope?: string) => Promise<void>>(
     async () => {},
   );
@@ -321,12 +326,24 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     let active = true;
     let authRevision = 0;
     setDeviceAccount(undefined);
-    const selectAccount = (userId: string | null) => {
-      setDeviceAccount(userId);
-      const scope =
-        userId === null
-          ? anonymousWorkflowScope(selectedScope.current)
-          : `account:${userId}`;
+    let selectionRevision = 0;
+    let selectionTail = Promise.resolve();
+    const selectAccount = (
+      userId: string | null | undefined,
+      previousScope = selectedScope.current,
+    ) => {
+      let scope =
+        userId === undefined
+          ? unverifiedWorkflowScope(previousScope)
+          : userId === null
+            ? anonymousWorkflowScope(selectedScope.current)
+            : `account:${userId}`;
+      if (!userId && scope === pendingSnapshotClaim.current?.live.scope) {
+        scope =
+          userId === undefined
+            ? unverifiedWorkflowScope(pendingSnapshotClaim.current.owner)
+            : anonymousWorkflowScope(pendingSnapshotClaim.current.owner);
+      }
       const live =
         snapshot.current?.scope === selectedScope.current
           ? {
@@ -334,66 +351,91 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               state: snapshot.current.stateRef.current,
             }
           : undefined;
-      if (!userId && live && isUnverifiedWorkflowScope(live.scope)) {
-        heldSnapshots.current.set(scope, { current: live.state });
+      // Same-account notifications refresh the mounted provider without
+      // interrupting its local edits. A pending selection still queues.
+      if (
+        scope === selectedScope.current &&
+        snapshot.current?.scope === scope
+      ) {
+        setDeviceAccount(userId);
+        setAccount((previous) => ({
+          ...previous,
+          revision: previous.revision + 1,
+        }));
+        return selectionTail;
       }
-      let storageBlocked = false;
-      if (userId && selectedScope.current !== scope) {
-        try {
-          const claimed = claimAnonymousSnapshots(
-            scope,
-            live,
-            heldSnapshots.current.get(scope)?.current,
-            memorySourceOwners.current,
-          );
-          heldSnapshots.current.set(scope, { current: claimed });
-          for (const [sourceScope, owner] of Object.entries(
-            memorySourceOwners.current,
-          )) {
-            if (owner === scope) heldSnapshots.current.delete(sourceScope);
-          }
-          snapshot.current = null;
-        } catch {
-          storageBlocked = true;
-          // Storage failure must not make a newly captured thought vanish
-          // on sign-in. Keep its first account owner in this tab as well.
-          if (
-            live &&
-            isUnownedWorkflowScope(live.scope) &&
-            (!memorySourceOwners.current[live.scope] ||
-              memorySourceOwners.current[live.scope] === scope)
-          ) {
-            const target =
-              heldSnapshots.current.get(scope)?.current ??
-              loadStoredStateFromSession(accountSnapshotKey(scope)).state ??
-              createSyncedInitialState();
-            heldSnapshots.current.set(scope, {
-              current: mergeAnonymousSnapshot(target, live.state),
-            });
-            memorySourceOwners.current[live.scope] = scope;
-            heldSnapshots.current.delete(live.scope);
-            snapshot.current = null;
-          }
-        }
-        try {
-          draftClaimReady.current = claimAnonymousTaskDrafts(scope, {
-            ...anonymousSnapshotOwners(),
-            ...memorySourceOwners.current,
-          }).then(
-            () => true,
-            () => false,
-          );
-        } catch {
-          draftClaimReady.current = Promise.resolve(false);
-          storageBlocked = true;
-        }
-      }
+      const revision = ++selectionRevision;
       selectedScope.current = scope;
-      setAccount((previous) => ({
-        scope,
-        revision: previous.revision + 1,
-        storageBlocked,
-      }));
+      snapshot.current = null;
+      setDeviceAccount(undefined);
+      setOwnershipBlocked(false);
+      setAccount((previous) => ({ ...previous, scope: "pending" }));
+      // Serialize reservations even when A and B arrive in one render.
+      // Retired selections may finish durable ownership, but never publish.
+      selectionTail = selectionTail.then(async () => {
+        let storageBlocked = false;
+        try {
+          if (userId) {
+            const pending = pendingSnapshotClaim.current;
+            if (pending) {
+              const recovered = await claimAnonymousSnapshots(
+                pending.owner,
+                pending.live,
+                heldSnapshots.current.get(pending.owner)?.current,
+                memorySourceOwners.current,
+                [pending.live.scope],
+              );
+              heldSnapshots.current.set(pending.owner, {
+                current: recovered.state,
+              });
+              pendingSnapshotClaim.current = null;
+            }
+            if (live && isUnownedWorkflowScope(live.scope))
+              pendingSnapshotClaim.current = { owner: scope, live };
+            const claimed = await claimAnonymousSnapshots(
+              scope,
+              live,
+              heldSnapshots.current.get(scope)?.current,
+              memorySourceOwners.current,
+            );
+            storageBlocked = claimed.storageBlocked;
+            heldSnapshots.current.set(scope, { current: claimed.state });
+            pendingSnapshotClaim.current = null;
+            for (const [sourceScope, owner] of Object.entries(
+              memorySourceOwners.current,
+            )) {
+              if (owner === scope) heldSnapshots.current.delete(sourceScope);
+            }
+            await claimAnonymousTaskDrafts(scope, {
+              ...anonymousSnapshotOwners(),
+              ...memorySourceOwners.current,
+            });
+          } else {
+            scope = await safeUnownedWorkflowScope(scope);
+            if (live && isUnverifiedWorkflowScope(live.scope)) {
+              heldSnapshots.current.set(scope, { current: live.state });
+            }
+          }
+        } catch {
+          if (!active || selectionRevision !== revision) return;
+          // No reducer mount and no replay until ownership is durable.
+          // Keep the original bytes and held state for a later retry.
+          draftClaimReady.current = Promise.resolve(false);
+          selectedScope.current = "pending";
+          setOwnershipBlocked(true);
+          return;
+        }
+        if (!active || selectionRevision !== revision) return;
+        draftClaimReady.current = Promise.resolve(true);
+        selectedScope.current = scope;
+        setDeviceAccount(userId);
+        setAccount((previous) => ({
+          scope,
+          revision: previous.revision + 1,
+          storageBlocked,
+        }));
+      });
+      return selectionTail;
     };
     if (!client) {
       selectedScope.current = "demo";
@@ -421,14 +463,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         const result = await client.auth?.getUser();
         if (!active || authRevision !== startedAt) return;
         if (result && !result.error)
-          selectAccount(result.data.user?.id ?? null);
+          await selectAccount(result.data.user?.id ?? null);
         else if (selectedScope.current === "pending") {
-          selectedScope.current = unverifiedWorkflowScope(previousScope);
-          setAccount({
-            scope: selectedScope.current,
-            revision: 0,
-            storageBlocked: false,
-          });
+          await selectAccount(undefined, previousScope);
         }
       } catch {
         if (
@@ -436,12 +473,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           authRevision === startedAt &&
           selectedScope.current === "pending"
         ) {
-          selectedScope.current = unverifiedWorkflowScope(previousScope);
-          setAccount({
-            scope: selectedScope.current,
-            revision: 0,
-            storageBlocked: false,
-          });
+          await selectAccount(undefined, previousScope);
         }
       }
     };
@@ -464,7 +496,19 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // new instance, and its persistence key never changes underneath it.
   return (
     <WorkflowNavigationBoundary>
-      {account.scope === "pending" ? null : (
+      {ownershipBlocked ? (
+        <div role="alert">
+          {DEVICE_STORAGE_BLOCKED}{" "}
+          <button
+            type="button"
+            onClick={() => {
+              void refreshIdentityRef.current();
+            }}
+          >
+            Retry device recovery
+          </button>
+        </div>
+      ) : account.scope === "pending" ? null : (
         <AccountWorkflowProvider
           key={account.scope}
           scope={account.scope}

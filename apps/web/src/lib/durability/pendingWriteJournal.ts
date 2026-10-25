@@ -88,8 +88,9 @@ const DB_NAME = "lifeos-pending-writes";
  * v1 was never wired into any UI, so no user data can exist in it and the
  * upgrade recreates the store outright rather than migrating rows.
  */
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = "pending";
+const CAPTURE_OWNERS = "capture_owners";
 const CLIENT_WRITE_ID_INDEX = "by_client_write_id";
 
 /**
@@ -226,18 +227,22 @@ function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
-      if (db.objectStoreNames.contains(STORE_NAME)) {
-        db.deleteObjectStore(STORE_NAME);
+      if (event.oldVersion < 2) {
+        if (db.objectStoreNames.contains(STORE_NAME))
+          db.deleteObjectStore(STORE_NAME);
+        const store = db.createObjectStore(STORE_NAME, {
+          keyPath: "seq",
+          autoIncrement: true,
+        });
+        store.createIndex(CLIENT_WRITE_ID_INDEX, "client_write_id", {
+          unique: true,
+        });
       }
-      const store = db.createObjectStore(STORE_NAME, {
-        keyPath: "seq",
-        autoIncrement: true,
-      });
-      store.createIndex(CLIENT_WRITE_ID_INDEX, "client_write_id", {
-        unique: true,
-      });
+      // v3 adds ownership reservations without touching v2's queued rows.
+      if (!db.objectStoreNames.contains(CAPTURE_OWNERS))
+        db.createObjectStore(CAPTURE_OWNERS);
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -309,8 +314,21 @@ export async function enqueuePendingWrite<
 
   const db = await openDatabase();
   try {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const transaction = db.transaction(
+      [STORE_NAME, CAPTURE_OWNERS],
+      "readwrite",
+    );
     const store = transaction.objectStore(STORE_NAME);
+    const captureId =
+      input.entity === "capture"
+        ? input.payload.workflow_capture_id
+        : undefined;
+    const reservedOwner =
+      typeof captureId === "string"
+        ? ((await requestToPromise(
+            transaction.objectStore(CAPTURE_OWNERS).get(captureId),
+          )) as string | undefined)
+        : undefined;
 
     // Look up any existing record for this client id INSIDE the same
     // transaction. Awaiting a promise settled from an IndexedDB success
@@ -326,8 +344,11 @@ export async function enqueuePendingWrite<
     // the caller captured before opening IndexedDB, not a later session.
     // Finish this unchanged transaction before rejecting.
     if (
-      existing?.owner_user_id !== undefined &&
-      existing.owner_user_id !== ownerStamp
+      (existing?.owner_user_id !== undefined &&
+        existing.owner_user_id !== ownerStamp) ||
+      (reservedOwner !== undefined &&
+        ownerStamp !== undefined &&
+        reservedOwner !== ownerStamp)
     ) {
       // A storage abort must not downgrade a known ownership refusal into
       // the generic storage-failure path (which can use a direct POST).
@@ -337,7 +358,7 @@ export async function enqueuePendingWrite<
 
     // Same-owner retries retain ownership. Unowned entries keep their
     // existing signed-out handoff policy.
-    const owner = existing ? existing.owner_user_id : ownerStamp;
+    const owner = existing?.owner_user_id ?? reservedOwner ?? ownerStamp;
     const fields =
       owner !== undefined
         ? { ...baseFields, owner_user_id: owner }
@@ -356,6 +377,59 @@ export async function enqueuePendingWrite<
 
     await transactionDone(transaction);
     return { ...fields, seq };
+  } finally {
+    db.close();
+  }
+}
+
+/** Bind only the adopted snapshot's captures, including a late enqueue.
+ * Both stores share a transaction, so enqueue cannot miss a reservation.
+ */
+export async function reserveCaptureWriteOwners(
+  owner: string,
+  captureIds: readonly string[],
+): Promise<void> {
+  if (captureIds.length === 0) return;
+  if (!hasIndexedDb()) throw new Error("Cannot reserve capture ownership.");
+  const ids = new Set(captureIds);
+  const db = await openDatabase();
+  try {
+    const transaction = db.transaction(
+      [STORE_NAME, CAPTURE_OWNERS],
+      "readwrite",
+    );
+    const store = transaction.objectStore(STORE_NAME);
+    const owners = transaction.objectStore(CAPTURE_OWNERS);
+    const writes = (await requestToPromise(store.getAll())) as PendingWrite[];
+    const reservations = await Promise.all(
+      [...ids].map((id) => requestToPromise(owners.get(id))),
+    );
+    if (
+      reservations.some(
+        (reserved) => reserved !== undefined && reserved !== owner,
+      ) ||
+      writes.some(
+        (write) =>
+          write.entity === "capture" &&
+          ids.has(String(write.payload.workflow_capture_id)) &&
+          write.owner_user_id !== undefined &&
+          write.owner_user_id !== owner,
+      )
+    ) {
+      await transactionDone(transaction);
+      throw new PendingWriteOwnershipError();
+    }
+    for (const id of ids) owners.put(owner, id);
+    for (const write of writes) {
+      if (
+        write.entity === "capture" &&
+        ids.has(String(write.payload.workflow_capture_id)) &&
+        write.owner_user_id === undefined
+      ) {
+        store.put({ ...write, owner_user_id: owner });
+      }
+    }
+    await transactionDone(transaction);
   } finally {
     db.close();
   }

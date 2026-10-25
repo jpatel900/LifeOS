@@ -8,8 +8,10 @@ import {
   markPendingWriteSynced,
   pendingWriteCount,
   replayPendingWrites,
+  reserveCaptureWriteOwners,
   type PendingWrite,
 } from "./pendingWriteJournal";
+import { setDeviceAccount } from "./deviceAccount";
 import { PersistenceWriteError } from "../persistenceFailureKind";
 
 /**
@@ -47,6 +49,83 @@ beforeEach(async () => {
 });
 
 describe("enqueuePendingWrite / listPendingWrites", () => {
+  it("reserves adopted captures before and after enqueue without claiming unrelated work", async () => {
+    setDeviceAccount(null);
+    const early = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { workflow_capture_id: "adopted-early" },
+    });
+    const unrelated = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { workflow_capture_id: "other-tab" },
+    });
+    await reserveCaptureWriteOwners("account-a", [
+      "adopted-early",
+      "adopted-late",
+    ]);
+    const late = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { workflow_capture_id: "adopted-late" },
+    });
+    const writes = await listPendingWrites();
+    expect(
+      writes.find((write) => write.client_write_id === early.client_write_id)
+        ?.owner_user_id,
+    ).toBe("account-a");
+    expect(late.owner_user_id).toBe("account-a");
+    expect(
+      writes.find(
+        (write) => write.client_write_id === unrelated.client_write_id,
+      )?.owner_user_id,
+    ).toBeUndefined();
+    await expect(
+      reserveCaptureWriteOwners("account-b", ["adopted-early"]),
+    ).rejects.toThrow("another account");
+    setDeviceAccount("account-b");
+    await expect(
+      enqueuePendingWrite({
+        entity: "capture",
+        payload: { workflow_capture_id: "adopted-late" },
+      }),
+    ).rejects.toThrow("another account");
+    setDeviceAccount(undefined);
+  });
+
+  it("upgrades v2 without dropping or reordering queued writes", async () => {
+    const original = {
+      seq: 19,
+      client_write_id: "v2-existing",
+      entity: "capture",
+      payload: { workflow_capture_id: "v2-capture" },
+      created_at: "2026-10-25T00:00:00Z",
+    };
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open("lifeos-pending-writes", 2);
+      request.onupgradeneeded = () => {
+        const store = request.result.createObjectStore("pending", {
+          keyPath: "seq",
+          autoIncrement: true,
+        });
+        store.createIndex("by_client_write_id", "client_write_id", {
+          unique: true,
+        });
+        store.put(original);
+      };
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        request.result.close();
+        resolve();
+      };
+    });
+    expect(await listPendingWrites()).toEqual([original]);
+    await reserveCaptureWriteOwners("account-a", ["v2-capture"]);
+    expect(await listPendingWrites()).toEqual([
+      { ...original, owner_user_id: "account-a" },
+    ]);
+    const later = await enqueuePendingWrite({ entity: "win", payload: {} });
+    expect(later.seq).toBeGreaterThan(original.seq);
+  });
+
   it("enqueues a write and lists it with a generated id and the right fields", async () => {
     const queued = await enqueuePendingWrite({
       entity: "win",

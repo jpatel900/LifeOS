@@ -46,6 +46,7 @@ import {
   SIGNED_OUT_SAVING_ON_THIS_DEVICE,
 } from "@/lib/statusVocabulary";
 import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
+import { clearSnapshotRecoveriesForTests } from "@/lib/workflowContext/snapshotRecovery";
 import { createSyncedInitialState } from "@/lib/workflowContext/reducerCore";
 import { createRawCaptureItem } from "@/lib/workflow/capture";
 import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
@@ -359,6 +360,7 @@ function Harness() {
 }
 
 beforeEach(async () => {
+  await clearSnapshotRecoveriesForTests();
   authListener.callback = null;
 
   mockGetUser.mockReset().mockResolvedValue({
@@ -3025,12 +3027,15 @@ describe("W3-16 #1: pending work never crosses to another account", () => {
       await act(async () => {
         authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_B_USER } });
       });
+      await screen.findByTestId("capture-texts");
       expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
         ACCOUNT_A_TEXT,
       );
       if (startingScope === "anonymous")
-        expect(screen.getByTestId("capture-texts")).toHaveTextContent(
-          "B's private thought",
+        await waitFor(() =>
+          expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+            "B's private thought",
+          ),
         );
       expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
         "Already saved for A",
@@ -3127,6 +3132,7 @@ describe("W3-16 #1: pending work never crosses to another account", () => {
       });
       authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_B_USER } });
     });
+    await screen.findByTestId("capture-texts");
     expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
       ACCOUNT_A_TEXT,
     );
@@ -3316,6 +3322,280 @@ describe("W3-16 #1: pending work never crosses to another account", () => {
     ).toBeNull();
   });
 
+  it.each(["reservation", "all writes", "source removal"])(
+    "W7-17: reload never gives B anonymous work adopted by A after %s fails",
+    async (failure) => {
+      mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+      const firstMount = render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      fireEvent.click(screen.getByText("Capture"));
+      const sourceKey = accountSnapshotKey("anonymous");
+      await waitFor(() =>
+        expect(sessionStorage.getItem(sourceKey)).toContain(ACCOUNT_A_TEXT),
+      );
+      const originalSet = Storage.prototype.setItem;
+      const writes = vi
+        .spyOn(Storage.prototype, "setItem")
+        .mockImplementation(function (this: Storage, key, value) {
+          if (
+            this === sessionStorage &&
+            (failure === "all writes" || key === sourceKey)
+          ) {
+            throw new DOMException("Quota", "QuotaExceededError");
+          }
+          originalSet.call(this, key, value);
+        });
+      const removals =
+        failure === "source removal"
+          ? vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+              throw new Error("blocked");
+            })
+          : null;
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: PERSISTED_AREA.user_id } },
+        error: null,
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockSyncJournaledCapture.mockRejectedValue(
+        new TypeError("Failed to fetch"),
+      );
+      await act(async () => {
+        authListener.callback?.("SIGNED_IN", {
+          user: { id: PERSISTED_AREA.user_id },
+        });
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+          ACCOUNT_A_TEXT,
+        ),
+      );
+      // Discard every provider ref, retaining the browser's durable stores.
+      firstMount.unmount();
+      writes.mockRestore();
+      removals?.mockRestore();
+      if (failure === "source removal") {
+        mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+        mockListAreas.mockRejectedValue(SIGNED_OUT_ERROR());
+        const signedOut = render(
+          <WorkflowProvider>
+            <Harness />
+          </WorkflowProvider>,
+        );
+        await waitFor(() =>
+          expect(
+            screen.getByTestId("areas-readback-settled"),
+          ).toHaveTextContent("true"),
+        );
+        expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+          ACCOUNT_A_TEXT,
+        );
+        fireEvent.click(screen.getByText("Capture B"));
+        await waitFor(() =>
+          expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+            "B's private thought",
+          ),
+        );
+        signedOut.unmount();
+      }
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: ACCOUNT_B_USER } },
+        error: null,
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [ACCOUNT_B_AREA],
+      });
+      mockSyncJournaledCapture.mockClear();
+      const secondMount = render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+        ACCOUNT_A_TEXT,
+      );
+      expect(
+        sessionStorage.getItem(accountSnapshotKey(`account:${ACCOUNT_B_USER}`)),
+      ).not.toContain(ACCOUNT_A_TEXT);
+      fireEvent.click(screen.getByText("Retry pending writes"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "1",
+        ),
+      );
+      expect(
+        mockSyncJournaledCapture.mock.calls.map((call) => call[1]?.raw_text),
+      ).not.toContain(ACCOUNT_A_TEXT);
+      secondMount.unmount();
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: PERSISTED_AREA.user_id } },
+        error: null,
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+          ACCOUNT_A_TEXT,
+        ),
+      );
+      expect(
+        sessionStorage.getItem(
+          accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`),
+        ),
+      ).toContain(ACCOUNT_A_TEXT);
+    },
+  );
+
+  it.each(["retry", "sign out"])(
+    "W7-17: blocks replay when recovery fails and recovers memory-only work after %s",
+    async (next) => {
+      mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+        throw new Error("quota");
+      });
+      fireEvent.click(screen.getByText("Capture"));
+      await waitFor(() =>
+        expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+          ACCOUNT_A_TEXT,
+        ),
+      );
+      const originalTransaction = IDBDatabase.prototype.transaction;
+      const blocked = vi
+        .spyOn(IDBDatabase.prototype, "transaction")
+        .mockImplementation(function (
+          this: IDBDatabase,
+          stores,
+          mode,
+          options,
+        ) {
+          const transaction = originalTransaction.call(
+            this,
+            stores,
+            mode,
+            options,
+          );
+          if (this.name === "lifeos-snapshot-recovery" && mode === "readwrite")
+            queueMicrotask(() => transaction.abort());
+          return transaction;
+        });
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: PERSISTED_AREA.user_id } },
+        error: null,
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      await act(async () => {
+        authListener.callback?.("SIGNED_IN", {
+          user: { id: PERSISTED_AREA.user_id },
+        });
+      });
+      await screen.findByRole("alert");
+      expect(screen.queryByTestId("capture-texts")).not.toBeInTheDocument();
+      expect(mockSyncJournaledCapture).not.toHaveBeenCalled();
+      blocked.mockRestore();
+      mockSyncJournaledCapture.mockRejectedValue(
+        new TypeError("Failed to fetch"),
+      );
+      if (next === "sign out") {
+        mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+        await act(async () => {
+          authListener.callback?.("SIGNED_OUT", null);
+        });
+        await screen.findByTestId("capture-texts");
+        expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+          ACCOUNT_A_TEXT,
+        );
+        fireEvent.click(screen.getByText("Capture B"));
+        await waitFor(() =>
+          expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+            "B's private thought",
+          ),
+        );
+        mockGetUser.mockResolvedValue({
+          data: { user: { id: ACCOUNT_B_USER } },
+          error: null,
+        });
+        mockListAreas.mockResolvedValue({
+          provider: "supabase",
+          areas: [ACCOUNT_B_AREA],
+        });
+        await act(async () => {
+          authListener.callback?.("SIGNED_IN", {
+            user: { id: ACCOUNT_B_USER },
+          });
+        });
+        await waitFor(() =>
+          expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+            "B's private thought",
+          ),
+        );
+        expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+          ACCOUNT_A_TEXT,
+        );
+        mockGetUser.mockResolvedValue({
+          data: { user: { id: PERSISTED_AREA.user_id } },
+          error: null,
+        });
+        mockListAreas.mockResolvedValue({
+          provider: "supabase",
+          areas: [PERSISTED_AREA],
+        });
+        await act(async () => {
+          authListener.callback?.("SIGNED_IN", {
+            user: { id: PERSISTED_AREA.user_id },
+          });
+        });
+      } else {
+        fireEvent.click(
+          screen.getByRole("button", { name: "Retry device recovery" }),
+        );
+      }
+      await waitFor(() =>
+        expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+          ACCOUNT_A_TEXT,
+        ),
+      );
+      expect((await listPendingWrites("capture"))[0]?.owner_user_id).toBe(
+        PERSISTED_AREA.user_id,
+      );
+    },
+  );
+
   // A's undelivered capture is held on the device for A (see
   // `durability/deviceAccount.ts`), never replayed under B.
   it("a capture account A could not deliver is never sent through account B's session", async () => {
@@ -3383,6 +3663,7 @@ describe("W3-16 #1: pending work never crosses to another account", () => {
     });
 
     // ... and then the page reloads as B.
+    await screen.findByTestId("capture-texts");
     expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
       ACCOUNT_A_TEXT,
     );
