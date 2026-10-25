@@ -721,7 +721,13 @@ describe("editBacklogTask — configured account", () => {
     expect(screen.getByTestId("unrelated-title")).toHaveTextContent(
       unrelated.title,
     );
-    expect(screen.getByTestId("sync-pending")).toHaveTextContent("true");
+    // #1106 review finding 2: the first move is kept on this device by
+    // design (its own "saved on this device" banner says so). It is still
+    // protected above, but it is not account work, so once the delivered
+    // edit settles nothing is left owed to the account.
+    await waitFor(() => {
+      expect(screen.getByTestId("sync-pending")).toHaveTextContent("false");
+    });
   });
 
   it("reports conflict and leaves the canonical task unchanged", async () => {
