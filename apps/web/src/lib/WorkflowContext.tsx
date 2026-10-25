@@ -44,6 +44,7 @@ import {
 } from "./workflow";
 import { taskHasGoogleBackedOpenBlock } from "./workflow/shared";
 import type { SessionSaveResult } from "./workflowContext/persistenceSync";
+import { WorkflowNavigationBoundary } from "./workflowContext/navigationBoundary";
 import {
   ACCOUNT_UNREACHABLE_NOW,
   DEVICE_STORAGE_BLOCKED,
@@ -461,23 +462,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // A new identity retires every reducer, alias, promise and transient view
   // from the old provider. Its asynchronous continuations cannot update the
   // new instance, and its persistence key never changes underneath it.
-  if (account.scope === "pending") return null;
   return (
-    <AccountWorkflowProvider
-      key={account.scope}
-      scope={account.scope}
-      authRevision={account.revision}
-      snapshotClaimBlocked={account.storageBlocked}
-      draftClaimReady={draftClaimReady.current}
-      publishSnapshot={publishSnapshot}
-      refreshIdentity={refreshIdentity}
-      onIdentityMismatch={onIdentityMismatch}
-      isScopeActive={isScopeActive}
-      heldState={heldSnapshots.current.get(account.scope)?.current}
-      clearHeldSnapshots={clearHeldSnapshots}
-    >
-      {children}
-    </AccountWorkflowProvider>
+    <WorkflowNavigationBoundary>
+      {account.scope === "pending" ? null : (
+        <AccountWorkflowProvider
+          key={account.scope}
+          scope={account.scope}
+          authRevision={account.revision}
+          snapshotClaimBlocked={account.storageBlocked}
+          draftClaimReady={draftClaimReady.current}
+          publishSnapshot={publishSnapshot}
+          refreshIdentity={refreshIdentity}
+          onIdentityMismatch={onIdentityMismatch}
+          isScopeActive={isScopeActive}
+          heldState={heldSnapshots.current.get(account.scope)?.current}
+          clearHeldSnapshots={clearHeldSnapshots}
+        >
+          {children}
+        </AccountWorkflowProvider>
+      )}
+    </WorkflowNavigationBoundary>
   );
 }
 

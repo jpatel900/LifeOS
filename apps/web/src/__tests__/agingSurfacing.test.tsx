@@ -22,7 +22,15 @@ const {
   mockListCaptureItems: vi.fn(),
   mockListPlanningItems: vi.fn(),
   mockListExecutionReviewItems: vi.fn(),
-  mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
+  mockCreateSupabaseBrowserClient: vi.fn(() => ({
+    mocked: true,
+    auth: {
+      getUser: async () => ({
+        data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+        error: null,
+      }),
+    },
+  })),
 }));
 
 vi.mock("@/lib/data/workflow", async () => {
