@@ -302,7 +302,8 @@ The FR-027 offline queue is a device-local IndexedDB store (`lifeos-capture-queu
 - an entry is **deleted from the device the moment it syncs** to the spine (`markCaptureSynced` on a successful, idempotent upsert) — the queue is a transient transport buffer, not a second store of record;
 - the queue **holds no OAuth tokens, no service keys, and opens no new write path** — it syncs through the same authenticated `capture_items` insert the web app uses (NS-INV-9 perimeter containment holds for offline-then-synced captures);
 - §6.4 prompt-injection containment applies unchanged to a capture that was queued offline and synced later (captured text is data, never instructions);
-- the queue is **purged on logout** (`clearOfflineCaptures`) so raw thoughts never outlive the session on a shared device.
+- the queue is **purged on logout** (`clearOfflineCaptures`) so raw thoughts never outlive the session on a shared device;
+- an entry, in this queue and in the pending-writes journal (`lifeos-pending-writes`), **belongs to the account signed in when it was made** and is sent only through that account's session, never another account that signs in on the same device (W3-16 #1, `lib/durability/deviceAccount.ts`). An entry made signed out goes to the next account that signs in.
 
 Future requirement:
 
