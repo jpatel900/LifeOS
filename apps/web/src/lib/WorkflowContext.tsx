@@ -366,10 +366,21 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const activeParseCaptureIdRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   const persistedAreasRef = useRef<Area[]>([]);
-  // W3-16 #8: true once an account area read has succeeded, even with zero
-  // areas. An empty `persistedAreasRef` alone cannot tell "not read yet" from
-  // "read, and the account has no areas".
-  const persistedAreasKnownRef = useRef(false);
+  // A successful empty read is useful evidence only for the account and
+  // generation that started it. Object identity also rejects A -> B -> A.
+  const areaAccountRef = useRef<{ account: DeviceAccount }>({
+    account: undefined,
+  });
+  const knownAreaAccountRef = useRef<typeof areaAccountRef.current | null>(
+    null,
+  );
+  const accountSyncRequestedRef = useRef(false);
+  const observeAreaAccount = useCallback((account: DeviceAccount) => {
+    if (areaAccountRef.current.account === account) return false;
+    areaAccountRef.current = { account };
+    knownAreaAccountRef.current = null;
+    return true;
+  }, []);
   const persistedCaptureIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedTaskIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedProposalIdByLocalIdRef = useRef(new Map<string, string>());
@@ -562,7 +573,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
   const applyPersistedAreas = useCallback((areas: Area[]) => {
     persistedAreasRef.current = areas;
-    persistedAreasKnownRef.current = true;
     // The reactive twin of the ref above, set in the same beat so the two can
     // never disagree. Consumers that must RECOMPUTE when areas land (the
     // rollup suppression key) read this; everything that only needs the value
@@ -2147,14 +2157,43 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         }
 
         try {
+          // Establish the read's owner BEFORE asking for areas. An empty
+          // result carries no row owner from which to infer that identity.
+          const beforeIdentity = areaAccountRef.current;
+          if (client.auth?.getUser) {
+            const identity = await client.auth.getUser();
+            if (
+              !mountedRef.current ||
+              beforeIdentity !== areaAccountRef.current
+            )
+              return;
+            if (identity.error) throw identity.error;
+            const account = identity.data.user?.id ?? null;
+            observeAreaAccount(account);
+            if (!account) {
+              markSignedOutLocal();
+              return;
+            }
+          }
+          const areaAccount = areaAccountRef.current;
           const result = await listAreas(client);
           // jsdom-teardown race fix — same shape as `mountedRef`'s own note
           // near its declaration. Bail first, before touching state at all.
           if (!mountedRef.current) return;
+          if (areaAccount !== areaAccountRef.current) return;
           if (result.provider !== "supabase") {
             markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
             return;
           }
+          if (
+            typeof areaAccount.account === "string" &&
+            result.areas.some((area) => area.user_id !== areaAccount.account)
+          ) {
+            throw new Error(
+              "The account changed while loading areas. Retry the account read.",
+            );
+          }
+          knownAreaAccountRef.current = areaAccount;
           applyPersistedAreas(result.areas);
           await syncPersistedWorkflowRows(client, result.areas, {
             preserveLocalOnlyWhilePending: true,
@@ -2321,6 +2360,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         if (mountedRef.current) setAreasReadbackSettled(true);
         accountSyncInFlightRef.current = false;
         finishPass();
+        // An account switch must not lose its read behind the in-flight
+        // guard. Serialize one fresh pass after the stale pass releases it.
+        if (accountSyncRequestedRef.current && mountedRef.current) {
+          accountSyncRequestedRef.current = false;
+          void runAccountSync({ replayAfter: true });
+        }
       }
     },
     [
@@ -2329,6 +2374,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       markAccountSynced,
       markPersistedLoadFailure,
       markLocalOnly,
+      markSignedOutLocal,
+      observeAreaAccount,
       syncPersistedWorkflowRows,
       replayJournaledWrites,
       refreshPendingLocalChanges,
@@ -2377,14 +2424,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       (event, session) => {
         if (!active) return;
         deviceIdentityGenerationRef.current += 1;
+        let accountChanged = false;
         // W3-16 #1: keep the owner of device-held work current on EVERY auth
         // event, before the early returns below. A sign-out means no account
         // may receive the last account's queued work.
         if (event === "SIGNED_OUT") {
+          accountChanged = observeAreaAccount(null);
           adoptDeviceAccount(null);
         } else if (session?.user?.id) {
+          accountChanged = observeAreaAccount(session.user.id);
           adoptDeviceAccount(session.user.id);
         } else if (event === "INITIAL_SESSION") {
+          accountChanged = observeAreaAccount(null);
           adoptDeviceAccount(null);
         }
         if (!session) return;
@@ -2396,7 +2447,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           return;
         }
         const posture = syncStatusRef.current;
-        if (posture.account !== "local-only" && !posture.signedOut) return;
+        if (
+          !accountChanged &&
+          posture.account !== "local-only" &&
+          !posture.signedOut
+        )
+          return;
+        if (accountChanged && accountSyncInFlightRef.current) {
+          accountSyncRequestedRef.current = true;
+          return;
+        }
         void runAccountSync({ replayAfter: true });
       },
     );
@@ -2405,7 +2465,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       active = false;
       subscription?.subscription?.unsubscribe();
     };
-  }, [adoptDeviceAccount, runAccountSync]);
+  }, [adoptDeviceAccount, observeAreaAccount, runAccountSync]);
 
   useEffect(() => {
     if (!hasHydratedFromStorage) {
@@ -2574,6 +2634,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       if (!maySendAs(queued.owner_user_id)) {
         continue;
       }
+      // Gate every scoped item, including a matching slug left by another
+      // account. Untagged UI area updates cannot certify this read boundary.
+      if (
+        queued.area_id &&
+        (knownAreaAccountRef.current !== areaAccountRef.current ||
+          areaAccountRef.current.account !== getDeviceAccount())
+      ) {
+        continue;
+      }
       // Bug hunt #5: an item whose chosen area cannot be resolved while the
       // account's areas are not known yet stays queued — sending it now would
       // file it with no area and delete the person's choice for good. Once
@@ -2585,16 +2654,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             persistedAreasRef.current,
           )
         : null;
-      // W3-16 #8: "the areas are known" is its own fact. An account read that
-      // succeeded with zero areas is known too, so a capture whose area is
-      // gone goes up with no area instead of staying queued forever.
-      if (
-        queued.area_id &&
-        !persistedAreaId &&
-        !persistedAreasKnownRef.current
-      ) {
-        continue;
-      }
       try {
         await syncQueuedCapture(client, {
           raw_text: queued.raw_text,
@@ -3197,12 +3256,29 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     return kind === "transient" ? "failed" : kind;
   }
 
+  const syncPersistedAreas = useCallback(
+    (areas: Area[]) => {
+      // UI loaders do not carry the account generation that started their
+      // read. Show their update, but revalidate before using it for a write.
+      // Invalidate an in-flight read too: it predates this area replacement.
+      areaAccountRef.current = { account: areaAccountRef.current.account };
+      knownAreaAccountRef.current = null;
+      applyPersistedAreas(areas);
+      if (accountSyncInFlightRef.current) {
+        accountSyncRequestedRef.current = true;
+      } else {
+        void runAccountSync({ replayAfter: true });
+      }
+    },
+    [applyPersistedAreas, runAccountSync],
+  );
+
   const value: WorkflowContextValue = {
     state,
     selectedAreaId,
     setSelectedAreaId,
     syncStatus,
-    syncPersistedAreas: applyPersistedAreas,
+    syncPersistedAreas,
     refreshPersistedWorkflow: async () => {
       await syncPersistedWorkflowRows(createSupabaseBrowserClient());
     },
