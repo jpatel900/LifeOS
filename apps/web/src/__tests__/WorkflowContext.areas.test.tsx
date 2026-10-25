@@ -703,6 +703,15 @@ describe("WorkflowProvider persisted area sync", () => {
         );
       });
 
+      // The SDK announces the signed-in session independently of row reads.
+      // Keep mount hydration paused while establishing the capture's owner.
+      await act(async () => {
+        expect(authStateCallback).toBeDefined();
+        authStateCallback?.("INITIAL_SESSION", {
+          user: { id: "22222222-2222-4222-8222-222222222222" },
+        });
+      });
+
       // The capture's own journal replay fails (call #0) and marks
       // local-only while the mount sync above is still parked mid flight.
       fireEvent.click(screen.getByRole("button", { name: "Capture" }));
@@ -712,6 +721,7 @@ describe("WorkflowProvider persisted area sync", () => {
         );
         expect(screen.getByTestId("sync-pending")).toHaveTextContent("true");
       });
+      expect(mockSyncJournaledCapture).toHaveBeenCalledTimes(1);
 
       // Release the parked mount sync. It resumes into its own
       // `replayJournaledWrites`, which retries the still-queued capture —
