@@ -4,12 +4,9 @@
 // phase4aRls.local` with RUN_SUPABASE_RLS_TESTS=1), never against a shared or
 // production database. Both scenarios write only synthetic rows and clean up.
 //
-// Known-bug convention in this file: the scenario and its harness checks run
-// as ordinary assertions, so a broken harness fails loudly. Only the single
-// assertion that names the bug goes through `expectKnownBug`, which passes
-// while the bug is present and FAILS once it is fixed. When that happens,
-// replace `expectKnownBug(() => X)` with `X`. (Plain `it.fails` would also
-// pass on a broken harness, and this lane cannot be probed locally.)
+// Both bugs are fixed (#3: export paging; #5: 20261024120000). The harness
+// checks still run as ordinary assertions, so a scenario that did not really
+// happen (too few rows seeded, replays that never overlapped) fails loudly.
 import { execFile, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -44,19 +41,6 @@ const userB = {
   password: "password123",
   areaId: "00000000-0000-4000-8000-000000000201",
 };
-
-function expectKnownBug(check: () => void) {
-  let threw = false;
-  try {
-    check();
-  } catch {
-    threw = true;
-  }
-  expect(
-    threw,
-    "KNOWN BUG fixed: this assertion now passes. Replace expectKnownBug(() => X) with X.",
-  ).toBe(true);
-}
 
 function createLocalClient() {
   if (!supabaseAnonKey) {
@@ -305,18 +289,15 @@ describeLocalRls(
         // Exactly one logical session, whatever the callers were told.
         expect(rows).toHaveLength(1);
 
-        // KNOWN BUG (W3-16 #5): the replay short-circuit runs BEFORE the
-        // task lock, so the second replay inserts after the first commits and
-        // hits the (user_id, client_write_id) unique index instead of being
-        // acknowledged as a duplicate.
-        expectKnownBug(() => {
-          expect(one.error).toBeNull();
-          expect(two.error).toBeNull();
-          expect(
-            [one.data?.deduplicated, two.data?.deduplicated].sort(),
-          ).toEqual([false, true]);
-          expect(one.data?.session?.id).toBe(two.data?.session?.id);
-        });
+        // W3-16 #5: the replay check runs again after the task lock
+        // (20261024120000), so the second replay is acknowledged as a
+        // duplicate with the first one's session, not a unique-index error.
+        expect(one.error).toBeNull();
+        expect(two.error).toBeNull();
+        expect([one.data?.deduplicated, two.data?.deduplicated].sort()).toEqual(
+          [false, true],
+        );
+        expect(one.data?.session?.id).toBe(two.data?.session?.id);
       } finally {
         holder.kill();
         await clientOne.from("execution_sessions").delete().eq("notes", notes);
