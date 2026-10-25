@@ -14,3 +14,4 @@ Decision records amending `docs/ARCHITECTURE.md` and product doctrine. Append-on
 | [0008](0008-trust-rungs-for-sota-models.md)        | Widen agent trust rungs for current-generation models (per-class, INV-10-gated)       | Accepted (owner ratified 2026-08-04; move-2 window 30m)  |
 
 - [0009 — Capture live, adapt periodically: the learning layer moves out of the app](0009-capture-live-adapt-periodically.md) — accepted 2026-08-24
+- [0010 — Snapshot state has explicit mutation owners](0010-snapshot-state-ownership.md) — local candidate for #967

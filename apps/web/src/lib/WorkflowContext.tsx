@@ -19,6 +19,8 @@ import {
 import type { ApprovedRollupSummary } from "./review/approvedRollups";
 import {
   acceptDraft,
+  addWorkflowArea,
+  updateWorkflowAreaColor,
   acceptProposal,
   backlogDraft,
   carryForwardTask,
@@ -131,7 +133,7 @@ import {
   loadStoredStateFromSession,
   mergePersistedCalendarBlocks,
   NIL_UUID,
-  persistedAreaIdForWorkflowId,
+  persistedAreaIdForWorkflowId as findPersistedAreaIdForWorkflowId,
   persistedIdForLocalId,
   workflowIdForPersistedId,
   isSignedOutError,
@@ -151,6 +153,17 @@ import {
   type AccountIdAliasFamily,
 } from "./workflow/shared";
 import { createApplyWorkflowState } from "./workflowContext/applyWorkflowState";
+import {
+  hasSnapshotWork,
+  acceptsSnapshotRead,
+  snapshotCursor,
+  snapshotReceipt,
+  snapshotAreaId,
+  acknowledgeSnapshot,
+  trackSnapshotChanges,
+  restoreSnapshotChanges,
+} from "./workflowContext/snapshotOwnership";
+import { createOrderedWrites } from "./workflowContext/orderedWrites";
 import {
   createPersistenceSync,
   type PersistenceSyncOps,
@@ -250,7 +263,7 @@ function derivePendingSaveFailureAggregate(pending: PendingWrite[]): {
 const WorkflowContext = createContext<WorkflowContextValue | null>(null);
 
 export function WorkflowProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(
+  const [state, dispatchReducer] = useReducer(
     workflowReducer,
     undefined,
     createSyncedInitialState,
@@ -358,6 +371,25 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const activeParseCaptureIdRef = useRef<string | null>(null);
   const stateRef = useRef(state);
+  const areaWrites = useRef(createOrderedWrites()).current;
+  const persistedAreaIdForWorkflowId = useCallback(
+    (areaId: string, areas: Area[]) =>
+      findPersistedAreaIdForWorkflowId(
+        snapshotAreaId(stateRef.current, areaId),
+        areas,
+      ),
+    [],
+  );
+  // One synchronous owner for domain mutations, aliases and delivery receipts.
+  // A later local apply in the same batch must see earlier bookkeeping too.
+  const dispatch = useCallback(
+    (action: Parameters<typeof workflowReducer>[1]) => {
+      const next = workflowReducer(stateRef.current, action);
+      stateRef.current = next;
+      dispatchReducer({ type: "hydrate", state: next });
+    },
+    [],
+  );
   const persistedAreasRef = useRef<Area[]>([]);
   const persistedCaptureIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedTaskIdByLocalIdRef = useRef(new Map<string, string>());
@@ -391,6 +423,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // Without this a second concurrent run could read `persistedAreasRef`
   // mid-write from the first.
   const accountSyncInFlightRef = useRef(false);
+  const accountSyncRequestedRef = useRef(false);
+  const snapshotIdentityRef = useRef<{
+    userId: string | null | undefined;
+    generation: number;
+  }>({ userId: undefined, generation: 0 });
   // #967 follow-up review, finding 1: every read that can set
   // `syncStatus.pendingSaveFailed` (`refreshJournalledDurableState`'s own
   // computation, and the narrower `refreshPendingSaveFailed` below) shares
@@ -533,49 +570,129 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     stateRef.current = state;
   }, [state]);
 
-  const applyPersistedAreas = useCallback((areas: Area[]) => {
-    persistedAreasRef.current = areas;
-    // The reactive twin of the ref above, set in the same beat so the two can
-    // never disagree. Consumers that must RECOMPUTE when areas land (the
-    // rollup suppression key) read this; everything that only needs the value
-    // synchronously inside a callback keeps reading the ref.
-    setWorkflowAreaIdByPersistedId(
-      Object.fromEntries(
-        areas.map((area) => [area.id, workflowAreaIdForPersistedArea(area)]),
-      ),
-    );
-    const syncedAreas = areas.map((area) => ({
-      id: workflowAreaIdForPersistedArea(area),
-      user_id: area.user_id,
-      name: area.name,
-      color: area.color ?? "#64748b",
-      created_at: area.created_at,
-    }));
-
-    dispatch({ type: "syncAreas", areas: syncedAreas });
-    setSelectedAreaId((current) => {
-      // #691: `null` is the user's explicit All-areas choice, not a missing
-      // value — an area sync must never stomp it back to the first area.
-      if (current === null) {
+  const beginAccountSnapshotRead = useCallback(
+    async (client: MinimalSupabaseClient) => {
+      const generation = snapshotIdentityRef.current.generation;
+      const identity = await client.auth?.getUser();
+      if (
+        !mountedRef.current ||
+        generation !== snapshotIdentityRef.current.generation
+      )
+        return null;
+      if (identity?.error) throw new Error(identity.error.message);
+      const userId = identity?.data.user?.id;
+      if (client.auth && !userId) {
+        markSignedOutLocal();
         return null;
       }
-      if (syncedAreas.some((area) => area.id === current)) {
-        return current;
+      if (userId) {
+        if (snapshotIdentityRef.current.userId !== userId) {
+          snapshotIdentityRef.current = { userId, generation: generation + 1 };
+        }
+        const epoch = snapshotCursor(stateRef.current).epoch;
+        dispatch({ type: "bindSnapshotAccount", userId });
+        if (snapshotCursor(stateRef.current).epoch !== epoch) {
+          persistedAreasRef.current = [];
+          setWorkflowAreaIdByPersistedId({});
+          setAccountClosedDays([]);
+          setAccountLoggedWins([]);
+          setOverrideRecords([]);
+          setDurationProfiles([]);
+          setDecidedPolicyKeys(new Set());
+          const refs = {
+            captures: persistedCaptureIdByLocalIdRef,
+            tasks: persistedTaskIdByLocalIdRef,
+            proposals: persistedProposalIdByLocalIdRef,
+            blocks: persistedBlockIdByLocalIdRef,
+            sessions: persistedSessionIdByLocalIdRef,
+          };
+          for (const [family, ref] of Object.entries(refs))
+            ref.current = new Map(
+              Object.entries(
+                stateRef.current.accountIdByLocalId[
+                  family as AccountIdAliasFamily
+                ] ?? {},
+              ),
+            );
+        }
       }
-      // C2-S8 (#687 finding 1): this reconcile can run long after mount (it
-      // fires whenever the account's real areas arrive from Supabase, an
-      // async fetch) — if the account's area list no longer includes the id
-      // the URL was naming (a stale/shared link, or the area itself was
-      // renamed/removed since), the selection is about to move away from
-      // `current`. Left alone, the address bar would keep claiming `current`
-      // even though the screen no longer shows it. No special-casing needed
-      // HERE for that: the URL-sync effect below (gated on
-      // `hasHydratedFromStorage`, reactive to every `selectedAreaId` change)
-      // is the one place that keeps `?area=` truthful regardless of WHY the
-      // selection moved — this reconcile just needs to change the state.
-      return syncedAreas[0]?.id ?? null;
-    });
-  }, []);
+      return {
+        cursor: snapshotCursor(stateRef.current),
+        userId,
+        generation: snapshotIdentityRef.current.generation,
+      };
+    },
+    [dispatch, markSignedOutLocal],
+  );
+
+  const accountSnapshotReadIsCurrent = useCallback(
+    (read: { cursor: ReturnType<typeof snapshotCursor>; generation: number }) =>
+      mountedRef.current &&
+      read.generation === snapshotIdentityRef.current.generation &&
+      read.cursor.epoch === snapshotCursor(stateRef.current).epoch,
+    [],
+  );
+
+  const applyPersistedAreas = useCallback(
+    (
+      areas: Area[],
+      cursor = snapshotCursor(stateRef.current),
+      readUserId = stateRef.current.snapshotOwnership?.userId,
+    ) => {
+      if (!acceptsSnapshotRead(stateRef.current, "areas", cursor)) return false;
+      persistedAreasRef.current = areas;
+      // The reactive twin of the ref above, set in the same beat so the two can
+      // never disagree. Consumers that must RECOMPUTE when areas land (the
+      // rollup suppression key) read this; everything that only needs the value
+      // synchronously inside a callback keeps reading the ref.
+      setWorkflowAreaIdByPersistedId(
+        Object.fromEntries(
+          areas.map((area) => [area.id, workflowAreaIdForPersistedArea(area)]),
+        ),
+      );
+      const syncedAreas = areas.map((area) => ({
+        id: workflowAreaIdForPersistedArea(area),
+        user_id: area.user_id,
+        name: area.name,
+        color: area.color ?? "#64748b",
+        created_at: area.created_at,
+      }));
+
+      const merged = workflowReducer(stateRef.current, {
+        type: "syncAreas",
+        areas: syncedAreas,
+        cursor,
+        readUserId,
+      });
+      dispatch({ type: "syncAreas", areas: syncedAreas, cursor, readUserId });
+      setSelectedAreaId((current) => {
+        // #691: `null` is the user's explicit All-areas choice, not a missing
+        // value — an area sync must never stomp it back to the first area.
+        if (current === null) {
+          return null;
+        }
+        if (merged.areas.some((area) => area.id === current)) {
+          return current;
+        }
+        const deliveredId = snapshotAreaId(merged, current);
+        if (merged.areas.some((area) => area.id === deliveredId))
+          return deliveredId;
+        // C2-S8 (#687 finding 1): this reconcile can run long after mount (it
+        // fires whenever the account's real areas arrive from Supabase, an
+        // async fetch) — if the account's area list no longer includes the id
+        // the URL was naming (a stale/shared link, or the area itself was
+        // renamed/removed since), the selection is about to move away from
+        // `current`. Left alone, the address bar would keep claiming `current`
+        // even though the screen no longer shows it. No special-casing needed
+        // HERE for that: the URL-sync effect below (gated on
+        // `hasHydratedFromStorage`, reactive to every `selectedAreaId` change)
+        // is the one place that keeps `?area=` truthful regardless of WHY the
+        // selection moved — this reconcile just needs to change the state.
+        return syncedAreas[0]?.id ?? null;
+      });
+    },
+    [dispatch],
+  );
 
   // #844 AGENT-TODO 2: the MAP, not its key-set. The reducer retires a local
   // row only when the mapped twin is present in the payload, so these
@@ -609,47 +726,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       refByFamily[family].current.set(localId, accountId);
       dispatch({ type: "recordAccountId", family, localId, accountId });
     },
-    [],
+    [dispatch],
   );
 
-  /**
-   * #737 C1 S5 — THE MISSING HALF OF `pendingLocalChanges`, flagged on #736.
-   *
-   * Nine call sites set this flag to `true`; not one ever set it back. So the
-   * moment anything went local-only — a signed-out session, one flaky save —
-   * every surface reading it was pinned to "some of your work is on this
-   * device" for the rest of the page's life, including long after the work had
-   * reached the account. #736's masthead indicator was built on that flag,
-   * which is why it could not be trusted and why S5 rebuilds it.
-   *
-   * ## What makes the recomputation honest rather than merely convenient
-   *
-   * The flag means "there is work on this device the account does not have".
-   * The queues answer that directly: the pending-writes journal and the
-   * offline capture queue hold exactly the writes still owed to the account.
-   *
-   * What the queues do NOT hold are the writes with no server destination at
-   * all — a proposal edit, a first-move edit, an approved task map, a draft
-   * edit with no accept, a WIP swap. Those also set the flag, and clearing it
-   * on an empty queue while one of them was outstanding would be a new
-   * falsehood in place of the old one.
-   *
-   * They are not outstanding here, and the reason is the CALLER, not this
-   * function: this runs only after a drain or a completed
-   * `syncPersistedWorkflowRows`, and that sync re-reads the account and
-   * reconciles local state against it. Anything the account lacked and could
-   * never receive has been overwritten by the account's own row by the time
-   * this runs — it is no longer on the device to be reported. So after a full
-   * sync, "work the account does not have" IS "work still queued".
-   *
-   * That is also why this is deliberately NOT called from anywhere else. Run
-   * mid-session, off the back of no sync, it would clear the flag over exactly
-   * the unsendable writes the paragraph above rules out.
-   *
-   * Best-effort on read failure: the flag is left exactly as it was rather
-   * than being cleared on a guess.
-   */
+  // Queues own journalled writes; the reducer owns memory-only work. Neither
+  // an empty queue nor an account refresh is a receipt for unrelated edits.
+  const pendingReadGenerationRef = useRef(0);
   const refreshPendingLocalChanges = useCallback(async () => {
+    const generation = ++pendingReadGenerationRef.current;
+    const cursor = snapshotCursor(stateRef.current);
     let queued: number;
     try {
       queued = (await pendingWriteCount()) + (await pendingCaptureCount());
@@ -660,10 +745,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // The provider that started this read may already be unmounted by the
     // time it resolves (see the jsdom-teardown race note by `mountedRef`
     // above) — do no work rather than call a state setter into nothing.
-    if (!mountedRef.current) return;
+    const latest = snapshotCursor(stateRef.current);
+    if (
+      !mountedRef.current ||
+      generation !== pendingReadGenerationRef.current ||
+      cursor.epoch !== latest.epoch ||
+      cursor.revision !== latest.revision
+    )
+      return;
 
     setSyncStatus((current) => {
-      const pendingLocalChanges = queued > 0;
+      const pendingLocalChanges =
+        queued > 0 || hasSnapshotWork(stateRef.current);
       if (current.pendingLocalChanges === pendingLocalChanges) return current;
       return {
         ...current,
@@ -681,6 +774,17 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  useEffect(() => {
+    if (hasSnapshotWork(state)) {
+      setSyncStatus((current) =>
+        current.pendingLocalChanges
+          ? current
+          : { ...current, pendingLocalChanges: true },
+      );
+    }
+    void refreshPendingLocalChanges();
+  }, [state, refreshPendingLocalChanges]);
+
   const syncPersistedWorkflowRows = useCallback(
     async (
       client: MinimalSupabaseClient | null,
@@ -695,9 +799,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
         return;
       }
-      if (!areas.length) {
-        return;
-      }
+      const read = await beginAccountSnapshotRead(client);
+      if (!read) return;
+      areas = areas.filter(
+        (area) => !read.userId || area.user_id === read.userId,
+      );
 
       /**
        * #840 follow-up — THE DROP-SET IS SNAPSHOT BEFORE THE READS, NOT AFTER.
@@ -728,6 +834,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
        * it documents the invariant and costs nothing.
        */
       const idAliases = buildIdAliasSnapshot();
+      const cursor = read.cursor;
 
       const [capturesResult, planningResult, executionResult] =
         await Promise.all([
@@ -740,7 +847,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // unmounted during this read must not dispatch, touch state below, or
       // start the four further un-awaited reads (`listWinRecords` and
       // siblings) that follow later in this function.
-      if (!mountedRef.current) return;
+      if (!accountSnapshotReadIsCurrent(read)) return;
 
       if (
         capturesResult.provider !== "supabase" ||
@@ -753,6 +860,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
       dispatch({
         type: "syncPersistedWorkflow",
+        cursor,
+        readUserId: read.userId,
         payload: {
           captures: capturesResult.captures.map((capture) =>
             toWorkflowCapture(capture, areas),
@@ -785,9 +894,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           .map((entry) => entry.period_start),
       );
       markAccountSynced(options);
-      // #737 C1 S5: the account has just been re-read and local state
-      // reconciled against it, which is the ONLY moment "still queued" and
-      // "not in the account" mean the same thing. See
+      // Reconcile queue evidence as well as reducer-owned work. See
       // `refreshPendingLocalChanges` for why it is called here and nowhere
       // else.
       void refreshPendingLocalChanges();
@@ -801,6 +908,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // row — the two halves of the fix are independent on purpose.
       void listWinRecords(client)
         .then((result) => {
+          if (!accountSnapshotReadIsCurrent(read)) return;
           if (result.provider !== "supabase") return;
           setAccountLoggedWins(
             result.winRecords
@@ -833,6 +941,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // override read must never knock the workflow sync into local-only.
       void listOverrideRecords(client)
         .then((result) => {
+          if (!accountSnapshotReadIsCurrent(read)) return;
           if (result.provider === "supabase") {
             setOverrideRecords(result.overrideRecords);
           }
@@ -847,6 +956,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // to raw estimates.
       void listDurationProfiles(client)
         .then((result) => {
+          if (!accountSnapshotReadIsCurrent(read)) return;
           if (result.provider === "supabase") {
             setDurationProfiles(result.durationProfiles);
           }
@@ -861,6 +971,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // decision made this session before the load resolves is preserved.
       void listSuggestionRecords(client)
         .then((result) => {
+          if (!accountSnapshotReadIsCurrent(read)) return;
           if (result.provider !== "supabase") return;
           const decided = decidedPolicyKeysFromSuggestionRecords(
             result.suggestionRecords,
@@ -874,6 +985,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     [
       buildIdAliasSnapshot,
+      beginAccountSnapshotRead,
+      accountSnapshotReadIsCurrent,
+      dispatch,
       markAccountSynced,
       markLocalOnly,
       refreshPendingLocalChanges,
@@ -906,6 +1020,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         }
         return { synced: 0, failed: 0, skipped: 0 };
       }
+
+      const replayEpoch = snapshotCursor(stateRef.current).epoch;
+      const recordReplayAlias: typeof recordAccountAlias = (...args) => {
+        if (
+          mountedRef.current &&
+          snapshotCursor(stateRef.current).epoch === replayEpoch
+        )
+          recordAccountAlias(...args);
+      };
 
       return replayDurableWrites({
         syncWin: (args) => syncJournaledWin(client, args),
@@ -992,14 +1115,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         // would fall back to its local-only path.
         recordPlanPlacementIds: (payload, result) => {
           if (payload.workflow_proposal_id && result.persistedProposalId) {
-            recordAccountAlias(
+            recordReplayAlias(
               "proposals",
               String(payload.workflow_proposal_id),
               result.persistedProposalId,
             );
           }
           if (payload.workflow_block_id && result.persistedBlockId) {
-            recordAccountAlias(
+            recordReplayAlias(
               "blocks",
               String(payload.workflow_block_id),
               result.persistedBlockId,
@@ -1033,14 +1156,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         }),
         recordTaskDraftAcceptIds: (payload, result) => {
           if (result.persistedTaskId) {
-            recordAccountAlias(
+            recordReplayAlias(
               "tasks",
               String(payload.workflow_task_id),
               result.persistedTaskId,
             );
           }
           if (payload.workflow_proposal_id && result.persistedProposalId) {
-            recordAccountAlias(
+            recordReplayAlias(
               "proposals",
               String(payload.workflow_proposal_id),
               result.persistedProposalId,
@@ -1155,7 +1278,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         // only retires a local row whose alias is recorded).
         recordCaptureId: (payload, result) => {
           if (result.captureId) {
-            recordAccountAlias(
+            recordReplayAlias(
               "captures",
               payload.workflow_capture_id,
               result.captureId,
@@ -1163,10 +1286,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           }
         },
       });
-    }, [recordAccountAlias]);
+    }, [recordAccountAlias, persistedAreaIdForWorkflowId]);
 
   const applyWorkflowState = createApplyWorkflowState(stateRef, dispatch);
 
+  const persistenceEpoch = snapshotCursor(stateRef.current).epoch;
+  const persistenceStillCurrent = () =>
+    mountedRef.current &&
+    snapshotCursor(stateRef.current).epoch === persistenceEpoch;
   const persistenceOps: PersistenceSyncOps = createPersistenceSync({
     persistedAreasRef,
     persistedCaptureIdByLocalIdRef,
@@ -1175,12 +1302,32 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     persistedBlockIdByLocalIdRef,
     persistedSessionIdByLocalIdRef,
     selectedAreaId,
-    recordAccountAlias,
-    markLocalOnly,
-    markDeviceStorageBlocked,
+    resolveWorkflowAreaId: (areaId) => snapshotAreaId(stateRef.current, areaId),
+    recordAccountAlias: (...args) => {
+      if (persistenceStillCurrent()) recordAccountAlias(...args);
+    },
+    registerDraftTransfer: (draftId, taskId, proposalId) => {
+      if (persistenceStillCurrent())
+        dispatch({
+          type: "registerDraftTransfer",
+          draftId,
+          taskId,
+          proposalId,
+        });
+    },
+    markLocalOnly: (...args) => {
+      if (persistenceStillCurrent()) markLocalOnly(...args);
+    },
+    markDeviceStorageBlocked: (...args) => {
+      if (persistenceStillCurrent()) markDeviceStorageBlocked(...args);
+    },
     replayJournaledWrites,
-    markPersistedLoadFailure,
-    syncPersistedWorkflowRows,
+    markPersistedLoadFailure: (...args) => {
+      if (persistenceStillCurrent()) markPersistedLoadFailure(...args);
+    },
+    syncPersistedWorkflowRows: async (...args) => {
+      if (persistenceStillCurrent()) await syncPersistedWorkflowRows(...args);
+    },
   });
 
   // S7 (#259), made durable by #737-A slice 2. Only ever called on explicit
@@ -1263,6 +1410,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       markDeviceStorageBlocked,
       markLocalOnly,
       replayJournaledWrites,
+      persistedAreaIdForWorkflowId,
     ],
   );
 
@@ -1281,6 +1429,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     taskMapDraftRef,
     setTaskMapDraft,
     stateRef,
+    isActive: () => mountedRef.current,
     persistedAreasRef,
     persistedTaskIdByLocalIdRef,
     markLocalOnly,
@@ -1355,6 +1504,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       markDeviceStorageBlocked,
       markLocalOnly,
       replayJournaledWrites,
+      persistedAreaIdForWorkflowId,
     ],
   );
 
@@ -1444,7 +1594,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           : null,
         estimateMinutes,
       ),
-    [durationProfiles],
+    [durationProfiles, persistedAreaIdForWorkflowId],
   );
 
   // The sourced duration recalibration for a proposal in `areaId`, or null when
@@ -1465,7 +1615,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         estimateMinutes,
       );
     },
-    [state.executionSessions, durationProfiles],
+    [state.executionSessions, durationProfiles, persistedAreaIdForWorkflowId],
   );
 
   // Decide a shown recalibration. On accept it ACTS: (1) records the decision
@@ -1691,7 +1841,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     }
     setHasHydratedFromStorage(true);
-  }, []);
+  }, [dispatch]);
 
   /**
    * Audit P0#4 — read the DEVICE tier of "which days are closed" back out of
@@ -2067,7 +2217,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // now the ONE mechanism that owns "replay the journal on mount", ordered
   // strictly after the refs populate, on every mount, signed in or not.
   const runAccountSync = useCallback(
-    async (options?: { replayAfter?: boolean }): Promise<void> => {
+    async function syncAccount(options?: {
+      replayAfter?: boolean;
+    }): Promise<void> {
       // #960 defect 1: the mount effect and a `SIGNED_IN` event can land in
       // the same tick (a session already present at first paint) — without
       // this guard the second call could read `persistedAreasRef` mid-write
@@ -2082,20 +2234,32 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        let readGeneration = snapshotIdentityRef.current.generation;
         try {
+          const read = await beginAccountSnapshotRead(client);
+          if (!read) return;
+          readGeneration = read.generation;
+          const areaCursor = read.cursor;
           const result = await listAreas(client);
           // jsdom-teardown race fix — same shape as `mountedRef`'s own note
           // near its declaration. Bail first, before touching state at all.
-          if (!mountedRef.current) return;
+          if (!accountSnapshotReadIsCurrent(read)) return;
           if (result.provider !== "supabase") {
             markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
             return;
           }
-          applyPersistedAreas(result.areas);
+          if (
+            applyPersistedAreas(result.areas, areaCursor, read.userId) === false
+          ) {
+            // The newer area-only read did not hydrate workflow or replay
+            // queued writes. Request a clean pass after releasing this one.
+            accountSyncRequestedRef.current = true;
+            return;
+          }
           await syncPersistedWorkflowRows(client, result.areas, {
             preserveLocalOnlyWhilePending: true,
           });
-          if (!mountedRef.current) return;
+          if (!accountSnapshotReadIsCurrent(read)) return;
           if (options?.replayAfter) {
             // #967 follow-up review, finding 1: the identity this pass is
             // accountable to, captured BEFORE the pending-period snapshot and
@@ -2109,6 +2273,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             } catch {
               expectedUserId = null;
             }
+            if (
+              !accountSnapshotReadIsCurrent(read) ||
+              (read.userId && expectedUserId !== read.userId)
+            )
+              return;
 
             // #967 review: the specific daily-review periods this pass is
             // responsible for confirming, snapshotted IMMEDIATELY BEFORE
@@ -2149,6 +2318,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               expectedDailyPeriodsSnapshotFailed = true;
             }
 
+            if (!accountSnapshotReadIsCurrent(read)) return;
+
             // ORDERING IS LOAD-BEARING (#960 defect 1) — this must run AFTER
             // the two calls above have populated `persistedAreasRef`.
             try {
@@ -2167,7 +2338,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             // "some work is saved on this device" even though nothing was.
             // Awaited (not fire-and-forget) so `markAccountSynced` sees the
             // POST-drain count on this very call, not one refresh cycle late.
-            if (!mountedRef.current) return;
+            if (!accountSnapshotReadIsCurrent(read)) return;
             await refreshPendingLocalChanges();
             // #967 follow-up review, finding 2: refresh ONLY
             // `pendingSaveFailed` unconditionally right after replay — a
@@ -2181,7 +2352,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             // comment — and stay gated behind the confirmation below exactly
             // as before; `refreshPendingSaveFailed` is a narrower sibling
             // that touches none of them.
-            if (!mountedRef.current) return;
+            if (!accountSnapshotReadIsCurrent(read)) return;
             await refreshPendingSaveFailed(client, expectedUserId);
             // #967: transfer a successfully replayed daily close to the
             // account tier BEFORE the journal refresh below can clear its
@@ -2205,6 +2376,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
                 expectedDailyPeriods,
                 expectedUserId,
               );
+            if (!accountSnapshotReadIsCurrent(read)) return;
             if (
               accountConfirmedExpectedDays &&
               !expectedDailyPeriodsSnapshotFailed
@@ -2212,10 +2384,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               await refreshJournalledDurableState();
             }
           }
-          if (!mountedRef.current) return;
+          if (!accountSnapshotReadIsCurrent(read)) return;
           markAccountSynced({ preserveLocalOnlyWhilePending: true });
         } catch (error) {
-          if (mountedRef.current) markPersistedLoadFailure(error);
+          if (
+            mountedRef.current &&
+            readGeneration === snapshotIdentityRef.current.generation
+          )
+            markPersistedLoadFailure(error);
         }
       } finally {
         // #737 C1 re-score ROUND 2 GAP 2: settled in a `finally`, for the
@@ -2224,10 +2400,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         // true if one ever stops.
         if (mountedRef.current) setAreasReadbackSettled(true);
         accountSyncInFlightRef.current = false;
+        if (accountSyncRequestedRef.current && mountedRef.current) {
+          accountSyncRequestedRef.current = false;
+          void syncAccount({ replayAfter: true });
+        }
       }
     },
     [
       applyPersistedAreas,
+      beginAccountSnapshotRead,
+      accountSnapshotReadIsCurrent,
       markAccountSynced,
       markPersistedLoadFailure,
       markLocalOnly,
@@ -2276,7 +2458,19 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     const { data: subscription } = client.auth.onAuthStateChange(
       (event, session) => {
-        if (!session) return;
+        const userId = session?.user.id ?? null;
+        const changed = snapshotIdentityRef.current.userId !== userId;
+        if (changed) {
+          snapshotIdentityRef.current = {
+            userId,
+            generation: snapshotIdentityRef.current.generation + 1,
+          };
+        }
+        if (!session) {
+          if (event === "SIGNED_OUT" || event === "INITIAL_SESSION")
+            markSignedOutLocal();
+          return;
+        }
         if (
           event !== "SIGNED_IN" &&
           event !== "INITIAL_SESSION" &&
@@ -2285,15 +2479,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           return;
         }
         const posture = syncStatusRef.current;
-        if (posture.account !== "local-only" && !posture.signedOut) return;
-        void runAccountSync({ replayAfter: true });
+        if (!changed && posture.account !== "local-only" && !posture.signedOut)
+          return;
+        if (accountSyncInFlightRef.current) {
+          if (changed) accountSyncRequestedRef.current = true;
+          return;
+        }
+        // Leave the auth callback before another getUser call enters its lock.
+        queueMicrotask(() => {
+          if (mountedRef.current) void runAccountSync({ replayAfter: true });
+        });
       },
     );
 
     return () => {
       subscription?.subscription?.unsubscribe();
     };
-  }, [runAccountSync]);
+  }, [runAccountSync, markSignedOutLocal]);
 
   useEffect(() => {
     if (!hasHydratedFromStorage) {
@@ -2308,7 +2510,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         ...current,
         storage: "blocked",
         message: DEVICE_STORAGE_BLOCKED,
-        pendingLocalChanges: true,
+        pendingLocalChanges:
+          current.pendingLocalChanges || hasSnapshotWork(state),
       }));
     }
   }, [hasHydratedFromStorage, state]);
@@ -2357,7 +2560,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [hasHydratedFromStorage]);
+  }, [hasHydratedFromStorage, dispatch]);
 
   /**
    * #737 C1 re-score GAP 3, write half — mirror the triage drafts to the
@@ -2528,7 +2731,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     if (syncedAny) {
       await syncPersistedWorkflowRows(client);
     }
-  }, [refreshUnsyncedCount, syncPersistedWorkflowRows]);
+  }, [
+    refreshUnsyncedCount,
+    syncPersistedWorkflowRows,
+    persistedAreaIdForWorkflowId,
+  ]);
 
   // Purge the device-local queue (logout — High-sensitivity raw captures).
   const clearOfflineCaptures = useCallback(async () => {
@@ -3009,10 +3216,22 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           due_at: persisted.task.due_at,
           updated_at: persisted.task.updated_at,
         };
-        applyWorkflowState({
+        const reflected = trackSnapshotChanges(stateRef.current, {
           ...stateRef.current,
           tasks: stateRef.current.tasks.map((item) =>
             item.id === taskId ? reflectedTask : item,
+          ),
+        });
+        dispatch({
+          type: "hydrate",
+          state: acknowledgeSnapshot(
+            reflected,
+            snapshotReceipt(reflected, "tasks", taskId, [
+              "title",
+              "description",
+              "area_id",
+              "due_at",
+            ]),
           ),
         });
       }
@@ -3077,7 +3296,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       taskId,
     );
     if (reverted) {
-      applyWorkflowState(reverted);
+      dispatch({
+        type: "hydrate",
+        state: restoreSnapshotChanges(stateRef.current, reverted, previous),
+      });
       // Only the app-update case has a banner-sized next step; the others
       // leave nothing on this device, so the banner has nothing to report.
       if (kind === "refused-needs-app-update") markPersistedSaveFailure(error);
@@ -3111,9 +3333,49 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     retryPendingAccountWrites: async () => {
       await runAccountSync({ replayAfter: true });
     },
-    addArea: (name, color) => dispatch({ type: "addArea", name, color }),
-    updateAreaColor: (areaId, color) =>
-      dispatch({ type: "updateAreaColor", areaId, color }),
+    addArea: (name, color) => {
+      const previous = stateRef.current;
+      applyWorkflowState(addWorkflowArea(previous, { name, color }));
+      const added = stateRef.current.areas.find(
+        (area) => !previous.areas.some((old) => old.id === area.id),
+      );
+      return added
+        ? snapshotReceipt(stateRef.current, "areas", added.id)
+        : undefined;
+    },
+    updateAreaColor: (areaId, color) => {
+      applyWorkflowState(
+        updateWorkflowAreaColor(stateRef.current, areaId, color),
+      );
+      return snapshotReceipt(stateRef.current, "areas", areaId, ["color"]);
+    },
+    acknowledgeAreaSave: (receipt, area) => {
+      if (
+        !mountedRef.current ||
+        snapshotCursor(stateRef.current).epoch !== receipt.epoch
+      )
+        return false;
+      dispatch({
+        type: "acknowledgeSnapshot",
+        receipt,
+        persistedId: workflowAreaIdForPersistedArea(area),
+      });
+      persistedAreasRef.current = [
+        ...persistedAreasRef.current.filter(
+          (existing) => existing.id !== area.id,
+        ),
+        area,
+      ];
+      return true;
+    },
+    runAreaWrite: (receipt, write) =>
+      areaWrites(snapshotAreaId(stateRef.current, receipt.id), async () => {
+        if (
+          mountedRef.current &&
+          snapshotCursor(stateRef.current).epoch === receipt.epoch
+        )
+          await write();
+      }),
     submitCaptureText: captureParseOps.submitCaptureText,
     sortCaptureIntoDrafts: captureParseOps.sortCaptureIntoDrafts,
     captureParse,
@@ -3314,7 +3576,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     updateTaskFirstTinyStep: (taskId, firstTinyStep) => {
       const previous = stateRef.current;
       const next = updateTaskFirstTinyStep(previous, taskId, firstTinyStep);
-      applyWorkflowState(next);
+      // Device-only by design: protected from account reads, never owed.
+      applyWorkflowState(next, { deviceOnly: true });
 
       if (next !== previous) {
         markLocalOnly(savedOnThisDeviceBanner("Your first move"));

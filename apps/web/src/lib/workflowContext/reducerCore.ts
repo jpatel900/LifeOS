@@ -80,6 +80,18 @@ import type {
 } from "../types";
 import { persistedAreaIdForWorkflowAreaId } from "../workflowAreaMapping";
 import type { ParsedWorkflowResult } from "../ai/parseCaptureWorkflow";
+import {
+  acknowledgeSnapshot,
+  bindSnapshotAccount,
+  acknowledgeSnapshotCreation,
+  reconcileSnapshotRead,
+  registerDraftTransfer,
+  resetSnapshotOwnership,
+  restoreSnapshotOwnership,
+  trackSnapshotChanges,
+  type SnapshotCursor,
+  type SnapshotReceipt,
+} from "./snapshotOwnership";
 
 // #687 demo-seed: STORAGE_KEY now lives in workflow/shared.ts (this file's
 // initializer needs it too, and shared.ts cannot import back from here
@@ -88,6 +100,18 @@ import type { ParsedWorkflowResult } from "../ai/parseCaptureWorkflow";
 export { STORAGE_KEY };
 
 export type WorkflowAction =
+  | { type: "bindSnapshotAccount"; userId: string }
+  | {
+      type: "acknowledgeSnapshot";
+      receipt: SnapshotReceipt;
+      persistedId?: string;
+    }
+  | {
+      type: "registerDraftTransfer";
+      draftId: string;
+      taskId: string;
+      proposalId: string | null;
+    }
   | {
       type: "hydrate";
       state: WorkflowState;
@@ -95,10 +119,14 @@ export type WorkflowAction =
   | {
       type: "syncAreas";
       areas: WorkflowState["areas"];
+      cursor?: SnapshotCursor;
+      readUserId?: string;
     }
   | {
       type: "syncPersistedWorkflow";
       payload: PersistedWorkflowPayload;
+      cursor?: SnapshotCursor;
+      readUserId?: string;
     }
   | {
       /**
@@ -449,14 +477,15 @@ export function mergePersistedCalendarBlocks(
   localRows: Phase2MockCalendarBlock[],
   idAliases: Map<string, string>,
   taskAliases: Map<string, string> = new Map(),
+  recordEcho?: (localId: string, accountId: string) => void,
 ): Phase2MockCalendarBlock[] {
   const persistedIds = new Set(persistedRows.map((row) => row.id));
   const twinArrived = (localId: string) => {
     const accountId = idAliases.get(localId);
     return accountId !== undefined && persistedIds.has(accountId);
   };
-  const isEchoOfPersisted = (localRow: Phase2MockCalendarBlock) =>
-    persistedRows.some(
+  const isEchoOfPersisted = (localRow: Phase2MockCalendarBlock) => {
+    const echo = persistedRows.find(
       (persistedRow) =>
         persistedRow.task_id !== null &&
         (persistedRow.task_id === localRow.task_id ||
@@ -465,6 +494,9 @@ export function mergePersistedCalendarBlocks(
         new Date(persistedRow.start_at).getTime() ===
           new Date(localRow.start_at).getTime(),
     );
+    if (echo) recordEcho?.(localRow.id, echo.id);
+    return echo !== undefined;
+  };
 
   return [
     ...persistedRows,
@@ -493,20 +525,24 @@ export function mergePersistedProposals(
   localRows: Phase2TimeBlockProposal[],
   idAliases: Map<string, string>,
   taskAliases: Map<string, string> = new Map(),
+  recordEcho?: (localId: string, accountId: string) => void,
 ): Phase2TimeBlockProposal[] {
   const persistedIds = new Set(persistedRows.map((row) => row.id));
   const twinArrived = (localId: string) => {
     const accountId = idAliases.get(localId);
     return accountId !== undefined && persistedIds.has(accountId);
   };
-  const isEchoOfPersisted = (localRow: Phase2TimeBlockProposal) =>
-    persistedRows.some(
+  const isEchoOfPersisted = (localRow: Phase2TimeBlockProposal) => {
+    const echo = persistedRows.find(
       (persistedRow) =>
         (persistedRow.task_id === localRow.task_id ||
           persistedRow.task_id === taskAliases.get(localRow.task_id)) &&
         new Date(persistedRow.proposed_start).getTime() ===
           new Date(localRow.proposed_start).getTime(),
     );
+    if (echo) recordEcho?.(localRow.id, echo.id);
+    return echo !== undefined;
+  };
 
   return [
     ...persistedRows,
@@ -535,6 +571,7 @@ export function mergePersistedSessions(
   idAliases: Map<string, string>,
   taskAliases: Map<string, string> = new Map(),
   blockAliases: Map<string, string> = new Map(),
+  recordEcho?: (localId: string, accountId: string) => void,
 ): Phase2MockExecutionSession[] {
   const persistedIds = new Set(persistedRows.map((row) => row.id));
   const twinArrived = (localId: string) => {
@@ -548,8 +585,8 @@ export function mergePersistedSessions(
   ) =>
     persistedId === localId ||
     (localId !== null && persistedId === (aliases.get(localId) ?? null));
-  const isEchoOfPersisted = (localRow: Phase2MockExecutionSession) =>
-    persistedRows.some(
+  const isEchoOfPersisted = (localRow: Phase2MockExecutionSession) => {
+    const echo = persistedRows.find(
       (persistedRow) =>
         matchesAliased(persistedRow.task_id, localRow.task_id, taskAliases) &&
         matchesAliased(
@@ -558,6 +595,9 @@ export function mergePersistedSessions(
           blockAliases,
         ),
     );
+    if (echo) recordEcho?.(localRow.id, echo.id);
+    return echo !== undefined;
+  };
 
   return [
     ...persistedRows,
@@ -930,14 +970,64 @@ export function workflowReducer(
   state: WorkflowState,
   action: WorkflowAction,
 ): WorkflowState {
+  if (
+    (action.type === "syncAreas" || action.type === "syncPersistedWorkflow") &&
+    action.cursor &&
+    action.cursor.epoch !== (state.snapshotOwnership?.epoch ?? 0)
+  )
+    return state;
+  const next = reduceWorkflowState(state, action);
   switch (action.type) {
+    case "hydrate":
+    case "bindSnapshotAccount":
+    case "syncAreas":
+    case "syncPersistedWorkflow":
+    case "recordAccountId":
+    case "acknowledgeSnapshot":
+    case "registerDraftTransfer":
+    case "reset":
+    // Reading drafts back from device storage is not a new user edit.
+    case "restoreDeviceDrafts":
+      return next;
+    // The first move is kept on this device by design (no account write).
+    case "updateTaskFirstTinyStep":
+      return trackSnapshotChanges(state, next, { deviceOnly: true });
+    default:
+      return trackSnapshotChanges(state, next);
+  }
+}
+
+function reduceWorkflowState(
+  state: WorkflowState,
+  action: WorkflowAction,
+): WorkflowState {
+  switch (action.type) {
+    case "bindSnapshotAccount":
+      return bindSnapshotAccount(state, action.userId);
+    case "acknowledgeSnapshot":
+      return acknowledgeSnapshot(state, action.receipt, action.persistedId);
+    case "registerDraftTransfer":
+      return registerDraftTransfer(
+        state,
+        action.draftId,
+        action.taskId,
+        action.proposalId,
+      );
     case "hydrate":
       return action.state;
     case "syncAreas":
-      return {
-        ...state,
-        areas: action.areas,
-      };
+      return reconcileSnapshotRead(
+        state,
+        {
+          ...state,
+          areas: action.areas,
+        },
+        ["areas"],
+        action.cursor,
+        { areas: action.areas },
+        {},
+        action.readUserId,
+      );
     case "syncPersistedWorkflow": {
       // The payload maps carry what THIS mount's refs knew at snapshot time;
       // the state aliases carry what any previous mount of this tab recorded
@@ -975,55 +1065,123 @@ export function workflowReducer(
         }
       }
       const retargeted = retargetCaptureReferences(state, captureRenames);
-      return {
-        ...retargeted,
-        captureItems: mergedCaptures,
-        tasks: mergePersistedRows(
-          action.payload.tasks,
-          retargeted.tasks,
-          taskAliases,
-        ),
-        timeBlockProposals: mergePersistedProposals(
-          action.payload.proposals,
-          state.timeBlockProposals,
-          effective("proposals"),
-          taskAliases,
-        ),
-        calendarBlocks: mergePersistedCalendarBlocks(
-          action.payload.blocks,
-          state.calendarBlocks,
-          blockAliases,
-          taskAliases,
-        ),
-        executionSessions: mergePersistedSessions(
-          action.payload.sessions,
-          state.executionSessions,
-          effective("sessions"),
-          taskAliases,
-          blockAliases,
-        ),
-        reviewLog: [
-          ...action.payload.reviewLog,
-          ...state.reviewLog.filter(
-            (line) => !action.payload.reviewLog.includes(line),
-          ),
-        ],
+      const proposalAliases = effective("proposals");
+      const sessionAliases = effective("sessions");
+      const inferredIds = {
+        timeBlockProposals: new Set<string>(),
+        calendarBlocks: new Set<string>(),
+        executionSessions: new Set<string>(),
       };
+      const proposals = mergePersistedProposals(
+        action.payload.proposals,
+        state.timeBlockProposals,
+        proposalAliases,
+        taskAliases,
+        (localId, accountId) => {
+          proposalAliases.set(localId, accountId);
+          inferredIds.timeBlockProposals.add(localId);
+        },
+      );
+      const blocks = mergePersistedCalendarBlocks(
+        action.payload.blocks,
+        state.calendarBlocks,
+        blockAliases,
+        taskAliases,
+        (localId, accountId) => {
+          blockAliases.set(localId, accountId);
+          inferredIds.calendarBlocks.add(localId);
+        },
+      );
+      const sessions = mergePersistedSessions(
+        action.payload.sessions,
+        state.executionSessions,
+        sessionAliases,
+        taskAliases,
+        blockAliases,
+        (localId, accountId) => {
+          sessionAliases.set(localId, accountId);
+          inferredIds.executionSessions.add(localId);
+        },
+      );
+      // Preserve the exact identity evidence already used by echo deduplication.
+      const identified = {
+        ...state,
+        accountIdByLocalId: {
+          captures: Object.fromEntries(captureAliases),
+          tasks: Object.fromEntries(taskAliases),
+          proposals: Object.fromEntries(proposalAliases),
+          blocks: Object.fromEntries(blockAliases),
+          sessions: Object.fromEntries(sessionAliases),
+        },
+      };
+      return reconcileSnapshotRead(
+        identified,
+        {
+          ...retargeted,
+          accountIdByLocalId: identified.accountIdByLocalId,
+          captureItems: mergedCaptures,
+          tasks: mergePersistedRows(
+            action.payload.tasks,
+            retargeted.tasks,
+            taskAliases,
+          ),
+          timeBlockProposals: proposals,
+          calendarBlocks: blocks,
+          executionSessions: sessions,
+          reviewLog: [
+            ...action.payload.reviewLog,
+            ...state.reviewLog.filter(
+              (line) => !action.payload.reviewLog.includes(line),
+            ),
+          ],
+        },
+        [
+          "captureItems",
+          "tasks",
+          "timeBlockProposals",
+          "calendarBlocks",
+          "executionSessions",
+        ],
+        action.cursor,
+        {
+          captureItems: action.payload.captures,
+          tasks: action.payload.tasks,
+          timeBlockProposals: action.payload.proposals,
+          calendarBlocks: action.payload.blocks,
+          executionSessions: action.payload.sessions,
+        },
+        inferredIds,
+        action.readUserId,
+      );
     }
     case "recordAccountId": {
       // A uuid workflow id IS the account id — recording it would only bloat
       // the map. Same-value re-records are no-ops so replay-heavy paths never
       // trigger a render for nothing.
-      if (isUuid(action.localId)) return state;
+      if (isUuid(action.localId))
+        return acknowledgeSnapshotCreation(
+          state,
+          action.family,
+          action.localId,
+        );
       const family = state.accountIdByLocalId[action.family] ?? {};
-      if (family[action.localId] === action.accountId) return state;
-      return {
-        ...state,
-        accountIdByLocalId: {
-          ...state.accountIdByLocalId,
-          [action.family]: { ...family, [action.localId]: action.accountId },
+      if (family[action.localId] === action.accountId)
+        return acknowledgeSnapshotCreation(
+          state,
+          action.family,
+          action.localId,
+        );
+      return acknowledgeSnapshotCreation(
+        {
+          ...state,
+          accountIdByLocalId: {
+            ...state.accountIdByLocalId,
+            [action.family]: { ...family, [action.localId]: action.accountId },
+          },
         },
-      };
+        action.family,
+        action.localId,
+      );
     }
     /**
      * #737 C1 re-score GAP 3 — restore the device's pending triage drafts.
@@ -1124,7 +1282,7 @@ export function workflowReducer(
     case "saveReview":
       return saveReview(state);
     case "reset":
-      return createSyncedEmptyState();
+      return resetSnapshotOwnership(state, createSyncedEmptyState());
     default:
       return state;
   }
@@ -1153,7 +1311,7 @@ export function loadStoredStateFromSession(): {
     }
 
     syncWorkflowIdCounterFromState(parsed);
-    return { state: parsed, storageBlocked: false };
+    return { state: restoreSnapshotOwnership(parsed), storageBlocked: false };
   } catch {
     // Keep the existing demo fallback when storage cannot be read, while
     // preserving the warning. An existing corrupt snapshot still blocks

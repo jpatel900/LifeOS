@@ -95,6 +95,8 @@ export function LifeOSCockpit({
     setSelectedAreaId,
     syncStatus,
     syncPersistedAreas,
+    acknowledgeAreaSave,
+    runAreaWrite,
     submitCaptureText,
     captureParse,
     retryCaptureParseWithMock,
@@ -222,7 +224,7 @@ export function LifeOSCockpit({
     const name = newAreaName.trim();
     if (!name) return;
     const color = ACCENT_PALETTE[state.areas.length % ACCENT_PALETTE.length];
-    addArea(name, color);
+    const receipt = addArea(name, color);
     setNewAreaName("");
     setIsAddingArea(false);
     showToast(`${name} added`);
@@ -235,9 +237,10 @@ export function LifeOSCockpit({
         color,
       });
       if (result.provider === "supabase") {
+        if (receipt && !acknowledgeAreaSave(receipt, result.area)) return;
         const areasResult = await listAreas(client);
         if (areasResult.provider === "supabase") {
-          syncPersistedAreas(areasResult.areas);
+          syncPersistedAreas(areasResult.areas, receipt);
           setSelectedAreaId(workflowAreaIdForPersistedArea(result.area));
         }
       } else {
@@ -253,7 +256,7 @@ export function LifeOSCockpit({
       showToast("Create an area before recoloring");
       return;
     }
-    updateLocalAreaColor(activeArea.id, color);
+    const receipt = updateLocalAreaColor(activeArea.id, color);
     setIsPaletteOpen(false);
     try {
       const persistedId = persistedAreaIdForWorkflowAreaId(
@@ -273,9 +276,13 @@ export function LifeOSCockpit({
         })),
       );
       if (persistedId) {
-        await updateAreaColor(createSupabaseBrowserClient(), {
-          area_id: persistedId,
-          color,
+        await runAreaWrite(receipt, async () => {
+          const result = await updateAreaColor(createSupabaseBrowserClient(), {
+            area_id: persistedId,
+            color,
+          });
+          if (result.provider === "supabase")
+            acknowledgeAreaSave(receipt, result.area);
         });
       }
     } catch {

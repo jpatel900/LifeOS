@@ -26,7 +26,7 @@ import {
 } from "@/__tests__/helpers/todayMomentsHarness";
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: routeReplace }),
   usePathname: () => "/",
 }));
 vi.mock("@/lib/reEntry/briefView", async (importOriginal) => ({
@@ -34,21 +34,30 @@ vi.mock("@/lib/reEntry/briefView", async (importOriginal) => ({
   createBriefViewRecorder: () => ({ recordIfNeeded: vi.fn() }),
 }));
 
-const { listAreas, listCaptures, upsert, account } = vi.hoisted(() => ({
-  listAreas: vi.fn(),
-  listCaptures: vi.fn(),
-  upsert: vi.fn(),
-  account: { available: false, captures: [] as Record<string, unknown>[] },
-}));
+const { listAreas, listCaptures, upsert, account, routeReplace, auth } =
+  vi.hoisted(() => ({
+    listAreas: vi.fn(),
+    listCaptures: vi.fn(),
+    upsert: vi.fn(),
+    account: { available: false, captures: [] as Record<string, unknown>[] },
+    routeReplace: vi.fn(),
+    auth: {
+      userId: "22222222-2222-4222-8222-222222222222",
+      notify: undefined as
+        | ((event: "SIGNED_IN", session: { user: { id: string } }) => void)
+        | undefined,
+    },
+  }));
 
 vi.mock("@/lib/supabase/browser", () => {
   const client = {
     auth: {
-      onAuthStateChange: () => ({
-        data: { subscription: { unsubscribe: vi.fn() } },
-      }),
+      onAuthStateChange: (callback: NonNullable<typeof auth.notify>) => {
+        auth.notify = callback;
+        return { data: { subscription: { unsubscribe: vi.fn() } } };
+      },
       getUser: async () => ({
-        data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+        data: { user: { id: auth.userId } },
         error: null,
       }),
     },
@@ -168,6 +177,8 @@ beforeEach(async () => {
   resetTodayMomentsMountTracking();
   await clearPendingWrites();
   vi.clearAllMocks();
+  auth.userId = customArea.user_id;
+  auth.notify = undefined;
   account.available = false;
   account.captures = [];
   listCaptures.mockImplementation(async () => ({
@@ -207,6 +218,63 @@ afterEach(async () => {
 });
 
 describe("Today capture before account area hydration", () => {
+  it.each([false, true])(
+    "waits for account B's area read before onboarding (empty account: %s)",
+    async (emptyAccount) => {
+      mountToday();
+      await waitFor(() =>
+        expect(providerState().map[customArea.id]).toBeDefined(),
+      );
+      const nextArea = {
+        ...customArea,
+        id: "88888888-8888-4888-8888-888888888888",
+        user_id: "99999999-9999-4999-8999-999999999999",
+        name: "Synthetic second account",
+        slug: "synthetic-second-account",
+      };
+      let release!: (value: {
+        provider: "supabase";
+        areas: (typeof customArea)[];
+      }) => void;
+      listAreas.mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+      );
+      await act(async () => {
+        auth.userId = nextArea.user_id;
+        auth.notify!("SIGNED_IN", { user: { id: auth.userId } });
+      });
+      await waitFor(() => expect(listAreas).toHaveBeenCalledTimes(2));
+      expect(
+        providerState().areas.some((area) => area.id === customArea.id),
+      ).toBe(false);
+      expect(providerState().map).toEqual({});
+      expect(routeReplace).not.toHaveBeenCalledWith("/welcome");
+      pressCaptureShortcut();
+      expect(screen.getByTestId("capture-save-destination")).toHaveTextContent(
+        "Will save without an area.",
+      );
+      await act(async () =>
+        release({
+          provider: "supabase",
+          areas: emptyAccount ? [] : [nextArea],
+        }),
+      );
+      if (emptyAccount) {
+        await waitFor(() => expect(providerState().areas).toEqual([]));
+        await waitFor(() =>
+          expect(routeReplace).toHaveBeenCalledWith("/welcome"),
+        );
+      } else {
+        await waitFor(() =>
+          expect(providerState().map[nextArea.id]).toBeDefined(),
+        );
+        expect(routeReplace).not.toHaveBeenCalledWith("/welcome");
+      }
+    },
+  );
+
   it("journals no implicit demo destination and delivers one account row after custom-only areas arrive", async () => {
     let resolveAreas!: (result: {
       provider: "supabase";
@@ -223,6 +291,7 @@ describe("Today capture before account area hydration", () => {
       providerState().areas.some((area) => area.id.startsWith("area-")),
     ).toBe(true);
     expect(providerState().map).toEqual({});
+    expect(routeReplace).not.toHaveBeenCalledWith("/welcome");
     pressCaptureShortcut();
     expect
       .soft(screen.getByTestId("capture-save-destination"))

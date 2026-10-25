@@ -10,7 +10,12 @@
 // which function each call is textually nested in), so this is called from
 // WorkflowProvider at the same relative position the four useCallbacks used
 // to occupy, unconditionally, every render.
-import { useCallback, type Dispatch, type MutableRefObject } from "react";
+import {
+  useCallback,
+  useRef,
+  type Dispatch,
+  type MutableRefObject,
+} from "react";
 import type { Area } from "@lifeos/schemas";
 import { requestTaskMapDraft as fetchTaskMapDraft } from "../ai/taskMapDraftClient";
 import { validateTaskMapForPersistence } from "../taskmap/persistence";
@@ -27,8 +32,11 @@ import type { WorkflowState } from "../workflow";
 import {
   persistedAreaIdForWorkflowId,
   persistedIdForLocalId,
+  workflowReducer,
 } from "./reducerCore";
 import type { WorkflowAction } from "./reducerCore";
+import { snapshotCursor, snapshotReceipt } from "./snapshotOwnership";
+import { createOrderedWrites } from "./orderedWrites";
 import type { MinimalSupabaseClient } from "../data/workflow";
 import { SAFE_TASK_MAP_FAILURE_MESSAGE, type TaskMapDraftState } from "./types";
 
@@ -37,6 +45,7 @@ export interface TaskMapDraftActionsDeps {
   taskMapDraftRef: MutableRefObject<TaskMapDraftState>;
   setTaskMapDraft: (next: TaskMapDraftState) => void;
   stateRef: MutableRefObject<WorkflowState>;
+  isActive?: () => boolean;
   persistedAreasRef: MutableRefObject<Area[]>;
   persistedTaskIdByLocalIdRef: MutableRefObject<Map<string, string>>;
   markLocalOnly: (message: string) => void;
@@ -56,6 +65,23 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
     markLocalOnly,
     syncPersistedWorkflowRows,
   } = deps;
+
+  // Map writes replace the whole graph. Keep account writes in user-action
+  // order, while applying every optimistic edit immediately. Receipts alone
+  // cannot prevent a slower older request from overwriting a newer saved graph.
+  const mapWrites = useRef(createOrderedWrites()).current;
+  const persistMapWrite = useCallback(
+    (
+      taskId: string,
+      stillCurrent: () => boolean,
+      write: () => Promise<void>,
+    ) => {
+      return mapWrites(taskId, async () => {
+        if (stillCurrent()) await write();
+      });
+    },
+    [mapWrites],
+  );
 
   // #590 slice 4: these dep arrays are copied verbatim from the original
   // inline useCallback hooks in WorkflowContext.tsx (mechanical extraction —
@@ -274,11 +300,23 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
         ? persistedTaskId!
         : taskId;
 
-      dispatch({
+      const previous = stateRef.current;
+      const next = workflowReducer(previous, {
         type: "approveTaskMapLocal",
         taskId: stateTaskId,
         graph: validatedGraph,
       });
+      stateRef.current = next;
+      dispatch({ type: "hydrate", state: next });
+      const receipt = snapshotReceipt(next, "tasks", stateTaskId, [
+        "progression_map",
+        "map_status",
+        "map_schema_version",
+        "first_tiny_step",
+      ]);
+      const stillCurrent = () =>
+        snapshotCursor(stateRef.current).epoch === receipt.epoch &&
+        (deps.isActive?.() ?? true);
       taskMapDraftRef.current = { phase: "idle" };
       setTaskMapDraft({ phase: "idle" });
 
@@ -289,46 +327,45 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
         return;
       }
 
-      const task = stateRef.current.tasks.find(
-        (item) => item.id === stateTaskId,
-      );
+      const task = previous.tasks.find((item) => item.id === stateTaskId);
       const persistedAreaId = task?.area_id
         ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
         : null;
 
-      // FR-031 slice 8: `stateRef.current` lags a render behind (it's
-      // synced from `state` in an effect, line ~1237), so right after the
-      // `approveTaskMapLocal` dispatch above it still holds the PRE-dispatch
-      // task — exactly the prior approved map (if any) that
-      // `approveTaskMapLocal` itself carried completion forward from. Send
-      // it here too so the Supabase-persisted row applies the identical
-      // carry-forward rule (`carryForwardNodeCompletion`, shared helper).
+      // Use the explicit pre-mutation graph for the same carry-forward rule
+      // as the local transition; stateRef now holds the new graph immediately.
       const previousGraph =
         task?.map_status === "approved" && task.progression_map
           ? task.progression_map
           : null;
 
       try {
-        await approveTaskMap(client, {
-          task_id: persistedTaskId,
-          area_id: persistedAreaId,
-          graph: validatedGraph,
-          ai_draft: aiDraftSource
-            ? {
-                nodes: aiDraftSource.draft.nodes,
-                edges: aiDraftSource.draft.edges,
-              }
-            : null,
-          suggestion_record_id: aiDraftSource?.suggestionRecordId ?? null,
-          previous_graph: previousGraph,
+        await persistMapWrite(persistedTaskId, stillCurrent, async () => {
+          const result = await approveTaskMap(client, {
+            task_id: persistedTaskId,
+            area_id: persistedAreaId,
+            graph: validatedGraph,
+            ai_draft: aiDraftSource
+              ? {
+                  nodes: aiDraftSource.draft.nodes,
+                  edges: aiDraftSource.draft.edges,
+                }
+              : null,
+            suggestion_record_id: aiDraftSource?.suggestionRecordId ?? null,
+            previous_graph: previousGraph,
+          });
+          if (!stillCurrent()) return;
+          if (result?.provider === "supabase")
+            dispatch({ type: "acknowledgeSnapshot", receipt });
+          await syncPersistedWorkflowRows(client);
         });
-        await syncPersistedWorkflowRows(client);
       } catch {
-        markLocalOnly(savedOnThisDeviceBanner("Your approved map"));
+        if (stillCurrent())
+          markLocalOnly(savedOnThisDeviceBanner("Your approved map"));
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see note above the `deps` destructure
-    [markLocalOnly, syncPersistedWorkflowRows],
+    [markLocalOnly, syncPersistedWorkflowRows, persistMapWrite],
   );
 
   // FR-031 slice 6 — reversible node-completion toggle on an approved map.
@@ -341,12 +378,21 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
     async (taskId: string, nodeId: string) => {
       const nowIso = new Date().toISOString();
 
-      dispatch({
+      const previous = stateRef.current;
+      const next = workflowReducer(previous, {
         type: "toggleTaskMapNodeCompletionLocal",
         taskId,
         nodeId,
         nowIso,
       });
+      stateRef.current = next;
+      dispatch({ type: "hydrate", state: next });
+      const receipt = snapshotReceipt(next, "tasks", taskId, [
+        "progression_map",
+      ]);
+      const stillCurrent = () =>
+        snapshotCursor(stateRef.current).epoch === receipt.epoch &&
+        (deps.isActive?.() ?? true);
 
       const client = createSupabaseBrowserClient();
       const persistedTaskId = persistedIdForLocalId(
@@ -359,25 +405,31 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
         return;
       }
 
-      const task = stateRef.current.tasks.find((item) => item.id === taskId);
+      const task = previous.tasks.find((item) => item.id === taskId);
       if (!task?.progression_map) {
         return;
       }
 
       try {
-        await setTaskMapNodeCompletion(client, {
-          task_id: persistedTaskId,
-          node_id: nodeId,
-          graph: task.progression_map,
-          now: nowIso,
+        await persistMapWrite(persistedTaskId, stillCurrent, async () => {
+          const result = await setTaskMapNodeCompletion(client, {
+            task_id: persistedTaskId,
+            node_id: nodeId,
+            graph: task.progression_map,
+            now: nowIso,
+          });
+          if (!stillCurrent()) return;
+          if (result?.provider === "supabase")
+            dispatch({ type: "acknowledgeSnapshot", receipt });
+          await syncPersistedWorkflowRows(client);
         });
-        await syncPersistedWorkflowRows(client);
       } catch {
-        markLocalOnly(savedOnThisDeviceBanner("Your map progress"));
+        if (stillCurrent())
+          markLocalOnly(savedOnThisDeviceBanner("Your map progress"));
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see note above the `deps` destructure
-    [markLocalOnly, syncPersistedWorkflowRows],
+    [markLocalOnly, syncPersistedWorkflowRows, persistMapWrite],
   );
 
   return {
