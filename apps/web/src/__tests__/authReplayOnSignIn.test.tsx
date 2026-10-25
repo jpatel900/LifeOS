@@ -541,6 +541,65 @@ describe("#967 cross-runtime compensation replay", () => {
   });
 });
 
+describe("snapshot account replay fence", () => {
+  it("does not start the old account's replay after a switch during its journal snapshot", async () => {
+    await journalReviewWrite({
+      workflowAreaId: null,
+      persistedAreaId: null,
+      reviewType: "daily",
+      periodStart: "2026-10-25",
+      periodEnd: "2026-10-25",
+      summaryJson: {},
+    });
+    let releaseSnapshot!: () => void;
+    const snapshotGate = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    let heldSnapshot = false;
+    mockListPendingWrites.mockImplementation(
+      async (entity?: Parameters<typeof listPendingWrites>[0]) => {
+        const rows = await listPendingWritesActual(entity);
+        if (entity === "review" && !heldSnapshot) {
+          expect(rows).toHaveLength(1);
+          heldSnapshot = true;
+          await snapshotGate;
+        }
+        return rows;
+      },
+    );
+    let finishNewAreas!: (value: unknown) => void;
+    mockListAreas
+      .mockReset()
+      .mockResolvedValueOnce({ provider: "supabase", areas: [PERSISTED_AREA] })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishNewAreas = resolve;
+        }),
+      );
+    mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
+    const view = render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(heldSnapshot).toBe(true));
+    const userB = "99999999-9999-4999-8999-999999999999";
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: userB } },
+      error: null,
+    });
+    await act(async () => {
+      authListener.callback!("SIGNED_IN", { user: { id: userB } });
+      releaseSnapshot();
+    });
+    await waitFor(() => expect(mockListAreas).toHaveBeenCalledTimes(2));
+    expect(mockSyncJournaledReviewEntry).not.toHaveBeenCalled();
+    view.unmount();
+    await act(async () => finishNewAreas({ provider: "supabase", areas: [] }));
+    expect(mockSyncJournaledReviewEntry).not.toHaveBeenCalled();
+  });
+});
+
 describe("#960 defects 1+2: a session arriving without a remount drains the journal", () => {
   it("journals a capture and a win while signed out, then delivers both once SIGNED_IN fires with no remount", async () => {
     // A task from an earlier signed-in session is already mirrored to this
@@ -1240,17 +1299,17 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     });
     mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
 
-    // The provider now calls `getUser()` exactly twice per pass: once in
-    // `runAccountSync`, BEFORE the pending-period snapshot and replay even
-    // start (captured as `expectedUserId`), and once inside
-    // `readbackAccountReviewClosedDays`, immediately after its own account
-    // read. Answering A the first time and B every time after means the
+    // The first two reads bind area/workflow hydration to A. The third
+    // captures `expectedUserId` before the journal snapshot/replay.
+    // Answering A through that capture and B every time after means the
     // switch spans the ENTIRE gap between those two calls — snapshot,
     // replay, and the readback's own read all happen while this mock is
     // already answering B, matching the follow-up review's "replay-to-read
     // gap" scenario rather than a change during the read alone.
     mockGetUser
       .mockReset()
+      .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
+      .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
       .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
       .mockResolvedValue({ data: { user: { id: userB } }, error: null });
 
@@ -1710,13 +1769,15 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         new Error("server rejected the review"),
       );
 
-      // getUser sequence: call 1 = `expectedUserId` capture (A, before
-      // replay); call 2 = `refreshPendingSaveFailed`'s own post-read
+      // After the two A hydration identity reads: `expectedUserId` is A
+      // before replay; `refreshPendingSaveFailed`'s own post-read recheck is
       // recheck (B — the narrowest possible window, a session change
       // spanning exactly this one read); call 3+ = the later review
       // readback's own recheck (A again — out of scope for this test).
       mockGetUser
         .mockReset()
+        .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
+        .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
         .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
         .mockResolvedValueOnce({ data: { user: { id: userB } }, error: null })
         .mockResolvedValue({ data: { user: { id: userA } }, error: null });
@@ -2657,6 +2718,8 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
 
       mockGetUser
         .mockReset()
+        .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
+        .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
         .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
         .mockResolvedValueOnce({ data: { user: { id: userB } }, error: null })
         .mockResolvedValue({ data: { user: { id: userA } }, error: null });

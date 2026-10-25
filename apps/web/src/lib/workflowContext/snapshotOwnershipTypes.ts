@@ -38,7 +38,7 @@ export interface SnapshotReceipt extends SnapshotCursor {
 export type SnapshotOwner = {
   creation?: SnapshotStamp;
   fields: Record<string, SnapshotStamp>;
-  /** The account row version (`updated_at`) this device last read. */
+  /** The newest valid account row version (`updated_at`) this device read. */
   base?: string;
   accountId?: string;
   inferredIdentity?: boolean;
@@ -48,7 +48,7 @@ export type SnapshotOwner = {
 export interface SnapshotOwnership extends SnapshotCursor {
   version: 1;
   rows: Partial<Record<SnapshotCollection, Record<string, SnapshotOwner>>>;
-  /** The account whose rows the last read returned. */
+  /** Authenticated account identity; also present for successful empty reads. */
   userId?: string;
   /** Per collection: a read at this revision pruned delivered bookkeeping, so
    * an older read can no longer be reconciled safely and is ignored. */

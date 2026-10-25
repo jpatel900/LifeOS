@@ -82,6 +82,7 @@ import { persistedAreaIdForWorkflowAreaId } from "../workflowAreaMapping";
 import type { ParsedWorkflowResult } from "../ai/parseCaptureWorkflow";
 import {
   acknowledgeSnapshot,
+  bindSnapshotAccount,
   acknowledgeSnapshotCreation,
   reconcileSnapshotRead,
   registerDraftTransfer,
@@ -99,6 +100,7 @@ import {
 export { STORAGE_KEY };
 
 export type WorkflowAction =
+  | { type: "bindSnapshotAccount"; userId: string }
   | {
       type: "acknowledgeSnapshot";
       receipt: SnapshotReceipt;
@@ -118,11 +120,13 @@ export type WorkflowAction =
       type: "syncAreas";
       areas: WorkflowState["areas"];
       cursor?: SnapshotCursor;
+      readUserId?: string;
     }
   | {
       type: "syncPersistedWorkflow";
       payload: PersistedWorkflowPayload;
       cursor?: SnapshotCursor;
+      readUserId?: string;
     }
   | {
       /**
@@ -975,6 +979,7 @@ export function workflowReducer(
   const next = reduceWorkflowState(state, action);
   switch (action.type) {
     case "hydrate":
+    case "bindSnapshotAccount":
     case "syncAreas":
     case "syncPersistedWorkflow":
     case "recordAccountId":
@@ -997,6 +1002,8 @@ function reduceWorkflowState(
   action: WorkflowAction,
 ): WorkflowState {
   switch (action.type) {
+    case "bindSnapshotAccount":
+      return bindSnapshotAccount(state, action.userId);
     case "acknowledgeSnapshot":
       return acknowledgeSnapshot(state, action.receipt, action.persistedId);
     case "registerDraftTransfer":
@@ -1018,6 +1025,8 @@ function reduceWorkflowState(
         ["areas"],
         action.cursor,
         { areas: action.areas },
+        {},
+        action.readUserId,
       );
     case "syncPersistedWorkflow": {
       // The payload maps carry what THIS mount's refs knew at snapshot time;
@@ -1142,6 +1151,7 @@ function reduceWorkflowState(
           executionSessions: action.payload.sessions,
         },
         inferredIds,
+        action.readUserId,
       );
     }
     case "recordAccountId": {

@@ -1,5 +1,5 @@
 import type { AccountIdAliasFamily, WorkflowState } from "../workflow/shared";
-import { hasDemoSeedId } from "../mockData";
+import { hasDemoSeedId, MOCK_USER_ID } from "../mockData";
 import type {
   SnapshotCollection,
   SnapshotCursor,
@@ -127,6 +127,90 @@ export const snapshotCursor = (state: WorkflowState): SnapshotCursor => ({
   epoch: state.snapshotOwnership?.epoch ?? 0,
   revision: state.snapshotOwnership?.revision ?? 0,
 });
+
+/** All representations of a collection must accept or reject a read together. */
+export function acceptsSnapshotRead(
+  state: WorkflowState,
+  collection: SnapshotCollection,
+  cursor: SnapshotCursor,
+): boolean {
+  return (
+    cursor.epoch === snapshotCursor(state).epoch &&
+    cursor.revision >=
+      (state.snapshotOwnership?.prunedThrough?.[collection] ?? 0)
+  );
+}
+
+/** Authenticated identity is evidence even when the account has no rows.
+ * Keep the existing device-only policy, but never carry delivered account rows
+ * or their optimistic aliases into another account's snapshot lifetime. */
+export function bindSnapshotAccount(
+  state: WorkflowState,
+  userId: string,
+): WorkflowState {
+  if (state.snapshotOwnership?.userId === userId) return state;
+  const metadata = copy(state);
+  const previousUserId = metadata.userId;
+  metadata.userId = userId;
+  // First sign-in from the default/device-only state is not an account
+  // change. Its in-flight local writes and receipts still belong to this
+  // lifetime. Legacy foreign account rows, however, require the same fence
+  // as an explicit switch even when their old metadata lacks a userId.
+  const changesAccount =
+    previousUserId !== undefined ||
+    (Object.keys(accountFields) as SnapshotCollection[]).some((collection) =>
+      rows(state, collection).some(
+        (row) =>
+          typeof row.user_id === "string" &&
+          row.user_id !== MOCK_USER_ID &&
+          row.user_id !== userId,
+      ),
+    );
+  if (changesAccount) metadata.epoch++;
+  delete metadata.prunedThrough;
+  const result = {
+    ...state,
+    snapshotOwnership: metadata,
+    accountIdByLocalId: { ...state.accountIdByLocalId },
+  };
+  for (const collection of Object.keys(accountFields) as SnapshotCollection[]) {
+    const keys = ownerKeysByAccountId(state, collection);
+    const group = metadata.rows[collection] ?? {};
+    const kept = rows(state, collection).filter((row) => {
+      const key = keys.get(row.id) ?? row.id;
+      const owner = group[key];
+      const undelivered =
+        owner?.creation?.pending &&
+        /^(area|capture|task|proposal|block|session)-\d+$/.test(key) &&
+        accountId(state, collection, key) === key;
+      // Older snapshots may have valid edits but no account marker. Their
+      // row identity can prove a same-account first binding, never empty B.
+      return undelivered || (!previousUserId && row.user_id === userId);
+    });
+    const keptIds = new Set(kept.map((row) => row.id));
+    for (const key of Object.keys(group)) {
+      if (!keptIds.has(key) && !keptIds.has(accountId(state, collection, key)))
+        delete group[key];
+    }
+    if (!Object.keys(group).length) delete metadata.rows[collection];
+    (result as unknown as Record<SnapshotCollection, Row[]>)[collection] = kept;
+    const family = families[collection];
+    if (family)
+      result.accountIdByLocalId[family] = Object.fromEntries(
+        Object.entries(state.accountIdByLocalId[family] ?? {}).filter(
+          ([localId, remoteId]) =>
+            keptIds.has(localId) || keptIds.has(remoteId),
+        ),
+      );
+  }
+  // Only transfers belonging to retained, undelivered creations survive.
+  // Their local draft receipt remains valid in the new snapshot lifetime.
+  for (const group of Object.values(metadata.rows))
+    for (const owner of Object.values(group ?? {}))
+      for (const receipt of owner.transfers ?? [])
+        receipt.epoch = metadata.epoch;
+  return result;
+}
 function fieldsFor(
   collection: SnapshotCollection,
   row: Row,
@@ -399,6 +483,7 @@ export function reconcileSnapshotRead(
   cursor = snapshotCursor(before),
   readRows: Partial<Pick<WorkflowState, SnapshotCollection>> = merged,
   inferredIds: Partial<Record<SnapshotCollection, Set<string>>> = {},
+  readUserId?: string,
 ): WorkflowState {
   if (cursor.epoch !== snapshotCursor(before).epoch) return before;
   const metadata = copy(before);
@@ -415,10 +500,14 @@ export function reconcileSnapshotRead(
   // A different account's rows: ownership of the previous account's rows no
   // longer applies (review finding 6). Only never-delivered local creations,
   // which belong to no account yet, keep their debt.
-  const readUser = collectionsRead
-    .flatMap((collection) => (readRows[collection] as Row[] | undefined) ?? [])
-    .map((row) => row.user_id)
-    .find((value): value is string => typeof value === "string");
+  const readUser =
+    readUserId ??
+    collectionsRead
+      .flatMap(
+        (collection) => (readRows[collection] as Row[] | undefined) ?? [],
+      )
+      .map((row) => row.user_id)
+      .find((value): value is string => typeof value === "string");
   if (readUser && metadata.userId && metadata.userId !== readUser) {
     for (const collection of Object.keys(
       accountFields,
@@ -438,7 +527,13 @@ export function reconcileSnapshotRead(
   for (const collection of collectionsRead) {
     // Bookkeeping this older read would need was already pruned by a newer
     // completed read, so its rows for this collection are ignored.
-    if (cursor.revision < (metadata.prunedThrough?.[collection] ?? 0)) {
+    if (
+      !acceptsSnapshotRead(
+        { ...before, snapshotOwnership: metadata },
+        collection,
+        cursor,
+      )
+    ) {
       (result as unknown as Record<SnapshotCollection, Row[]>)[collection] = [
         ...rows(before, collection),
       ];
@@ -518,7 +613,14 @@ export function reconcileSnapshotRead(
         if (!protect && equal(localValue, remoteValue)) acknowledge(stamp);
         if (stamp.pending || protect) resolved[field] = localValue;
       }
-      if (remoteVersion) owner.base = remoteVersion;
+      // A late read may protect the field value while still carrying older
+      // version evidence. Saving that older base would lose the edit on reload.
+      if (
+        remoteVersion &&
+        Number.isFinite(Date.parse(remoteVersion)) &&
+        (!owner.base || Date.parse(remoteVersion) > Date.parse(owner.base))
+      )
+        owner.base = remoteVersion;
       if (index < 0) output.push(resolved);
       else output[index] = resolved;
       if (id !== persistedId) {

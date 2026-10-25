@@ -89,6 +89,73 @@ function readTasks(
 }
 
 describe("snapshot state ownership (#967)", () => {
+  it("keeps the newest account version through an old read, reload and unchanged read", () => {
+    const initial = accountTask();
+    const v1 = { ...initial.tasks[0], updated_at: "2026-10-01T00:00:00.000Z" };
+    const seenV1 = readTasks(initial, [v1]);
+    const oldRead = snapshotCursor(seenV1);
+    const v2 = { ...v1, updated_at: "2026-10-02T00:00:00.000Z" };
+    const seenV2 = readTasks(seenV1, [v2]);
+    const edited = trackSnapshotChanges(seenV2, {
+      ...seenV2,
+      tasks: [{ ...v2, title: "Unsent edit based on v2" }],
+    });
+    const late = readTasks(edited, [v1], oldRead);
+    expect(late.tasks[0].title).toBe("Unsent edit based on v2");
+    const restored = reloadWorkflowState(late);
+    const unchanged = readTasks(restored, [v2]);
+    expect(unchanged.tasks[0].title).toBe("Unsent edit based on v2");
+    expect(
+      Object.values(late.snapshotOwnership!.rows.tasks!).every(
+        (owner) => owner.base === v2.updated_at,
+      ),
+    ).toBe(true);
+  });
+
+  it("binds an empty account independently of rows and fences the prior account read", () => {
+    const initial = accountTask();
+    const edited = trackSnapshotChanges(initial, {
+      ...initial,
+      tasks: [{ ...initial.tasks[0], title: "Account A unsent edit" }],
+    });
+    const oldCursor = snapshotCursor(edited);
+    const switched = workflowReducer(edited, {
+      type: "bindSnapshotAccount",
+      userId: "99999999-9999-4999-8999-999999999999",
+    });
+    expect(switched.tasks).toEqual([]);
+    expect(switched.snapshotOwnership?.rows.tasks).toBeUndefined();
+    expect(readTasks(switched, initial.tasks, oldCursor)).toBe(switched);
+  });
+
+  it("drops delivered local aliases at account switch but retains an undelivered creation", () => {
+    const local = trackSnapshotChanges(
+      workflowSeed(),
+      acceptLatestDraft(
+        captureWorkflow(workflowSeed(), "Synthetic local task"),
+      ),
+    );
+    const taskId = local.tasks[0].id;
+    const delivered = workflowReducer(local, {
+      type: "recordAccountId",
+      family: "tasks",
+      localId: taskId,
+      accountId: TASK_ID,
+    });
+    const switched = workflowReducer(delivered, {
+      type: "bindSnapshotAccount",
+      userId: "99999999-9999-4999-8999-999999999999",
+    });
+    expect(switched.tasks).toEqual([]);
+    expect(switched.accountIdByLocalId.tasks).toEqual({});
+    const unbound = workflowReducer(local, {
+      type: "bindSnapshotAccount",
+      userId: "99999999-9999-4999-8999-999999999999",
+    });
+    expect(unbound.tasks).toEqual(local.tasks);
+    expect(hasSnapshotWork(unbound)).toBe(true);
+  });
+
   it("retains an unsaved area through account refresh and adopts its exact creation identity", () => {
     const initial = workflowSeed();
     const local = workflowReducer(initial, {
@@ -119,6 +186,95 @@ describe("snapshot state ownership (#967)", () => {
       { ...area, id: AREA_ID, color: "#123456" },
     ]);
     expect(hasSnapshotWork(read)).toBe(true);
+  });
+
+  it("keeps an undelivered operation's receipt valid through first sign-in", () => {
+    const local = workflowReducer(workflowSeed(), {
+      type: "addArea",
+      name: "Early local area",
+      color: "#112233",
+    });
+    const area = local.areas.find((row) => row.name === "Early local area")!;
+    const receipt = snapshotReceipt(local, "areas", area.id);
+    const bound = workflowReducer(local, {
+      type: "bindSnapshotAccount",
+      userId: "99999999-9999-4999-8999-999999999999",
+    });
+    expect(snapshotCursor(bound).epoch).toBe(receipt.epoch);
+    const saved = acknowledgeSnapshot(bound, receipt, AREA_ID);
+    expect(
+      saved.snapshotOwnership!.rows.areas![area.id].creation?.pending,
+    ).toBe(false);
+  });
+
+  it("preserves same-user legacy ownership on first binding and drops a different user's rows", () => {
+    const initial = accountTask();
+    const edited = trackSnapshotChanges(initial, {
+      ...initial,
+      tasks: [{ ...initial.tasks[0], title: "Same-account pending title" }],
+    });
+    delete edited.snapshotOwnership!.userId;
+    const same = workflowReducer(edited, {
+      type: "bindSnapshotAccount",
+      userId: initial.tasks[0].user_id,
+    });
+    expect(same.tasks[0].title).toBe("Same-account pending title");
+    expect(hasPendingOwner(same, "tasks")).toBe(true);
+    expect(
+      workflowReducer(same, {
+        type: "bindSnapshotAccount",
+        userId: initial.tasks[0].user_id,
+      }),
+    ).toBe(same);
+    const different = workflowReducer(edited, {
+      type: "bindSnapshotAccount",
+      userId: "99999999-9999-4999-8999-999999999999",
+    });
+    expect(different.tasks).toEqual([]);
+  });
+
+  it("retains draft transfers across binding and reload without acknowledging a later edit", () => {
+    const drafted = captureWorkflow(workflowSeed(), "Synthetic transfer");
+    const draftId = drafted.taskDrafts[0].id;
+    const accepted = workflowReducer(drafted, {
+      type: "backlogDraft",
+      draftId,
+    });
+    const taskId = accepted.tasks[0].id;
+    const transferred = workflowReducer(accepted, {
+      type: "registerDraftTransfer",
+      draftId,
+      taskId,
+      proposalId: null,
+    });
+    const receipt =
+      transferred.snapshotOwnership!.rows.tasks![taskId].transfers![0];
+    const later = workflowReducer(transferred, {
+      type: "editDraft",
+      draftId,
+      changes: { title: "Later draft edit" },
+    });
+    const bound = workflowReducer(later, {
+      type: "bindSnapshotAccount",
+      userId: "99999999-9999-4999-8999-999999999999",
+    });
+    const restored = reloadWorkflowState(bound);
+    expect(
+      restored.snapshotOwnership!.rows.tasks![taskId].transfers![0],
+    ).toEqual({ ...receipt, epoch: snapshotCursor(bound).epoch });
+    const delivered = workflowReducer(restored, {
+      type: "recordAccountId",
+      family: "tasks",
+      localId: taskId,
+      accountId: TASK_ID,
+    });
+    expect(
+      delivered.taskDrafts.find((draft) => draft.id === draftId)?.title,
+    ).toBe("Later draft edit");
+    expect(
+      delivered.snapshotOwnership!.rows.taskDrafts![draftId].fields.title
+        .pending,
+    ).toBe(true);
   });
 
   it("a successful capture retires only its creation, independently of snapshot storage", () => {

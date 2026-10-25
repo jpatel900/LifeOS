@@ -48,9 +48,12 @@ the memory-only-area and earlier-failed-capture controls. It is not reused.
    known replay/offline-queue debt. A failed queue read retains prior evidence.
    Latest-started and mutation-generation guards prevent old empty reads from
    clearing newer work.
-7. Reset invalidates in-flight ownership receipts and reads. Existing account
-   identity and unmount fences remain binding. This change adds no replay
-   worker, server write, database migration or account-switching policy.
+7. Reset and account changes invalidate in-flight ownership receipts and reads.
+   Authenticated identity binds a read before it starts, independently of its
+   returned rows. Empty accounts therefore clear prior account-held rows and
+   aliases too. Auth events fence old completions and request a fresh pass if
+   the previous account's read was still running. This adds no replay worker,
+   server write, database migration or reassignment of device-only work.
 
 New rows carry a creation obligation separately from later field edits. An exact
 creation receipt allows account defaults to replace optimistic defaults, while
@@ -99,7 +102,9 @@ An older saved copy never overwrites newer account data (review, 2026-10-24):
   Rows the account already holds take the account's values on the next read,
   as the pre-#967 merge did, and are not resurrected if the account no longer
   returns them.
-- Each owner records the account row version (`updated_at`) it last saw.
+- Each owner records the newest valid account row version (`updated_at`) it saw.
+  Late reads cannot lower that evidence. Otherwise a retained edit would be
+  lost after reload when the unchanged newer account row returned.
   Pending edits restored from a saved copy are marked `restored`. They keep
   their value only while the account row is provably that same version. A
   newer, missing or unknown account version wins and releases them. Edits made
@@ -114,8 +119,17 @@ Bookkeeping limits (review, 2026-10-24):
 - Reading drafts back from device storage creates no new obligation.
 - A completed read prunes delivered stamps its start already covers. An older
   read that would have needed them is then ignored for that collection.
-- A read returning a different account's rows drops the previous account's
-  row ownership; only never-delivered local creations keep their debt.
+  Area reads use the same acceptance check before changing persistence caches,
+  reactive mappings or selection, keeping those representations consistent.
+- Binding a different authenticated account drops the previous account's rows,
+  ownership and delivered local aliases, even when the new account is empty.
+  Only never-delivered local creations keep their debt. Retained draft-transfer
+  receipts keep their exact revisions and values under the new epoch. A legacy
+  snapshot without an account marker retains same-account edits only when its
+  row identity proves the match. Existing device-only retention stays in place.
+- Retained local children are not silently reassigned when their prior account
+  parent disappears. This is not whole-app account storage isolation: device
+  drafts and other device-only surfaces keep their existing policies.
 - Change tracking looks up owners through one alias map per collection and
   skips unchanged row objects, so a dispatch stays linear in the row count.
 
