@@ -82,6 +82,19 @@ export class GoogleCalendarInsertRejectedError extends Error {
   }
 }
 
+/**
+ * W3-16 #2: an earlier approval already created this proposal's event, but
+ * it no longer matches the approval: it was moved or cancelled on Google, or
+ * is gone. The event exists or existed, so this is NOT proof that Google
+ * holds nothing; it only means LifeOS must not confirm the approved time.
+ */
+export class GoogleCalendarExistingEventMismatchError extends Error {
+  constructor() {
+    super("The Google Calendar event no longer matches this approval.");
+    this.name = "GoogleCalendarExistingEventMismatchError";
+  }
+}
+
 export class GoogleCalendarEventDriftError extends Error {
   constructor() {
     super(
@@ -231,6 +244,76 @@ export async function getGoogleCalendarEventForConnection(
   };
 }
 
+function readEventDateTime(
+  payload: Record<string, unknown> | null,
+  key: "start" | "end",
+) {
+  const value = payload?.[key];
+  if (!value || typeof value !== "object") return null;
+  const dateTime = (value as Record<string, unknown>).dateTime;
+  return typeof dateTime === "string" ? dateTime : null;
+}
+
+function isSameInstant(actual: string | null, expected: string) {
+  if (actual === null) return false;
+  const actualMs = Date.parse(actual);
+  return !Number.isNaN(actualMs) && actualMs === Date.parse(expected);
+}
+
+/**
+ * Read the event an earlier approval already created (insert answered 409)
+ * and return it only if it still matches this approval: not cancelled,
+ * carrying this proposal's id, at the approved start and end. Anything else
+ * throws `GoogleCalendarExistingEventMismatchError`, so the caller never
+ * records a time Google no longer holds.
+ */
+async function confirmExistingApprovedEvent(params: {
+  accessToken: string;
+  calendarId: string;
+  eventId: string;
+  proposalId: string;
+  proposedStart: string;
+  proposedEnd: string;
+}): Promise<InsertGoogleCalendarEventResult> {
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${params.calendarId}/events/${encodeURIComponent(params.eventId)}`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${params.accessToken}` },
+      cache: "no-store",
+    },
+  );
+
+  if (response.status === 404 || response.status === 410) {
+    throw new GoogleCalendarExistingEventMismatchError();
+  }
+
+  const payload = (await response.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+
+  if (!response.ok) {
+    throw new Error("Google Calendar event read failed.");
+  }
+
+  if (
+    readEventStatus(payload) === "cancelled" ||
+    readPrivateExtendedProperty(payload, "lifeos_proposal_id") !==
+      params.proposalId ||
+    !isSameInstant(readEventDateTime(payload, "start"), params.proposedStart) ||
+    !isSameInstant(readEventDateTime(payload, "end"), params.proposedEnd)
+  ) {
+    throw new GoogleCalendarExistingEventMismatchError();
+  }
+
+  return {
+    googleEventId: params.eventId,
+    googleEventEtag: readEtag(payload),
+    eventSnapshot: payload,
+  };
+}
+
 export async function insertGoogleCalendarEventForConnection(
   params: InsertGoogleCalendarEventParams,
 ): Promise<InsertGoogleCalendarEventResult> {
@@ -280,11 +363,18 @@ export async function insertGoogleCalendarEventForConnection(
   > | null;
 
   if (response.status === 409) {
-    return {
-      googleEventId: eventId,
-      googleEventEtag: null,
-      eventSnapshot: null,
-    };
+    // W3-16 #2: the deterministic id already exists, so an earlier approval
+    // created this event. It is only this approval's event if it still holds
+    // the approved time. Read it before anything is recorded: it may have
+    // been moved or cancelled on Google since.
+    return confirmExistingApprovedEvent({
+      accessToken,
+      calendarId,
+      eventId,
+      proposalId: params.proposalId,
+      proposedStart: params.proposedStart,
+      proposedEnd: params.proposedEnd,
+    });
   }
 
   if (response.status >= 400 && response.status < 500) {
