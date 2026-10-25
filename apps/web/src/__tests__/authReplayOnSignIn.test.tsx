@@ -2719,7 +2719,7 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       );
     });
 
-    it("is a no-op while an account sync is already in flight — no duplicate account hydration and no duplicate handler run", async () => {
+    it("queues one coalesced retry behind an active sync without concurrent hydration or duplicate delivery", async () => {
       const day = "2026-09-22";
 
       await journalReviewWrite({
@@ -2767,33 +2767,34 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       const listExecutionReviewItemsCallsBeforeRetry =
         mockListExecutionReviewItems.mock.calls.length;
 
-      fireEvent.click(screen.getByText("Retry pending writes"));
-
-      // #967 root review: an explicit boundary for the MANUAL WRAPPER's own
-      // settlement, not a fixed sleep — `runAccountSync`'s in-flight guard
-      // makes the retry's own call resolve near-instantly (an early
-      // return), so waiting for THAT specific call to settle is
-      // deterministic where a timer is not.
+      try {
+        await act(async () => {
+          fireEvent.click(screen.getByText("Retry pending writes"));
+          fireEvent.click(screen.getByText("Retry pending writes"));
+        });
+        // The manual callers wait for a fresh pass after mount completes.
+        // Neither caller may start concurrent hydration or another delivery.
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "0",
+        );
+        expect(mockListAreas.mock.calls.length).toBe(listAreasCallsBeforeRetry);
+        expect(mockListExecutionReviewItems.mock.calls.length).toBe(
+          listExecutionReviewItemsCallsBeforeRetry,
+        );
+        expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+      } finally {
+        // Always release the shared journal tail, even if an assertion fails.
+        releaseMountAttempt({ provider: "supabase" });
+      }
       await waitFor(() => {
         expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
-          "1",
+          "2",
         );
       });
-
-      // While the ORIGINAL pass is still held open: no duplicate account
-      // hydration (a second `runAccountSync` pass getting past its own
-      // guard would call `listAreas`/`listExecutionReviewItems` again,
-      // regardless of whether the journal's own serialization also happens
-      // to keep a second HANDLER call from running) and no duplicate
-      // handler call either.
-      expect(mockListAreas.mock.calls.length).toBe(listAreasCallsBeforeRetry);
-      expect(mockListExecutionReviewItems.mock.calls.length).toBe(
-        listExecutionReviewItemsCallsBeforeRetry,
+      expect(mockListAreas.mock.calls.length).toBe(
+        listAreasCallsBeforeRetry + 1,
       );
       expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
-
-      // The mount pass's own attempt still completes normally afterward.
-      releaseMountAttempt({ provider: "supabase" });
       await waitFor(async () => {
         const pending = await listPendingWrites("review");
         expect(pending).toHaveLength(0);

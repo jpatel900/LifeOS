@@ -34,12 +34,15 @@ vi.mock("@/lib/reEntry/briefView", async (importOriginal) => ({
   createBriefViewRecorder: () => ({ recordIfNeeded: vi.fn() }),
 }));
 
-const { listAreas, listCaptures, upsert, account } = vi.hoisted(() => ({
-  listAreas: vi.fn(),
-  listCaptures: vi.fn(),
-  upsert: vi.fn(),
-  account: { available: false, captures: [] as Record<string, unknown>[] },
-}));
+const { listAreas, listCaptures, listExecution, upsert, account } = vi.hoisted(
+  () => ({
+    listAreas: vi.fn(),
+    listCaptures: vi.fn(),
+    listExecution: vi.fn(),
+    upsert: vi.fn(),
+    account: { available: false, captures: [] as Record<string, unknown>[] },
+  }),
+);
 
 vi.mock("@/lib/supabase/browser", () => {
   const client = {
@@ -66,13 +69,7 @@ vi.mock("@/lib/data/workflow", async (importOriginal) => ({
     proposals: [],
     blocks: [],
   }),
-  listExecutionReviewItems: async () => ({
-    provider: "supabase",
-    tasks: [],
-    blocks: [],
-    sessions: [],
-    reviewEntries: [],
-  }),
+  listExecutionReviewItems: listExecution,
   listWinRecords: async () => ({ provider: "supabase", winRecords: [] }),
   listOverrideRecords: async () => ({
     provider: "supabase",
@@ -168,6 +165,14 @@ beforeEach(async () => {
   resetTodayMomentsMountTracking();
   await clearPendingWrites();
   vi.clearAllMocks();
+  listExecution.mockReset();
+  listExecution.mockResolvedValue({
+    provider: "supabase",
+    tasks: [],
+    blocks: [],
+    sessions: [],
+    reviewEntries: [],
+  });
   account.available = false;
   account.captures = [];
   listCaptures.mockImplementation(async () => ({
@@ -334,6 +339,21 @@ describe("Today capture before account area hydration", () => {
   });
 
   it("keeps a deliberate real-area capture queued through account failure and sends that area on retry", async () => {
+    const emptyExecution = {
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    };
+    let finishMountReadback!: (value: typeof emptyExecution) => void;
+    listExecution.mockResolvedValueOnce(emptyExecution);
+    listExecution.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishMountReadback = resolve;
+        }),
+    );
     const chosenArea = {
       ...customArea,
       id: "44444444-4444-4444-8444-444444444444",
@@ -370,8 +390,13 @@ describe("Today capture before account area hydration", () => {
       persisted_area_id: chosenArea.id,
     });
     expect(account.captures).toHaveLength(0);
+    // Hold the mount pass after its replay. A failed capture can already
+    // offer Retry while that pass still waits for its account readback.
+    await waitFor(() => expect(finishMountReadback).toBeTypeOf("function"));
     account.available = true;
     fireEvent.click(screen.getByRole("button", { name: "Retry account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry account" }));
+    await act(async () => finishMountReadback(emptyExecution));
     await waitFor(() => expect(account.captures).toHaveLength(1));
     expect(account.captures[0].area_id).toBe(chosenArea.id);
     await waitFor(async () =>

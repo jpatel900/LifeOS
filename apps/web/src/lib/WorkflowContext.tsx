@@ -412,6 +412,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // Without this a second concurrent run could read `persistedAreasRef`
   // mid-write from the first.
   const accountSyncInFlightRef = useRef(false);
+  const accountSyncCompletionRef = useRef<Promise<void>>(Promise.resolve());
+  const manualAccountRetryRef = useRef<Promise<void> | null>(null);
   // #967 follow-up review, finding 1: every read that can set
   // `syncStatus.pendingSaveFailed` (`refreshJournalledDurableState`'s own
   // computation, and the narrower `refreshPendingSaveFailed` below) shares
@@ -2127,6 +2129,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // from the first.
       if (accountSyncInFlightRef.current) return;
       accountSyncInFlightRef.current = true;
+      let finishPass!: () => void;
+      accountSyncCompletionRef.current = new Promise<void>((resolve) => {
+        finishPass = resolve;
+      });
 
       try {
         const client = createSupabaseBrowserClient();
@@ -2309,6 +2315,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         // true if one ever stops.
         if (mountedRef.current) setAreasReadbackSettled(true);
         accountSyncInFlightRef.current = false;
+        finishPass();
       }
     },
     [
@@ -3198,11 +3205,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // directly, bypassing this hydration/identity/closed-day handling; see
     // the `online` handler's own comment). No new drain, no direct
     // `replayJournaledWrites` call, no change to `refreshPersistedWorkflow`
-    // above (still read-only). `runAccountSync`'s own in-flight guard makes
-    // this a safe no-op if a pass is already running; callers must judge
-    // the result from `syncStatus`, not from this promise resolving.
+    // above (still read-only). A manual retry may arrive after a failed
+    // capture while the mount pass still awaits readback. Join that pass,
+    // then run one fresh attempt. Repeated clicks share the same retry.
     retryPendingAccountWrites: async () => {
-      await runAccountSync({ replayAfter: true });
+      if (manualAccountRetryRef.current) return manualAccountRetryRef.current;
+      const retry = (async () => {
+        while (accountSyncInFlightRef.current) {
+          await accountSyncCompletionRef.current;
+        }
+        if (!mountedRef.current) return;
+        await runAccountSync({ replayAfter: true });
+      })();
+      manualAccountRetryRef.current = retry;
+      try {
+        await retry;
+      } finally {
+        if (manualAccountRetryRef.current === retry) {
+          manualAccountRetryRef.current = null;
+        }
+      }
     },
     addArea: (name, color) => dispatch({ type: "addArea", name, color }),
     updateAreaColor: (areaId, color) =>
