@@ -45,7 +45,9 @@ import {
   ACCOUNT_SAVE_FAILED,
   SIGNED_OUT_SAVING_ON_THIS_DEVICE,
 } from "@/lib/statusVocabulary";
-import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
+import { createSyncedInitialState } from "@/lib/workflowContext/reducerCore";
+import { createRawCaptureItem } from "@/lib/workflow/capture";
 import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
 import { PersistenceWriteError } from "@/lib/persistenceFailureKind";
 
@@ -124,7 +126,10 @@ function seedSessionStorageWithPresyncedTask() {
     wipRefusal: null,
     accountIdByLocalId: {},
   };
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(seededState));
+  window.sessionStorage.setItem(
+    accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`),
+    JSON.stringify(seededState),
+  );
 }
 
 const PERSISTED_AREA = {
@@ -238,6 +243,8 @@ function Harness() {
     state,
     selectedAreaId,
     submitCaptureText,
+    sortCaptureIntoDrafts,
+    captureParse,
     confirmWin,
     syncStatus,
     accountClosedDays,
@@ -269,6 +276,13 @@ function Harness() {
       </span>
       <span data-testid="sync-message">{syncStatus.message ?? ""}</span>
       <span data-testid="capture-area">{unsortedCapture?.area_id ?? ""}</span>
+      <span data-testid="capture-texts">
+        {state.captureItems.map((capture) => capture.raw_text).join("|")}
+      </span>
+      <span data-testid="area-names">
+        {state.areas.map((area) => area.name).join("|")}
+      </span>
+      <span data-testid="parse-phase">{captureParse.phase}</span>
       <span data-testid="account-closed-days">
         {accountClosedDays.join(",")}
       </span>
@@ -304,6 +318,20 @@ function Harness() {
         }
       >
         Capture
+      </button>
+      <button
+        type="button"
+        onClick={() => submitCaptureText("B's private thought", selectedAreaId)}
+      >
+        Capture B
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (unsortedCapture) sortCaptureIntoDrafts(unsortedCapture.id);
+        }}
+      >
+        Sort capture
       </button>
       <button
         type="button"
@@ -403,6 +431,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   window.sessionStorage.clear();
   await clearPendingWrites();
 });
@@ -2958,6 +2987,341 @@ describe("W3-16 #1: pending work never crosses to another account", () => {
   };
   const ACCOUNT_A_TEXT = "Call the landlord back";
 
+  it.each(["account", "anonymous"])("retains a %s capture across A/B/A when session storage refuses writes", async (startingScope) => {
+    if (startingScope === "anonymous") mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+    if (startingScope === "anonymous") {
+      const saved = createSyncedInitialState();
+      saved.captureItems = [createRawCaptureItem({ rawText: "Already saved for A" })];
+      sessionStorage.setItem(accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`), JSON.stringify(saved));
+    }
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    mockSyncJournaledCapture.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Quota", "QuotaExceededError");
+    });
+    fireEvent.click(screen.getByText("Capture"));
+    await waitFor(() =>
+      expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+        ACCOUNT_A_TEXT,
+      ),
+    );
+    if (startingScope === "anonymous") {
+      mockGetUser.mockResolvedValue({ data: { user: { id: PERSISTED_AREA.user_id } }, error: null });
+      await act(async () => { authListener.callback?.("SIGNED_IN", { user: { id: PERSISTED_AREA.user_id } }); });
+      await waitFor(() => expect(screen.getByTestId("capture-texts")).toHaveTextContent(ACCOUNT_A_TEXT));
+      expect(screen.getByTestId("capture-texts")).toHaveTextContent("Already saved for A");
+      mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+      await act(async () => { authListener.callback?.("SIGNED_OUT", null); });
+      expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(ACCOUNT_A_TEXT);
+      fireEvent.click(screen.getByText("Capture B"));
+      await waitFor(() => expect(screen.getByTestId("capture-texts")).toHaveTextContent("B's private thought"));
+    }
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: ACCOUNT_B_USER } },
+      error: null,
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [ACCOUNT_B_AREA],
+    });
+    await act(async () => {
+      authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_B_USER } });
+    });
+    expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+      ACCOUNT_A_TEXT,
+    );
+    if (startingScope === "anonymous") expect(screen.getByTestId("capture-texts")).toHaveTextContent("B's private thought");
+    expect(screen.getByTestId("capture-texts")).not.toHaveTextContent("Already saved for A");
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: PERSISTED_AREA.user_id } },
+      error: null,
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    await act(async () => {
+      authListener.callback?.("SIGNED_IN", {
+        user: { id: PERSISTED_AREA.user_id },
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+        ACCOUNT_A_TEXT,
+      ),
+    );
+    expect(screen.getByTestId("capture-texts")).not.toHaveTextContent("B's private thought");
+    if (startingScope === "anonymous") expect(screen.getByTestId("capture-texts")).toHaveTextContent("Already saved for A");
+  });
+
+  it("does not sort with a cached account session while identity is unverified", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
+      error: new Error("offline"),
+    });
+    const getSession = vi.fn();
+    mockCreateSupabaseBrowserClient().auth.getSession = getSession;
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    fireEvent.click(screen.getByText("Capture"));
+    await waitFor(() =>
+      expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+        ACCOUNT_A_TEXT,
+      ),
+    );
+    fireEvent.click(screen.getByText("Sort capture"));
+    expect(screen.getByTestId("parse-phase")).toHaveTextContent("failed");
+    expect(getSession).not.toHaveBeenCalled();
+    expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+      ACCOUNT_A_TEXT,
+    );
+  });
+
+  it("does not reuse a consumed anonymous snapshot during two auth events in one render", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+    mockSyncJournaledCapture.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("sync-signed-out")).toHaveTextContent("true"),
+    );
+    fireEvent.click(screen.getByText("Capture"));
+    await waitFor(() =>
+      expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+        ACCOUNT_A_TEXT,
+      ),
+    );
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: ACCOUNT_B_USER } },
+      error: null,
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [ACCOUNT_B_AREA],
+    });
+    await act(async () => {
+      authListener.callback?.("SIGNED_IN", {
+        user: { id: PERSISTED_AREA.user_id },
+      });
+      authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_B_USER } });
+    });
+    expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+      ACCOUNT_A_TEXT,
+    );
+    expect(
+      sessionStorage.getItem(
+        accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`),
+      ),
+    ).toContain(ACCOUNT_A_TEXT);
+  });
+
+  it("preserves a genuinely signed-out capture when the first account signs in", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+    mockSyncJournaledCapture.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("sync-signed-out")).toHaveTextContent("true"),
+    );
+    fireEvent.click(screen.getByText("Capture"));
+    await waitFor(() =>
+      expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+        ACCOUNT_A_TEXT,
+      ),
+    );
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: PERSISTED_AREA.user_id } },
+      error: null,
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    await act(async () => {
+      authListener.callback?.("SIGNED_IN", {
+        user: { id: PERSISTED_AREA.user_id },
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+      ACCOUNT_A_TEXT,
+    );
+    expect(sessionStorage.getItem(accountSnapshotKey("anonymous"))).toBeNull();
+  });
+
+  it("keeps account rows hidden during identity failure and recovers identity before retrying", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
+      error: new Error("offline"),
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    mockSyncJournaledCapture.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    expect(mockListAreas).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Capture"));
+    await waitFor(() =>
+      expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+        ACCOUNT_A_TEXT,
+      ),
+    );
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: PERSISTED_AREA.user_id } },
+      error: null,
+    });
+    fireEvent.click(screen.getByText("Retry pending writes"));
+    // The empty local scaffold already includes Main Job. Wait for the
+    // actual account read and its exact area set, not that shared name.
+    await waitFor(() => expect(mockListAreas).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByTestId("area-names")).toHaveTextContent(/^Main Job$/),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+      ACCOUNT_A_TEXT,
+    );
+    fireEvent.click(screen.getByText("Capture"));
+    await waitFor(async () => {
+      const writes = await listPendingWrites("capture");
+      expect(
+        writes.some((write) => write.owner_user_id === PERSISTED_AREA.user_id),
+      ).toBe(true);
+    });
+  });
+
+  it("ignores an old account's area response after a direct account switch", async () => {
+    let releaseAreas!: (value: {
+      provider: string;
+      areas: (typeof PERSISTED_AREA)[];
+    }) => void;
+    mockListAreas.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseAreas = resolve;
+        }),
+    );
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(mockListAreas).toHaveBeenCalledTimes(1));
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: ACCOUNT_B_USER } },
+      error: null,
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [{ ...ACCOUNT_B_AREA, name: "B's area" }],
+    });
+    await act(async () => {
+      authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_B_USER } });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("area-names")).toHaveTextContent("B's area"),
+    );
+    await act(async () => {
+      releaseAreas({ provider: "supabase", areas: [PERSISTED_AREA] });
+    });
+    expect(screen.getByTestId("area-names")).toHaveTextContent("B's area");
+    expect(screen.getByTestId("area-names")).not.toHaveTextContent("Main Job");
+  });
+
+  it("does not replace an auth event with a delayed startup identity response", async () => {
+    let releaseIdentity!: (value: unknown) => void;
+    mockGetUser.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseIdentity = resolve;
+        }),
+    );
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: ACCOUNT_B_USER } },
+      error: null,
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [{ ...ACCOUNT_B_AREA, name: "B's area" }],
+    });
+    await act(async () => {
+      authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_B_USER } });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("area-names")).toHaveTextContent("B's area"),
+    );
+    await act(async () => {
+      releaseIdentity({
+        data: { user: { id: PERSISTED_AREA.user_id } },
+        error: null,
+      });
+    });
+    expect(screen.getByTestId("area-names")).toHaveTextContent("B's area");
+    expect(
+      sessionStorage.getItem(
+        accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`),
+      ),
+    ).toBeNull();
+  });
+
   // A's undelivered capture is held on the device for A (see
   // `durability/deviceAccount.ts`), never replayed under B.
   it("a capture account A could not deliver is never sent through account B's session", async () => {
@@ -2988,12 +3352,20 @@ describe("W3-16 #1: pending work never crosses to another account", () => {
     await waitFor(() => expect(mockSyncJournaledCapture).toHaveBeenCalled());
 
     // A signs out.
+    expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+      ACCOUNT_A_TEXT,
+    );
     mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
     mockListAreas.mockRejectedValue(SIGNED_OUT_ERROR());
     await act(async () => {
       authListener.callback?.("SIGNED_OUT", null);
       await Promise.resolve();
     });
+    // W7-1: the tab's reducer must stop showing A's capture, not only stop
+    // sending it. The provider is deliberately still mounted here.
+    expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+      ACCOUNT_A_TEXT,
+    );
 
     // B signs in on the same device, without a remount ...
     mockGetUser.mockResolvedValue({
@@ -3017,6 +3389,18 @@ describe("W3-16 #1: pending work never crosses to another account", () => {
     });
 
     // ... and then the page reloads as B.
+    expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+      ACCOUNT_A_TEXT,
+    );
+    mockSyncJournaledCapture.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+    fireEvent.click(screen.getByText("Capture B"));
+    await waitFor(() =>
+      expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+        "B's private thought",
+      ),
+    );
     firstMount.unmount();
     render(
       <WorkflowProvider>
@@ -3039,6 +3423,43 @@ describe("W3-16 #1: pending work never crosses to another account", () => {
       (call) => (call[1] as { raw_text?: string }).raw_text,
     );
     expect(sentTexts).not.toContain(ACCOUNT_A_TEXT);
+    expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+      ACCOUNT_A_TEXT,
+    );
+    expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+      "B's private thought",
+    );
+    // Returning to A recovers A's held local copy, even while sending still
+    // fails. Switching accounts must hide private work, never erase it.
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: PERSISTED_AREA.user_id } },
+      error: null,
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    mockSyncJournaledCapture.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+    await act(async () => {
+      authListener.callback?.("SIGNED_IN", {
+        user: { id: PERSISTED_AREA.user_id },
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+        ACCOUNT_A_TEXT,
+      ),
+    );
+    expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+      "B's private thought",
+    );
+    expect(
+      (await listPendingWrites("capture")).filter(
+        (write) => write.owner_user_id === PERSISTED_AREA.user_id,
+      ),
+    ).toHaveLength(1);
   });
 });
 

@@ -126,6 +126,12 @@ export interface AddAreaInput {
 }
 
 let idCounter = 0;
+let accountScopedIds = false;
+
+/** Account snapshots and anonymous handoffs must never reuse a local ID. */
+export function setAccountScopedWorkflowIds(enabled: boolean): void {
+  accountScopedIds = enabled;
+}
 
 /** IDs produced by `nextId` use these prefixes; used to resync the counter after hydration. */
 const WORKFLOW_GENERATED_ID =
@@ -184,6 +190,7 @@ export function raiseWorkflowIdCounterFromState(state: WorkflowState): void {
 }
 
 export function nextId(prefix: string) {
+  if (accountScopedIds) return `${prefix}-${crypto.randomUUID()}`;
   idCounter += 1;
   return `${prefix}-${idCounter}`;
 }

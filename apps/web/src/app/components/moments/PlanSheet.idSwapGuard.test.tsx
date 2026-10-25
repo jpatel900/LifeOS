@@ -18,7 +18,7 @@ import "fake-indexeddb/auto";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
-import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
 import {
   acceptLatestDraft,
   captureWorkflow,
@@ -49,9 +49,15 @@ const {
   mockListOverrideRecords: vi.fn(),
   mockListDurationProfiles: vi.fn(),
   mockListSuggestionRecords: vi.fn(),
-  // These reads are only ever called with the mocked functions above (never
-  // real supabase-js methods), so the "client" only needs to be truthy.
-  mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
+  mockCreateSupabaseBrowserClient: vi.fn(() => ({
+    mocked: true,
+    auth: {
+      getUser: async () => ({
+        data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+        error: null,
+      }),
+    },
+  })),
 }));
 
 vi.mock("@/lib/data/workflow", async () => {
@@ -172,7 +178,10 @@ describe("#886 guard: PlanSheet's task list and first-move drafts survive the id
   it("keeps the same DOM node and the typed first-move text after the local task becomes an account row", async () => {
     const SEED = seedState();
     const localTask = SEED.tasks[0];
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(SEED));
+    window.sessionStorage.setItem(
+      accountSnapshotKey(`account:${persistedArea.user_id}`),
+      JSON.stringify(SEED),
+    );
 
     // Nothing on the account yet — the local row is still the only copy.
     mockListExecutionReviewItems.mockResolvedValue({

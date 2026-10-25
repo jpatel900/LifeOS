@@ -21,8 +21,8 @@
  *   waits on the device until its own account signs in again.
  *
  * Pure module state, no React, no network. `WorkflowProvider` keeps it
- * current from what it already learns about the session (the auth listener's
- * events and `runAccountSync`'s own identity read).
+ * current at its outer account boundary, before selecting the reducer and
+ * storage scope. Retired providers cannot change this identity.
  */
 
 /**
@@ -32,6 +32,18 @@
  * - `undefined`: not known yet (before the first identity read).
  */
 export type DeviceAccount = string | null | undefined;
+
+export function isAnonymousWorkflowScope(scope: string): boolean {
+  return scope === "anonymous" || scope.startsWith("anonymous:");
+}
+
+export function isUnownedWorkflowScope(scope: string | undefined): boolean {
+  return scope !== undefined && (isUnverifiedWorkflowScope(scope) || isAnonymousWorkflowScope(scope));
+}
+
+export function isUnverifiedWorkflowScope(scope: string): boolean {
+  return scope === "unverified" || scope.startsWith("unverified:");
+}
 
 let currentAccount: DeviceAccount = undefined;
 

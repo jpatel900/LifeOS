@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Phase2TaskDraft } from "@lifeos/schemas";
 import {
   clearStoredTaskDrafts,
+  claimAnonymousTaskDrafts,
   listStoredTaskDrafts,
   reconcileStoredTaskDrafts,
   storedTaskDraftCount,
@@ -47,6 +48,48 @@ afterEach(async () => {
 });
 
 describe("draftStore", () => {
+  it("honors a reserved snapshot owner when another account finishes recovery", async () => {
+    const draft = makeDraft({ id: "reserved-draft" });
+    await reconcileStoredTaskDrafts([draft], "anonymous");
+    await claimAnonymousTaskDrafts("account:B", { anonymous: "account:A" });
+    expect(await listStoredTaskDrafts("account:A")).toEqual([draft]);
+    expect(await listStoredTaskDrafts("account:B")).toEqual([]);
+  });
+  it("claims explicitly anonymous drafts once and blocks a retired scope's late mirror", async () => {
+    const draft = makeDraft({ id: "anonymous-unique-draft" });
+    await reconcileStoredTaskDrafts([draft], "anonymous");
+    await Promise.all([
+      claimAnonymousTaskDrafts("account:A"),
+      claimAnonymousTaskDrafts("account:B"),
+    ]);
+    await reconcileStoredTaskDrafts([draft], "anonymous");
+    await claimAnonymousTaskDrafts("account:B");
+    expect(await listStoredTaskDrafts("account:A")).toEqual([draft]);
+    expect(await listStoredTaskDrafts("account:B")).toEqual([]);
+    expect(await listStoredTaskDrafts("anonymous")).toEqual([]);
+    expect(await storedTaskDraftCount()).toBe(1);
+  });
+  it("isolates same-id drafts and decisions by account and retains legacy drafts", async () => {
+    const legacy = makeDraft({ id: "d-1", title: "Unattributed old draft" });
+    const accountA = makeDraft({ id: "d-1", title: "Private to A" });
+    const accountB = makeDraft({ id: "d-1", title: "Private to B" });
+    await reconcileStoredTaskDrafts([legacy]);
+    await reconcileStoredTaskDrafts([accountA], "account:A");
+    await reconcileStoredTaskDrafts([accountB], "account:B");
+    await reconcileStoredTaskDrafts(
+      [{ ...accountA, status: "rejected" }],
+      "account:A",
+    );
+    await reconcileStoredTaskDrafts([accountA], "account:A");
+
+    expect(await listStoredTaskDrafts("account:A")).toEqual([
+      { ...accountA, status: "rejected" },
+    ]);
+    expect(await listStoredTaskDrafts("account:B")).toEqual([accountB]);
+    expect(await listStoredTaskDrafts("anonymous")).toEqual([]);
+    expect(await listStoredTaskDrafts()).toEqual([legacy]);
+    expect(await storedTaskDraftCount()).toBe(3);
+  });
   it("holds a draft and reads it back whole", async () => {
     const draft = makeDraft({ id: "d-1", title: "Renew the certificate" });
     await reconcileStoredTaskDrafts([draft]);

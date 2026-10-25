@@ -171,14 +171,20 @@ describe("W3-16 #1 sibling: the offline queue holds a capture for its own accoun
         data: { user: null },
         error: { message: "offline" },
       });
+      mockGetUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: { message: "offline" },
+      });
       mockGetUser.mockImplementationOnce(
         () =>
           new Promise((resolve) => {
             resolveIdentity = resolve;
           }),
       );
+      let retryIdentity!: () => Promise<void>;
       function Projection() {
-        const { unsyncedCaptureCount, journalledClosedDays } = useWorkflow();
+        const { unsyncedCaptureCount, journalledClosedDays, retryPendingAccountWrites } = useWorkflow();
+        retryIdentity = retryPendingAccountWrites;
         return (
           <output data-testid="projection">
             {unsyncedCaptureCount}:{journalledClosedDays.join(",")}
@@ -190,10 +196,12 @@ describe("W3-16 #1 sibling: the offline queue holds a capture for its own accoun
           <Projection />
         </WorkflowProvider>,
       );
-      await waitFor(() => expect(resolveIdentity).toBeTypeOf("function"));
+      expect(screen.queryByTestId("projection")).not.toBeInTheDocument();
       await waitFor(() =>
         expect(screen.getByTestId("projection").textContent).toBe("1:"),
       );
+      act(() => { void retryIdentity(); });
+      await waitFor(() => expect(resolveIdentity).toBeTypeOf("function"));
       await act(async () => {
         if (source === "event") {
           authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_A } });
@@ -244,6 +252,18 @@ describe("W3-16 #1 sibling: the offline queue holds a capture for its own accoun
         </WorkflowProvider>,
       );
       await waitFor(() => expect(mockGetUser).toHaveBeenCalled());
+      if (identityState === "delayed") {
+        await waitFor(() => expect(resolveIdentity).toBeTypeOf("function"));
+        expect(screen.queryByTestId("queue-count")).not.toBeInTheDocument();
+        expect(getDeviceAccount()).toBeUndefined();
+        expect(await listPendingCaptures()).toHaveLength(2);
+        await act(async () => {
+          resolveIdentity({
+            data: { user: null },
+            error: { message: "offline" },
+          });
+        });
+      }
       // The unowned row proves the asynchronous count finished loading.
       await waitFor(() =>
         expect(screen.getByTestId("queue-count").textContent).not.toBe("0"),
@@ -252,14 +272,6 @@ describe("W3-16 #1 sibling: the offline queue holds a capture for its own accoun
       expect(getDeviceAccount()).toBeUndefined();
       expect(await listPendingCaptures()).toHaveLength(2);
       mounted.unmount();
-      if (resolveIdentity) {
-        await act(async () => {
-          resolveIdentity({
-            data: { user: null },
-            error: { message: "offline" },
-          });
-        });
-      }
     },
   );
 

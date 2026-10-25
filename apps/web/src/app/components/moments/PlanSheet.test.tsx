@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
 import { buildPipelineCounts } from "./pipelineCounts";
 import {
   acceptLatestDraft,
@@ -132,9 +133,14 @@ function StateProbe() {
 
 function renderSheet(
   open = true,
-  options: { onToast?: (message: string) => void } = {},
+  options: { onToast?: (message: string) => void; accountUserId?: string } = {},
 ) {
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(SEED));
+  window.sessionStorage.setItem(
+    options.accountUserId
+      ? accountSnapshotKey(`account:${options.accountUserId}`)
+      : STORAGE_KEY,
+    JSON.stringify(SEED),
+  );
   return render(
     <WorkflowProvider>
       <StateProbe />
@@ -708,7 +714,15 @@ describe("PlanSheet — the ported Plan surface", () => {
       });
 
       beforeEach(() => {
-        mockCreateSupabaseBrowserClient.mockReturnValue({ mocked: true });
+        mockCreateSupabaseBrowserClient.mockReturnValue({
+          mocked: true,
+          auth: {
+            getUser: async () => ({
+              data: { user: { id: WRITER_USER_ID } },
+              error: null,
+            }),
+          },
+        });
         editorAccountOverrides.persist = () =>
           Promise.resolve({
             status: "persisted",
@@ -726,9 +740,9 @@ describe("PlanSheet — the ported Plan surface", () => {
       async function saveAreaMoveToPersonal(
         onToast: (message: string) => void,
       ) {
-        renderSheet(true, { onToast });
+        renderSheet(true, { onToast, accountUserId: WRITER_USER_ID });
         fireEvent.click(
-          screen.getByTestId(`plan-sheet-edit-${BACKLOG_TASK.id}`),
+          await screen.findByTestId(`plan-sheet-edit-${BACKLOG_TASK.id}`),
         );
         fireEvent.change(
           screen.getByTestId(`plan-sheet-edit-area-input-${BACKLOG_TASK.id}`),

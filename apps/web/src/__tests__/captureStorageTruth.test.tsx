@@ -17,7 +17,7 @@ import {
 import * as durableWrites from "@/lib/durability/durableWrites";
 import { listPendingCaptures } from "@/lib/capture/offlineQueue";
 import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
-import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
 import {
   ACCOUNT_SAVE_FAILED,
   ACCOUNT_SAVED_DEVICE_STORAGE_BLOCKED,
@@ -174,7 +174,10 @@ function makeSessionStorageSnapshotWriteFail(): () => void {
   const spy = vi
     .spyOn(Storage.prototype, "setItem")
     .mockImplementation(function (this: Storage, key: string, value: string) {
-      if (this === window.sessionStorage && key === STORAGE_KEY) {
+      if (
+        this === window.sessionStorage &&
+        key === accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`)
+      ) {
         throw new DOMException(
           "Quota exceeded (synthetic).",
           "QuotaExceededError",
@@ -264,7 +267,9 @@ function expectMemoryAndSnapshot(savedInSession: boolean) {
   expect(screen.getByTestId("capture-text").textContent).toBe(
     "Call the landlord back",
   );
-  const raw = window.sessionStorage.getItem(STORAGE_KEY);
+  const raw = window.sessionStorage.getItem(
+    accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`),
+  );
   const snapshot = raw
     ? (JSON.parse(raw) as { captureItems: Array<{ raw_text: string }> })
     : null;
