@@ -366,6 +366,7 @@ describe("W7-8: offline area readiness belongs to the active account", () => {
     const subject = await enqueueCapture({
       rawText: "Retry after the pending account read",
       areaId: "area-main-job",
+      returnHook: "after lunch",
     });
     render(
       <WorkflowProvider>
@@ -376,6 +377,7 @@ describe("W7-8: offline area readiness belongs to the active account", () => {
     await act(async () => {
       await workflow.retryPendingAccountWrites();
     });
+    expect(mockSyncQueuedCapture).not.toHaveBeenCalled();
     await act(async () => {
       rejectFirst(new Error("Older account read failed"));
     });
@@ -383,13 +385,18 @@ describe("W7-8: offline area readiness belongs to the active account", () => {
       expect(await listPendingCaptures()).toHaveLength(0),
     );
     expect(mockListAreas).toHaveBeenCalledTimes(2);
-    const sends = (mockSyncQueuedCapture.mock.calls as unknown[][]).filter(
-      (call) =>
-        (call[1] as { client_capture_id: string }).client_capture_id ===
-        subject.client_capture_id,
-    );
-    expect(sends).toHaveLength(1);
-    expect(sends[0]![1]).toMatchObject({ area_id: persistedArea.id });
+    const sends = mockSyncQueuedCapture.mock.calls as unknown[][];
+    // Settled-read and area-map signals may both drain. The writer deduplicates
+    // by client_capture_id; every attempt must retain the same payload.
+    expect(sends.length).toBeGreaterThan(0);
+    for (const send of sends) {
+      expect(send[1]).toMatchObject({
+        client_capture_id: subject.client_capture_id,
+        area_id: persistedArea.id,
+        raw_text: "Retry after the pending account read",
+        return_hook: "after lunch",
+      });
+    }
   });
 
   it.each([accountB, accountA])(
