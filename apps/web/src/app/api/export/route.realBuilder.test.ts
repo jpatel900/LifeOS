@@ -31,22 +31,50 @@ const makeRequest = () =>
 const EARLY_TABLE = USER_DATA_EXPORT_TABLES[0];
 const FAILING_TABLE = USER_DATA_EXPORT_TABLES[4];
 
+// The builder reads each table in pages (`.order()` then `.range()`), the
+// way the real PostgREST client does. This fake answers the same calls.
+function pagedSelect(result: {
+  data: unknown[] | null;
+  error: { message: string; code?: string } | null;
+}) {
+  let rows = (result.data ?? []) as { id: string }[];
+  const query = {
+    order: vi.fn((): typeof query => query),
+    gt: vi.fn((column: string, value: string): typeof query => {
+      expect(column).toBe("id");
+      rows = rows.filter((row) => row.id > value);
+      return query;
+    }),
+    or: vi.fn((): typeof query => {
+      throw new Error("This fixture has no composite-key rows");
+    }),
+    range: vi.fn(async (from: number, to: number) =>
+      result.error
+        ? { data: null, error: result.error }
+        : { data: rows.slice(from, to + 1), error: null },
+    ),
+  };
+  return query;
+}
+
 function clientFailingAt(error: { message: string; code?: string }) {
   const queried: string[] = [];
   const client = {
     from: vi.fn((table: string) => {
       queried.push(table);
       return {
-        select: vi.fn(async () =>
-          table === FAILING_TABLE
-            ? { data: null, error }
-            : {
-                data:
-                  table === EARLY_TABLE
-                    ? [{ id: "early-row", note: "synthetic" }]
-                    : [],
-                error: null,
-              },
+        select: vi.fn(() =>
+          pagedSelect(
+            table === FAILING_TABLE
+              ? { data: null, error }
+              : {
+                  data:
+                    table === EARLY_TABLE
+                      ? [{ id: "early-row", note: "synthetic" }]
+                      : [],
+                  error: null,
+                },
+          ),
         ),
       };
     }),
@@ -64,10 +92,12 @@ describe("GET /api/export with the real export builder (W3-16 #7)", () => {
     // No table fails in this control.
     const client = {
       from: vi.fn((table: string) => ({
-        select: vi.fn(async () => ({
-          data: table === EARLY_TABLE ? [{ id: "early-row" }] : [],
-          error: null,
-        })),
+        select: vi.fn(() =>
+          pagedSelect({
+            data: table === EARLY_TABLE ? [{ id: "early-row" }] : [],
+            error: null,
+          }),
+        ),
       })),
     };
     mocks.requireSupabaseServerUser.mockResolvedValue({
@@ -126,5 +156,56 @@ describe("GET /api/export with the real export builder (W3-16 #7)", () => {
       errorCategory: "auth_rejected",
       error: AUTH_REJECTED_COPY,
     });
+  });
+
+  it("expires on a later page without returning rows already read from that table", async () => {
+    let taskPages = 0;
+    const client = {
+      from: (table: string) => ({
+        select: () => {
+          if (table === FAILING_TABLE && ++taskPages === 2) {
+            return pagedSelect({
+              data: null,
+              error: {
+                message: "JWT expired: provider detail",
+                code: "PGRST301",
+              },
+            });
+          }
+          return pagedSelect({
+            data:
+              table === FAILING_TABLE
+                ? [{ id: "task-private-marker" }]
+                : table === EARLY_TABLE
+                  ? [{ id: "early-private-marker" }]
+                  : [],
+            error: null,
+          });
+        },
+      }),
+    };
+    mocks.requireSupabaseServerUser.mockResolvedValue({
+      client,
+      user: { id: "user-1" },
+    });
+
+    const response = await GET(makeRequest());
+    const text = await response.text();
+
+    expect(taskPages).toBe(2);
+    expect(response.status).toBe(401);
+    expect(JSON.parse(text)).toEqual({
+      ok: false,
+      errorCategory: "auth_rejected",
+      error: AUTH_REJECTED_COPY,
+    });
+    for (const secret of [
+      "task-private-marker",
+      "early-private-marker",
+      "PGRST301",
+      "provider detail",
+    ]) {
+      expect(text).not.toContain(secret);
+    }
   });
 });
