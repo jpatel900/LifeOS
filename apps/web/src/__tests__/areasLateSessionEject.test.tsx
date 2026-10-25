@@ -345,3 +345,4 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     expect(mocks.routerReplace).toHaveBeenCalledTimes(1);
   });
 });
+import "fake-indexeddb/auto";

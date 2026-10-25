@@ -770,3 +770,4 @@ describe("editBacklogTask — configured account", () => {
     expect(screen.getByTestId("task-title")).toHaveTextContent(task.title);
   });
 });
+import "fake-indexeddb/auto";

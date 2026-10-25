@@ -401,3 +401,4 @@ describe("Google Calendar approval bridge", () => {
     ).toBeNull();
   });
 });
+import "fake-indexeddb/auto";

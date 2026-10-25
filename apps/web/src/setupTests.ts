@@ -1,7 +1,4 @@
 import "@testing-library/jest-dom/vitest";
-// Account restoration now verifies durable ownership before mounting.
-// Missing/blocked-storage tests explicitly stub the API they exercise.
-import "fake-indexeddb/auto";
 
 // #687 demo-seed (owner 2026-08-30): the unconfigured-Supabase fallback now
 // seeds its initial workflow state with sample data (`lib/flags.ts`'s

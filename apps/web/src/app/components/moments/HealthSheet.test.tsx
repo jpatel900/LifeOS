@@ -538,9 +538,7 @@ describe("HealthSheet — the ported Health surface", () => {
 
   it("groups every check under its plain-language group, and shows each check's own plain name", async () => {
     await renderSheet();
-    await waitFor(() =>
-      expect(screen.getByTestId("health-sheet-group-work")).toBeInTheDocument(),
-    );
+    await screen.findByTestId("health-sheet-group-privacy");
     expect(
       screen.getByTestId("health-sheet-group-connections"),
     ).toHaveTextContent("Connected apps");
@@ -658,9 +656,11 @@ describe("HealthSheet — the ported Health surface", () => {
       ).toBeInTheDocument(),
     );
     // The raw subsystem name is present — in the developer layer.
-    expect(
-      screen.getByTestId("health-sheet-developer-details"),
-    ).toHaveTextContent("google_calendar");
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("health-sheet-developer-details"),
+      ).toHaveTextContent("google_calendar"),
+    );
 
     const surface = screen
       .getByTestId("health-sheet")
@@ -932,3 +932,4 @@ describe("HealthSheet — the pulse timer never outlives the sheet", () => {
     expect(laterTimerCount()).toBe(0);
   });
 });
+import "fake-indexeddb/auto";
