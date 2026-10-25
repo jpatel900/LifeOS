@@ -44,6 +44,8 @@ interface ExportPage {
 
 interface ExportTableQuery {
   order: (column: string, options: { ascending: boolean }) => ExportTableQuery;
+  gt: (column: string, value: string) => ExportTableQuery;
+  or: (filters: string) => ExportTableQuery;
   range: (from: number, to: number) => PromiseLike<ExportPage>;
 }
 
@@ -60,8 +62,9 @@ interface MinimalExportClient {
 // ever set below this page size.
 const EXPORT_PAGE_SIZE = 1000;
 
-// A stable order is what stops pages from skipping or repeating rows. Every
-// export table is keyed by `id`, except these two composite keys.
+// Order and resume by the full primary key. Offsets shift if an earlier row
+// is inserted or deleted between requests. Every export table is keyed by
+// `id`, except these two composite keys.
 const EXPORT_ORDER_KEYS: Partial<
   Record<UserDataExportTable, readonly string[]>
 > = {
@@ -112,16 +115,41 @@ async function readWholeTable(
   table: UserDataExportTable,
 ): Promise<unknown[]> {
   const rows: unknown[] = [];
+  const keys = exportOrderKeys(table);
+  let cursor: string[] | undefined;
 
   for (;;) {
     let query = client.from(table).select("*");
-    for (const column of exportOrderKeys(table)) {
+    for (const column of keys) {
       query = query.order(column, { ascending: true });
     }
-    const { data, error } = await query.range(
-      rows.length,
-      rows.length + EXPORT_PAGE_SIZE - 1,
-    );
+    if (cursor) {
+      if (keys.length === 1) {
+        query = query.gt(keys[0], cursor[0]);
+      } else {
+        const values = cursor;
+        // Lexicographic continuation: first key greater, OR equal prefix
+        // with the next key greater. Quote raw PostgREST filter literals;
+        // the client handles URL encoding. RLS still bounds every request.
+        query = query.or(
+          keys
+            .map((key, index) => {
+              const after = `${key}.gt.${JSON.stringify(values[index])}`;
+              const prefix = keys
+                .slice(0, index)
+                .map(
+                  (column, prefixIndex) =>
+                    `${column}.eq.${JSON.stringify(values[prefixIndex])}`,
+                );
+              return prefix.length
+                ? `and(${[...prefix, after].join(",")})`
+                : after;
+            })
+            .join(","),
+        );
+      }
+    }
+    const { data, error } = await query.range(0, EXPORT_PAGE_SIZE - 1);
 
     if (error) {
       throw tableReadFailure(table, error);
@@ -131,7 +159,19 @@ async function readWholeTable(
     if (page.length === 0) {
       return rows;
     }
+    const last = page[page.length - 1] as Record<string, unknown> | null;
+    const nextCursor = keys.map((key) => {
+      const value = last?.[key];
+      if (typeof value !== "string" || value.length === 0) {
+        throw tableReadFailure(table, {});
+      }
+      return value;
+    });
+    if (cursor?.every((value, index) => value === nextCursor[index])) {
+      throw tableReadFailure(table, {});
+    }
     rows.push(...page);
+    cursor = nextCursor;
   }
 }
 
@@ -139,6 +179,8 @@ async function readWholeTable(
  * Assemble a full JSON export of the signed-in user's data. The client must
  * be a user-scoped (anon key + user access token) client so RLS bounds every
  * select to the requesting user; never call this with a service-role client.
+ * Pages are not a transaction snapshot: new rows behind the cursor and
+ * primary-key changes during the export are not included reliably.
  */
 export async function buildUserDataExport(
   client: MinimalExportClient,

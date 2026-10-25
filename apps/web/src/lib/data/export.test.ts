@@ -224,8 +224,38 @@ describe("buildUserDataExport", () => {
     );
   });
 
-  // W3-16 #3: pages only stay complete and free of repeats when every page
-  // request uses the same stable order: the table's primary key.
+  it("fails closed if the response cannot supply a cursor", async () => {
+    const { client } = clientWithRows({ tasks: [{ note: "private-marker" }] });
+    await expect(buildUserDataExport(client)).rejects.toThrow(
+      "Data export failed while reading tasks. Nothing was exported; try again.",
+    );
+  });
+
+  it("fails closed if a response repeats the previous cursor", async () => {
+    let taskPages = 0;
+    const client = {
+      from: (table: string) => ({
+        select: () => {
+          if (table === "tasks" && ++taskPages > 2) {
+            throw new Error("Unexpected third request after a stalled cursor");
+          }
+          const query = pagedSelect({
+            data: table === "tasks" ? [{ id: "task-1" }] : [],
+            error: null,
+          });
+          query.gt.mockImplementation(() => query);
+          return query;
+        },
+      }),
+    };
+
+    await expect(buildUserDataExport(client)).rejects.toThrow(
+      "Data export failed while reading tasks. Nothing was exported; try again.",
+    );
+    expect(taskPages).toBe(2);
+  });
+
+  // Every page uses the same primary-key order as the continuation cursor.
   it("orders every page by the table's primary key", async () => {
     const orders: Record<string, string[]> = {};
     type RecordingQuery = {
