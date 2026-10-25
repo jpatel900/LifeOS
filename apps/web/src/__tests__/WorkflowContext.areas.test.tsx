@@ -414,7 +414,7 @@ describe("WorkflowProvider persisted area sync", () => {
       areas: [
         {
           id: "33333333-3333-4333-8333-333333333333",
-          user_id: "user-a",
+          user_id: persistedArea.user_id,
           name: "Deep Work",
           slug: "deep-work",
           description: "Custom area",
