@@ -1,5 +1,9 @@
 import type { AccountIdAliasFamily, WorkflowState } from "../workflow/shared";
-import { hasDemoSeedId, MOCK_USER_ID } from "../mockData";
+import {
+  areas as initialAreas,
+  hasDemoSeedId,
+  MOCK_USER_ID,
+} from "../mockData";
 import type {
   SnapshotCollection,
   SnapshotCursor,
@@ -154,10 +158,16 @@ export function bindSnapshotAccount(
   metadata.userId = userId;
   // First sign-in from the default/device-only state is not an account
   // change. Its in-flight local writes and receipts still belong to this
-  // lifetime. Legacy foreign account rows, however, require the same fence
-  // as an explicit switch even when their old metadata lacks a userId.
+  // lifetime. Legacy foreign rows or delivered account associations require
+  // the same fence as an explicit switch when metadata lacks a userId.
   const changesAccount =
     previousUserId !== undefined ||
+    Object.values(state.accountIdByLocalId).some(
+      (group) => Object.keys(group).length > 0,
+    ) ||
+    Object.values(metadata.rows).some((group) =>
+      Object.values(group ?? {}).some((owner) => owner.accountId !== undefined),
+    ) ||
     (Object.keys(accountFields) as SnapshotCollection[]).some((collection) =>
       rows(state, collection).some(
         (row) =>
@@ -185,7 +195,16 @@ export function bindSnapshotAccount(
         accountId(state, collection, key) === key;
       // Older snapshots may have valid edits but no account marker. Their
       // row identity can prove a same-account first binding, never empty B.
-      return undelivered || (!previousUserId && row.user_id === userId);
+      const neutralInitialArea =
+        !changesAccount &&
+        collection === "areas" &&
+        row.user_id === MOCK_USER_ID &&
+        initialAreas.some((area) => area.id === row.id);
+      return (
+        undelivered ||
+        neutralInitialArea ||
+        (!previousUserId && row.user_id === userId)
+      );
     });
     const keptIds = new Set(kept.map((row) => row.id));
     for (const key of Object.keys(group)) {
@@ -203,6 +222,12 @@ export function bindSnapshotAccount(
         ),
       );
   }
+  // Empty while binding means "not read yet", not an empty account. Keep
+  // neutral placeholders until syncAreas supplies the authoritative result.
+  // Never restore previous-account names, colors, ownership or mappings.
+  if (result.areas.length === 0)
+    result.areas = initialAreas.map((area) => ({ ...area }));
+
   // Only transfers belonging to retained, undelivered creations survive.
   // Their local draft receipt remains valid in the new snapshot lifetime.
   for (const group of Object.values(metadata.rows))

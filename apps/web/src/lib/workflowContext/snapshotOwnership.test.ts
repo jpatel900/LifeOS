@@ -207,6 +207,25 @@ describe("snapshot state ownership (#967)", () => {
     ).toBe(false);
   });
 
+  it("keeps neutral first-load areas until the authoritative account read", () => {
+    const initial = workflowSeed();
+    const userId = "99999999-9999-4999-8999-999999999999";
+    const bound = workflowReducer(initial, {
+      type: "bindSnapshotAccount",
+      userId,
+    });
+    expect(bound.areas).toEqual(initial.areas);
+    expect(bound.snapshotOwnership?.rows.areas).toBeUndefined();
+    expect(hasSnapshotWork(bound)).toBe(false);
+    const loaded = workflowReducer(bound, {
+      type: "syncAreas",
+      areas: [],
+      cursor: snapshotCursor(bound),
+      readUserId: userId,
+    });
+    expect(loaded.areas).toEqual([]);
+  });
+
   it("preserves same-user legacy ownership on first binding and drops a different user's rows", () => {
     const initial = accountTask();
     const edited = trackSnapshotChanges(initial, {
@@ -232,6 +251,63 @@ describe("snapshot state ownership (#967)", () => {
     });
     expect(different.tasks).toEqual([]);
   });
+
+  it.each(["alias", "receipt"] as const)(
+    "fences old receipts when legacy %s evidence associates work with an unknown account",
+    (evidence) => {
+      const local =
+        evidence === "alias"
+          ? trackSnapshotChanges(
+              workflowSeed(),
+              acceptLatestDraft(captureWorkflow(workflowSeed(), "Legacy task")),
+            )
+          : workflowReducer(workflowSeed(), {
+              type: "addArea",
+              name: "Delivered legacy area",
+              color: "#abcdef",
+            });
+      const delivered =
+        evidence === "alias"
+          ? workflowReducer(local, {
+              type: "recordAccountId",
+              family: "tasks",
+              localId: local.tasks[0].id,
+              accountId: TASK_ID,
+            })
+          : acknowledgeSnapshot(
+              local,
+              snapshotReceipt(
+                local,
+                "areas",
+                local.areas.find((row) => row.name === "Delivered legacy area")!
+                  .id,
+              ),
+              AREA_ID,
+            );
+      const pending = workflowReducer(delivered, {
+        type: "addArea",
+        name: "Pending old-account area",
+        color: "#112233",
+      });
+      const area = pending.areas.find(
+        (row) => row.name === "Pending old-account area",
+      )!;
+      const oldReceipt = snapshotReceipt(pending, "areas", area.id);
+      expect(pending.snapshotOwnership!.userId).toBeUndefined();
+      const bound = workflowReducer(pending, {
+        type: "bindSnapshotAccount",
+        userId: "99999999-9999-4999-8999-999999999999",
+      });
+      expect(bound.tasks).toEqual([]);
+      expect(bound.accountIdByLocalId.tasks).toEqual({});
+      expect(
+        bound.areas.some((row) => row.name === "Delivered legacy area"),
+      ).toBe(false);
+      expect(bound.areas).toContainEqual(area);
+      expect(acknowledgeSnapshot(bound, oldReceipt, AREA_ID)).toBe(bound);
+      expect(snapshotCursor(bound).epoch).not.toBe(oldReceipt.epoch);
+    },
+  );
 
   it("retains draft transfers across binding and reload without acknowledging a later edit", () => {
     const drafted = captureWorkflow(workflowSeed(), "Synthetic transfer");

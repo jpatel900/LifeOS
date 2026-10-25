@@ -127,6 +127,13 @@ Bookkeeping limits (review, 2026-10-24):
   receipts keep their exact revisions and values under the new epoch. A legacy
   snapshot without an account marker retains same-account edits only when its
   row identity proves the match. Existing device-only retention stays in place.
+- Delivered aliases and receipt account IDs also fence old operations when a
+  legacy snapshot lacks an account marker. Pure device-only first sign-in keeps
+  its existing epoch so valid in-flight local receipts still work.
+- Binding is not an empty-account read. Neutral initial area placeholders prevent
+  premature onboarding while the new account's read is pending. They contain no
+  prior-account values, ownership or persistence mapping. The actual area read,
+  including an empty result, replaces them through normal reconciliation.
 - Retained local children are not silently reassigned when their prior account
   parent disappears. This is not whole-app account storage isolation: device
   drafts and other device-only surfaces keep their existing policies.
