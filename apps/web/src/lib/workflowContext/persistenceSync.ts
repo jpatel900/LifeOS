@@ -197,6 +197,9 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         )
       : null;
 
+    // Both device replay and direct fallback identify the same capture.
+    const clientCaptureId =
+      localCapture.client_capture_id ?? generateClientWriteId();
     let journalled;
     try {
       journalled = await journalCaptureWrite({
@@ -212,8 +215,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         // that counter, and reusing it here overwrote an earlier capture's
         // raw text in the account (bug hunt #1). `persistCapture` runs once
         // per capture; journal replays reuse the key stored in the journal.
-        clientCaptureId:
-          localCapture.client_capture_id ?? generateClientWriteId(),
+        clientCaptureId,
       });
     } catch {
       // #960 review finding 3: the device itself refused to hold the journal
@@ -225,15 +227,22 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       // resolved or none) POSTed directly with no device tier at all; that
       // path is kept alive here as a fallback so a storage-blocked device
       // still reaches the account instead of regressing behind the new
-      // durable one. A failure from THIS call is not caught here — it
-      // propagates to the caller's `markPersistedSaveFailure`, the same
-      // classification a direct `createCaptureItem` failure has always had.
+      // durable one. A failed account call still reaches the caller's
+      // `markPersistedSaveFailure`, without losing the separate fact that
+      // the device refused to keep a recovery copy.
       if (!localCapture.area_id || persistedAreaId) {
-        const result = await createCaptureItem(client, {
-          raw_text: localCapture.raw_text,
-          return_hook: localCapture.return_hook ?? null,
-          area_id: persistedAreaId,
-        });
+        let result;
+        try {
+          result = await createCaptureItem(client, {
+            raw_text: localCapture.raw_text,
+            return_hook: localCapture.return_hook ?? null,
+            area_id: persistedAreaId,
+            client_capture_id: clientCaptureId,
+          });
+        } catch (error) {
+          markDeviceStorageBlocked({ preservePendingLocalChanges: true });
+          throw error;
+        }
         if (result.provider === "supabase") {
           recordAccountAlias("captures", localCapture.id, result.capture.id);
           // #967: account acknowledgement cannot repair the failed device

@@ -2196,6 +2196,175 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
   // above for `pendingSaveFailed`, under the exact same generation/identity
   // guards, not a new read or watcher.
   describe("pendingSaveFailureKind (#967 typed failure category)", () => {
+    it("retains a real invalid review, sends unrelated valid work, and tracks later mixed and recoverable failures", async () => {
+      const original = await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: "2026-09-17",
+        periodEnd: "2026-09-16",
+        summaryJson: { summary: "Synthetic retained review" },
+      });
+      await journalWinWrite({
+        workflowTaskId: PRESYNCED_TASK_ID,
+        persistedTaskId: PRESYNCED_TASK_ID,
+        persistedAreaId: PERSISTED_AREA.id,
+        title: "Synthetic valid win",
+        detail: null,
+        occurredAt: "2026-09-17T00:00:00.000Z",
+      });
+      const actual = await vi.importActual<
+        typeof import("@/lib/data/workflow")
+      >("@/lib/data/workflow");
+      mockSyncJournaledReviewEntry.mockImplementation(
+        actual.syncJournaledReviewEntry,
+      );
+      mockSyncJournaledWin.mockResolvedValue({ provider: "supabase" });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      expect(screen.getByTestId("pending-save-failure-kind")).toHaveTextContent(
+        "invalid-write",
+      );
+      const retained = await listPendingWrites();
+      expect(retained).toHaveLength(1);
+      expect(retained[0]).toMatchObject({
+        ...original,
+        last_attempt_failed: true,
+        last_attempt_failure_kind: "invalid-write",
+      });
+      expect(retained[0]).not.toHaveProperty("error");
+      expect(retained[0]).not.toHaveProperty("issues");
+      expect(mockSyncJournaledWin).toHaveBeenCalledTimes(1);
+
+      await journalWinWrite({
+        workflowTaskId: PRESYNCED_TASK_ID,
+        persistedTaskId: PRESYNCED_TASK_ID,
+        persistedAreaId: PERSISTED_AREA.id,
+        title: "Synthetic second win",
+        detail: null,
+        occurredAt: "2026-09-18T00:00:00.000Z",
+      });
+      mockSyncJournaledWin.mockRejectedValue(
+        new PersistenceWriteError(
+          "Missing account capability",
+          "server-capability-missing",
+        ),
+      );
+      fireEvent.click(screen.getByText("Retry pending writes"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "1",
+        ),
+      );
+      expect(screen.getByTestId("pending-save-failure-kind")).toHaveTextContent(
+        "unknown",
+      );
+      expect(await listPendingWrites()).toHaveLength(2);
+      mockSyncJournaledWin.mockRejectedValue(new Error("Network unavailable"));
+      fireEvent.click(screen.getByText("Retry pending writes"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "2",
+        ),
+      );
+      expect(screen.getByTestId("pending-save-failure-kind")).toHaveTextContent(
+        "unknown",
+      );
+      expect(await listPendingWrites()).toHaveLength(2);
+
+      mockSyncJournaledReviewEntry.mockRejectedValue(
+        new Error("Network unavailable"),
+      );
+      mockSyncJournaledWin.mockResolvedValue({ provider: "supabase" });
+      fireEvent.click(screen.getByText("Retry pending writes"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "3",
+        ),
+      );
+      expect(screen.getByTestId("pending-save-failure-kind")).toHaveTextContent(
+        "unknown",
+      );
+      const latest = await listPendingWrites();
+      expect(latest).toHaveLength(1);
+      expect(latest[0]?.payload).toEqual(original.payload);
+      expect(latest[0]?.last_attempt_failure_kind).toBe("unknown");
+    });
+
+    it("excludes unfailed rows from an invalid-write aggregate", async () => {
+      const failed = {
+        seq: 1,
+        entity: "review",
+        client_write_id: "invalid-review-snapshot",
+        payload: {
+          review_type: "daily",
+          period_start: "2026-09-17",
+          period_end: "2026-09-16",
+        },
+        created_at: "2026-09-17T00:00:00.000Z",
+        last_attempt_failed: true,
+        last_attempt_failure_kind: "invalid-write",
+      } as Awaited<ReturnType<typeof listPendingWrites>>[number];
+      const unfailed = {
+        ...failed,
+        seq: 2,
+        client_write_id: "unattempted-review-snapshot",
+        last_attempt_failed: false,
+        last_attempt_failure_kind: undefined,
+      };
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+      mockListPendingWrites.mockImplementation((entity) =>
+        entity === undefined || entity === "review"
+          ? Promise.resolve([failed, unfailed])
+          : listPendingWritesActual(entity),
+      );
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      expect(screen.getByTestId("pending-save-failure-kind")).toHaveTextContent(
+        "invalid-write",
+      );
+      expect(screen.getByTestId("pending-save-failed")).toHaveTextContent(
+        "true",
+      );
+    });
+
     it("is server-capability-missing, and the shared notice goes calm with the app-update message, when the one failed row is a genuine known PersistenceWriteError", async () => {
       const day = "2026-09-17";
 

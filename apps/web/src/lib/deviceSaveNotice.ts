@@ -9,6 +9,9 @@ import {
 } from "./statusVocabulary";
 import type { WorkflowSyncStatus } from "./workflowContext/types";
 
+export const ACCOUNT_SAVED_WORK_NEEDS_REPAIR =
+  "Some saved work needs a repair before LifeOS can send it to your account. Keep a copy in Health.";
+
 /**
  * ONE READING OF "WHERE IS MY WORK RIGHT NOW" FOR EVERY SURFACE (#734)
  * ===================================================================
@@ -94,13 +97,43 @@ export type DeviceSaveTone = "calm" | "alarm";
 
 export interface DeviceSaveNotice {
   tone: DeviceSaveTone;
-  /** The sentence to show. Always a `statusVocabulary` phrase. */
+  /** The canonical sentence to show on every save-status surface. */
   message: string;
   /**
    * True when the only reason the work is here is that nobody is signed in,
    * so a surface can offer the sign-in door alongside the sentence (#688).
    */
   signedOut: boolean;
+}
+
+function hasInvalidPendingWrite(status: WorkflowSyncStatus): boolean {
+  return Boolean(
+    status.pendingSaveFailed &&
+    status.pendingLocalChanges &&
+    status.pendingSaveFailureKind === "invalid-write",
+  );
+}
+
+/**
+ * Recovery belongs to the same status policy as the notice. Unknown or mixed
+ * failures retain retry. Proven invalid writes get a local copy, while sign-in,
+ * blocked storage, and an app update keep their existing higher-priority paths.
+ */
+export function resolvePendingWriteRecoveryAction(
+  status: WorkflowSyncStatus,
+): "retry" | "download" | null {
+  const notice = resolveDeviceSaveNotice(status);
+  if (
+    !status.pendingSaveFailed ||
+    !notice ||
+    status.signedOut ||
+    status.storage === "blocked" ||
+    status.pendingSaveFailureKind === "server-capability-missing" ||
+    notice.message === ACCOUNT_NEEDS_APP_UPDATE
+  ) {
+    return null;
+  }
+  return hasInvalidPendingWrite(status) ? "download" : "retry";
 }
 
 /**
@@ -149,6 +182,20 @@ export function resolveDeviceSaveNotice(
   // exactly as generic as "we don't know why yet", even when non-null.
   const hasSpecificActionableMessage =
     status.message === ACCOUNT_NEEDS_APP_UPDATE;
+
+  // This category is emitted only by an adapter that proved the saved input
+  // cannot be replayed. Do not make that claim for unknown or mixed failures.
+  if (
+    status.account !== "checking" &&
+    hasInvalidPendingWrite(status) &&
+    !hasSpecificActionableMessage
+  ) {
+    return {
+      tone: "alarm",
+      message: ACCOUNT_SAVED_WORK_NEEDS_REPAIR,
+      signedOut: false,
+    };
+  }
 
   if (status.account === "local-only") {
     if (status.pendingSaveFailed && !hasSpecificActionableMessage) {
