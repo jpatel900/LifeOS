@@ -36,7 +36,10 @@ const enhanced: RequestRollupProseResult = {
   summary: { ...draft.summary, highlights: ["You shipped the work."] },
 };
 
-function mountRollups(period: "week" | "month" = "week") {
+function mountRollups(
+  period: "week" | "month" = "week",
+  initialDrafts?: RollupDraftVM[],
+) {
   const approvedRows: ApprovedRollupSummary[] =
     period === "month"
       ? [
@@ -91,7 +94,7 @@ function mountRollups(period: "week" | "month" = "week") {
   }
   const hook = renderHook(
     (value) => useCloseMomentRollups({ ...stableOptions, ...value }),
-    { initialProps: props() },
+    { initialProps: props(initialDrafts) },
   );
   return {
     ...hook,
@@ -200,19 +203,30 @@ describe("rollup prose survives equivalent account projection refreshes", () => 
     expect(requestProse).not.toHaveBeenCalled();
   });
 
-  it("does not start queued areas after unmount", async () => {
-    let resolve!: (value: RequestRollupProseResult) => void;
-    requestProse.mockReturnValue(
-      new Promise((done) => {
-        resolve = done;
-      }),
-    );
-    const hook = mountRollups();
-    hook.refresh([draft, { ...draft, areaId: "area-home", areaLabel: "Home" }]);
-    await waitFor(() => expect(requestProse).toHaveBeenCalledTimes(1));
-    hook.unmount();
-    await act(async () => resolve(enhanced));
-    expect(requestProse).toHaveBeenCalledTimes(1);
-    expect(getSession).toHaveBeenCalledTimes(1);
-  });
+  it.each([false, true])(
+    "does not start queued areas after unmount (new batch: %s)",
+    async (newBatch) => {
+      let resolve!: (value: RequestRollupProseResult) => void;
+      requestProse.mockReturnValue(
+        new Promise((done) => {
+          resolve = done;
+        }),
+      );
+      const bothDrafts = [
+        draft,
+        { ...draft, areaId: "area-home", areaLabel: "Home" },
+      ];
+      const hook = mountRollups("week", newBatch ? [draft] : bothDrafts);
+      await waitFor(() => expect(requestProse).toHaveBeenCalledTimes(1));
+      if (newBatch) {
+        hook.refresh(bothDrafts);
+        await waitFor(() => expect(getSession).toHaveBeenCalledTimes(2));
+      }
+      hook.unmount();
+      await act(async () => resolve(enhanced));
+      expect(requestProse).toHaveBeenCalledTimes(1);
+      // Each batch captures its token before waiting behind the first request.
+      expect(getSession).toHaveBeenCalledTimes(newBatch ? 2 : 1);
+    },
+  );
 });

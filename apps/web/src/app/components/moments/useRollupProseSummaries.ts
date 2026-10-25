@@ -61,8 +61,10 @@ export function useRollupProseSummaries(
 
   useEffect(() => {
     const client = createSupabaseBrowserClient();
+    if (!client) return;
     let active = true;
-    for (const draft of client ? drafts : []) {
+    let batchAuth: Promise<{ accessToken: string | null } | null> | undefined;
+    for (const draft of drafts) {
       const inputKey = proseInputKey(draft, periodType);
       let request = requests.current.get(draft.areaId);
       // Preserve the existing one-request-per-area budget. A changed draft
@@ -70,17 +72,24 @@ export function useRollupProseSummaries(
       // another request in this mounted session.
       if (request && request.inputKey !== inputKey) continue;
       if (!request) {
+        // Capture this batch's token when queued, not when a preceding
+        // provider call finishes under a potentially different account.
+        // Handle lookup failure now, even while the request waits its turn.
+        const queuedAuth = (batchAuth ??= client.auth
+          .getSession()
+          .then(({ data }) => ({
+            accessToken: data.session?.access_token ?? null,
+          }))
+          .catch(() => null));
         const promise = requestTail.current
           .then(async () => {
             // A fresh effect can keep the same input alive. Removed/changed
             // drafts and unmounts must not start a queued provider request.
             const stillCurrent = () =>
               currentInputs.current?.get(draft.areaId) === inputKey;
-            if (!stillCurrent() || !client) return null;
-            const accessToken =
-              (await client.auth.getSession()).data.session?.access_token ??
-              null;
             if (!stillCurrent()) return null;
+            const auth = await queuedAuth;
+            if (!auth || !stillCurrent()) return null;
             return requestRollupProse(
               {
                 areaLabel: draft.areaLabel,
@@ -88,7 +97,7 @@ export function useRollupProseSummaries(
                 periodLabel: draft.periodLabel,
                 draft: draft.summary,
               },
-              { accessToken },
+              auth,
             );
           })
           .catch(() => null);
