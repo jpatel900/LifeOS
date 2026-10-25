@@ -2363,38 +2363,54 @@ describe("workflow data provider", () => {
     );
   });
 
-  it.each([false, true])("W7-16: a review receipt names the actual authenticated owner (daily conflict: %s)", async (conflict) => {
-    const upsert = vi.fn().mockResolvedValue({ error: conflict ? {
-      code: "23505",
-      message: 'duplicate key value violates unique constraint "review_entries_user_daily_close_key"',
-    } : null });
-    const from = vi.fn().mockReturnValue({ upsert });
-    const result = await syncJournaledReviewEntry(authenticatedClient(from), {
-      client_write_id: "receipt-owner",
-      area_id: null,
-      review_type: "daily",
-      period_start: "2026-05-08",
-      period_end: "2026-05-08",
-      summary_json: {},
-    });
-    expect(result).toEqual({ provider: "supabase", userId });
-    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: userId }), expect.anything());
-  });
+  it.each([false, true])(
+    "W7-16: a review receipt names the actual authenticated owner (daily conflict: %s)",
+    async (conflict) => {
+      const upsert = vi.fn().mockResolvedValue({
+        error: conflict
+          ? {
+              code: "23505",
+              message:
+                'duplicate key value violates unique constraint "review_entries_user_daily_close_key"',
+            }
+          : null,
+      });
+      const from = vi.fn().mockReturnValue({ upsert });
+      const result = await syncJournaledReviewEntry(authenticatedClient(from), {
+        client_write_id: "receipt-owner",
+        area_id: null,
+        review_type: "daily",
+        period_start: "2026-05-08",
+        period_end: "2026-05-08",
+        summary_json: {},
+      });
+      expect(result).toEqual({ provider: "supabase", userId });
+      expect(upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ user_id: userId }),
+        expect.anything(),
+      );
+    },
+  );
 
   it("W7-16: an unrelated duplicate cannot produce a delivery receipt", async () => {
-    const upsert = vi.fn().mockResolvedValue({ error: {
-      code: "23505",
-      message: 'duplicate key value violates unique constraint "unrelated_key"',
-    } });
+    const upsert = vi.fn().mockResolvedValue({
+      error: {
+        code: "23505",
+        message:
+          'duplicate key value violates unique constraint "unrelated_key"',
+      },
+    });
     const from = vi.fn().mockReturnValue({ upsert });
-    await expect(syncJournaledReviewEntry(authenticatedClient(from), {
-      client_write_id: "no-receipt-on-error",
-      area_id: null,
-      review_type: "daily",
-      period_start: "2026-05-08",
-      period_end: "2026-05-08",
-      summary_json: {},
-    })).rejects.toThrow("unrelated_key");
+    await expect(
+      syncJournaledReviewEntry(authenticatedClient(from), {
+        client_write_id: "no-receipt-on-error",
+        area_id: null,
+        review_type: "daily",
+        period_start: "2026-05-08",
+        period_end: "2026-05-08",
+        summary_json: {},
+      }),
+    ).rejects.toThrow("unrelated_key");
   });
 
   it("keeps journalled-review sync a no-op in mock mode", async () => {

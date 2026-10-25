@@ -952,7 +952,24 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
       return replayDurableWrites({
         syncWin: (args) => syncJournaledWin(client, args),
-        syncReview: (args) => syncJournaledReviewEntry(client, args),
+        syncReview: async (args) => {
+          const receipt = await syncJournaledReviewEntry(client, args);
+          // An unowned row is visible to any account until delivery. Only
+          // the server write's authenticated owner can inherit its retained
+          // confirmation obligation, including a success after switching away.
+          if (
+            mountedRef.current &&
+            receipt.provider === "supabase" &&
+            args.review_type === "daily"
+          ) {
+            const unconfirmed =
+              unconfirmedClosedDaysRef.current.get(receipt.userId) ??
+              new Set<string>();
+            unconfirmed.add(args.period_start);
+            unconfirmedClosedDaysRef.current.set(receipt.userId, unconfirmed);
+          }
+          return receipt;
+        },
         syncExecutionSession: (args) =>
           syncJournaledExecutionSession(client, args),
         // Late id resolution: a win journalled while signed out carries only its
@@ -1809,7 +1826,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         const unconfirmed =
           unconfirmedClosedDaysRef.current.get(account) ?? new Set<string>();
         for (const write of pending) {
-          if (write.entity !== "review") continue;
+          if (write.entity !== "review" || write.owner_user_id !== account)
+            continue;
           const payload = write.payload as {
             review_type?: unknown;
             period_start?: unknown;
@@ -2236,33 +2254,29 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // pass never actually confirmed. `expectedDailyPeriodsSnapshotFailed`
       // tracks that distinction separately from an honestly-empty list.
       let expectedDailyPeriods: string[] = [];
+      const ownedDailyPeriods: string[] = [];
       let expectedDailyPeriodsSnapshotFailed = false;
       try {
-        // W3-16 #1: only this account's own (or unowned) closes. Another
-        // account's held close can never be confirmed by this account's
-        // readback, and must not block this account's own release.
-        expectedDailyPeriods = visibleToAccount(
+        // Every visible close guards this pass's evidence release. Only
+        // owned rows create a lasting account obligation before delivery.
+        const pendingReviews = visibleToAccount(
           await listPendingWrites("review"),
           account,
-        )
-          .map(
-            (write) =>
-              write.payload as {
-                review_type?: unknown;
-                period_start?: unknown;
-              },
-          )
-          .filter(
-            (
-              payload,
-            ): payload is {
-              review_type: "daily";
-              period_start: string;
-            } =>
-              payload.review_type === "daily" &&
-              typeof payload.period_start === "string",
-          )
-          .map((payload) => payload.period_start);
+        );
+        for (const write of pendingReviews) {
+          const payload = write.payload as {
+            review_type?: unknown;
+            period_start?: unknown;
+          };
+          if (
+            payload.review_type === "daily" &&
+            typeof payload.period_start === "string"
+          ) {
+            expectedDailyPeriods.push(payload.period_start);
+            if (write.owner_user_id === account)
+              ownedDailyPeriods.push(payload.period_start);
+          }
+        }
       } catch {
         expectedDailyPeriodsSnapshotFailed = true;
       }
@@ -2278,10 +2292,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // journal on a later pass does not erase an earlier confirmation debt.
       const unconfirmed =
         unconfirmedClosedDaysRef.current.get(account) ?? new Set<string>();
-      for (const period of expectedDailyPeriods) unconfirmed.add(period);
+      for (const period of ownedDailyPeriods) unconfirmed.add(period);
       if (unconfirmed.size > 0)
         unconfirmedClosedDaysRef.current.set(account, unconfirmed);
-      expectedDailyPeriods = [...unconfirmed];
+      expectedDailyPeriods = [
+        ...new Set([...expectedDailyPeriods, ...unconfirmed]),
+      ];
 
       // ORDERING IS LOAD-BEARING (#960 defect 1) — this must run AFTER
       // the two calls above have populated `persistedAreasRef`.
@@ -2291,6 +2307,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         // Best-effort: the journal stays populated and the next
         // mount, reconnect, or sign-in retries it.
       }
+      // Receipts for previously unowned rows arrive during replay, after
+      // the snapshot above. Include them before testing account confirmation.
+      expectedDailyPeriods = [
+        ...new Set([
+          ...expectedDailyPeriods,
+          ...(unconfirmedClosedDaysRef.current.get(account) ?? []),
+        ]),
+      ];
       // #960 review finding 1: this was the only `replayJournaledWrites`
       // call site with no matching refresh (compare the "sync on mount"
       // effect and `persistCapture`/`persistMarkedSession` and friends,

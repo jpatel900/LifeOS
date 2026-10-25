@@ -214,7 +214,16 @@ vi.mock("@/lib/data/workflow", async () => {
     listSuggestionRecords: mockListSuggestionRecords,
     syncJournaledCapture: mockSyncJournaledCapture,
     syncJournaledWin: mockSyncJournaledWin,
-    syncJournaledReviewEntry: mockSyncJournaledReviewEntry,
+    syncJournaledReviewEntry: async (
+      ...args: Parameters<typeof actual.syncJournaledReviewEntry>
+    ) => {
+      const result = await mockSyncJournaledReviewEntry(...args);
+      // Existing successful fixtures write to A. Account-switch fixtures
+      // explicitly override the transport's authenticated receipt owner.
+      return result?.provider === "supabase"
+        ? { userId: PERSISTED_AREA.user_id, ...result }
+        : result;
+    },
   };
 });
 
@@ -3421,14 +3430,25 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
         periodEnd: day,
         summaryJson: {},
       });
-      expect((await listPendingWritesActual("review"))[0]?.owner_user_id).toBeUndefined();
-      mockListAreas.mockResolvedValue({ provider: "supabase", areas: [PERSISTED_AREA] });
-      mockSyncJournaledReviewEntry.mockRejectedValue(new TypeError("Failed to fetch"));
+      expect(
+        (await listPendingWritesActual("review"))[0]?.owner_user_id,
+      ).toBeUndefined();
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockSyncJournaledReviewEntry.mockRejectedValue(
+        new TypeError("Failed to fetch"),
+      );
       let releaseSnapshot!: () => void;
       let snapshotStarted!: () => void;
-      const snapshotReached = new Promise<void>((resolve) => { snapshotStarted = resolve; });
+      const snapshotReached = new Promise<void>((resolve) => {
+        snapshotStarted = resolve;
+      });
       if (switchPoint === "before replay") {
-        const hold = new Promise<void>((resolve) => { releaseSnapshot = resolve; });
+        const hold = new Promise<void>((resolve) => {
+          releaseSnapshot = resolve;
+        });
         let held = false;
         mockListPendingWrites.mockImplementation(async (entity) => {
           const pending = await listPendingWritesActual(entity);
@@ -3440,36 +3460,68 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
           return pending;
         });
       }
-      render(<WorkflowProvider><Harness /></WorkflowProvider>);
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
       if (switchPoint === "before replay") {
-        await act(async () => { await snapshotReached; });
+        await act(async () => {
+          await snapshotReached;
+        });
         expect(mockSyncJournaledReviewEntry).not.toHaveBeenCalled();
       } else {
-        await waitFor(() => expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent("true"));
+        await waitFor(() =>
+          expect(
+            screen.getByTestId("areas-readback-settled"),
+          ).toHaveTextContent("true"),
+        );
         expect(mockSyncJournaledReviewEntry).toHaveBeenCalled();
       }
       expect(closedDayTiers().journalled).toContain(day);
-      expect((await listPendingWritesActual("review"))[0]?.owner_user_id).toBeUndefined();
+      expect(
+        (await listPendingWritesActual("review"))[0]?.owner_user_id,
+      ).toBeUndefined();
 
       const otherUser = "77777777-7777-4777-8777-777777777777";
       async function changeOwner(userId: string) {
         const readsBefore = mockListPendingWrites.mock.results.length;
-        mockGetUser.mockResolvedValue({ data: { user: { id: userId } }, error: null });
-        await act(async () => { authListener.callback?.("USER_UPDATED", { user: { id: userId } }); });
+        mockGetUser.mockResolvedValue({
+          data: { user: { id: userId } },
+          error: null,
+        });
+        await act(async () => {
+          authListener.callback?.("USER_UPDATED", { user: { id: userId } });
+        });
         await settleJournalReads(readsBefore);
       }
       await changeOwner(otherUser);
       if (switchPoint === "before replay") {
-        await act(async () => { releaseSnapshot(); });
-        await waitFor(() => expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent("true"));
+        await act(async () => {
+          releaseSnapshot();
+        });
+        await waitFor(() =>
+          expect(
+            screen.getByTestId("areas-readback-settled"),
+          ).toHaveTextContent("true"),
+        );
       }
-      mockSyncJournaledReviewEntry.mockReset().mockResolvedValue({ provider: "supabase" });
+      mockSyncJournaledReviewEntry
+        .mockReset()
+        .mockResolvedValue({ provider: "supabase", userId: otherUser });
       const bRead = accountReviewRead([day]);
-      bRead.reviewEntries = bRead.reviewEntries.map((entry) => ({ ...entry, user_id: otherUser }));
+      bRead.reviewEntries = bRead.reviewEntries.map((entry) => ({
+        ...entry,
+        user_id: otherUser,
+      }));
       mockListExecutionReviewItems.mockResolvedValue(bRead);
       const bReads = mockListPendingWrites.mock.results.length;
       fireEvent.click(screen.getByText("Retry pending writes"));
-      await waitFor(() => expect(screen.getByTestId("retry-settled-count")).toHaveTextContent("1"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "1",
+        ),
+      );
       await settleJournalReads(bReads);
       expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
       expect(await listPendingWritesActual("review")).toHaveLength(0);
@@ -3478,7 +3530,11 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
       mockListExecutionReviewItems.mockResolvedValue(accountReviewRead());
       await changeOwner(PERSISTED_AREA.user_id);
       fireEvent.click(screen.getByText("Retry pending writes"));
-      await waitFor(() => expect(screen.getByTestId("retry-settled-count")).toHaveTextContent("2"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "2",
+        ),
+      );
       await settleJournalReads(0);
       expect(closedDayTiers().account).not.toContain(day);
       expect(closedDayTiers().journalled).not.toContain(day);
@@ -3490,37 +3546,86 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
     "W7-16: a delayed receipt belongs to %s after the visible account changes to B",
     async (deliveredTo) => {
       setDeviceAccount(null);
-      await journalReviewWrite({ workflowAreaId: null, persistedAreaId: null, reviewType: "daily", periodStart: day, periodEnd: day, summaryJson: {} });
-      mockListAreas.mockResolvedValue({ provider: "supabase", areas: [PERSISTED_AREA] });
-      let acknowledge!: (value: { provider: "supabase"; userId: string }) => void;
-      mockSyncJournaledReviewEntry.mockReturnValue(new Promise((resolve) => { acknowledge = resolve; }));
-      render(<WorkflowProvider><Harness /></WorkflowProvider>);
-      await waitFor(() => expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1));
-      expect((await listPendingWritesActual("review"))[0]?.owner_user_id).toBeUndefined();
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      let acknowledge!: (value: {
+        provider: "supabase";
+        userId: string;
+      }) => void;
+      mockSyncJournaledReviewEntry.mockReturnValue(
+        new Promise((resolve) => {
+          acknowledge = resolve;
+        }),
+      );
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1),
+      );
+      expect(
+        (await listPendingWritesActual("review"))[0]?.owner_user_id,
+      ).toBeUndefined();
       const otherUser = "77777777-7777-4777-8777-777777777777";
       async function changeOwner(userId: string) {
         const readsBefore = mockListPendingWrites.mock.results.length;
-        mockGetUser.mockResolvedValue({ data: { user: { id: userId } }, error: null });
-        await act(async () => { authListener.callback?.("USER_UPDATED", { user: { id: userId } }); });
+        mockGetUser.mockResolvedValue({
+          data: { user: { id: userId } },
+          error: null,
+        });
+        await act(async () => {
+          authListener.callback?.("USER_UPDATED", { user: { id: userId } });
+        });
         await settleJournalReads(readsBefore);
       }
       await changeOwner(otherUser);
-      const receiptOwner = deliveredTo === "A" ? PERSISTED_AREA.user_id : otherUser;
-      await act(async () => { acknowledge({ provider: "supabase", userId: receiptOwner }); });
-      await waitFor(() => expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent("true"));
+      const receiptOwner =
+        deliveredTo === "A" ? PERSISTED_AREA.user_id : otherUser;
+      await act(async () => {
+        acknowledge({ provider: "supabase", userId: receiptOwner });
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
       expect(await listPendingWritesActual("review")).toHaveLength(0);
 
       fireEvent.click(screen.getByText("Retry pending writes"));
-      await waitFor(() => expect(screen.getByTestId("retry-settled-count")).toHaveTextContent("1"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "1",
+        ),
+      );
       await settleJournalReads(0);
       expect(closedDayTiers().account).not.toContain(day);
-      expect(closedDayTiers().journalled?.includes(day)).toBe(deliveredTo === "B");
+      expect(closedDayTiers().journalled?.includes(day)).toBe(
+        deliveredTo === "B",
+      );
       await changeOwner(PERSISTED_AREA.user_id);
       fireEvent.click(screen.getByText("Retry pending writes"));
-      await waitFor(() => expect(screen.getByTestId("retry-settled-count")).toHaveTextContent("2"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "2",
+        ),
+      );
       await settleJournalReads(0);
       expect(closedDayTiers().account).not.toContain(day);
-      expect(closedDayTiers().journalled?.includes(day)).toBe(deliveredTo === "A");
+      expect(closedDayTiers().journalled?.includes(day)).toBe(
+        deliveredTo === "A",
+      );
       expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
     },
   );
