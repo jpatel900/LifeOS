@@ -70,6 +70,38 @@ describe("Google Calendar server persistence helpers", () => {
       "google_calendar_connections",
     );
     expect(eq).toHaveBeenCalledWith("user_id", user.id);
+    expect(result.connection?.credential_verified_at).toBeNull();
+    expect(select).toHaveBeenCalledWith(
+      expect.stringContaining("credential_verified_at"),
+    );
+  });
+
+  it("persists and reads verification only through the service client", async () => {
+    const verifiedAt = "2026-10-25T12:00:00.000Z";
+    const row = {
+      ...storedConnection,
+      connected_at: verifiedAt,
+      credential_verified_at: verifiedAt,
+    };
+    const single = vi.fn().mockResolvedValue({ data: row, error: null });
+    const select = vi.fn().mockReturnValue({
+      single,
+      eq: vi.fn().mockReturnValue({ maybeSingle: single }),
+    });
+    const upsert = vi.fn().mockReturnValue({ select });
+    mocks.requireSupabaseServiceRoleClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ upsert, select }),
+    });
+    await upsertGoogleCalendarConnectionForAccessToken("token", {
+      ...row,
+      status: "connected",
+    });
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ credential_verified_at: verifiedAt }),
+      { onConflict: "user_id" },
+    );
+    const read = await getGoogleCalendarStoredConnectionForAccessToken("token");
+    expect(read.connection?.credential_verified_at).toBe(verifiedAt);
   });
 
   it("rejects service-role connection upserts for a different authenticated user", async () => {

@@ -13,10 +13,10 @@ import {
 } from "@/lib/googleCalendar/events";
 import {
   claimGoogleCalendarApprovalForAccessToken,
+  type CalendarAbsenceAttempt,
   updateExternalWriteEventResultForAccessToken,
 } from "@/lib/externalWrites/server";
 import {
-  findGoogleBackedScheduledBlockForTaskForAccessToken,
   getCalendarBlockForProposalForAccessToken,
   getTaskForAccessToken,
   getTimeBlockProposalForAccessToken,
@@ -62,7 +62,7 @@ function mapCreateEventFailure(error: unknown) {
     return {
       status: 409,
       error:
-        "This calendar approval conflicts with an earlier approval or its saved details changed. Retry the original proposal with the same calendar connection, or cancel its event before approving another time.",
+        "This calendar approval conflicts with an earlier approval or its saved details changed. Review the earlier event on its original Google Calendar. Reconnecting does not clear an unresolved approval. Local planning remains available.",
     };
   }
   // #670: the raw message is only inspected to pick a status; the client
@@ -173,6 +173,21 @@ export async function POST(request: Request) {
     }
 
     if (
+      !connection.connected_at ||
+      !connection.credential_verified_at ||
+      !sameInstant(connection.credential_verified_at, connection.connected_at)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Reconnect Google Calendar to verify this connection before creating events. Local planning remains available.",
+        },
+        { status: 409 },
+      );
+    }
+
+    if (
       !connection.first_write_warning_acknowledged_at &&
       !input.acknowledge_first_write_warning
     ) {
@@ -236,25 +251,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Calendar hunt #1: one Google event per task. A sibling proposal of a
-    // task that is already on Google Calendar must not create a second one.
-    if (proposal.task_id) {
-      const googleBackedBlock =
-        await findGoogleBackedScheduledBlockForTaskForAccessToken(
-          accessToken,
-          proposal.task_id,
-        );
-      if (googleBackedBlock) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error:
-              "This task already has a Google Calendar event. Cancel that event first if you want a different time.",
-          },
-          { status: 409 },
-        );
-      }
-    }
+    // The atomic claim owns sibling exclusion and stale-block recovery.
+    // An early local-block check would hide provider absence from that path.
 
     const task = proposal.task_id
       ? await getTaskForAccessToken(accessToken, proposal.task_id)
@@ -308,27 +306,45 @@ export async function POST(request: Request) {
       );
     } catch (error) {
       // A finished sibling attempt still reserves this task. Ask Google: if
-      // every such sibling's event is gone (not found or cancelled), nothing
-      // could be duplicated, so claim again with those siblings vouched for.
+      // every originating event is gone, ask the RPC to revalidate the exact
+      // checked attempts. Any newer pending or finished attempt still blocks.
       const checkable =
         error &&
         typeof error === "object" &&
-        "checkableProposalIds" in error &&
-        Array.isArray(error.checkableProposalIds)
-          ? (error.checkableProposalIds as string[])
+        "checkableAttempts" in error &&
+        Array.isArray(error.checkableAttempts)
+          ? (error.checkableAttempts as CalendarAbsenceAttempt[])
           : [];
       if (!checkable.length) throw error;
-      for (const siblingId of checkable) {
+      // "primary" alone does not identify a Google account. Require every
+      // attempt to originate from this exact connection generation/calendar.
+      if (
+        checkable.some(
+          (attempt) =>
+            attempt.connectionId !== connection.id ||
+            attempt.calendarId !== connection.calendar_id ||
+            !connection.connected_at ||
+            !sameInstant(attempt.connectedAt, connection.connected_at),
+        )
+      )
+        throw error;
+      for (const siblingId of new Set(
+        checkable.map((attempt) => attempt.proposalId),
+      )) {
         const gone = await isProposalEventGoneFromGoogle({
           connection,
           proposalId: siblingId,
+          providerAccessToken,
           supabaseAccessToken: accessToken,
         });
         if (!gone) throw error;
       }
       auditEvent = await claimGoogleCalendarApprovalForAccessToken(
         accessToken,
-        { ...claim, absentProposalIds: checkable },
+        {
+          ...claim,
+          absentAttemptIds: checkable.map((attempt) => attempt.auditId),
+        },
       );
     }
     auditEventId = auditEvent.id;

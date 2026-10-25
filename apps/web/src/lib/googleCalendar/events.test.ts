@@ -46,6 +46,24 @@ describe("Google Calendar event insert helper", () => {
     );
   });
 
+  it("checks absence with the already resolved token on the exact calendar", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 404 }));
+    const gone = await isProposalEventGoneFromGoogle({
+      connection: { ...connection, calendar_id: "synthetic calendar" },
+      proposalId: "550e8400-e29b-41d4-a716-446655440501",
+      supabaseAccessToken: "supabase-access-token",
+      providerAccessToken: "fixed-provider-token",
+    });
+    expect(gone).toBe(true);
+    expect(mocks.resolveGoogleCalendarAccessToken).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      "https://www.googleapis.com/calendar/v3/calendars/synthetic%20calendar/events/lifeos550e8400e29b41d4a716446655440501",
+      expect.objectContaining({
+        headers: { Authorization: "Bearer fixed-provider-token" },
+      }),
+    );
+  });
+
   it("maps a local proposal to a minimal Google Calendar event insert body", async () => {
     const proposalId = "550e8400-e29b-41d4-a716-446655440501";
     vi.mocked(fetch).mockResolvedValue(

@@ -2,6 +2,7 @@ import {
   ExternalWriteEventSchema,
   type ExternalWriteEvent,
 } from "@lifeos/schemas";
+import { z } from "zod";
 import {
   requireSupabaseServiceRoleClient,
   requireSupabaseServerUser,
@@ -12,6 +13,30 @@ const externalWriteEventColumns =
 
 export const EXTERNAL_WRITE_FAILURE_INCIDENT_WINDOW_MS = 30 * 60 * 1000;
 export const EXTERNAL_WRITE_FAILURE_INCIDENT_THRESHOLD = 3;
+
+export const CalendarAbsenceAttemptsSchema = z.array(
+  z
+    .object({
+      auditId: z.string().uuid(),
+      proposalId: z.string().uuid(),
+      connectionId: z.string().uuid(),
+      connectedAt: z.string().datetime({ offset: true }),
+      calendarId: z.string().min(1),
+    })
+    .strict(),
+);
+export type CalendarAbsenceAttempt = z.infer<
+  typeof CalendarAbsenceAttemptsSchema
+>[number];
+
+function parseCalendarAbsenceAttempts(details: string) {
+  if (!details.startsWith("checkable-v2:")) return [];
+  try {
+    return CalendarAbsenceAttemptsSchema.parse(JSON.parse(details.slice(13)));
+  } catch {
+    return [];
+  }
+}
 
 type ExternalWriteUpdateChain = {
   eq: (column: string, value: string) => ExternalWriteUpdateChain;
@@ -211,8 +236,8 @@ export async function claimGoogleCalendarApprovalForAccessToken(
     connectedAt: string | null;
     calendarId: string;
     requestSummary: Record<string, unknown>;
-    /** Sibling proposals whose events Google just confirmed are gone. */
-    absentProposalIds?: string[];
+    /** Exact finished attempts whose originating events Google confirmed gone. */
+    absentAttemptIds?: string[];
   },
 ) {
   assertServerRuntime();
@@ -231,27 +256,20 @@ export async function claimGoogleCalendarApprovalForAccessToken(
     p_connected_at: row.connectedAt,
     p_calendar_id: row.calendarId,
     p_request_summary: row.requestSummary,
-    ...(row.absentProposalIds?.length
-      ? { p_absent_proposal_ids: row.absentProposalIds }
+    ...(row.absentAttemptIds?.length
+      ? { p_absent_attempt_ids: row.absentAttemptIds }
       : {}),
   });
   if (error) {
     if (error.code === "PCA01") {
-      // The RPC names finished sibling attempts the route may check with
-      // Google ("checkable:<id>,<id>"). Anything else is not checkable.
+      // Legacy proposal-wide vouchers and malformed origin data fail closed.
       const details =
         "details" in error && typeof error.details === "string"
           ? error.details
           : "";
-      const checkableProposalIds = details.startsWith("checkable:")
-        ? details
-            .slice("checkable:".length)
-            .split(",")
-            .filter((id) => /^[0-9a-f-]{36}$/i.test(id))
-        : [];
       throw Object.assign(new Error("Calendar approval conflict."), {
         code: "CALENDAR_APPROVAL_CONFLICT",
-        checkableProposalIds,
+        checkableAttempts: parseCalendarAbsenceAttempts(details),
       });
     }
     throw new Error(getSupabaseMessage(error));

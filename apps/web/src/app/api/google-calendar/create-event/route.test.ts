@@ -123,6 +123,7 @@ const connection = {
   status: "connected" as const,
   first_write_warning_acknowledged_at: "2026-05-09T00:00:00.000Z",
   connected_at: "2026-05-09T00:00:00.000Z",
+  credential_verified_at: "2026-05-09T00:00:00.000Z",
   disconnected_at: null,
   token_expires_at: "2026-05-09T01:00:00.000Z",
   token_type: "Bearer",
@@ -211,14 +212,146 @@ describe("google-calendar create-event route", () => {
     expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
   });
 
+  describe("W7-6 absence evidence", () => {
+    const sibling = "550e8400-e29b-41d4-a716-446655440599";
+    const attempt = {
+      auditId: "550e8400-e29b-41d4-a716-446655440799",
+      proposalId: sibling,
+      connectionId: connection.id,
+      connectedAt: connection.connected_at,
+      calendarId: connection.calendar_id,
+    };
+    const conflict = (attempts = [attempt]) =>
+      Object.assign(new Error("Calendar approval conflict."), {
+        code: "CALENDAR_APPROVAL_CONFLICT",
+        checkableAttempts: attempts,
+      });
+    const approve = () =>
+      POST(
+        request({
+          proposal_id: proposal.id,
+          approved: true,
+          approved_start: proposal.proposed_start,
+          approved_end: proposal.proposed_end,
+        }),
+      );
+
+    it("refuses existing unverified token pairs before probing or writing", async () => {
+      mocks.getGoogleCalendarStoredConnectionForAccessToken.mockResolvedValue({
+        connection: {
+          ...connection,
+          credential_verified_at: null,
+          encrypted_access_token: "account-b-access",
+          encrypted_refresh_token: "account-a-refresh",
+        },
+      });
+      mocks.isProposalEventGoneFromGoogle.mockResolvedValue(true);
+      expect((await approve()).status).toBe(409);
+      expect(
+        mocks.resolveGoogleCalendarWriteAccessToken,
+      ).not.toHaveBeenCalled();
+      expect(mocks.isProposalEventGoneFromGoogle).not.toHaveBeenCalled();
+      expect(
+        mocks.insertGoogleCalendarEventForConnection,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("passes exact checked attempt IDs and stops when a newer attempt makes reclaim conflict", async () => {
+      mocks.claimGoogleCalendarApprovalForAccessToken
+        .mockRejectedValueOnce(conflict())
+        .mockRejectedValueOnce(
+          conflict([
+            { ...attempt, auditId: "550e8400-e29b-41d4-a716-446655440798" },
+          ]),
+        );
+      mocks.isProposalEventGoneFromGoogle.mockResolvedValue(true);
+      const response = await approve();
+      expect(response.status).toBe(409);
+      expect(
+        mocks.claimGoogleCalendarApprovalForAccessToken,
+      ).toHaveBeenCalledTimes(2);
+      expect(
+        mocks.claimGoogleCalendarApprovalForAccessToken,
+      ).toHaveBeenLastCalledWith(
+        "supabase-access-token",
+        expect.objectContaining({ absentAttemptIds: [attempt.auditId] }),
+      );
+      expect(mocks.isProposalEventGoneFromGoogle).toHaveBeenCalledWith(
+        expect.objectContaining({ providerAccessToken: "google-access-token" }),
+      );
+      expect(
+        mocks.insertGoogleCalendarEventForConnection,
+      ).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { connectedAt: "2026-05-08T00:00:00.000Z" },
+      { calendarId: "different-calendar" },
+      { connectionId: "550e8400-e29b-41d4-a716-446655440999" },
+    ])("never probes a different origin: %j", async (differentOrigin) => {
+      const error = Object.assign(
+        conflict([{ ...attempt, ...differentOrigin }]),
+        {
+          // Old proposal-only details must never override origin-bound evidence.
+          checkableProposalIds: [sibling],
+        },
+      );
+      mocks.claimGoogleCalendarApprovalForAccessToken.mockRejectedValueOnce(
+        error,
+      );
+      mocks.isProposalEventGoneFromGoogle.mockResolvedValue(true);
+      const response = await approve();
+      expect(response.status).toBe(409);
+      expect(mocks.isProposalEventGoneFromGoogle).not.toHaveBeenCalled();
+      expect(
+        mocks.insertGoogleCalendarEventForConnection,
+      ).not.toHaveBeenCalled();
+    });
+
+    it.each(["scheduled", "running"])(
+      "lets the atomic claim reconcile a stale %s sibling block",
+      async (status) => {
+        mocks.findGoogleBackedScheduledBlockForTaskForAccessToken.mockResolvedValue(
+          {
+            ...block,
+            proposal_id: sibling,
+            status,
+            google_event_id: `lifeos${sibling.replace(/-/g, "")}`,
+          },
+        );
+        mocks.claimGoogleCalendarApprovalForAccessToken.mockRejectedValueOnce(
+          conflict(),
+        );
+        mocks.isProposalEventGoneFromGoogle.mockResolvedValue(true);
+        const response = await approve();
+        expect(response.status).toBe(200);
+        expect(
+          mocks.claimGoogleCalendarApprovalForAccessToken,
+        ).toHaveBeenCalledTimes(2);
+        expect(
+          mocks.insertGoogleCalendarEventForConnection,
+        ).toHaveBeenCalledTimes(1);
+      },
+    );
+  });
+
   // Review round 3: a finished sibling attempt is released only after Google
   // itself confirms that sibling's event is gone (cases 2 and 3).
   describe("asking Google about a finished sibling attempt", () => {
     const sibling = "550e8400-e29b-41d4-a716-446655440599";
+    const auditId = "550e8400-e29b-41d4-a716-446655440799";
     const conflict = () =>
       Object.assign(new Error("Calendar approval conflict."), {
         code: "CALENDAR_APPROVAL_CONFLICT",
-        checkableProposalIds: [sibling],
+        checkableAttempts: [
+          {
+            auditId,
+            proposalId: sibling,
+            connectionId: connection.id,
+            connectedAt: connection.connected_at,
+            calendarId: connection.calendar_id,
+          },
+        ],
       });
     const approve = () =>
       POST(
@@ -240,13 +373,14 @@ describe("google-calendar create-event route", () => {
       expect(mocks.isProposalEventGoneFromGoogle).toHaveBeenCalledWith({
         connection,
         proposalId: sibling,
+        providerAccessToken: "google-access-token",
         supabaseAccessToken: "supabase-access-token",
       });
       expect(
         mocks.claimGoogleCalendarApprovalForAccessToken,
       ).toHaveBeenLastCalledWith(
         "supabase-access-token",
-        expect.objectContaining({ absentProposalIds: [sibling] }),
+        expect.objectContaining({ absentAttemptIds: [auditId] }),
       );
       expect(
         mocks.insertGoogleCalendarEventForConnection,
@@ -270,7 +404,7 @@ describe("google-calendar create-event route", () => {
 
     it("does not ask Google when the conflict names nothing checkable", async () => {
       mocks.claimGoogleCalendarApprovalForAccessToken.mockRejectedValue(
-        Object.assign(conflict(), { checkableProposalIds: [] }),
+        Object.assign(conflict(), { checkableAttempts: [] }),
       );
       const response = await approve();
       expect(response.status).toBe(409);
@@ -293,7 +427,7 @@ describe("google-calendar create-event route", () => {
       releasePrechecks = resolve;
     });
     let prechecks = 0;
-    mocks.findGoogleBackedScheduledBlockForTaskForAccessToken.mockImplementation(
+    mocks.getCalendarBlockForProposalForAccessToken.mockImplementation(
       async () => {
         if (++prechecks === 2) releasePrechecks();
         await bothPrechecked;
@@ -728,12 +862,10 @@ describe("google-calendar create-event route", () => {
   });
 
   it("refuses a second Google event for a task that already has one (calendar hunt #1)", async () => {
-    mocks.findGoogleBackedScheduledBlockForTaskForAccessToken.mockResolvedValue(
-      {
-        ...block,
-        id: "550e8400-e29b-41d4-a716-446655440602",
-        proposal_id: "550e8400-e29b-41d4-a716-446655440502",
-      },
+    mocks.claimGoogleCalendarApprovalForAccessToken.mockRejectedValue(
+      Object.assign(new Error("Calendar approval conflict"), {
+        code: "CALENDAR_APPROVAL_CONFLICT",
+      }),
     );
 
     const response = await POST(
@@ -747,13 +879,10 @@ describe("google-calendar create-event route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(409);
-    expect(body.error).toContain("already has a Google Calendar event");
-    expect(
-      mocks.findGoogleBackedScheduledBlockForTaskForAccessToken,
-    ).toHaveBeenCalledWith("supabase-access-token", proposal.task_id);
+    expect(body.error).toContain("conflicts with an earlier approval");
     expect(
       mocks.claimGoogleCalendarApprovalForAccessToken,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledTimes(1);
     expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
   });
 

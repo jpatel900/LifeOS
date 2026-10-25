@@ -4,6 +4,7 @@ import { resolveGoogleCalendarAccessToken } from "./freebusy";
 interface GoogleCalendarEventReadParams {
   connection: GoogleCalendarStoredConnection;
   eventId: string;
+  providerAccessToken?: string;
   supabaseAccessToken: string;
 }
 
@@ -160,11 +161,13 @@ function buildDeterministicGoogleEventId(proposalId: string) {
 export async function isProposalEventGoneFromGoogle(params: {
   connection: GoogleCalendarStoredConnection;
   proposalId: string;
+  providerAccessToken?: string;
   supabaseAccessToken: string;
 }): Promise<boolean> {
   const read = await getGoogleCalendarEventForConnection({
     connection: params.connection,
     eventId: buildDeterministicGoogleEventId(params.proposalId),
+    providerAccessToken: params.providerAccessToken,
     supabaseAccessToken: params.supabaseAccessToken,
   });
   return !read.exists || read.status === "cancelled";
@@ -175,10 +178,12 @@ export async function getGoogleCalendarEventForConnection(
 ): Promise<GoogleCalendarEventReadResult> {
   assertServerRuntime();
 
-  const accessToken = await resolveGoogleCalendarAccessToken({
-    connection: params.connection,
-    supabaseAccessToken: params.supabaseAccessToken,
-  });
+  const accessToken =
+    params.providerAccessToken ??
+    (await resolveGoogleCalendarAccessToken({
+      connection: params.connection,
+      supabaseAccessToken: params.supabaseAccessToken,
+    }));
   const calendarId = encodeURIComponent(params.connection.calendar_id);
   const eventId = encodeURIComponent(params.eventId);
   const response = await fetch(

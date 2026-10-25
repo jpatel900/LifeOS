@@ -1,6 +1,6 @@
 -- Run only against an isolated, migrated test database (see
--- calendar_approval_guard.sql). Review round 3 (#1105): no case may leave a
--- task blocked with no way out.
+-- calendar_approval_guard.sql). Recovery requires proven originating credentials;
+-- legacy or reconnected origins remain protected when identity cannot be proved.
 begin;
 
 create function pg_temp.claim2(p_user uuid, p_proposal uuid, p_task uuid, p_connection uuid)
@@ -37,6 +37,7 @@ begin
   from (values (first,t),(sibling,t),(late,t),(other,t2)) as v(id,task);
   insert into public.google_calendar_connections(id,user_id,status,connected_at,first_write_warning_acknowledged_at,encrypted_refresh_token)
   values (c,u,'connected','2026-05-09T00:00:00Z','2026-05-09T00:00:00Z','fixture-only');
+  update public.google_calendar_connections set credential_verified_at=connected_at where id=c;
 
   -- Case 4: a legacy attempt whose proposal row was deleted reserves no
   -- other proposal. It must not block an unrelated task's approval.
@@ -55,14 +56,15 @@ begin
     raise exception 'Unverified sibling was released';
   exception when sqlstate 'PCA01' then
     get stacked diagnostics message = message_text, detail = pg_exception_detail;
-    if detail is distinct from 'checkable:' || first::text then
+    if detail not like 'checkable-v2:%'
+       or substring(detail from 14)::jsonb->0->>'auditId' is distinct from claimed->>'id' then
       raise exception 'Conflict did not name the checkable sibling: %', detail;
     end if;
   end;
   -- The route confirmed with Google that the first event is gone.
   perform public.claim_google_calendar_approval(
     u, sibling, t, '2026-05-10T16:00:00Z', '2026-05-10T17:00:00Z', c,
-    '2026-05-09T00:00:00Z', 'primary', '{}'::jsonb, array[first]);
+    '2026-05-09T00:00:00Z', 'primary', '{}'::jsonb, array[(claimed->>'id')::uuid]);
 
   -- A pending attempt may still be in flight: vouching cannot release it.
   begin

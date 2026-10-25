@@ -53,6 +53,7 @@ begin
   values (legacy_proposal,u,a,legacy_task,'2026-05-10T16:00:00Z','2026-05-10T17:00:00Z');
   insert into public.google_calendar_connections(id,user_id,status,connected_at,first_write_warning_acknowledged_at,encrypted_refresh_token)
   values (c,u,'connected','2026-05-09T00:00:00Z','2026-05-09T00:00:00Z','fixture-only');
+  update public.google_calendar_connections set credential_verified_at=connected_at where id=c;
 
   insert into public.external_write_events(user_id,area_id,provider,operation,target_type,target_id,request_summary_json,result_status)
   values(u,a,'google_calendar','calendar.events.insert','time_block_proposal',legacy_proposal::text,
@@ -119,8 +120,18 @@ begin
     raise exception 'Cancellation after reconnect released original account';
   exception when sqlstate 'PCA01' then null; end;
   update public.google_calendar_connections set connected_at='2026-05-09T00:00:00Z' where id=c;
-  -- Matching confirmed cancellation permits a new proposal/event ID.
-  perform pg_temp.claim(u,sibling,t,c);
+  -- A successful deletion still cannot release a pending insert.
+  begin
+    perform pg_temp.claim(u,sibling,t,c);
+    raise exception 'Deletion waived a pending insert';
+  exception when sqlstate 'PCA01' then null; end;
+  update public.external_write_events set result_status='succeeded'
+    where id=(retry_claim->>'id')::uuid;
+  -- Both attempts finished and the route freshly checked their event.
+  perform public.claim_google_calendar_approval(u,sibling,t,
+    '2026-05-10T16:00:00Z','2026-05-10T17:00:00Z',c,
+    '2026-05-09T00:00:00Z','primary','{}',
+    array[(first_claim->>'id')::uuid,(retry_claim->>'id')::uuid]);
 
   update public.google_calendar_connections set connected_at='2026-05-11T00:00:00Z' where id=c;
   begin
@@ -168,6 +179,7 @@ begin
   from (values (p3,t3),(s3,t3),(p4,t4),(s4,t4),(p5,t5),(s5,t5)) as v(id,task);
   insert into public.google_calendar_connections(id,user_id,status,connected_at,first_write_warning_acknowledged_at,encrypted_refresh_token)
   values (c,u,'connected','2026-05-09T00:00:00Z','2026-05-09T00:00:00Z','fixture-only');
+  update public.google_calendar_connections set credential_verified_at=connected_at where id=c;
 
   claim3 := pg_temp.claim(u,p3,t3,c);
   update public.external_write_events
