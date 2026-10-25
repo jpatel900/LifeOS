@@ -101,6 +101,28 @@ export async function snapshotRecoveryId(
   ).join("");
 }
 
+/** Explicit browser reset removes content but keeps ownership fences for
+ * stale sources retained in other tabs. Normal account writes never prune.
+ */
+export async function clearSnapshotRecoveryPayloads(): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  const db = await openDatabase();
+  try {
+    const transaction = db.transaction(STORE, "readwrite");
+    const done = transactionDone(transaction);
+    const store = transaction.objectStore(STORE);
+    const request = store.getAll();
+    request.onsuccess = () => {
+      for (const record of request.result as SnapshotRecovery[]) {
+        store.put({ id: record.id, scope: record.scope, owner: record.owner });
+      }
+    };
+    await done;
+  } finally {
+    db.close();
+  }
+}
+
 /** Test isolation only. Product reset must retain ownership tombstones. */
 export async function clearSnapshotRecoveriesForTests(): Promise<void> {
   const db = await openDatabase();

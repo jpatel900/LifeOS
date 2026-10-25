@@ -272,6 +272,7 @@ export async function claimAnonymousSnapshots(
         memoryOwners[scope] = reserved.owner;
         continue;
       }
+      if (!reserved.state) continue;
       source = reserved.state ?? source;
       receipts.add(reserved.id);
       storageBlocked = true;

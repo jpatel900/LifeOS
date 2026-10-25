@@ -1,4 +1,5 @@
 "use client";
+import { clearSnapshotRecoveryPayloads } from "./workflowContext/snapshotRecovery";
 
 import {
   createContext,
@@ -316,6 +317,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [],
   );
   const clearHeldSnapshots = useCallback(() => {
+    pendingSnapshotClaim.current = null;
     heldSnapshots.current.clear();
     memorySourceOwners.current = {};
     snapshot.current = null;
@@ -3947,6 +3949,7 @@ function AccountWorkflowProvider({
         clearQueue(),
         clearStoredTaskDrafts(),
         clearPendingWrites(),
+        clearSnapshotRecoveryPayloads(),
       ]);
       for (
         let index = window.sessionStorage.length - 1;

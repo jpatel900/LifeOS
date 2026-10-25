@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearSnapshotRecoveriesForTests,
+  clearSnapshotRecoveryPayloads,
   listSnapshotRecoveries,
 } from "./snapshotRecovery";
 import {
@@ -322,6 +323,28 @@ describe("account snapshots", () => {
         .map((capture) => capture.raw_text)
         .sort(),
     ).toEqual(["First copied tab", "Second copied tab"]);
+  });
+
+  it("explicit browser reset clears retained payloads without releasing their owner", async () => {
+    const original = captured("Clear this recovery");
+    storeAccountSnapshot("anonymous", original);
+    const writes = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("quota");
+      });
+    await claimAnonymousSnapshots("account:A");
+    writes.mockRestore();
+    await clearSnapshotRecoveryPayloads();
+    const retained = (await listSnapshotRecoveries())[0];
+    expect(retained?.owner).toBe("account:A");
+    expect(retained?.state).toBeUndefined();
+    expect(
+      (await claimAnonymousSnapshots("account:A")).state.captureItems,
+    ).toEqual([]);
+    expect(
+      (await claimAnonymousSnapshots("account:B")).state.captureItems,
+    ).toEqual([]);
   });
 
   it("preserves original bytes and refuses adoption when fallback transaction aborts", async () => {

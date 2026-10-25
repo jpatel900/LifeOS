@@ -358,7 +358,9 @@ export async function enqueuePendingWrite<
 
     // Same-owner retries retain ownership. Unowned entries keep their
     // existing signed-out handoff policy.
-    const owner = existing?.owner_user_id ?? reservedOwner ?? ownerStamp;
+    const owner = existing
+      ? (existing.owner_user_id ?? reservedOwner)
+      : (reservedOwner ?? ownerStamp);
     const fields =
       owner !== undefined
         ? { ...baseFields, owner_user_id: owner }
