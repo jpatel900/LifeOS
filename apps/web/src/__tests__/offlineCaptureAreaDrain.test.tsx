@@ -250,16 +250,11 @@ describe("W7-8: offline area readiness belongs to the active account", () => {
           }),
       );
       await switchAccount(accountB);
-      let retry!: Promise<void>;
-      act(() => {
-        retry = workflow.retryPendingAccountWrites();
-      });
       await waitFor(() => expect(resolveB).toBeTypeOf("function"));
       const subject = await queueAndDrain();
       await expectHeld(subject.client_capture_id);
       await act(async () => {
         resolveB({ provider: "supabase", areas: [areaB] });
-        await retry;
       });
       await waitFor(async () =>
         expect(await listPendingCaptures()).toHaveLength(0),
@@ -374,12 +369,14 @@ describe("W7-8: offline area readiness belongs to the active account", () => {
       </WorkflowProvider>,
     );
     await waitFor(() => expect(rejectFirst).toBeTypeOf("function"));
-    await act(async () => {
-      await workflow.retryPendingAccountWrites();
+    let retry!: Promise<void>;
+    act(() => {
+      retry = workflow.retryPendingAccountWrites();
     });
     expect(mockSyncQueuedCapture).not.toHaveBeenCalled();
     await act(async () => {
       rejectFirst(new Error("Older account read failed"));
+      await retry;
     });
     await waitFor(async () =>
       expect(await listPendingCaptures()).toHaveLength(0),

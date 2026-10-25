@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RollupSummaryContent } from "@lifeos/schemas";
 import {
   requestRollupProse,
@@ -49,10 +49,17 @@ export function useRollupProseSummaries(
     >
   >({});
 
-  useEffect(() => {
+  // Publish committed inputs before async continuations can send a request.
+  useLayoutEffect(() => {
     currentInputs.current = new Map(
       drafts.map((draft) => [draft.areaId, proseInputKey(draft, periodType)]),
     );
+    return () => {
+      currentInputs.current = null;
+    };
+  }, [drafts, periodType]);
+
+  useEffect(() => {
     const client = createSupabaseBrowserClient();
     let active = true;
     for (const draft of client ? drafts : []) {
@@ -92,7 +99,12 @@ export function useRollupProseSummaries(
       // Cleanup removes this observer, not the request. A replacement effect
       // can observe the same promise after an equivalent projection refresh.
       void request.promise.then((result) => {
-        if (!active || !result?.enhanced) return;
+        if (
+          !active ||
+          !result?.enhanced ||
+          currentInputs.current?.get(draft.areaId) !== inputKey
+        )
+          return;
         setResolved((previous) =>
           previous[draft.areaId]?.inputKey === inputKey
             ? previous
@@ -105,7 +117,6 @@ export function useRollupProseSummaries(
     }
     return () => {
       active = false;
-      currentInputs.current = null;
     };
   }, [drafts, periodType]);
 
