@@ -3,18 +3,168 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildUserDataExport, USER_DATA_EXPORT_TABLES } from "./export";
 
-// The builder reads each table in pages (`.order()` then `.range()`), the
-// way the real PostgREST client does. This fake answers the same calls.
-function pagedSelect(result: {
-  data: unknown[] | null;
-  error: { message?: string } | null;
-}) {
+// A small API-like store: sort and filter the current rows on each request,
+// then apply the response cap. Mutations happen before the next request.
+function changingClient(
+  rowsByTable: Record<string, Record<string, string>[]>,
+  beforeRead: (table: string, page: number) => void,
+  cap = 2,
+) {
+  const pages: Record<string, number> = {};
+  const requests: { table: string; orders: string[]; from: number }[] = [];
+  const client = {
+    from: (table: string) => ({
+      select: () => {
+        const orders: string[] = [];
+        const filters: ((row: Record<string, string>) => boolean)[] = [];
+        const condition = (expression: string, row: Record<string, string>) => {
+          const match = /^(\w+)\.(gt|eq)\.("[^"]*")$/.exec(expression);
+          if (!match) throw new Error(`Unsupported fake filter: ${expression}`);
+          const [, column, operator, literal] = match;
+          const value = JSON.parse(literal) as string;
+          return operator === "gt"
+            ? row[column] > value
+            : row[column] === value;
+        };
+        const query = {
+          order: (column: string, options: { ascending: boolean }) => {
+            expect(options.ascending).toBe(true);
+            orders.push(column);
+            return query;
+          },
+          gt: (column: string, value: string) => {
+            filters.push((row) => row[column] > value);
+            return query;
+          },
+          or: (expression: string) => {
+            const [first, and] = expression.split(",and(");
+            if (!and?.endsWith(")"))
+              throw new Error("Invalid composite filter");
+            filters.push(
+              (row) =>
+                condition(first, row) ||
+                and
+                  .slice(0, -1)
+                  .split(",")
+                  .every((part) => condition(part, row)),
+            );
+            return query;
+          },
+          range: async (from: number, to: number) => {
+            beforeRead(table, (pages[table] = (pages[table] ?? 0) + 1));
+            requests.push({ table, orders, from });
+            const rows = [...(rowsByTable[table] ?? [])]
+              .filter((row) => filters.every((filter) => filter(row)))
+              .sort((a, b) => {
+                for (const column of orders) {
+                  if (a[column] < b[column]) return -1;
+                  if (a[column] > b[column]) return 1;
+                }
+                return 0;
+              });
+            return {
+              data: rows.slice(from, Math.min(to + 1, from + cap)),
+              error: null,
+            };
+          },
+        };
+        return query;
+      },
+    }),
+  };
+  return { client, requests };
+}
+
+describe("export while rows change between pages", () => {
+  it.each(["delete", "insert"])(
+    "%s before the page boundary does not omit or repeat existing rows",
+    async (mutation) => {
+      const tasks = ["02", "04", "06", "08"].map((id) => ({ id }));
+      const { client } = changingClient({ tasks }, (table, page) => {
+        if (table !== "tasks" || page !== 2) return;
+        if (mutation === "delete") tasks.shift();
+        else tasks.unshift({ id: "01" });
+      });
+
+      const result = await buildUserDataExport(client);
+
+      expect(result.tables.tasks).toEqual(
+        ["02", "04", "06", "08"].map((id) => ({ id })),
+      );
+    },
+  );
+
+  it.each([
+    ["brief_views", "viewed_on"],
+    ["purpose_gauge_checkins", "checked_on"],
+  ] as const)(
+    "continues %s through composite key ties",
+    async (table, dateKey) => {
+      const rows = [
+        { user_id: "user-b", [dateKey]: "2026-10-01" },
+        { user_id: "user-a", [dateKey]: "2026-10-03" },
+        { user_id: "user-a", [dateKey]: "2026-10-01" },
+        { user_id: "user-b", [dateKey]: "2026-10-02" },
+        { user_id: "user-a", [dateKey]: "2026-10-02" },
+      ];
+      const expected = [rows[2], rows[4], rows[1], rows[0], rows[3]];
+      const { client, requests } = changingClient(
+        { [table]: rows },
+        (name, page) => {
+          if (name === table && page === 2) rows.splice(2, 1);
+        },
+      );
+
+      const result = await buildUserDataExport(client);
+
+      expect(result.tables[table]).toEqual(expected);
+      const tableRequests = requests.filter(
+        (request) => request.table === table,
+      );
+      expect(tableRequests).toHaveLength(4);
+      expect(
+        tableRequests.every(
+          (request) => request.orders.join(",") === `user_id,${dateKey}`,
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it("can include new rows ahead of the cursor without claiming a snapshot", async () => {
+    const tasks = ["02", "04", "08"].map((id) => ({ id }));
+    const { client } = changingClient({ tasks }, (table, page) => {
+      if (table === "tasks" && page === 2) tasks.push({ id: "06" });
+    });
+
+    expect((await buildUserDataExport(client)).tables.tasks).toEqual(
+      ["02", "04", "06", "08"].map((id) => ({ id })),
+    );
+  });
+});
+
+function pagedSelect(
+  result: { data: unknown[] | null; error: { message?: string } | null },
+  cap = 1000,
+) {
+  let rows = [...(result.data ?? [])] as Record<string, string>[];
   const query = {
-    order: vi.fn((): typeof query => query),
+    order: vi.fn((column: string): typeof query => {
+      rows.sort((a, b) =>
+        a[column] < b[column] ? -1 : a[column] > b[column] ? 1 : 0,
+      );
+      return query;
+    }),
+    gt: vi.fn((column: string, value: string): typeof query => {
+      rows = rows.filter((row) => row[column] > value);
+      return query;
+    }),
+    or: vi.fn((): typeof query => {
+      throw new Error("Use changingClient for composite-key rows");
+    }),
     range: vi.fn(async (from: number, to: number) =>
       result.error
         ? { data: null, error: result.error }
-        : { data: (result.data ?? []).slice(from, to + 1), error: null },
+        : { data: rows.slice(from, Math.min(to + 1, from + cap)), error: null },
     ),
   };
   return query;
@@ -81,17 +231,21 @@ describe("buildUserDataExport", () => {
     type RecordingQuery = {
       order: (column: string) => RecordingQuery;
       range: ReturnType<typeof pagedSelect>["range"];
+      gt: ReturnType<typeof pagedSelect>["gt"];
+      or: ReturnType<typeof pagedSelect>["or"];
     };
     const client = {
       from: vi.fn((table: string) => ({
         select: vi.fn(() => {
-          const { range } = pagedSelect({ data: [], error: null });
+          const { range, gt, or } = pagedSelect({ data: [], error: null });
           const query: RecordingQuery = {
             order: (column: string) => {
               (orders[table] ??= []).push(column);
               return query;
             },
             range,
+            gt,
+            or,
           };
           return query;
         }),
@@ -132,21 +286,12 @@ describe("buildUserDataExport above the API row cap (W3-16 #3)", () => {
       from: vi.fn((table: string) => {
         const rows = rowsByTable[table] ?? [];
         return {
-          select: vi.fn(() => {
-            // Awaiting the select itself is the unpaginated read: capped.
-            const unpaginated: Promise<{
-              data: unknown;
-              error: { message?: string } | null;
-            }> = Promise.resolve({ data: rows.slice(0, cap), error: null });
-            const query = Object.assign(unpaginated, {
-              order: vi.fn((): typeof query => query),
-              range: vi.fn(async (from: number, to: number) => ({
-                data: rows.slice(from, Math.min(to + 1, from + cap)),
-                error: null,
-              })),
-            });
-            return query;
-          }),
+          select: vi.fn(() =>
+            Object.assign(
+              Promise.resolve({ data: rows.slice(0, cap), error: null }),
+              pagedSelect({ data: rows, error: null }, cap),
+            ),
+          ),
         };
       }),
     };

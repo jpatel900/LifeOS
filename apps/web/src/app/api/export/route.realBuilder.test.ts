@@ -37,12 +37,21 @@ function pagedSelect(result: {
   data: unknown[] | null;
   error: { message: string; code?: string } | null;
 }) {
+  let rows = (result.data ?? []) as { id: string }[];
   const query = {
     order: vi.fn((): typeof query => query),
+    gt: vi.fn((column: string, value: string): typeof query => {
+      expect(column).toBe("id");
+      rows = rows.filter((row) => row.id > value);
+      return query;
+    }),
+    or: vi.fn((): typeof query => {
+      throw new Error("This fixture has no composite-key rows");
+    }),
     range: vi.fn(async (from: number, to: number) =>
       result.error
         ? { data: null, error: result.error }
-        : { data: (result.data ?? []).slice(from, to + 1), error: null },
+        : { data: rows.slice(from, to + 1), error: null },
     ),
   };
   return query;
@@ -147,5 +156,56 @@ describe("GET /api/export with the real export builder (W3-16 #7)", () => {
       errorCategory: "auth_rejected",
       error: AUTH_REJECTED_COPY,
     });
+  });
+
+  it("expires on a later page without returning rows already read from that table", async () => {
+    let taskPages = 0;
+    const client = {
+      from: (table: string) => ({
+        select: () => {
+          if (table === FAILING_TABLE && ++taskPages === 2) {
+            return pagedSelect({
+              data: null,
+              error: {
+                message: "JWT expired: provider detail",
+                code: "PGRST301",
+              },
+            });
+          }
+          return pagedSelect({
+            data:
+              table === FAILING_TABLE
+                ? [{ id: "task-private-marker" }]
+                : table === EARLY_TABLE
+                  ? [{ id: "early-private-marker" }]
+                  : [],
+            error: null,
+          });
+        },
+      }),
+    };
+    mocks.requireSupabaseServerUser.mockResolvedValue({
+      client,
+      user: { id: "user-1" },
+    });
+
+    const response = await GET(makeRequest());
+    const text = await response.text();
+
+    expect(taskPages).toBe(2);
+    expect(response.status).toBe(401);
+    expect(JSON.parse(text)).toEqual({
+      ok: false,
+      errorCategory: "auth_rejected",
+      error: AUTH_REJECTED_COPY,
+    });
+    for (const secret of [
+      "task-private-marker",
+      "early-private-marker",
+      "PGRST301",
+      "provider detail",
+    ]) {
+      expect(text).not.toContain(secret);
+    }
   });
 });
