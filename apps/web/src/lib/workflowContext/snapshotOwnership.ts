@@ -1,5 +1,20 @@
 import type { AccountIdAliasFamily, WorkflowState } from "../workflow/shared";
 import { hasDemoSeedId } from "../mockData";
+import type {
+  SnapshotCollection,
+  SnapshotCursor,
+  SnapshotOwner,
+  SnapshotOwnership,
+  SnapshotReceipt,
+  SnapshotStamp,
+} from "./snapshotOwnershipTypes";
+
+export type {
+  SnapshotCollection,
+  SnapshotCursor,
+  SnapshotOwnership,
+  SnapshotReceipt,
+} from "./snapshotOwnershipTypes";
 
 // Delivery obligations belong to actual state transitions, never to a toast or
 // a failed snapshot write. New rows have one creation obligation. Only later
@@ -71,44 +86,24 @@ const deviceCollections = [
   "timeBlockProposalDrafts",
   "projects",
 ] as const;
-export type SnapshotCollection =
+// The literal union lives in the leaf types module; this keeps it exact.
+type DerivedCollection =
   | keyof typeof accountFields
   | (typeof deviceCollections)[number];
+const collectionsMatch: [SnapshotCollection, DerivedCollection] extends [
+  DerivedCollection,
+  SnapshotCollection,
+]
+  ? true
+  : never = true;
+void collectionsMatch;
 const collections: SnapshotCollection[] = [
   ...(Object.keys(accountFields) as (keyof typeof accountFields)[]),
   ...deviceCollections,
 ];
 type Row = { id: string; [key: string]: unknown };
-type Stamp = {
-  revision: number;
-  pending: boolean;
-  acknowledgedAt?: number;
-  /** Came from a saved copy (page reload), not from an edit in this page. */
-  restored?: boolean;
-};
-type Owner = {
-  creation?: Stamp;
-  fields: Record<string, Stamp>;
-  /** The account row version (`updated_at`) this device last read. */
-  base?: string;
-  accountId?: string;
-  inferredIdentity?: boolean;
-  transfers?: SnapshotReceipt[];
-};
-export interface SnapshotCursor {
-  epoch: number;
-  revision: number;
-}
-export interface SnapshotReceipt extends SnapshotCursor {
-  collection: SnapshotCollection;
-  id: string;
-  creation?: number;
-  fields: Record<string, { revision: number; value: unknown }>;
-}
-export interface SnapshotOwnership extends SnapshotCursor {
-  version: 1;
-  rows: Partial<Record<SnapshotCollection, Record<string, Owner>>>;
-}
+type Stamp = SnapshotStamp;
+type Owner = SnapshotOwner;
 const families: Partial<Record<SnapshotCollection, AccountIdAliasFamily>> = {
   captureItems: "captures",
   tasks: "tasks",

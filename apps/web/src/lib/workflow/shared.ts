@@ -27,7 +27,7 @@ import type {
   Phase2MockProject,
   Phase2MockTask,
 } from "../types";
-import type { SnapshotOwnership } from "../workflowContext/snapshotOwnership";
+import type { SnapshotOwnership } from "../workflowContext/snapshotOwnershipTypes";
 
 export const WIP_ENFORCEMENT_POLICY_ID = "wip_enforcement.v1";
 export const WIP_ENFORCEMENT_LIMIT = 3;
