@@ -7,7 +7,10 @@ import "fake-indexeddb/auto";
 import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
-import { setDeviceAccount } from "@/lib/durability/deviceAccount";
+import {
+  getDeviceAccount,
+  setDeviceAccount,
+} from "@/lib/durability/deviceAccount";
 import {
   enqueueCapture,
   listPendingCaptures,
@@ -289,6 +292,65 @@ describe("W7-8: offline area readiness belongs to the active account", () => {
     await waitFor(() => expect(workflow.syncStatus.account).toBe("sync-error"));
     const subject = await queueAndDrain();
     await expectHeld(subject.client_capture_id);
+  });
+
+  it("retries an identity read superseded by a same-account token refresh", async () => {
+    mockListAreas
+      .mockRejectedValueOnce(new Error("First area read failed"))
+      .mockResolvedValue({ provider: "supabase", areas: [persistedArea] });
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(workflow.syncStatus.account).toBe("sync-error"));
+    let resolveIdentity!: (value: unknown) => void;
+    let resolveFreshIdentity!: (value: unknown) => void;
+    mockGetUser
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveIdentity = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFreshIdentity = resolve;
+          }),
+      );
+    const subject = await enqueueCapture({
+      rawText: "Keep the selected account area",
+      areaId: "area-main-job",
+      returnHook: "after lunch",
+    });
+    let retry!: Promise<void>;
+    act(() => {
+      retry = workflow.retryPendingAccountWrites();
+    });
+    await waitFor(() => expect(resolveIdentity).toBeTypeOf("function"));
+    await act(async () => {
+      authListener.callback!("TOKEN_REFRESHED", { user: { id: accountA } });
+      resolveIdentity({ data: { user: { id: accountB } }, error: null });
+      await retry;
+    });
+    await waitFor(() => expect(resolveFreshIdentity).toBeTypeOf("function"));
+    expect(getDeviceAccount()).toBe(accountA);
+    expect(mockListAreas).toHaveBeenCalledTimes(1);
+    await expectHeld(subject.client_capture_id);
+    await act(async () => {
+      resolveFreshIdentity({ data: { user: { id: accountA } }, error: null });
+    });
+    await waitFor(async () =>
+      expect(await listPendingCaptures()).toHaveLength(0),
+    );
+    const sends = (mockSyncQueuedCapture.mock.calls as unknown[][]).filter(
+      (call) =>
+        (call[1] as { client_capture_id: string }).client_capture_id ===
+        subject.client_capture_id,
+    );
+    expect(sends).toHaveLength(1);
+    expect(sends[0]![1]).toMatchObject({ area_id: persistedArea.id });
   });
 
   it.each([accountB, accountA])(

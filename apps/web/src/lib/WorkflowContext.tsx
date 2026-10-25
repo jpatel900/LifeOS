@@ -2161,15 +2161,20 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           // result carries no row owner from which to infer that identity.
           const beforeIdentity = areaAccountRef.current;
           if (client.auth?.getUser) {
+            const identityGeneration = deviceIdentityGenerationRef.current;
             const identity = await client.auth.getUser();
-            if (
-              !mountedRef.current ||
-              beforeIdentity !== areaAccountRef.current
-            )
+            if (!mountedRef.current) return;
+            if (identityGeneration !== deviceIdentityGenerationRef.current) {
+              // Even a same-account token event supersedes this answer.
+              // Request a fresh pass because its area epoch may be unchanged.
+              accountSyncRequestedRef.current = true;
               return;
+            }
+            if (beforeIdentity !== areaAccountRef.current) return;
             if (identity.error) throw identity.error;
             const account = identity.data.user?.id ?? null;
             observeAreaAccount(account);
+            adoptDeviceAccount(account);
             if (!account) {
               markSignedOutLocal();
               return;
