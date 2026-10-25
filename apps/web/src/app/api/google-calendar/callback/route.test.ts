@@ -57,7 +57,7 @@ import { GET } from "./route";
 
 describe("google-calendar callback route", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mocks.getGoogleCalendarConfig.mockReturnValue({
       clientId: "client-id",
       clientSecret: "client-secret",
@@ -80,6 +80,48 @@ describe("google-calendar callback route", () => {
     mocks.encryptGoogleCalendarToken
       .mockReturnValueOnce("encrypted-google-access-token")
       .mockReturnValueOnce("encrypted-google-refresh-token");
+  });
+
+  it("never mixes a new account access token with an unverified old refresh token", async () => {
+    const userId = "550e8400-e29b-41d4-a716-446655440001";
+    mocks.readGoogleCalendarOAuthStateCookie.mockReturnValue({
+      state: "expected-state",
+      userId,
+      accessToken: "supabase-access-token",
+      createdAt: "2026-05-09T00:00:00.000Z",
+    });
+    mocks.isGoogleCalendarOAuthStateValid.mockReturnValue(true);
+    mocks.requireSupabaseServerUser.mockResolvedValue({ user: { id: userId } });
+    mocks.getGoogleCalendarStoredConnectionForAccessToken.mockResolvedValue({
+      connection: {
+        calendar_id: "primary",
+        encrypted_refresh_token: "old-account-refresh-token",
+      },
+    });
+    mocks.exchangeGoogleCalendarCode.mockResolvedValue({
+      accessToken: "new-account-access-token",
+      refreshToken: null,
+      expiresIn: 3600,
+      tokenType: "Bearer",
+      scope: ["https://www.googleapis.com/auth/calendar.events.owned"],
+    });
+    const response = await GET(
+      new Request(
+        "http://localhost/api/google-calendar/callback?state=expected-state&code=synthetic",
+        {
+          headers: { Cookie: "lifeos_google_calendar_oauth=sealed-cookie" },
+        },
+      ),
+    );
+    expect(response.headers.get("location")).toContain(
+      "googleCalendarError=refresh_token_missing",
+    );
+    expect(
+      mocks.upsertGoogleCalendarConnectionForAccessToken,
+    ).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: "connected" }),
+    );
   });
 
   it("rejects invalid callback state", async () => {
@@ -192,6 +234,10 @@ describe("google-calendar callback route", () => {
         user_id: "550e8400-e29b-41d4-a716-446655440001",
       }),
     );
+    const saved =
+      mocks.upsertGoogleCalendarConnectionForAccessToken.mock.calls.at(-1)![1];
+    expect(saved.credential_verified_at).toEqual(saved.connected_at);
+    expect(saved.credential_verified_at).toEqual(expect.any(String));
   });
 
   it("fails safely when Google does not return a refresh token and none is stored", async () => {

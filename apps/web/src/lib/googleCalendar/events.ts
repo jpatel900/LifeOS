@@ -4,6 +4,7 @@ import { resolveGoogleCalendarAccessToken } from "./freebusy";
 interface GoogleCalendarEventReadParams {
   connection: GoogleCalendarStoredConnection;
   eventId: string;
+  providerAccessToken?: string;
   supabaseAccessToken: string;
 }
 
@@ -13,9 +14,24 @@ interface InsertGoogleCalendarEventParams {
   proposalId: string;
   proposedEnd: string;
   proposedStart: string;
+  /**
+   * Google access token already resolved by the caller. The approval route
+   * resolves it BEFORE reserving the approval, so a sign-in refresh failure
+   * (no request ever reached Google) never leaves a durable reservation.
+   */
+  providerAccessToken?: string;
   supabaseAccessToken: string;
   timezone: string;
   title: string;
+}
+
+/** Resolve (refreshing if needed) the Google token for a calendar write. */
+export function resolveGoogleCalendarWriteAccessToken(params: {
+  connection: GoogleCalendarStoredConnection;
+  supabaseAccessToken: string;
+}): Promise<string> {
+  assertServerRuntime();
+  return resolveGoogleCalendarAccessToken(params);
 }
 
 export interface InsertGoogleCalendarEventResult {
@@ -48,6 +64,21 @@ export class GoogleCalendarMissingEtagError extends Error {
   constructor() {
     super("Google Calendar update/cancel requires an If-Match etag guard.");
     this.name = "GoogleCalendarMissingEtagError";
+  }
+}
+
+/**
+ * Google answered the insert with a definitive client error (4xx other than
+ * 409). The request was refused, so no event exists. Timeouts, network
+ * errors and 5xx stay plain errors: Google may have created the event.
+ */
+export class GoogleCalendarInsertRejectedError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super("Google Calendar event insert failed.");
+    this.name = "GoogleCalendarInsertRejectedError";
+    this.status = status;
   }
 }
 
@@ -122,15 +153,37 @@ function buildDeterministicGoogleEventId(proposalId: string) {
   return `lifeos${compactId}`;
 }
 
+/**
+ * Ask Google whether a proposal's deterministic event is gone from the
+ * connected calendar: not found, or a cancelled tombstone. Read errors throw,
+ * so an unknown answer never counts as "gone".
+ */
+export async function isProposalEventGoneFromGoogle(params: {
+  connection: GoogleCalendarStoredConnection;
+  proposalId: string;
+  providerAccessToken?: string;
+  supabaseAccessToken: string;
+}): Promise<boolean> {
+  const read = await getGoogleCalendarEventForConnection({
+    connection: params.connection,
+    eventId: buildDeterministicGoogleEventId(params.proposalId),
+    providerAccessToken: params.providerAccessToken,
+    supabaseAccessToken: params.supabaseAccessToken,
+  });
+  return !read.exists || read.status === "cancelled";
+}
+
 export async function getGoogleCalendarEventForConnection(
   params: GoogleCalendarEventReadParams,
 ): Promise<GoogleCalendarEventReadResult> {
   assertServerRuntime();
 
-  const accessToken = await resolveGoogleCalendarAccessToken({
-    connection: params.connection,
-    supabaseAccessToken: params.supabaseAccessToken,
-  });
+  const accessToken =
+    params.providerAccessToken ??
+    (await resolveGoogleCalendarAccessToken({
+      connection: params.connection,
+      supabaseAccessToken: params.supabaseAccessToken,
+    }));
   const calendarId = encodeURIComponent(params.connection.calendar_id);
   const eventId = encodeURIComponent(params.eventId);
   const response = await fetch(
@@ -184,10 +237,12 @@ export async function insertGoogleCalendarEventForConnection(
   assertServerRuntime();
 
   const eventId = buildDeterministicGoogleEventId(params.proposalId);
-  const accessToken = await resolveGoogleCalendarAccessToken({
-    connection: params.connection,
-    supabaseAccessToken: params.supabaseAccessToken,
-  });
+  const accessToken =
+    params.providerAccessToken ??
+    (await resolveGoogleCalendarAccessToken({
+      connection: params.connection,
+      supabaseAccessToken: params.supabaseAccessToken,
+    }));
   const calendarId = encodeURIComponent(params.connection.calendar_id);
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`,
@@ -230,6 +285,10 @@ export async function insertGoogleCalendarEventForConnection(
       googleEventEtag: null,
       eventSnapshot: null,
     };
+  }
+
+  if (response.status >= 400 && response.status < 500) {
+    throw new GoogleCalendarInsertRejectedError(response.status);
   }
 
   if (!response.ok) {
