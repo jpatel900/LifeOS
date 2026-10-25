@@ -3450,7 +3450,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     updateTaskFirstTinyStep: (taskId, firstTinyStep) => {
       const previous = stateRef.current;
       const next = updateTaskFirstTinyStep(previous, taskId, firstTinyStep);
-      applyWorkflowState(next);
+      // Device-only by design: protected from account reads, never owed.
+      applyWorkflowState(next, { deviceOnly: true });
 
       if (next !== previous) {
         markLocalOnly(savedOnThisDeviceBanner("Your first move"));

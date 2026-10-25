@@ -981,7 +981,12 @@ export function workflowReducer(
     case "acknowledgeSnapshot":
     case "registerDraftTransfer":
     case "reset":
+    // Reading drafts back from device storage is not a new user edit.
+    case "restoreDeviceDrafts":
       return next;
+    // The first move is kept on this device by design (no account write).
+    case "updateTaskFirstTinyStep":
+      return trackSnapshotChanges(state, next, { deviceOnly: true });
     default:
       return trackSnapshotChanges(state, next);
   }

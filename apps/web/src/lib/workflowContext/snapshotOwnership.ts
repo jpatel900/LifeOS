@@ -52,7 +52,8 @@ const accountFields = {
     "task_id",
     "proposed_start",
     "proposed_end",
-    "rationale",
+    // `rationale` is display text: proposal edits never send it, so owning it
+    // would leave work "pending" forever (review finding 2).
     "conflict_flag",
     "status",
   ],
@@ -189,20 +190,42 @@ function canonical(
   const collection = relations[field];
   return collection ? accountId(state, collection, value) : value;
 }
+/** Work still owed to the ACCOUNT. Device-only collections (drafts, projects)
+ * and device-only fields are protected from reads but never owed. */
 export function hasSnapshotWork(state: WorkflowState): boolean {
-  return Object.values(state.snapshotOwnership?.rows ?? {}).some((group) =>
-    Object.values(group).some(
-      (owner) =>
-        owner.creation?.pending ||
-        Object.values(owner.fields).some((field) => field.pending),
-    ),
+  return (Object.keys(accountFields) as SnapshotCollection[]).some(
+    (collection) =>
+      Object.values(state.snapshotOwnership?.rows[collection] ?? {}).some(
+        (owner) =>
+          owner.creation?.pending ||
+          Object.values(owner.fields).some(
+            (field) => field.pending && !field.deviceOnly,
+          ),
+      ),
   );
 }
 
-/** Call only after an actual local transition. Account hydration is separate. */
+/** One pass: owner key for each account id (first match, as before). */
+function ownerKeysByAccountId(
+  state: WorkflowState,
+  collection: SnapshotCollection,
+): Map<string, string> {
+  const keys = new Map<string, string>();
+  for (const key of Object.keys(
+    state.snapshotOwnership?.rows[collection] ?? {},
+  )) {
+    const id = accountId(state, collection, key);
+    if (!keys.has(id)) keys.set(id, key);
+  }
+  return keys;
+}
+
+/** Call only after an actual local transition. Account hydration is separate.
+ * `deviceOnly` marks edits that are kept on this device by design. */
 export function trackSnapshotChanges(
   before: WorkflowState,
   after: WorkflowState,
+  options: { deviceOnly?: boolean } = {},
 ): WorkflowState {
   if (before === after) return after;
   const metadata = copy(before);
@@ -213,6 +236,7 @@ export function trackSnapshotChanges(
       rows(before, collection).map((row) => [row.id, row]),
     );
     const newIds = new Set(rows(after, collection).map((row) => row.id));
+    const keys = ownerKeysByAccountId(before, collection);
     const group = metadata.rows[collection] ?? {};
     // Domain transitions replace/remove device drafts. Deleted drafts cannot
     // leave invisible debt behind. Account rows are changed by status, not deleted.
@@ -224,7 +248,9 @@ export function trackSnapshotChanges(
     }
     for (const row of rows(after, collection)) {
       const old = oldRows.get(row.id);
-      const key = ownerId(before, collection, row.id);
+      // Unchanged row objects cannot carry a new edit (review finding 4).
+      if (old === row) continue;
+      const key = keys.get(row.id) ?? row.id;
       if (!old) {
         group[key] = { creation: { revision, pending: true }, fields: {} };
         changed = true;
@@ -237,7 +263,13 @@ export function trackSnapshotChanges(
         // reads keep this current; it decides whether a saved copy is older.
         if (owner.base === undefined && typeof old.updated_at === "string")
           owner.base = old.updated_at;
-        owner.fields[field] = { revision, pending: true };
+        // A device-only edit never hides an account write still owed.
+        const prior = owner.fields[field];
+        const deviceOnly =
+          options.deviceOnly && !(prior?.pending && !prior.deviceOnly);
+        owner.fields[field] = deviceOnly
+          ? { revision, pending: true, deviceOnly: true }
+          : { revision, pending: true };
         changed = true;
       }
     }
@@ -380,7 +412,38 @@ export function reconcileSnapshotRead(
     stamp.acknowledgedAt = metadata.revision + 1;
     acknowledged = true;
   };
+  // A different account's rows: ownership of the previous account's rows no
+  // longer applies (review finding 6). Only never-delivered local creations,
+  // which belong to no account yet, keep their debt.
+  const readUser = collectionsRead
+    .flatMap((collection) => (readRows[collection] as Row[] | undefined) ?? [])
+    .map((row) => row.user_id)
+    .find((value): value is string => typeof value === "string");
+  if (readUser && metadata.userId && metadata.userId !== readUser) {
+    for (const collection of Object.keys(
+      accountFields,
+    ) as SnapshotCollection[]) {
+      const group = metadata.rows[collection] ?? {};
+      for (const [id, owner] of Object.entries(group))
+        if (
+          !owner.creation?.pending ||
+          accountId(before, collection, id) !== id
+        )
+          delete group[id];
+      if (!Object.keys(group).length) delete metadata.rows[collection];
+    }
+    delete metadata.prunedThrough;
+  }
+  if (readUser) metadata.userId = readUser;
   for (const collection of collectionsRead) {
+    // Bookkeeping this older read would need was already pruned by a newer
+    // completed read, so its rows for this collection are ignored.
+    if (cursor.revision < (metadata.prunedThrough?.[collection] ?? 0)) {
+      (result as unknown as Record<SnapshotCollection, Row[]>)[collection] = [
+        ...rows(before, collection),
+      ];
+      continue;
+    }
     const output = [...rows(merged, collection)];
     for (const [id, owner] of Object.entries(metadata.rows[collection] ?? {})) {
       if (inferredIds[collection]?.has(id) && owner.creation?.pending)
@@ -463,6 +526,43 @@ export function reconcileSnapshotRead(
         if (duplicate >= 0) output.splice(duplicate, 1);
       }
     }
+    // Prune bookkeeping this read proves is settled (review finding 5): a
+    // delivered stamp whose watermark this read's start already covers.
+    let pruned = false;
+    const group = metadata.rows[collection] ?? {};
+    for (const [id, owner] of Object.entries(group)) {
+      for (const [field, stamp] of Object.entries(owner.fields))
+        if (!stamp.pending && watermark(stamp) <= cursor.revision) {
+          delete owner.fields[field];
+          pruned = true;
+        }
+      if (
+        owner.creation &&
+        !owner.creation.pending &&
+        watermark(owner.creation) <= cursor.revision
+      ) {
+        delete owner.creation;
+        delete owner.transfers;
+        delete owner.inferredIdentity;
+        pruned = true;
+      }
+      if (
+        !owner.creation &&
+        !owner.transfers?.length &&
+        !owner.accountId &&
+        !Object.keys(owner.fields).length
+      )
+        delete group[id];
+    }
+    if (pruned)
+      metadata.prunedThrough = {
+        ...metadata.prunedThrough,
+        [collection]: Math.max(
+          metadata.prunedThrough?.[collection] ?? 0,
+          cursor.revision,
+        ),
+      };
+    if (!Object.keys(group).length) delete metadata.rows[collection];
     // This assignment stays inside the closed, typed collection list above.
     (result as unknown as Record<SnapshotCollection, Row[]>)[collection] =
       output;
@@ -512,12 +612,26 @@ export function normalizeSnapshotOwnership(
     !record(value.rows)
   )
     return undefined;
+  if (value.userId !== undefined && typeof value.userId !== "string")
+    return undefined;
+  if (
+    value.prunedThrough !== undefined &&
+    (!record(value.prunedThrough) ||
+      !Object.entries(value.prunedThrough).every(
+        ([collection, revision]) =>
+          collections.includes(collection as SnapshotCollection) &&
+          counter(revision) &&
+          revision <= (value.revision as number),
+      ))
+  )
+    return undefined;
   const validStamp = (stamp: unknown) =>
     record(stamp) &&
     counter(stamp.revision) &&
     stamp.revision <= (value.revision as number) &&
     typeof stamp.pending === "boolean" &&
     (stamp.restored === undefined || typeof stamp.restored === "boolean") &&
+    (stamp.deviceOnly === undefined || typeof stamp.deviceOnly === "boolean") &&
     (stamp.acknowledgedAt === undefined ||
       (counter(stamp.acknowledgedAt) &&
         stamp.acknowledgedAt <= (value.revision as number)));

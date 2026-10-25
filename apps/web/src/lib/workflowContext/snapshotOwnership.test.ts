@@ -20,6 +20,20 @@ import {
 } from "./snapshotOwnership";
 import { revertTaskReviewTransition } from "./taskReviewRefusal";
 
+// Device-only work (drafts, the first move) is still owned and protected, but
+// since review finding 2 it no longer counts as account work, so these checks
+// read the ownership itself instead of `hasSnapshotWork`.
+function hasPendingOwner(
+  state: ReturnType<typeof workflowSeed>,
+  collection: "tasks" | "taskDrafts",
+) {
+  return Object.values(state.snapshotOwnership?.rows[collection] ?? {}).some(
+    (owner) =>
+      owner.creation?.pending ||
+      Object.values(owner.fields).some((field) => field.pending),
+  );
+}
+
 const TASK_ID = "22222222-2222-4222-8222-222222222222";
 const CAPTURE_ID = "33333333-3333-4333-8333-333333333333";
 const AREA_ID = "44444444-4444-4444-8444-444444444444";
@@ -163,7 +177,9 @@ describe("snapshot state ownership (#967)", () => {
       taskId: TASK_ID,
       firstTinyStep: "Call the reviewer",
     });
-    expect(hasSnapshotWork(acknowledgeSnapshot(newer, receipt))).toBe(true);
+    expect(hasPendingOwner(acknowledgeSnapshot(newer, receipt), "tasks")).toBe(
+      true,
+    );
     expect(
       readTasks(newer, [{ ...original, first_tiny_step: "Call the reviewer" }])
         .tasks[0].first_tiny_step,
@@ -217,7 +233,7 @@ describe("snapshot state ownership (#967)", () => {
     expect(state.taskDrafts.find((row) => row.id === draft.id)?.status).toBe(
       "accepted",
     );
-    expect(hasSnapshotWork(state)).toBe(true);
+    expect(hasPendingOwner(state, "tasks")).toBe(true);
     state = readTasks(state, [
       { ...canonical, first_tiny_step: "Newer personal step" },
     ]);
@@ -346,7 +362,7 @@ describe("snapshot state ownership (#967)", () => {
       firstTinyStep: "Unsent device edit",
     });
     const restored = reloadWorkflowState(edited);
-    expect(hasSnapshotWork(restored)).toBe(true);
+    expect(hasPendingOwner(restored, "tasks")).toBe(true);
     const newer = readTasks(restored, [
       {
         ...original,
@@ -355,7 +371,7 @@ describe("snapshot state ownership (#967)", () => {
       },
     ]);
     expect(newer.tasks[0].first_tiny_step).toBe("Newer account edit");
-    expect(hasSnapshotWork(newer)).toBe(false);
+    expect(hasPendingOwner(newer, "tasks")).toBe(false);
   });
 
   it("a restored unsent edit survives while the account row is unchanged since it was seen", () => {
@@ -371,7 +387,7 @@ describe("snapshot state ownership (#967)", () => {
     const restored = reloadWorkflowState(edited);
     const same = readTasks(restored, [accountRow]);
     expect(same.tasks[0].first_tiny_step).toBe("Unsent device edit");
-    expect(hasSnapshotWork(same)).toBe(true);
+    expect(hasPendingOwner(same, "tasks")).toBe(true);
   });
 
   it("an echo with different block intent stays pending without reintroducing a duplicate", () => {
@@ -483,7 +499,7 @@ describe("snapshot state ownership (#967)", () => {
     expect(
       state.taskDrafts.find((item) => item.id === pending[1].id)?.status,
     ).toBe("pending");
-    expect(hasSnapshotWork(state)).toBe(true);
+    expect(hasPendingOwner(state, "taskDrafts")).toBe(true);
   });
 
   it("keeps map approval and completion through an unrelated refresh", () => {
@@ -598,5 +614,102 @@ describe("snapshot state ownership (#967)", () => {
     ).toBe(newer);
     expect(readTasks(newer, accountTask().tasks, receipt)).toBe(newer);
     expect(hasSnapshotWork(newer)).toBe(true);
+  });
+
+  // Review findings 2-6 (#1106).
+  it("keeps a device-only first move through reads without holding the account notice", () => {
+    const initial = accountTask();
+    const original = initial.tasks[0];
+    const edited = workflowReducer(initial, {
+      type: "updateTaskFirstTinyStep",
+      taskId: TASK_ID,
+      firstTinyStep: "Device-only move",
+    });
+    expect(hasSnapshotWork(edited)).toBe(false);
+    expect(readTasks(edited, [original]).tasks[0].first_tiny_step).toBe(
+      "Device-only move",
+    );
+  });
+
+  it("does not hold the account notice for proposal rationale or device-only projects", () => {
+    const base = accountTask();
+    const proposal = {
+      id: "55555555-5555-4555-8555-555555555555",
+      user_id: base.tasks[0].user_id,
+      area_id: base.tasks[0].area_id,
+      task_id: TASK_ID,
+      proposed_start: "2026-10-24T16:00:00.000Z",
+      proposed_end: "2026-10-24T16:30:00.000Z",
+      rationale: "Account rationale",
+      conflict_flag: false,
+      status: "proposed",
+      created_at: "2026-10-01T00:00:00.000Z",
+      updated_at: "2026-10-01T00:00:00.000Z",
+    } as unknown as (typeof base.timeBlockProposals)[number];
+    const before = { ...base, timeBlockProposals: [proposal] };
+    const rationale = trackSnapshotChanges(before, {
+      ...before,
+      timeBlockProposals: [{ ...proposal, rationale: "Sized to actuals" }],
+    });
+    expect(hasSnapshotWork(rationale)).toBe(false);
+    const project = {
+      id: "project-901",
+      area_id: base.tasks[0].area_id,
+      name: "Device project",
+    } as unknown as (typeof base.projects)[number];
+    const withProject = trackSnapshotChanges(before, {
+      ...before,
+      projects: [...before.projects, project],
+    });
+    expect(hasSnapshotWork(withProject)).toBe(false);
+  });
+
+  it("does not mint delivery work when drafts are read back from the device", () => {
+    const drafted = captureWorkflow(workflowSeed(), "Synthetic stored draft");
+    const restored = workflowReducer(
+      { ...drafted, taskDrafts: [], snapshotOwnership: undefined },
+      { type: "restoreDeviceDrafts", drafts: drafted.taskDrafts },
+    );
+    expect(restored.taskDrafts).toHaveLength(drafted.taskDrafts.length);
+    expect(restored.snapshotOwnership?.rows.taskDrafts).toBeUndefined();
+  });
+
+  it("prunes delivered bookkeeping after a later read and fences older reads", () => {
+    const initial = accountTask();
+    const original = initial.tasks[0];
+    const oldRead = snapshotCursor(initial);
+    const moved = trackSnapshotChanges(initial, {
+      ...initial,
+      tasks: [{ ...original, title: "Delivered title" }],
+    });
+    const receipt = snapshotReceipt(moved, "tasks", TASK_ID, ["title"]);
+    const saved = acknowledgeSnapshot(moved, receipt);
+    const delivered = { ...original, title: "Delivered title" };
+    const later = readTasks(saved, [delivered]);
+    const owners = Object.values(later.snapshotOwnership?.rows.tasks ?? {});
+    expect(owners.every((owner) => !("title" in owner.fields))).toBe(true);
+    // A read that started before the edit returns late with the old title.
+    const stale = readTasks(later, [original], oldRead);
+    expect(stale.tasks[0].title).toBe("Delivered title");
+  });
+
+  it("drops another account's row ownership when a different user's rows are read", () => {
+    const initial = accountTask();
+    const original = initial.tasks[0];
+    const edited = trackSnapshotChanges(initial, {
+      ...initial,
+      tasks: [{ ...original, title: "User A unsent title" }],
+    });
+    expect(hasSnapshotWork(edited)).toBe(true);
+    const switched = readTasks(edited, [
+      {
+        ...original,
+        id: "88888888-8888-4888-8888-888888888888",
+        user_id: "99999999-9999-4999-8999-999999999999",
+        title: "User B task",
+      },
+    ]);
+    expect(switched.tasks.map((task) => task.title)).toEqual(["User B task"]);
+    expect(switched.snapshotOwnership?.rows.tasks).toBeUndefined();
   });
 });

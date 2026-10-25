@@ -105,6 +105,20 @@ An older saved copy never overwrites newer account data (review, 2026-10-24):
   newer, missing or unknown account version wins and releases them. Edits made
   in the current page are unaffected.
 
+Bookkeeping limits (review, 2026-10-24):
+
+- Only account work drives the "work on this device" notice. Device-only
+  collections (drafts, projects) and device-only edits (the first move) stay
+  protected from reads but are never owed. Proposal `rationale` is display
+  text and is not owned.
+- Reading drafts back from device storage creates no new obligation.
+- A completed read prunes delivered stamps its start already covers. An older
+  read that would have needed them is then ignored for that collection.
+- A read returning a different account's rows drops the previous account's
+  row ownership; only never-delivered local creations keep their debt.
+- Change tracking looks up owners through one alias map per collection and
+  skips unchanged row objects, so a dispatch stays linear in the row count.
+
 The focused checks must include the exact saved R-967 successful-capture target
 and both safety controls, then new field/race, hydration, reset and provider cases.
 Tests must prove both retention of unrelated work and eventual clearing after the

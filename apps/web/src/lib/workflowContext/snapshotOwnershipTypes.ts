@@ -19,6 +19,8 @@ export type SnapshotStamp = {
   acknowledgedAt?: number;
   /** Came from a saved copy (page reload), not from an edit in this page. */
   restored?: boolean;
+  /** Kept on this device by design; protected, but not owed to the account. */
+  deviceOnly?: boolean;
 };
 
 export interface SnapshotCursor {
@@ -46,4 +48,9 @@ export type SnapshotOwner = {
 export interface SnapshotOwnership extends SnapshotCursor {
   version: 1;
   rows: Partial<Record<SnapshotCollection, Record<string, SnapshotOwner>>>;
+  /** The account whose rows the last read returned. */
+  userId?: string;
+  /** Per collection: a read at this revision pruned delivered bookkeeping, so
+   * an older read can no longer be reconciled safely and is ignored. */
+  prunedThrough?: Partial<Record<SnapshotCollection, number>>;
 }

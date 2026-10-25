@@ -19,8 +19,11 @@ export function createApplyWorkflowState(
   stateRef: MutableRefObject<WorkflowState>,
   dispatch: Dispatch<WorkflowAction>,
 ) {
-  return function applyWorkflowState(nextState: WorkflowState) {
-    const tracked = trackSnapshotChanges(stateRef.current, nextState);
+  return function applyWorkflowState(
+    nextState: WorkflowState,
+    options?: { deviceOnly?: boolean },
+  ) {
+    const tracked = trackSnapshotChanges(stateRef.current, nextState, options);
     stateRef.current = tracked;
     syncWorkflowIdCounterFromState(nextState);
     dispatch({ type: "hydrate", state: tracked });
