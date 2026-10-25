@@ -99,6 +99,7 @@ const connection = {
   status: "connected" as const,
   first_write_warning_acknowledged_at: "2026-05-09T00:00:00.000Z",
   connected_at: "2026-05-09T00:00:00.000Z",
+  credential_verified_at: "2026-05-09T00:00:00.000Z",
   disconnected_at: null,
   token_expires_at: "2026-05-09T01:00:00.000Z",
   token_type: "Bearer",
