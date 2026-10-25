@@ -648,14 +648,18 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     // a raw HTTP mock (see `syncJournaledCapture`'s own request-shape unit
     // tests in `lib/data/workflow.test.ts`).
     await waitFor(() => expect(mockSyncJournaledCapture).toHaveBeenCalled());
-    // `syncCapture` is wired as `(args) => syncJournaledCapture(client, args)`
-    // — the client is the first argument, the request shape is the second.
+    // Replay carries the chosen area and binds the actual write to this
+    // account across the writer's own asynchronous identity read.
     expect(mockSyncJournaledCapture).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         area_id: PERSISTED_AREA.id,
         raw_text: "Call the landlord back",
       }),
+      {
+        expectedUserId: PERSISTED_AREA.user_id,
+        assertCurrentAccount: expect.any(Function),
+      },
     );
 
     // (b) the win leaves the journal — ORDER was the bug: replay must run
