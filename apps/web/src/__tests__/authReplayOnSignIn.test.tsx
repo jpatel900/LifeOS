@@ -3107,3 +3107,237 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     });
   });
 });
+
+// W3-16 finding 1: pending private work across sign-out and a different
+// account on the same device. Sign-out (`AuthAffordance.handleSignOut`) only
+// calls `auth.signOut()`. The provider's auth listener ignores events with no
+// session, and pending-write journal entries carry no owner. So a capture
+// account A could not deliver waits in the journal, and is replayed through
+// account B's session once B signs in on this device.
+//
+// The provider sees sign-out only as the SIGNED_OUT event that
+// `auth.signOut()` emits, so this test fires that event directly.
+describe("W3-16 #1: pending work never crosses to another account", () => {
+  const ACCOUNT_B_USER = "88888888-8888-4888-8888-888888888888";
+  const ACCOUNT_B_AREA = {
+    ...PERSISTED_AREA,
+    id: "99999999-9999-4999-8999-999999999999",
+    user_id: ACCOUNT_B_USER,
+  };
+  const ACCOUNT_A_TEXT = "Call the landlord back";
+
+  // KNOWN BUG (W3-16 #1): expected failure. A's undelivered capture is
+  // replayed under B. Flip to `it` once pending work is purged, or held for
+  // its owner, at sign-out.
+  it.fails(
+    "a capture account A could not deliver is never sent through account B's session",
+    async () => {
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockSyncJournaledCapture.mockRejectedValue(
+        new TypeError("Failed to fetch"),
+      );
+
+      const firstMount = render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+
+      // Account A captures. The account write fails, so it waits on device.
+      fireEvent.click(screen.getByText("Capture"));
+      await waitFor(async () => {
+        expect(await listPendingWrites("capture")).toHaveLength(1);
+      });
+      await waitFor(() => expect(mockSyncJournaledCapture).toHaveBeenCalled());
+
+      // A signs out.
+      mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+      mockListAreas.mockRejectedValue(SIGNED_OUT_ERROR());
+      await act(async () => {
+        authListener.callback?.("SIGNED_OUT", null);
+        await Promise.resolve();
+      });
+
+      // B signs in on the same device, without a remount ...
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: ACCOUNT_B_USER } },
+        error: null,
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [ACCOUNT_B_AREA],
+      });
+      mockSyncJournaledCapture.mockReset().mockResolvedValue({
+        provider: "supabase",
+        captureId: "77777777-7777-4777-8777-777777777777",
+      });
+      await act(async () => {
+        authListener.callback?.("SIGNED_IN", {
+          user: { id: ACCOUNT_B_USER },
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // ... and then the page reloads as B.
+      firstMount.unmount();
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      // One explicit, fully settled replay pass as B: a deterministic
+      // boundary, so the check below never races the mount's own replay.
+      fireEvent.click(screen.getByText("Retry pending writes"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "1",
+        ),
+      );
+
+      const sentTexts = mockSyncJournaledCapture.mock.calls.map(
+        (call) => (call[1] as { raw_text?: string }).raw_text,
+      );
+      expect(sentTexts).not.toContain(ACCOUNT_A_TEXT);
+    },
+  );
+});
+
+// W3-16 finding 4: a daily close queued offline is delivered by the
+// RECONNECT path (the `online` event). That path replays the journal and then
+// refreshes device evidence directly. Unlike the account-sync path, it does
+// not first confirm the day in the account. So the device tier can drop the
+// day while the account tier does not hold it yet: a closed day reads open.
+describe("W3-16 #4: reconnect keeps a closed day closed until the account confirms it", () => {
+  const day = "2026-09-04";
+
+  async function mountWithUndeliveredClose() {
+    await journalReviewWrite({
+      workflowAreaId: null,
+      persistedAreaId: null,
+      reviewType: "daily",
+      periodStart: day,
+      periodEnd: day,
+      summaryJson: {},
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    // Mount while the account write cannot get through.
+    mockSyncJournaledReviewEntry.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalled(),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("journalled-closed-days")).toHaveTextContent(
+        day,
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    expect(await listPendingWritesActual("review")).toHaveLength(1);
+    expect(screen.getByTestId("account-closed-days")).not.toHaveTextContent(
+      day,
+    );
+  }
+
+  async function reconnectAndDeliver() {
+    mockSyncJournaledReviewEntry
+      .mockReset()
+      .mockResolvedValue({ provider: "supabase" });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await Promise.resolve();
+    });
+    await waitFor(async () => {
+      expect(await listPendingWritesActual("review")).toHaveLength(0);
+    });
+    expect(mockSyncJournaledReviewEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ review_type: "daily", period_start: day }),
+    );
+  }
+
+  function closedDayTiers() {
+    return {
+      journalled: screen.getByTestId("journalled-closed-days").textContent,
+      account: screen.getByTestId("account-closed-days").textContent,
+    };
+  }
+
+  // KNOWN BUG (W3-16 #4): expected failure. Flip to `it` once the reconnect
+  // path hands off device evidence only after the account confirms the day.
+  it.fails(
+    "the account read omits the day: the day still reads closed after reconnect",
+    async () => {
+      await mountWithUndeliveredClose();
+      // Every later account read answers without the day.
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
+
+      await reconnectAndDeliver();
+
+      // The device tier must keep the day: the account never confirmed it.
+      // A wait (not a one-off check) so the post-replay journal refresh has
+      // run before the final read.
+      await waitFor(() => {
+        expect(closedDayTiers().journalled).not.toContain(day);
+      }).catch(() => undefined);
+      const tiers = closedDayTiers();
+      expect(
+        tiers.journalled?.includes(day) || tiers.account?.includes(day),
+      ).toBe(true);
+    },
+  );
+
+  // KNOWN BUG (W3-16 #4): expected failure, same cause.
+  it.fails(
+    "the account read fails: the day still reads closed after reconnect",
+    async () => {
+      await mountWithUndeliveredClose();
+      mockListExecutionReviewItems.mockRejectedValue(
+        new TypeError("Failed to fetch"),
+      );
+
+      await reconnectAndDeliver();
+
+      await waitFor(() => {
+        expect(closedDayTiers().journalled).not.toContain(day);
+      }).catch(() => undefined);
+      const tiers = closedDayTiers();
+      expect(
+        tiers.journalled?.includes(day) || tiers.account?.includes(day),
+      ).toBe(true);
+    },
+  );
+});
