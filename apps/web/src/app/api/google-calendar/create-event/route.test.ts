@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   updateCalendarBlockGoogleEventForAccessToken: vi.fn(),
   updateExternalWriteEventResultForAccessToken: vi.fn(),
   InsertRejected: class GoogleCalendarInsertRejectedError extends Error {},
+  isProposalEventGoneFromGoogle: vi.fn(),
 }));
 
 vi.mock("@/lib/googleCalendar/config", () => ({
@@ -38,6 +39,7 @@ vi.mock("@/lib/googleCalendar/events", () => ({
   resolveGoogleCalendarWriteAccessToken:
     mocks.resolveGoogleCalendarWriteAccessToken,
   GoogleCalendarInsertRejectedError: mocks.InsertRejected,
+  isProposalEventGoneFromGoogle: mocks.isProposalEventGoneFromGoogle,
 }));
 
 vi.mock("@/lib/externalWrites/server", () => ({
@@ -207,6 +209,73 @@ describe("google-calendar create-event route", () => {
       mocks.claimGoogleCalendarApprovalForAccessToken,
     ).not.toHaveBeenCalled();
     expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+  });
+
+  // Review round 3: a finished sibling attempt is released only after Google
+  // itself confirms that sibling's event is gone (cases 2 and 3).
+  describe("asking Google about a finished sibling attempt", () => {
+    const sibling = "550e8400-e29b-41d4-a716-446655440599";
+    const conflict = () =>
+      Object.assign(new Error("Calendar approval conflict."), {
+        code: "CALENDAR_APPROVAL_CONFLICT",
+        checkableProposalIds: [sibling],
+      });
+    const approve = () =>
+      POST(
+        request({
+          proposal_id: proposal.id,
+          approved: true,
+          approved_start: proposal.proposed_start,
+          approved_end: proposal.proposed_end,
+        }),
+      );
+
+    it("retries the claim with the sibling vouched absent when Google says it is gone", async () => {
+      mocks.claimGoogleCalendarApprovalForAccessToken
+        .mockRejectedValueOnce(conflict())
+        .mockResolvedValueOnce({ id: "550e8400-e29b-41d4-a716-446655440701" });
+      mocks.isProposalEventGoneFromGoogle.mockResolvedValue(true);
+      const response = await approve();
+      expect(response.status).toBe(200);
+      expect(mocks.isProposalEventGoneFromGoogle).toHaveBeenCalledWith({
+        connection,
+        proposalId: sibling,
+        supabaseAccessToken: "supabase-access-token",
+      });
+      expect(
+        mocks.claimGoogleCalendarApprovalForAccessToken,
+      ).toHaveBeenLastCalledWith(
+        "supabase-access-token",
+        expect.objectContaining({ absentProposalIds: [sibling] }),
+      );
+      expect(
+        mocks.insertGoogleCalendarEventForConnection,
+      ).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps refusing when the sibling's event still exists on Google", async () => {
+      mocks.claimGoogleCalendarApprovalForAccessToken.mockRejectedValue(
+        conflict(),
+      );
+      mocks.isProposalEventGoneFromGoogle.mockResolvedValue(false);
+      const response = await approve();
+      expect(response.status).toBe(409);
+      expect(
+        mocks.claimGoogleCalendarApprovalForAccessToken,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        mocks.insertGoogleCalendarEventForConnection,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("does not ask Google when the conflict names nothing checkable", async () => {
+      mocks.claimGoogleCalendarApprovalForAccessToken.mockRejectedValue(
+        Object.assign(conflict(), { checkableProposalIds: [] }),
+      );
+      const response = await approve();
+      expect(response.status).toBe(409);
+      expect(mocks.isProposalEventGoneFromGoogle).not.toHaveBeenCalled();
+    });
   });
 
   it("allows only one sibling past the durable claim when both prechecks see no block", async () => {

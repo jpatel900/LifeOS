@@ -116,6 +116,50 @@ describe("external write audit helpers", () => {
     });
   });
 
+  // Review round 3: the conflict names finished sibling attempts the route
+  // may check against Google, and a vouched retry passes them back.
+  it("exposes checkable sibling ids and forwards vouched absences", async () => {
+    const first = "550e8400-e29b-41d4-a716-446655440511";
+    const second = "550e8400-e29b-41d4-a716-446655440512";
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          code: "PCA01",
+          message: "Calendar approval conflict",
+          details: `checkable:${first},${second}`,
+        },
+      })
+      .mockResolvedValueOnce({ data: auditRow, error: null });
+    mocks.requireSupabaseServiceRoleClient.mockReturnValue({ rpc });
+    await expect(
+      claimGoogleCalendarApprovalForAccessToken("token", approval),
+    ).rejects.toMatchObject({
+      code: "CALENDAR_APPROVAL_CONFLICT",
+      checkableProposalIds: [first, second],
+    });
+    await claimGoogleCalendarApprovalForAccessToken("token", {
+      ...approval,
+      absentProposalIds: [first, second],
+    });
+    expect(rpc).toHaveBeenLastCalledWith(
+      "claim_google_calendar_approval",
+      expect.objectContaining({ p_absent_proposal_ids: [first, second] }),
+    );
+  });
+
+  it("does not expose checkable ids for a conflict without them", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "PCA01", message: "Calendar approval conflict" },
+    });
+    mocks.requireSupabaseServiceRoleClient.mockReturnValue({ rpc });
+    await expect(
+      claimGoogleCalendarApprovalForAccessToken("token", approval),
+    ).rejects.toMatchObject({ checkableProposalIds: [] });
+  });
+
   it.each([
     { data: null, error: { message: "database unavailable" } },
     { data: null, error: null },

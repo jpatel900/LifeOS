@@ -11,7 +11,10 @@ create or replace function public.claim_google_calendar_approval(
   p_connection_id uuid,
   p_connected_at timestamptz,
   p_calendar_id text,
-  p_request_summary jsonb
+  p_request_summary jsonb,
+  -- Sibling proposals whose events the route just confirmed are gone from
+  -- Google (404 or cancelled). Only finished attempts can be released.
+  p_absent_proposal_ids uuid[] default '{}'
 ) returns jsonb
 language plpgsql
 security invoker
@@ -24,6 +27,7 @@ declare
   v_prior record;
   v_scope text;
   v_same_connection boolean;
+  v_blockers text[] := '{}';
 begin
   if p_user_id is null then
     raise exception using errcode = 'PCA01', message = 'Calendar approval conflict';
@@ -84,14 +88,14 @@ begin
       continue;
     end if;
     -- Explicit JSON null is a taskless scope, not missing legacy metadata.
-    -- New claims survive proposal deletion/reassignment. Legacy orphaned
-    -- attempts fail closed because their original task cannot be recovered.
+    -- New claims survive proposal deletion/reassignment. A legacy attempt
+    -- whose proposal was deleted has no recoverable task, so it reserves no
+    -- other proposal (it used to block every task-bound approval).
     v_scope := case when v_prior.request_summary_json ? 'claim_task_id'
       then v_prior.request_summary_json->>'claim_task_id'
       else v_prior.legacy_task_id::text end;
     if v_prior.target_id is distinct from p_proposal_id::text
-       and (p_task_id is null or v_scope is distinct from p_task_id::text)
-       and (v_prior.request_summary_json ? 'claim_task_id' or v_prior.existing_proposal_id is not null) then
+       and (p_task_id is null or v_scope is distinct from p_task_id::text) then
       continue;
     end if;
 
@@ -135,6 +139,19 @@ begin
       continue;
     end if;
 
+    -- A sibling's finished attempt can be checked against Google. The route
+    -- reads that sibling's deterministic event id on the current calendar and
+    -- vouches for it here only when Google says it is gone or cancelled. A
+    -- pending attempt may still be in flight, so it is never checkable.
+    if v_prior.target_id is distinct from p_proposal_id::text
+       and v_prior.result_status <> 'pending' then
+      if v_prior.target_id = any(coalesce(p_absent_proposal_ids, '{}')::text[]) then
+        continue;
+      end if;
+      v_blockers := array_append(v_blockers, v_prior.target_id);
+      continue;
+    end if;
+
     if v_prior.target_id is distinct from p_proposal_id::text
        or v_scope is distinct from p_task_id::text
        or v_same_connection is distinct from true
@@ -143,6 +160,12 @@ begin
       raise exception using errcode = 'PCA01', message = 'Calendar approval conflict';
     end if;
   end loop;
+
+  if coalesce(array_length(v_blockers, 1), 0) > 0 then
+    -- Machine-readable for the route: the sibling proposal ids to check.
+    raise exception using errcode = 'PCA01', message = 'Calendar approval conflict',
+      detail = 'checkable:' || array_to_string(v_blockers, ',');
+  end if;
 
   insert into public.external_write_events (
     user_id, area_id, provider, operation, target_type, target_id,
@@ -160,8 +183,8 @@ begin
 end;
 $$;
 
-revoke all on function public.claim_google_calendar_approval(uuid,uuid,uuid,timestamptz,timestamptz,uuid,timestamptz,text,jsonb) from public, anon, authenticated;
-grant execute on function public.claim_google_calendar_approval(uuid,uuid,uuid,timestamptz,timestamptz,uuid,timestamptz,text,jsonb) to service_role;
+revoke all on function public.claim_google_calendar_approval(uuid,uuid,uuid,timestamptz,timestamptz,uuid,timestamptz,text,jsonb,uuid[]) from public, anon, authenticated;
+grant execute on function public.claim_google_calendar_approval(uuid,uuid,uuid,timestamptz,timestamptz,uuid,timestamptz,text,jsonb,uuid[]) to service_role;
 -- The claim runs as service_role (SECURITY INVOKER). This project grants
 -- service_role table access explicitly, per table (see
 -- 20260509231500_harden_google_calendar_security.sql). A service-key client

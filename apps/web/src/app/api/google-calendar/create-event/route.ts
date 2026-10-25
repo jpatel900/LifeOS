@@ -8,6 +8,7 @@ import { getGoogleCalendarConfig } from "@/lib/googleCalendar/config";
 import {
   GoogleCalendarInsertRejectedError,
   insertGoogleCalendarEventForConnection,
+  isProposalEventGoneFromGoogle,
   resolveGoogleCalendarWriteAccessToken,
 } from "@/lib/googleCalendar/events";
 import {
@@ -278,30 +279,58 @@ export async function POST(request: Request) {
       supabaseAccessToken: accessToken,
     });
 
-    const auditEvent = await claimGoogleCalendarApprovalForAccessToken(
-      accessToken,
-      {
-        proposalId: proposal.id,
-        taskId: proposal.task_id,
-        proposedStart: proposal.proposed_start,
-        proposedEnd: proposal.proposed_end,
-        connectionId: connection.id,
-        connectedAt: connection.connected_at,
-        calendarId: connection.calendar_id,
-        requestSummary: {
-          calendar_id: connection.calendar_id,
-          first_write_warning_acknowledged:
-            Boolean(connection.first_write_warning_acknowledged_at) ||
-            input.acknowledge_first_write_warning,
-          proposal_id: proposal.id,
-          proposed_end: proposal.proposed_end,
-          proposed_start: proposal.proposed_start,
-          timezone: input.timezone,
-          title_source: task ? "task.title" : "fallback",
-        },
-        userId: user.id,
+    const claim = {
+      proposalId: proposal.id,
+      taskId: proposal.task_id,
+      proposedStart: proposal.proposed_start,
+      proposedEnd: proposal.proposed_end,
+      connectionId: connection.id,
+      connectedAt: connection.connected_at,
+      calendarId: connection.calendar_id,
+      requestSummary: {
+        calendar_id: connection.calendar_id,
+        first_write_warning_acknowledged:
+          Boolean(connection.first_write_warning_acknowledged_at) ||
+          input.acknowledge_first_write_warning,
+        proposal_id: proposal.id,
+        proposed_end: proposal.proposed_end,
+        proposed_start: proposal.proposed_start,
+        timezone: input.timezone,
+        title_source: task ? "task.title" : "fallback",
       },
-    );
+      userId: user.id,
+    };
+    let auditEvent;
+    try {
+      auditEvent = await claimGoogleCalendarApprovalForAccessToken(
+        accessToken,
+        claim,
+      );
+    } catch (error) {
+      // A finished sibling attempt still reserves this task. Ask Google: if
+      // every such sibling's event is gone (not found or cancelled), nothing
+      // could be duplicated, so claim again with those siblings vouched for.
+      const checkable =
+        error &&
+        typeof error === "object" &&
+        "checkableProposalIds" in error &&
+        Array.isArray(error.checkableProposalIds)
+          ? (error.checkableProposalIds as string[])
+          : [];
+      if (!checkable.length) throw error;
+      for (const siblingId of checkable) {
+        const gone = await isProposalEventGoneFromGoogle({
+          connection,
+          proposalId: siblingId,
+          supabaseAccessToken: accessToken,
+        });
+        if (!gone) throw error;
+      }
+      auditEvent = await claimGoogleCalendarApprovalForAccessToken(
+        accessToken,
+        { ...claim, absentProposalIds: checkable },
+      );
+    }
     auditEventId = auditEvent.id;
 
     const insertResult = await insertGoogleCalendarEventForConnection({

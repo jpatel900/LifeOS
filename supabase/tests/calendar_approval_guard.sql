@@ -35,9 +35,9 @@ declare
   retry_claim jsonb;
 begin
   if has_function_privilege('authenticated',
-      'public.claim_google_calendar_approval(uuid,uuid,uuid,timestamptz,timestamptz,uuid,timestamptz,text,jsonb)', 'execute')
+      'public.claim_google_calendar_approval(uuid,uuid,uuid,timestamptz,timestamptz,uuid,timestamptz,text,jsonb,uuid[])', 'execute')
      or has_function_privilege('anon',
-      'public.claim_google_calendar_approval(uuid,uuid,uuid,timestamptz,timestamptz,uuid,timestamptz,text,jsonb)', 'execute') then
+      'public.claim_google_calendar_approval(uuid,uuid,uuid,timestamptz,timestamptz,uuid,timestamptz,text,jsonb,uuid[])', 'execute') then
     raise exception 'Claim RPC must be service-only';
   end if;
   insert into public.areas(id,user_id,name,slug) values (a,u,'Fixture','approval-guard');

@@ -152,6 +152,24 @@ function buildDeterministicGoogleEventId(proposalId: string) {
   return `lifeos${compactId}`;
 }
 
+/**
+ * Ask Google whether a proposal's deterministic event is gone from the
+ * connected calendar: not found, or a cancelled tombstone. Read errors throw,
+ * so an unknown answer never counts as "gone".
+ */
+export async function isProposalEventGoneFromGoogle(params: {
+  connection: GoogleCalendarStoredConnection;
+  proposalId: string;
+  supabaseAccessToken: string;
+}): Promise<boolean> {
+  const read = await getGoogleCalendarEventForConnection({
+    connection: params.connection,
+    eventId: buildDeterministicGoogleEventId(params.proposalId),
+    supabaseAccessToken: params.supabaseAccessToken,
+  });
+  return !read.exists || read.status === "cancelled";
+}
+
 export async function getGoogleCalendarEventForConnection(
   params: GoogleCalendarEventReadParams,
 ): Promise<GoogleCalendarEventReadResult> {

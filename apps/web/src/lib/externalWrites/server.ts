@@ -211,6 +211,8 @@ export async function claimGoogleCalendarApprovalForAccessToken(
     connectedAt: string | null;
     calendarId: string;
     requestSummary: Record<string, unknown>;
+    /** Sibling proposals whose events Google just confirmed are gone. */
+    absentProposalIds?: string[];
   },
 ) {
   assertServerRuntime();
@@ -229,11 +231,27 @@ export async function claimGoogleCalendarApprovalForAccessToken(
     p_connected_at: row.connectedAt,
     p_calendar_id: row.calendarId,
     p_request_summary: row.requestSummary,
+    ...(row.absentProposalIds?.length
+      ? { p_absent_proposal_ids: row.absentProposalIds }
+      : {}),
   });
   if (error) {
     if (error.code === "PCA01") {
+      // The RPC names finished sibling attempts the route may check with
+      // Google ("checkable:<id>,<id>"). Anything else is not checkable.
+      const details =
+        "details" in error && typeof error.details === "string"
+          ? error.details
+          : "";
+      const checkableProposalIds = details.startsWith("checkable:")
+        ? details
+            .slice("checkable:".length)
+            .split(",")
+            .filter((id) => /^[0-9a-f-]{36}$/i.test(id))
+        : [];
       throw Object.assign(new Error("Calendar approval conflict."), {
         code: "CALENDAR_APPROVAL_CONFLICT",
+        checkableProposalIds,
       });
     }
     throw new Error(getSupabaseMessage(error));

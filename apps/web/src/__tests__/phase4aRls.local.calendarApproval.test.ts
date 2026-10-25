@@ -188,6 +188,29 @@ local("calendar approval claim — real local PostgreSQL", () => {
         .update({ status: "accepted" })
         .eq("id", winner);
       expect(statusOnly.error).toBeNull();
+
+      // Review round 3: once the winner's attempts have finished, the
+      // conflict names them as checkable, and a retry vouching (after the
+      // route has asked Google) that their event is gone is allowed.
+      await must(
+        service
+          .from("external_write_events")
+          .update({ result_status: "succeeded" })
+          .eq("target_id", winner),
+      );
+      const checkable = await service.rpc(
+        "claim_google_calendar_approval",
+        claimArgs(userId, sibling, taskId, connectionId),
+      );
+      expect(checkable.error?.code).toBe("PCA01");
+      expect(checkable.error?.details).toMatch(
+        new RegExp(`^checkable:${winner}`),
+      );
+      const vouched = await service.rpc("claim_google_calendar_approval", {
+        ...claimArgs(userId, sibling, taskId, connectionId),
+        p_absent_proposal_ids: [winner],
+      });
+      expect(vouched.error).toBeNull();
     } finally {
       await must(
         service

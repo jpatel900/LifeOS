@@ -13,6 +13,7 @@ import {
   GoogleCalendarInsertRejectedError,
   deleteGoogleCalendarEventForConnection,
   insertGoogleCalendarEventForConnection,
+  isProposalEventGoneFromGoogle,
 } from "./events";
 
 const connection = {
@@ -155,6 +156,47 @@ describe("Google Calendar event insert helper", () => {
         title: "Call dentist tomorrow",
       }).catch((failure: unknown) => failure);
       expect(error).toBeInstanceOf(GoogleCalendarInsertRejectedError);
+    },
+  );
+
+  it.each([
+    ["not found", new Response("", { status: 404 }), true],
+    [
+      "a cancelled tombstone",
+      new Response(
+        JSON.stringify({
+          id: "lifeos550e8400e29b41d4a716446655440599",
+          status: "cancelled",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+      true,
+    ],
+    [
+      "a live event",
+      new Response(
+        JSON.stringify({
+          id: "lifeos550e8400e29b41d4a716446655440599",
+          status: "confirmed",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+      false,
+    ],
+  ])(
+    "reports a sibling event as gone from Google only for %s",
+    async (_label, response, gone) => {
+      vi.mocked(fetch).mockResolvedValue(response);
+      await expect(
+        isProposalEventGoneFromGoogle({
+          connection,
+          proposalId: "550e8400-e29b-41d4-a716-446655440599",
+          supabaseAccessToken: "supabase-access-token",
+        }),
+      ).resolves.toBe(gone);
+      expect(vi.mocked(fetch).mock.calls[0]?.[0]).toContain(
+        "/events/lifeos550e8400e29b41d4a716446655440599",
+      );
     },
   );
 
