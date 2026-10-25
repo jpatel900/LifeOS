@@ -199,9 +199,11 @@ import {
   type ReplaySummary,
 } from "./durability/pendingWriteJournal";
 import {
+  getDeviceAccount,
   maySendAs,
   setDeviceAccount,
   visibleToAccount,
+  type DeviceAccount,
 } from "./durability/deviceAccount";
 import type { PersistenceFailureKind } from "./persistenceFailureKind";
 // Final UX Loop C1, Target Cards 1+7 (audit P0#4): one definition of which
@@ -394,9 +396,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // provider reads the session, so a fresh mount starts at "not known", never
   // at whatever an earlier provider in this document last saw. See
   // `durability/deviceAccount.ts`.
+  const deviceIdentityGenerationRef = useRef(0);
+  const deviceVisibilityRefreshRef = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
+    deviceIdentityGenerationRef.current += 1;
     setDeviceAccount(undefined);
     return () => {
+      deviceIdentityGenerationRef.current += 1;
       setDeviceAccount(undefined);
     };
   }, []);
@@ -626,6 +632,19 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  // FR-027 (F-G1a): refresh the unsynced-count signal from the device queue.
+  const refreshUnsyncedCount = useCallback(async () => {
+    try {
+      const count = await visiblePendingCaptureCount();
+      // See `mountedRef`'s note above the ref/refs block — a provider
+      // unmounted while this read was in flight must not touch state.
+      if (!mountedRef.current) return;
+      setUnsyncedCaptureCount(count);
+    } catch {
+      // best-effort signal; a queue read failure must not break capture
+    }
+  }, []);
 
   /**
    * #737 C1 S5 — THE MISSING HALF OF `pendingLocalChanges`, flagged on #736.
@@ -2085,6 +2104,21 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // mount replay has been removed (see its effect's own comment): this is
   // now the ONE mechanism that owns "replay the journal on mount", ordered
   // strictly after the refs populate, on every mount, signed in or not.
+  // Owner changes must reveal retained device evidence even while offline.
+  // Same-owner events do not refresh: a drained close may still be awaiting
+  // account confirmation under the post-replay readback gate below.
+  const adoptDeviceAccount = useCallback(
+    (account: DeviceAccount) => {
+      if (getDeviceAccount() === account) return;
+      setDeviceAccount(account);
+      deviceVisibilityRefreshRef.current = Promise.all([
+        refreshUnsyncedCount(),
+        refreshJournalledDurableState(),
+      ]).then(() => undefined);
+    },
+    [refreshUnsyncedCount, refreshJournalledDurableState],
+  );
+
   const runAccountSync = useCallback(
     async (options?: { replayAfter?: boolean }): Promise<void> => {
       // #960 defect 1: the mount effect and a `SIGNED_IN` event can land in
@@ -2123,19 +2157,38 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             // change that happens during replay itself.
             let expectedUserId: string | null = null;
             try {
+              const identityGeneration = deviceIdentityGenerationRef.current;
               const currentUser = await client.auth?.getUser();
+              if (!mountedRef.current) return;
               expectedUserId = currentUser?.data.user?.id ?? null;
               // W3-16 #1: the replay below sends only this account's own
               // device-held work (see `durability/deviceAccount.ts`). Only a
               // clean answer moves it: supabase-js reports a network or
               // auth-server failure as `{ user: null, error }`, which means
               // "not known", never "signed out".
-              if (currentUser && !currentUser.error) {
-                setDeviceAccount(expectedUserId);
+              // An auth event or provider cleanup supersedes this read,
+              // even if it eventually returns a clean but older identity.
+              if (
+                currentUser &&
+                !currentUser.error &&
+                identityGeneration === deviceIdentityGenerationRef.current
+              ) {
+                adoptDeviceAccount(expectedUserId);
               }
             } catch {
               expectedUserId = null;
             }
+
+            // An auth event can also establish the owner while getUser is
+            // pending. Snapshot its visible device evidence before replay
+            // removes rows. If another event starts a newer refresh, wait
+            // for that one too.
+            let visibilityRefresh: Promise<void>;
+            do {
+              visibilityRefresh = deviceVisibilityRefreshRef.current;
+              await visibilityRefresh;
+              if (!mountedRef.current) return;
+            } while (visibilityRefresh !== deviceVisibilityRefreshRef.current);
 
             // #967 review: the specific daily-review periods this pass is
             // responsible for confirming, snapshotted IMMEDIATELY BEFORE
@@ -2259,6 +2312,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     },
     [
+      adoptDeviceAccount,
       applyPersistedAreas,
       markAccountSynced,
       markPersistedLoadFailure,
@@ -2306,17 +2360,20 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    let active = true;
     const { data: subscription } = client.auth.onAuthStateChange(
       (event, session) => {
+        if (!active) return;
+        deviceIdentityGenerationRef.current += 1;
         // W3-16 #1: keep the owner of device-held work current on EVERY auth
         // event, before the early returns below. A sign-out means no account
         // may receive the last account's queued work.
         if (event === "SIGNED_OUT") {
-          setDeviceAccount(null);
+          adoptDeviceAccount(null);
         } else if (session?.user?.id) {
-          setDeviceAccount(session.user.id);
+          adoptDeviceAccount(session.user.id);
         } else if (event === "INITIAL_SESSION") {
-          setDeviceAccount(null);
+          adoptDeviceAccount(null);
         }
         if (!session) return;
         if (
@@ -2333,9 +2390,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     );
 
     return () => {
+      active = false;
       subscription?.subscription?.unsubscribe();
     };
-  }, [runAccountSync]);
+  }, [adoptDeviceAccount, runAccountSync]);
 
   useEffect(() => {
     if (!hasHydratedFromStorage) {
@@ -2478,19 +2536,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [hasHydratedFromStorage, selectedAreaId]);
-
-  // FR-027 (F-G1a): refresh the unsynced-count signal from the device queue.
-  const refreshUnsyncedCount = useCallback(async () => {
-    try {
-      const count = await visiblePendingCaptureCount();
-      // See `mountedRef`'s note above the ref/refs block — a provider
-      // unmounted while this read was in flight must not touch state.
-      if (!mountedRef.current) return;
-      setUnsyncedCaptureCount(count);
-    } catch {
-      // best-effort signal; a queue read failure must not break capture
-    }
-  }, []);
 
   // Drain the offline queue to the spine when online. Idempotent (upsert on the
   // client_capture_id unique index), fault-isolated per item, and a failed item

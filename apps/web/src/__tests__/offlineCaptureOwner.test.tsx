@@ -3,9 +3,9 @@
 // must never be sent through account B's session. It waits on the device
 // for A, untouched.
 import "fake-indexeddb/auto";
-import { act, render, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WorkflowProvider } from "@/lib/WorkflowContext";
+import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import {
   enqueueCapture,
   listPendingCaptures,
@@ -14,6 +14,10 @@ import {
   getDeviceAccount,
   setDeviceAccount,
 } from "@/lib/durability/deviceAccount";
+import {
+  clearPendingWrites,
+  enqueuePendingWrite,
+} from "@/lib/durability/pendingWriteJournal";
 
 const ACCOUNT_A = "44444444-4444-4444-8444-444444444444";
 const ACCOUNT_B = "55555555-5555-4555-8555-555555555555";
@@ -88,6 +92,7 @@ vi.mock("@/lib/supabase/browser", () => ({
 beforeEach(async () => {
   window.sessionStorage.clear();
   setDeviceAccount(undefined);
+  await clearPendingWrites();
   await new Promise<void>((resolve) => {
     const req = indexedDB.deleteDatabase("lifeos-capture-queue");
     req.onsuccess = () => resolve();
@@ -127,6 +132,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   window.sessionStorage.clear();
   setDeviceAccount(undefined);
 });
@@ -149,6 +155,225 @@ async function queueAccountACaptureAndSignal() {
 }
 
 describe("W3-16 #1 sibling: the offline queue holds a capture for its own account", () => {
+  it.each(["read", "event"])(
+    "reveals retained offline projections when the owner is established by %s",
+    async (source) => {
+      await queueAccountACaptureAndSignal();
+      setDeviceAccount(ACCOUNT_A);
+      await enqueuePendingWrite({
+        entity: "review",
+        payload: { review_type: "daily", period_start: "2026-08-01" },
+      });
+      setDeviceAccount(undefined);
+      vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+      let resolveIdentity!: (value: unknown) => void;
+      mockGetUser.mockResolvedValue({
+        data: { user: null },
+        error: { message: "offline" },
+      });
+      mockGetUser.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveIdentity = resolve;
+          }),
+      );
+      function Projection() {
+        const { unsyncedCaptureCount, journalledClosedDays } = useWorkflow();
+        return (
+          <output data-testid="projection">
+            {unsyncedCaptureCount}:{journalledClosedDays.join(",")}
+          </output>
+        );
+      }
+      render(
+        <WorkflowProvider>
+          <Projection />
+        </WorkflowProvider>,
+      );
+      await waitFor(() => expect(resolveIdentity).toBeTypeOf("function"));
+      await waitFor(() =>
+        expect(screen.getByTestId("projection").textContent).toBe("1:"),
+      );
+      await act(async () => {
+        if (source === "event") {
+          authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_A } });
+          resolveIdentity({
+            data: { user: null },
+            error: { message: "offline" },
+          });
+        } else {
+          resolveIdentity({ data: { user: { id: ACCOUNT_A } }, error: null });
+        }
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId("projection").textContent).toBe(
+          "2:2026-08-01",
+        ),
+      );
+      expect(await listPendingCaptures()).toHaveLength(2);
+    },
+  );
+
+  it.each(["delayed", "failed"])(
+    "hides owned queue counts with a %s initial identity read",
+    async (identityState) => {
+      await queueAccountACaptureAndSignal();
+      vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+      let resolveIdentity!: (value: unknown) => void;
+      mockGetUser.mockResolvedValue({
+        data: { user: null },
+        error: { message: "offline" },
+      });
+      if (identityState === "delayed") {
+        mockGetUser.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveIdentity = resolve;
+            }),
+        );
+      }
+      function Count() {
+        const { unsyncedCaptureCount } = useWorkflow();
+        return (
+          <output data-testid="queue-count">{unsyncedCaptureCount}</output>
+        );
+      }
+      const mounted = render(
+        <WorkflowProvider>
+          <Count />
+        </WorkflowProvider>,
+      );
+      await waitFor(() => expect(mockGetUser).toHaveBeenCalled());
+      // The unowned row proves the asynchronous count finished loading.
+      await waitFor(() =>
+        expect(screen.getByTestId("queue-count").textContent).not.toBe("0"),
+      );
+      expect(screen.getByTestId("queue-count").textContent).toBe("1");
+      expect(getDeviceAccount()).toBeUndefined();
+      expect(await listPendingCaptures()).toHaveLength(2);
+      mounted.unmount();
+      if (resolveIdentity) {
+        await act(async () => {
+          resolveIdentity({
+            data: { user: null },
+            error: { message: "offline" },
+          });
+        });
+      }
+    },
+  );
+
+  it.each([ACCOUNT_A, null])(
+    "ignores a stale successful identity answer (%s) after B signs in",
+    async (staleAccount) => {
+      await queueAccountACaptureAndSignal();
+      let resolveIdentity!: (value: unknown) => void;
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: ACCOUNT_B } },
+        error: null,
+      });
+      mockGetUser.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveIdentity = resolve;
+          }),
+      );
+      render(
+        <WorkflowProvider>
+          <div />
+        </WorkflowProvider>,
+      );
+      await waitFor(() => expect(resolveIdentity).toBeTypeOf("function"));
+      await act(async () => {
+        authListener.callback?.("SIGNED_OUT", null);
+        authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_B } });
+      });
+      expect(getDeviceAccount()).toBe(ACCOUNT_B);
+      await act(async () => {
+        resolveIdentity({
+          data: { user: staleAccount ? { id: staleAccount } : null },
+          error: null,
+        });
+      });
+      expect(getDeviceAccount()).toBe(ACCOUNT_B);
+      const made = await enqueueCapture({
+        rawText: "B new work",
+        areaId: null,
+      });
+      expect(made.owner_user_id).toBe(ACCOUNT_B);
+      await waitFor(() => expect(sentTexts()).toContain("Signal capture"));
+      expect(sentTexts()).not.toContain("Account A offline thought");
+    },
+  );
+
+  it("ignores a stale identity answer after sign-out", async () => {
+    let resolveIdentity!: (value: unknown) => void;
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+    mockGetUser.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveIdentity = resolve;
+        }),
+    );
+    render(
+      <WorkflowProvider>
+        <div />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(resolveIdentity).toBeTypeOf("function"));
+    await act(async () => {
+      authListener.callback?.("SIGNED_OUT", null);
+      resolveIdentity({ data: { user: { id: ACCOUNT_A } }, error: null });
+    });
+    expect(getDeviceAccount()).toBeNull();
+    const made = await enqueueCapture({
+      rawText: "signed-out work",
+      areaId: null,
+    });
+    expect(made.owner_user_id).toBeUndefined();
+  });
+
+  it("an unmounted provider cannot overwrite a new provider's owner", async () => {
+    let resolveIdentity!: (value: unknown) => void;
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: ACCOUNT_B } },
+      error: null,
+    });
+    mockGetUser.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveIdentity = resolve;
+        }),
+    );
+    const old = render(
+      <WorkflowProvider>
+        <div />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(resolveIdentity).toBeTypeOf("function"));
+    const oldListener = authListener.callback;
+    old.unmount();
+    render(
+      <WorkflowProvider>
+        <div />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(getDeviceAccount()).toBe(ACCOUNT_B));
+    await act(async () => {
+      resolveIdentity({ data: { user: { id: ACCOUNT_A } }, error: null });
+    });
+    expect(getDeviceAccount()).toBe(ACCOUNT_B);
+    await act(async () => {
+      oldListener?.("SIGNED_OUT", null);
+    });
+    expect(getDeviceAccount()).toBe(ACCOUNT_B);
+    const made = await enqueueCapture({
+      rawText: "new provider work",
+      areaId: null,
+    });
+    expect(made.owner_user_id).toBe(ACCOUNT_B);
+  });
+
   it("a capture queued under A is never sent through B's session", async () => {
     await queueAccountACaptureAndSignal();
     mockGetUser.mockResolvedValue({

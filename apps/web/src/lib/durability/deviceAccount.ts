@@ -16,8 +16,8 @@
  *   (`maySendAs`). An entry with no owner was made signed out (or before the
  *   account was known) and keeps the #960 behavior: it goes to the account
  *   that signs in.
- * - An entry known to belong to another account is not shown or counted for
- *   the current one (`isHeldForAnotherAccount`). Nothing is deleted: the work
+ * - An owned entry is shown and counted only for its known account
+ *   (`isHeldForAnotherAccount`). Nothing is deleted: the work
  *   waits on the device until its own account signs in again.
  *
  * Pure module state, no React, no network. `WorkflowProvider` keeps it
@@ -61,16 +61,15 @@ export function maySendAs(
 }
 
 /**
- * Is an entry owned by `owner` known to belong to someone other than
- * `account`? Lenient while the account is not known yet, so the owner's own
- * work does not briefly vanish from view on a reload.
+ * Must this entry be held out of the current account's views?
+ * Owned work stays hidden until its exact owner is known, including during
+ * an unresolved or failed initial identity read.
  */
 export function isHeldForAnotherAccount(
   owner: string | undefined,
   account: DeviceAccount = currentAccount,
 ): boolean {
   if (owner === undefined) return false;
-  if (account === undefined) return false;
   return owner !== account;
 }
 

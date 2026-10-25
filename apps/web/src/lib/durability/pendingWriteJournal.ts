@@ -266,6 +266,14 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
   });
 }
 
+/** An ownership rejection must never be treated as a storage outage. */
+export class PendingWriteOwnershipError extends Error {
+  constructor() {
+    super("Cannot replace work held for another account.");
+    this.name = "PendingWriteOwnershipError";
+  }
+}
+
 /** Fresh unique id for a journalled write (also the sync idempotency key). */
 export function generateClientWriteId(): string {
   return crypto.randomUUID();
@@ -314,8 +322,21 @@ export async function enqueuePendingWrite<
       >,
     );
 
-    // W3-16 #1: a retry of an existing write keeps that write's owner, so a
-    // re-enqueue can never move one account's work to another account.
+    // Only the original owner may replace an owned operation. Compare with
+    // the caller captured before opening IndexedDB, not a later session.
+    // Finish this unchanged transaction before rejecting.
+    if (
+      existing?.owner_user_id !== undefined &&
+      existing.owner_user_id !== ownerStamp
+    ) {
+      // A storage abort must not downgrade a known ownership refusal into
+      // the generic storage-failure path (which can use a direct POST).
+      await transactionDone(transaction).catch(() => undefined);
+      throw new PendingWriteOwnershipError();
+    }
+
+    // Same-owner retries retain ownership. Unowned entries keep their
+    // existing signed-out handoff policy.
     const owner = existing ? existing.owner_user_id : ownerStamp;
     const fields =
       owner !== undefined

@@ -46,7 +46,10 @@ import {
   journalTaskReviewWrite,
   journalProposalEditWrite,
 } from "../durability/durableWrites";
-import { generateClientWriteId } from "../durability/pendingWriteJournal";
+import {
+  generateClientWriteId,
+  PendingWriteOwnershipError,
+} from "../durability/pendingWriteJournal";
 import {
   savedOnThisDeviceAndSendingBanner,
   savedOnThisDeviceBanner,
@@ -215,7 +218,10 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         clientCaptureId:
           localCapture.client_capture_id ?? generateClientWriteId(),
       });
-    } catch {
+    } catch (error) {
+      // An ownership refusal is not a storage failure. A direct POST would
+      // bypass the account boundary that just rejected this replacement.
+      if (error instanceof PendingWriteOwnershipError) throw error;
       // #960 review finding 3: the device itself refused to hold the journal
       // entry (private mode, a full IndexedDB quota, a blocking extension) —
       // but if the capture is otherwise fully RESOLVABLE (no area was chosen,

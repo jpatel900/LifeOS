@@ -11,6 +11,7 @@ import {
   listPendingWrites,
   listVisiblePendingWrites,
   replayPendingWrites,
+  PendingWriteOwnershipError,
   visiblePendingWriteCount,
 } from "./pendingWriteJournal";
 import {
@@ -65,17 +66,49 @@ describe("deviceAccount rules", () => {
     expect(maySendAs(undefined, ACCOUNT_B)).toBe(true);
   });
 
-  it("hides an entry only when it is known to be another account's", () => {
+  it("hides an owned entry until its own account is known", () => {
     expect(isHeldForAnotherAccount(ACCOUNT_A, ACCOUNT_B)).toBe(true);
     expect(isHeldForAnotherAccount(ACCOUNT_A, null)).toBe(true);
     expect(isHeldForAnotherAccount(ACCOUNT_A, ACCOUNT_A)).toBe(false);
-    // Not known yet (a reload before the session read): keep showing it.
-    expect(isHeldForAnotherAccount(ACCOUNT_A, undefined)).toBe(false);
+    expect(isHeldForAnotherAccount(ACCOUNT_A, undefined)).toBe(true);
     expect(isHeldForAnotherAccount(undefined, ACCOUNT_B)).toBe(false);
   });
 });
 
 describe("pending-writes journal: held for its owner", () => {
+  it("keeps an ownership rejection typed even if the storage transaction aborts", async () => {
+    setDeviceAccount(ACCOUNT_A);
+    const original = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { n: 1 },
+      clientWriteId: "owned",
+    });
+    const get = IDBIndex.prototype.get;
+    const spy = vi
+      .spyOn(IDBIndex.prototype, "get")
+      .mockImplementation(function (this: IDBIndex, key) {
+        const request = get.call(this, key);
+        const transaction = this.objectStore.transaction;
+        request.addEventListener("success", () => {
+          queueMicrotask(() => transaction.abort());
+        });
+        return request;
+      });
+    setDeviceAccount(ACCOUNT_B);
+    try {
+      await expect(
+        enqueuePendingWrite({
+          entity: "capture",
+          payload: { n: 2 },
+          clientWriteId: "owned",
+        }),
+      ).rejects.toBeInstanceOf(PendingWriteOwnershipError);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await listPendingWrites()).toEqual([original]);
+  });
+
   it("replays A's write only while A is signed in, and never deletes it for B", async () => {
     setDeviceAccount(ACCOUNT_A);
     const written = await enqueuePendingWrite({
@@ -99,20 +132,66 @@ describe("pending-writes journal: held for its owner", () => {
     expect(await listPendingWrites()).toHaveLength(0);
   });
 
-  it("a retry under the same client id keeps the original owner", async () => {
+  it.each([ACCOUNT_B, null, undefined])(
+    "rejects another or unresolved caller (%s) replacing an owned write",
+    async (account) => {
+      setDeviceAccount(ACCOUNT_A);
+      const original = await enqueuePendingWrite({
+        entity: "capture",
+        payload: { raw_text: "account A original" },
+        clientWriteId: "write-1",
+      });
+      setDeviceAccount(account);
+      await expect(
+        enqueuePendingWrite({
+          entity: "capture",
+          payload: { raw_text: "replacement private text" },
+          clientWriteId: "write-1",
+        }),
+      ).rejects.toThrow("Cannot replace work held for another account.");
+      expect(await listPendingWrites()).toEqual([original]);
+
+      setDeviceAccount(ACCOUNT_A);
+      const handler = vi.fn().mockResolvedValue(undefined);
+      await replayPendingWrites({ capture: handler });
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler.mock.calls[0][0].payload).toEqual(original.payload);
+      expect(await listPendingWrites()).toEqual([]);
+    },
+  );
+
+  it("a same-owner retry keeps its owner and queue position", async () => {
     setDeviceAccount(ACCOUNT_A);
-    await enqueuePendingWrite({
+    const original = await enqueuePendingWrite({
       entity: "capture",
       payload: { raw_text: "first" },
       clientWriteId: "write-1",
     });
-    setDeviceAccount(ACCOUNT_B);
     const retried = await enqueuePendingWrite({
       entity: "capture",
       payload: { raw_text: "first, retried" },
       clientWriteId: "write-1",
     });
     expect(retried.owner_user_id).toBe(ACCOUNT_A);
+    expect(retried.seq).toBe(original.seq);
+    expect(retried.payload).toEqual({ raw_text: "first, retried" });
+  });
+
+  it("keeps an unowned retry unowned after sign-in", async () => {
+    setDeviceAccount(null);
+    const original = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { raw_text: "signed-out" },
+      clientWriteId: "anonymous-write",
+    });
+    setDeviceAccount(ACCOUNT_A);
+    const retried = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { raw_text: "signed-out retry" },
+      clientWriteId: "anonymous-write",
+    });
+    expect(retried.owner_user_id).toBeUndefined();
+    expect(retried.seq).toBe(original.seq);
   });
 
   it("an account switch part-way through a pass holds back the rest", async () => {
@@ -147,6 +226,32 @@ describe("pending-writes journal: held for its owner", () => {
 });
 
 describe("offline capture queue: held for its owner", () => {
+  it("hides owned lists and counts while identity is unresolved", async () => {
+    setDeviceAccount(ACCOUNT_A);
+    const owned = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { raw_text: "owned" },
+    });
+    await enqueueCapture({ rawText: "owned", areaId: null });
+    setDeviceAccount(null);
+    const unowned = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { raw_text: "unowned" },
+    });
+    await enqueueCapture({ rawText: "unowned", areaId: null });
+
+    for (const account of [undefined, ACCOUNT_B, null]) {
+      setDeviceAccount(account);
+      expect(await listVisiblePendingWrites()).toEqual([unowned]);
+      expect(await visiblePendingWriteCount()).toBe(1);
+      expect(await visiblePendingCaptureCount()).toBe(1);
+    }
+    setDeviceAccount(ACCOUNT_A);
+    expect(await listVisiblePendingWrites()).toEqual([owned, unowned]);
+    expect(await visiblePendingWriteCount()).toBe(2);
+    expect(await visiblePendingCaptureCount()).toBe(2);
+  });
+
   it("stamps the queued capture and does not count it for another account", async () => {
     setDeviceAccount(ACCOUNT_A);
     const queued = await enqueueCapture({ rawText: "offline A", areaId: null });
