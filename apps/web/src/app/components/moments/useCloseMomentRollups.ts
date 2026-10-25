@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WorkflowState } from "@/lib/workflow";
 import type { useWorkflow } from "@/lib/WorkflowContext";
 import type {
@@ -21,15 +14,13 @@ import {
   buildMonthlyRollupDrafts,
   deriveMonthOverMonthReadback,
 } from "./momentsViewModel";
-import type { RollupSummaryContent } from "@lifeos/schemas";
 import {
   resolveDurablyApprovedRollupKeys,
   resolvedRollupAreaId,
   rollupKey,
   type ApprovedRollupSummary,
 } from "@/lib/review/approvedRollups";
-import { requestRollupProse } from "@/lib/ai/rollupProseClient";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { useRollupProseSummaries } from "./useRollupProseSummaries";
 import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import type { CloseWinVM } from "./CloseMoment";
 import type { ToastAction } from "./toast";
@@ -86,109 +77,6 @@ interface UseCloseMomentRollupsOptions {
    * approve a rollup.
    */
   areasReadbackSettled: boolean;
-}
-
-type ProseDraft = Pick<
-  RollupDraftVM,
-  | "areaId"
-  | "areaLabel"
-  | "periodStart"
-  | "periodEnd"
-  | "periodLabel"
-  | "summary"
->;
-
-function proseSignature(draft: ProseDraft, periodType: "week" | "month") {
-  return JSON.stringify([
-    periodType,
-    draft.areaLabel,
-    draft.periodStart,
-    draft.periodEnd,
-    draft.periodLabel,
-    draft.summary,
-  ]);
-}
-
-function useRollupProseSummaries(
-  drafts: readonly ProseDraft[],
-  periodType: "week" | "month",
-) {
-  const requestedAreasRef = useRef(new Set<string>());
-  const activeDraftsRef = useRef(new Map<string, string>());
-  const [results, setResults] = useState<
-    Record<
-      string,
-      {
-        signature: string;
-        summary: RollupSummaryContent;
-      }
-    >
-  >({});
-
-  // Requests belong to the mounted draft, not one render's array identity.
-  // Publish the committed inputs before async continuations can send or apply
-  // prose. Cleanup empties them on unmount; an equivalent refresh restores
-  // the same signatures without cancelling the one allowed request per area.
-  useLayoutEffect(() => {
-    activeDraftsRef.current = new Map(
-      drafts.map((draft) => [draft.areaId, proseSignature(draft, periodType)]),
-    );
-    return () => {
-      activeDraftsRef.current.clear();
-    };
-  }, [drafts, periodType]);
-
-  useEffect(() => {
-    const client = createSupabaseBrowserClient();
-    if (!client) return;
-    const toRequest = drafts.filter(
-      (draft) => !requestedAreasRef.current.has(draft.areaId),
-    );
-    if (toRequest.length === 0) return;
-    for (const draft of toRequest) requestedAreasRef.current.add(draft.areaId);
-    void (async () => {
-      try {
-        const accessToken =
-          (await client.auth.getSession()).data.session?.access_token ?? null;
-        for (const draft of toRequest) {
-          const signature = proseSignature(draft, periodType);
-          if (activeDraftsRef.current.get(draft.areaId) !== signature) continue;
-          const result = await requestRollupProse(
-            {
-              areaLabel: draft.areaLabel,
-              periodType,
-              periodLabel: draft.periodLabel,
-              draft: draft.summary,
-            },
-            { accessToken },
-          );
-          if (
-            !result.enhanced ||
-            activeDraftsRef.current.get(draft.areaId) !== signature
-          )
-            continue;
-          setResults((prev) => ({
-            ...prev,
-            [draft.areaId]: { signature, summary: result.summary },
-          }));
-        }
-      } catch {
-        // Session lookup failure keeps the deterministic draft. Retain the
-        // one-request policy rather than retrying a degraded service on render.
-      }
-    })();
-  }, [drafts, periodType]);
-
-  return useMemo(() => {
-    const summaries: Record<string, RollupSummaryContent> = {};
-    for (const draft of drafts) {
-      const result = results[draft.areaId];
-      if (result?.signature === proseSignature(draft, periodType)) {
-        summaries[draft.areaId] = result.summary;
-      }
-    }
-    return summaries;
-  }, [drafts, periodType, results]);
 }
 
 export function useCloseMomentRollups({
