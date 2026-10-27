@@ -60,6 +60,7 @@ jobs:
 
       # Always hand over failures too, so old approval cannot survive a crash.
       - name: Hand verdict to the sole auto-merge writer
+        id: writer
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -71,3 +72,51 @@ jobs:
         # Keep the existing entry point across cutover: before this owner-merged
         # change reaches main, its trusted writer still has the old --notify CLI.
         run: node scripts/agent/selfmerge-window.mjs --notify
+
+      # Checkout can fail before the writer exists. Recover trusted main code
+      # through the API, without adding a second owner of merge mutations.
+      - name: Revoke after a failed writer handoff
+        if: always() && steps.writer.outcome != 'success'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        with:
+          script: |
+            const { mkdtemp, writeFile, rm } = require('node:fs/promises');
+            const { join } = require('node:path');
+            const { pathToFileURL } = require('node:url');
+            const { data: ref } = await github.rest.git.getRef({
+              ...context.repo, ref: 'heads/main',
+            });
+            if (ref.object?.type !== 'commit' || !/^[a-f0-9]{40}$/i.test(ref.object.sha)) {
+              throw new Error('Could not resolve the trusted main writer revision.');
+            }
+            const directory = await mkdtemp(join(process.env.RUNNER_TEMP, 'automerge-revoke-'));
+            try {
+              for (const file of [
+                'selfmerge-window.mjs', 'check-safe-automerge.mjs',
+                'red-guard-diagnose.mjs', 'automation-policy.mjs',
+              ]) {
+                const { data } = await github.rest.repos.getContent({
+                  ...context.repo, path: 'scripts/agent/' + file, ref: ref.object.sha,
+                });
+                if (data.type !== 'file' || data.encoding !== 'base64' || typeof data.content !== 'string') {
+                  throw new Error('Could not load trusted writer dependency: ' + file);
+                }
+                const source = Buffer.from(data.content, 'base64').toString('utf8');
+                // Before owner merge, main still has the legacy unconditional CLI.
+                // Refuse to import it: its --notify/--scan paths may arm a PR.
+                if (file === 'selfmerge-window.mjs' && !/export function writeAutoMerge\(/.test(source)) {
+                  throw new Error('Trusted main does not yet expose the sole auto-merge writer.');
+                }
+                await writeFile(join(directory, file), source);
+              }
+              const { writeAutoMerge } = await import(pathToFileURL(join(directory, 'selfmerge-window.mjs')).href);
+              const result = writeAutoMerge({
+                id: context.payload.pull_request.node_id, enabled: false,
+              });
+              core.info('Checkout-independent revocation: ' + result.action);
+            } finally {
+              await rm(directory, { recursive: true, force: true });
+            }

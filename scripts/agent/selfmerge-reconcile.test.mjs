@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
 import test from "node:test";
 
 test("only the reconciler owns auto-merge mutations", () => {
@@ -53,6 +54,176 @@ const verdict = {
   eligible: true,
 };
 const api = () => import("./selfmerge-window.mjs");
+
+// Simulate checkout failing before any repository file reaches the runner.
+// Execute the workflow's actual fallback with its real module dependency set.
+// Every GitHub/subprocess call is intercepted before importing any writer code.
+function mockFailedCheckout(options = {}) {
+  const yaml = readFileSync(".github/workflows/safe-automerge.yml", "utf8");
+  const fallback = yaml
+    .match(
+      /- name: Revoke after a failed writer handoff[\s\S]*?script: \|\r?\n((?: {12}[^\n]*(?:\n|$))*)/,
+    )?.[1]
+    ?.replace(/^ {12}/gm, "");
+  const root = resolve(".");
+  const scratch = mkdtempSync(resolve(".selfmerge-checkout-test-"));
+  const code = `
+    import assert from 'node:assert/strict';
+    import child from 'node:child_process';
+    import { mkdirSync, readFileSync, readdirSync } from 'node:fs';
+    import { createRequire, syncBuiltinESMExports } from 'node:module';
+    import { join } from 'node:path';
+    import { pathToFileURL } from 'node:url';
+    const options = ${JSON.stringify(options)};
+    const calls = [], reads = [];
+    const scratch = ${JSON.stringify(scratch)};
+    const workspace = join(scratch, 'empty-workspace');
+    const temp = join(scratch, 'runner-temp');
+    mkdirSync(workspace); mkdirSync(temp);
+    process.chdir(workspace);
+    process.env.RUNNER_TEMP = temp;
+    process.env.GH_REPO = 'owner/repo';
+    process.env.GH_TOKEN = 'mock-only';
+    delete process.env.GITHUB_STEP_SUMMARY;
+    delete process.env.GITHUB_OUTPUT;
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_CHAT_ID;
+    child.execFileSync = (command, argv) => {
+      calls.push({ command, argv });
+      assert.equal(command, 'gh');
+      assert.deepEqual(argv.slice(0, 2), ['api', 'graphql']);
+      const query = argv.find(arg => arg.startsWith('query='));
+      assert.ok(query);
+      if (query.includes('disablePullRequestAutoMerge')) {
+        if (options.disableFails) throw new Error('permission denied');
+        return JSON.stringify({data: {}});
+      }
+      if (query.startsWith('query=query')) {
+        return JSON.stringify({data: {node: {__typename: 'PullRequest', autoMergeRequest: options.confirmDisabled ? null : {enabledAt: 'now'}}}});
+      }
+      throw new Error('Unexpected mutation: ' + query);
+    };
+    syncBuiltinESMExports();
+    const github = { rest: {
+      git: { getRef: async args => {
+        assert.deepEqual(args, {owner: 'owner', repo: 'repo', ref: 'heads/main'});
+        if (options.refFails) throw new Error('reference unavailable');
+        return {data: {object: {type: 'commit', sha: options.badRef ? 'untrusted-head' : 'a'.repeat(40)}}};
+      }},
+      repos: { getContent: async args => {
+        assert.equal(args.owner, 'owner'); assert.equal(args.repo, 'repo');
+        assert.equal(args.ref, 'a'.repeat(40));
+        reads.push(args.path);
+        if (options.contentFails && reads.length === 3) throw new Error('content unavailable');
+        if (options.badContent) return {data: {type: 'dir'}};
+        let source = readFileSync(join(${JSON.stringify(root)}, args.path), 'utf8');
+        if (options.legacyWriter && args.path.endsWith('/selfmerge-window.mjs')) {
+          source = "throw new Error('UNSAFE legacy CLI executed');";
+        }
+        if (options.importFails && args.path.endsWith('/automation-policy.mjs')) {
+          source += "\\nthrow new Error('trusted dependency failed to load');";
+        }
+        return {data: {type: 'file', encoding: 'base64', content: Buffer.from(source).toString('base64')}};
+      }},
+    }};
+    const context = {repo: {owner: 'owner', repo: 'repo'}, payload: {pull_request: {
+      node_id: 'PR_test', number: 42, body: '- [ ] OWNER-GATE: approval',
+      auto_merge: {enabled_at: 'now'}, head: {sha: 'untrusted-head'}, base: {sha: 'untrusted-base'},
+    }}};
+    let checkoutError, error;
+    try {
+      await import(pathToFileURL(join(workspace, 'scripts/agent/selfmerge-window.mjs')));
+    } catch (caught) { checkoutError = caught.code; }
+    try {
+      const source = ${JSON.stringify(fallback ?? "")};
+      if (source) {
+        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+        await new AsyncFunction('github', 'context', 'core', 'require', source)(
+          github, context, {info: () => {}}, createRequire(import.meta.url));
+      }
+    } catch (caught) { error = caught.message; }
+    console.log('MOCK_CHECKOUT=' + JSON.stringify({checkoutError, error, calls, reads, leftovers: readdirSync(temp)}));
+  `;
+  try {
+    const output = execFileSync(
+      process.execPath,
+      ["--input-type=module", "--eval", code],
+      { encoding: "utf8", stdio: "pipe", timeout: 10000 },
+    );
+    const line = output
+      .split(/\r?\n/)
+      .find((value) => value.startsWith("MOCK_CHECKOUT="));
+    assert.ok(line, output);
+    return JSON.parse(line.slice("MOCK_CHECKOUT=".length));
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+test("failed checkout still revokes an armed PR after an owner-gate edit", () => {
+  const result = mockFailedCheckout();
+  assert.equal(result.checkoutError, "ERR_MODULE_NOT_FOUND");
+  assert.equal(result.error, undefined);
+  assert.equal(
+    result.calls.length,
+    1,
+    "The missing writer must not skip revocation",
+  );
+  assert.ok(
+    result.calls[0].argv.some((arg) =>
+      arg.includes("disablePullRequestAutoMerge"),
+    ),
+  );
+  assert.ok(result.calls[0].argv.includes("id=PR_test"));
+  assert.deepEqual(result.reads.sort(), [
+    "scripts/agent/automation-policy.mjs",
+    "scripts/agent/check-safe-automerge.mjs",
+    "scripts/agent/red-guard-diagnose.mjs",
+    "scripts/agent/selfmerge-window.mjs",
+  ]);
+  assert.deepEqual(result.leftovers, []);
+});
+
+test("checkout fallback rejects unavailable trusted code and the legacy CLI", () => {
+  for (const options of [
+    { refFails: true },
+    { badRef: true },
+    { contentFails: true },
+    { badContent: true },
+    { legacyWriter: true },
+    { importFails: true },
+  ]) {
+    const result = mockFailedCheckout(options);
+    assert.ok(result.error, "Bootstrap failures must remain visible");
+    assert.doesNotMatch(result.error, /UNSAFE legacy CLI executed/);
+    assert.deepEqual(result.calls, []);
+    assert.deepEqual(result.leftovers, []);
+  }
+});
+
+test("checkout fallback retains strict disable confirmation on a mutation failure", () => {
+  const armed = mockFailedCheckout({ disableFails: true });
+  assert.match(armed.error ?? "", /Could not confirm auto-merge is disabled/);
+  assert.equal(armed.calls.length, 2);
+  const disabled = mockFailedCheckout({
+    disableFails: true,
+    confirmDisabled: true,
+  });
+  assert.equal(disabled.error, undefined);
+  assert.equal(disabled.calls.length, 2);
+  assert.deepEqual(armed.leftovers, []);
+  assert.deepEqual(disabled.leftovers, []);
+});
+
+test("checkout fallback follows any failed handoff without masking the job failure", () => {
+  const yaml = readFileSync(".github/workflows/safe-automerge.yml", "utf8");
+  assert.match(yaml, /name: Hand verdict[^\n]*\r?\n\s+id: writer/);
+  assert.match(
+    yaml,
+    /name: Revoke after a failed writer handoff\r?\n\s+if: always\(\) && steps\.writer\.outcome != 'success'/,
+  );
+  assert.doesNotMatch(yaml, /continue-on-error/);
+});
 
 test("an ordinary PR never receives a self-merge notification", async () => {
   const { evaluateAutoMerge } = await api();
