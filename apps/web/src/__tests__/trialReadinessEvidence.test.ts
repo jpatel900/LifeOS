@@ -11,10 +11,14 @@ const program = readFileSync(
 const currentProgramState =
   program.split("## 6. Program state")[1]?.split("\n> ##")[0] ?? "";
 const failureDate = "2026-10-27";
+const datedFailure =
+  currentProgramState
+    .split("\n")
+    .find((line) => line.startsWith(`- **${failureDate} —`)) ?? "";
 
 function latestReadinessDate(checkpoints: string) {
   return [
-    ...checkpoints.matchAll(/^- \*\*(\d{4}-\d{2}-\d{2}) — ([^*\n]+)\*\*:/gm),
+    ...checkpoints.matchAll(/^- \*\*(\d{4}-\d{2}-\d{2}) — ([^*\n]+):\*\*/gm),
   ].find((entry) => /\b(TRIAL|READINESS)\b/i.test(entry[2] ?? ""))?.[1];
 }
 
@@ -22,6 +26,7 @@ function assertCurrentFailureSummary(
   summary: string,
   latestDate: string | undefined,
 ) {
+  expect(latestDate, "Missing dated readiness checkpoint").toBeDefined();
   // A newer readiness checkpoint supersedes this failure-specific contract.
   // It may truthfully record a started trial and a different next action.
   if (latestDate !== failureDate) return;
@@ -39,10 +44,6 @@ function assertCurrentFailureSummary(
 // failures. Newer evidence can supersede them without erasing the trial gates.
 describe("trial readiness reflects the recorded smoke attempts (#820)", () => {
   it("records both later attempts and distinguishes wrapper success from smoke failure", () => {
-    const datedFailure =
-      currentProgramState
-        .split("\n")
-        .find((line) => line.startsWith(`- **${failureDate} —`)) ?? "";
     expect(datedFailure).toContain("39144442976");
     expect(datedFailure).toContain("40214046720");
     expect(datedFailure).toMatch(/SMOKE_OUTCOME: failure/);
@@ -68,25 +69,24 @@ describe("trial readiness reflects the recorded smoke attempts (#820)", () => {
       currentProgramState;
     const startedTrial =
       "Trial started 2026-10-28. C2 owner glance completed.\n## Next action\nUse LifeOS for the trial.";
+    const latestDate = latestReadinessDate(laterEvidence);
+    expect(latestDate).toBe("2026-10-28");
     expect(() =>
-      assertCurrentFailureSummary(
-        startedTrial,
-        latestReadinessDate(laterEvidence),
-      ),
+      assertCurrentFailureSummary(startedTrial, latestDate),
     ).not.toThrow();
   });
 
   it("still rejects stale instructions when a newer checkpoint is unrelated to readiness", () => {
     const unrelatedCheckpoint =
-      "- **2026-10-28 — NAVIGATION COPY:** Labels clarified.\n" +
-      currentProgramState;
+      "- **2026-10-28 — NAVIGATION COPY:** Labels clarified.\n" + datedFailure;
     // The guard is live while the dated failure remains current, including
     // if an unrelated program note is inserted ahead of it.
-    if (latestReadinessDate(currentProgramState) !== failureDate) return;
+    const latestDate = latestReadinessDate(unrelatedCheckpoint);
+    expect(latestDate).toBe(failureDate);
     expect(() =>
       assertCurrentFailureSummary(
         "## Next action\nWait for the next weekly smoke.",
-        latestReadinessDate(unrelatedCheckpoint),
+        latestDate,
       ),
     ).toThrow();
   });
