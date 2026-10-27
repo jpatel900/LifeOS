@@ -11,7 +11,7 @@ stale — check docs/program/final-ux-loop.md §6 and recent merged PRs before t
 
 **Real use first owns priority** (owner decision 2026-09-29, Option A). Prepare the 10-day trial, then use LifeOS before more campaign work. The [Final UX Loop](program/final-ux-loop.md) keeps its rules and history but gives up the serial queue. Campaign implementation C2–C6 is parked and resumes only from trial findings. New feature work stays frozen except FR-049 and FR-028 ([program rule R8](program/final-ux-loop.md)). Bug and truth repairs continue, trial blockers first.
 
-State as of 2026-10-17: **The trial has not started**; its start stays UNSET until production proves capture and Sort (program §7). That proof is still missing and UNVERIFIED: the weekly production smoke (#1026) still fails, and the latest repairs, deployed 2026-10-13, have not been checked by it yet. Live readiness and evidence are recorded in the program's §6. **C1** remains closed at 10/10. **C2** has its implementation slices merged and awaits only the owner's five-minute glance (§5.2); no implementation or re-score is active, and C2 is not closed. **C3** has technical onboarding proof in PR #999; the owner's experience and adoption gate remains unverified.
+State as of 2026-10-27: **The trial has not started**; its start stays UNSET until production proves capture and Sort (program §7). That proof is still missing and UNVERIFIED. Later weekly smoke attempts (#1026) failed before Sort, at capture visibility; the latest could not find its capture on Start before reloading. The dated attempts and their actual smoke outcomes are recorded in [program §6](program/final-ux-loop.md#6-program-state-live--update-at-every-checkpoint-newest-first). **C1** remains closed at 10/10. **C2** has its implementation slices merged and awaits only the owner's five-minute glance (§5.2); no implementation or re-score is active, and C2 is not closed. **C3** has technical onboarding proof in PR #999; the owner's experience and adoption gate remains unverified.
 
 The shipped product baseline: areas, capture, optional AI/mock parse, triage, local-first planning, explicit approval-gated Google Calendar event creation, execution tracking, review logging, deterministic health checks, audit-oriented persistence, and a versioned headless client surface (`/api/v1` + `@lifeos/cli`) alongside the web app.
 
@@ -45,7 +45,7 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 ## Next action
 
-Prove that a real production capture appears on Start and Sort makes a next step on the build deployed 2026-10-13. The next weekly smoke run (#1026) is the check; if Sort still times out, fix that first as the trial blocker. The account-save warning from 2026-09-27 is still unexplained. Then begin the trial in program §7. C2's five-minute owner glance remains pending alongside preparation; do not start another re-score round. Cross-lane work follows `docs/agent/LANES.md`.
+Have #1026's current owner diagnose the capture visibility failure, then use the existing production readiness check to prove that a real capture appears on Start and Sort makes a next step. Establish the served build from production evidence; a workflow's head SHA alone does not prove it. The account-save warning from 2026-09-27 is still unexplained. Begin the trial only after the confirmation required by program §7. C2's five-minute owner glance remains pending alongside preparation; do not start another re-score round. Cross-lane work follows `docs/agent/LANES.md`.
 
 ## Do-not-repeat
 
