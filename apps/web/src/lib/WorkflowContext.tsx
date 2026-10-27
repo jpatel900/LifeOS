@@ -284,7 +284,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     stateRef: { current: WorkflowState };
   } | null>(null);
   const heldSnapshots = useRef(new Map<string, { current: WorkflowState }>());
-  const memorySourceOwners = useRef<Record<string, string>>({});
+  const memorySourceOwners = useRef<Record<string, string | null>>({});
   const selectedScope = useRef(account.scope);
   const isScopeActive = useCallback(
     (scope: string) => selectedScope.current === scope,
@@ -411,6 +411,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             await claimAnonymousTaskDrafts(scope, {
               ...anonymousSnapshotOwners(),
               ...memorySourceOwners.current,
+              ...claimed.draftOwners,
             });
           } else {
             scope = await safeUnownedWorkflowScope(scope);

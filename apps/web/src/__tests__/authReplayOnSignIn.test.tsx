@@ -3322,6 +3322,118 @@ describe("W3-16 #1: pending work never crosses to another account", () => {
     ).toBeNull();
   });
 
+  it.each([false, true])(
+    "W8-15: B mounts and replays its own work from A's stale copied source (quota=%s)",
+    async (quota) => {
+      mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+      const firstMount = render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      fireEvent.click(screen.getByText("Capture"));
+      const sourceKey = accountSnapshotKey("anonymous");
+      await waitFor(() =>
+        expect(sessionStorage.getItem(sourceKey)).toContain(ACCOUNT_A_TEXT),
+      );
+      const copiedSource = sessionStorage.getItem(sourceKey)!;
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: PERSISTED_AREA.user_id } },
+        error: null,
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockSyncJournaledCapture.mockRejectedValue(
+        new TypeError("Failed to fetch"),
+      );
+      await act(async () => {
+        authListener.callback?.("SIGNED_IN", {
+          user: { id: PERSISTED_AREA.user_id },
+        });
+      });
+      await waitFor(() =>
+        expect(
+          sessionStorage.getItem(
+            accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`),
+          ),
+        ).toContain(ACCOUNT_A_TEXT),
+      );
+      firstMount.unmount();
+      sessionStorage.clear();
+      sessionStorage.setItem(sourceKey, copiedSource);
+      const originalSet = Storage.prototype.setItem;
+      const writes = vi
+        .spyOn(Storage.prototype, "setItem")
+        .mockImplementation(function (this: Storage, key, value) {
+          if (quota && this === sessionStorage && key === sourceKey)
+            throw new DOMException("Quota", "QuotaExceededError");
+          originalSet.call(this, key, value);
+        });
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: ACCOUNT_B_USER } },
+        error: null,
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [ACCOUNT_B_AREA],
+      });
+      mockSyncJournaledCapture.mockClear();
+      const secondMount = render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      expect(
+        screen.queryByText("Retry device recovery"),
+      ).not.toBeInTheDocument();
+      expect(screen.getByTestId("capture-texts")).not.toHaveTextContent(
+        ACCOUNT_A_TEXT,
+      );
+      fireEvent.click(screen.getByText("Capture B"));
+      // Positive witness: B's persistence path actually ran before exclusion.
+      await waitFor(() =>
+        expect(
+          mockSyncJournaledCapture.mock.calls.map((call) => call[1]?.raw_text),
+        ).toContain("B's private thought"),
+      );
+      expect(
+        mockSyncJournaledCapture.mock.calls.map((call) => call[1]?.raw_text),
+      ).not.toContain(ACCOUNT_A_TEXT);
+      secondMount.unmount();
+      writes.mockRestore();
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: PERSISTED_AREA.user_id } },
+        error: null,
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+          ACCOUNT_A_TEXT,
+        ),
+      );
+    },
+  );
+
   it.each(["reservation", "all writes", "source removal"])(
     "W7-17: reload never gives B anonymous work adopted by A after %s fails",
     async (failure) => {

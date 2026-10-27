@@ -5,10 +5,13 @@ import {
   enqueuePendingWrite,
   generateClientWriteId,
   listPendingWrites,
+  listVisiblePendingWrites,
   markPendingWriteSynced,
   pendingWriteCount,
   replayPendingWrites,
   reserveCaptureWriteOwners,
+  reserveSnapshotCaptureOwner,
+  readSnapshotCaptureOwner,
   type PendingWrite,
 } from "./pendingWriteJournal";
 import { setDeviceAccount } from "./deviceAccount";
@@ -49,6 +52,186 @@ beforeEach(async () => {
 });
 
 describe("enqueuePendingWrite / listPendingWrites", () => {
+  it("refreshes capture quarantine after an earlier replay handler settles", async () => {
+    setDeviceAccount(null);
+    await enqueuePendingWrite({
+      entity: "win",
+      payload: { name: "hold-pass" },
+    });
+    const held = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { workflow_capture_id: "late-free" },
+    });
+    await reserveCaptureWriteOwners("A", ["late-a"]);
+    await reserveCaptureWriteOwners("B", ["late-b"]);
+    setDeviceAccount("C");
+    const own = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { workflow_capture_id: "late-c-own" },
+    });
+    const entered = deferred();
+    const release = deferred();
+    const sent: string[] = [];
+    const replay = replayPendingWrites({
+      win: async () => {
+        entered.resolve();
+        await release.promise;
+      },
+      capture: async (write) => {
+        sent.push(write.client_write_id);
+      },
+    });
+    await entered.promise;
+    expect(
+      await reserveSnapshotCaptureOwner("late-mixed", "C", [
+        "late-a",
+        "late-b",
+        "late-free",
+      ]),
+    ).toBeNull();
+    release.resolve();
+    await replay;
+    expect(sent).toEqual([own.client_write_id]);
+    expect(
+      (await listPendingWrites()).map((write) => write.client_write_id),
+    ).toContain(held.client_write_id);
+  });
+
+  it("holds an ambiguous unowned capture while the unrelated account's own work replays", async () => {
+    await reserveCaptureWriteOwners("A", ["mixed-a"]);
+    await reserveCaptureWriteOwners("B", ["mixed-b"]);
+    setDeviceAccount(null);
+    const ambiguous = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { workflow_capture_id: "mixed-free" },
+    });
+    expect(
+      await reserveSnapshotCaptureOwner("mixed-replay-token", "C", [
+        "mixed-a",
+        "mixed-b",
+        "mixed-free",
+      ]),
+    ).toBeNull();
+    setDeviceAccount(null);
+    const late = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { workflow_capture_id: "mixed-free" },
+    });
+    setDeviceAccount("C");
+    expect(await listVisiblePendingWrites()).toEqual([]);
+    const own = await enqueuePendingWrite({
+      entity: "capture",
+      payload: { workflow_capture_id: "c-own" },
+    });
+    const sent: string[] = [];
+    await replayPendingWrites({
+      capture: async (write) => {
+        sent.push(write.client_write_id);
+      },
+    });
+    expect(sent).toEqual([own.client_write_id]);
+    expect(
+      (await listPendingWrites()).map((write) => write.client_write_id),
+    ).toEqual([ambiguous.client_write_id, late.client_write_id]);
+    await expect(
+      enqueuePendingWrite({
+        entity: "capture",
+        payload: { workflow_capture_id: "mixed-free" },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("adds snapshot fences without changing a v3 capture owner or queue position", async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("lifeos-pending-writes", 3);
+      request.onupgradeneeded = () => {
+        const store = request.result.createObjectStore("pending", {
+          keyPath: "seq",
+          autoIncrement: true,
+        });
+        store.createIndex("by_client_write_id", "client_write_id", {
+          unique: true,
+        });
+        request.result.createObjectStore("capture_owners");
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const queued = {
+      seq: 7,
+      client_write_id: "old-write",
+      entity: "capture",
+      payload: { workflow_capture_id: "old-capture" },
+      owner_user_id: "A",
+      created_at: "2026-10-20T12:00:00Z",
+    };
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(
+        ["pending", "capture_owners"],
+        "readwrite",
+      );
+      transaction.objectStore("pending").put(queued);
+      transaction.objectStore("capture_owners").put("A", "old-capture");
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = transaction.onerror = () =>
+        reject(transaction.error);
+    });
+    db.close();
+    expect(
+      await reserveSnapshotCaptureOwner("old-token", "B", ["old-capture"]),
+    ).toBe("A");
+    expect(await listPendingWrites()).toEqual([queued]);
+    await expect(
+      reserveCaptureWriteOwners("B", ["old-capture"]),
+    ).rejects.toThrow();
+  });
+
+  it("chooses one snapshot owner across concurrent copied tokens with disjoint captures", async () => {
+    const [first, second] = await Promise.all([
+      reserveSnapshotCaptureOwner("shared-token", "A", ["first"]),
+      reserveSnapshotCaptureOwner("shared-token", "B", ["second"]),
+    ]);
+    expect(first).toBe(second);
+    expect(["A", "B"]).toContain(first);
+    await reserveCaptureWriteOwners(first!, ["first", "second"]);
+    expect(await readSnapshotCaptureOwner("shared-token", [])).toBe(first);
+    await clearPendingWrites();
+    expect(await readSnapshotCaptureOwner("shared-token", [])).toBe(first);
+  });
+
+  it("respects a racing owned enqueue without splitting snapshot and capture owners", async () => {
+    setDeviceAccount("A");
+    const results = await Promise.allSettled([
+      enqueuePendingWrite({
+        entity: "capture",
+        payload: { workflow_capture_id: "racing" },
+      }),
+      reserveSnapshotCaptureOwner("racing-token", "B", ["racing"]),
+    ]);
+    expect(results[1].status).toBe("fulfilled");
+    const owner = await readSnapshotCaptureOwner("racing-token", ["racing"]);
+    expect(["A", "B"]).toContain(owner);
+    const writes = await listPendingWrites();
+    expect(writes.every((write) => write.owner_user_id === owner)).toBe(true);
+    if (owner === "B") expect(results[0].status).toBe("rejected");
+    else expect(writes).toHaveLength(1);
+  });
+
+  it("quarantines a mixed-owner source without changing its existing capture owners", async () => {
+    await reserveCaptureWriteOwners("A", ["owned-a"]);
+    await reserveCaptureWriteOwners("B", ["owned-b"]);
+    expect(
+      await reserveSnapshotCaptureOwner("mixed-token", "C", [
+        "owned-a",
+        "owned-b",
+        "free",
+      ]),
+    ).toBeNull();
+    expect(await readSnapshotCaptureOwner("mixed-token", [])).toBeNull();
+    await expect(reserveCaptureWriteOwners("D", ["free"])).rejects.toThrow();
+    await reserveCaptureWriteOwners("A", ["owned-a"]);
+    await reserveCaptureWriteOwners("B", ["owned-b"]);
+  });
   it("reserves adopted captures before and after enqueue without claiming unrelated work", async () => {
     setDeviceAccount(null);
     const early = await enqueuePendingWrite({

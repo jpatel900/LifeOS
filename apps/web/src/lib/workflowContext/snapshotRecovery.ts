@@ -82,6 +82,34 @@ export async function reserveSnapshotRecovery(
   }
 }
 
+/** Repair only the exact version whose capture ownership was validated.
+ * A concurrent append or reset wins; the caller must re-read and revalidate.
+ */
+export async function repairSnapshotRecoveryOwner(
+  expected: SnapshotRecovery,
+  owner: string,
+): Promise<SnapshotRecovery | null> {
+  const db = await openDatabase();
+  try {
+    const transaction = db.transaction(STORE, "readwrite");
+    const done = transactionDone(transaction);
+    const store = transaction.objectStore(STORE);
+    const request = store.get(expected.id);
+    let repaired: SnapshotRecovery | null = null;
+    request.onsuccess = () => {
+      const current = request.result as SnapshotRecovery | undefined;
+      if (current && JSON.stringify(current) === JSON.stringify(expected)) {
+        repaired = { ...current, owner };
+        store.put(repaired);
+      }
+    };
+    await done;
+    return repaired;
+  } finally {
+    db.close();
+  }
+}
+
 export async function snapshotRecoveryId(
   scope: string,
   stored: string | null,

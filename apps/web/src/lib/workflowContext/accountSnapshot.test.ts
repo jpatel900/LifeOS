@@ -4,7 +4,10 @@ import {
   clearSnapshotRecoveriesForTests,
   clearSnapshotRecoveryPayloads,
   listSnapshotRecoveries,
+  reserveSnapshotRecovery,
+  snapshotRecoveryId,
 } from "./snapshotRecovery";
+import { reserveCaptureWriteOwners } from "../durability/pendingWriteJournal";
 import {
   createEmptyWorkflowState,
   nextId,
@@ -20,6 +23,7 @@ import {
   storeAccountSnapshot,
   safeUnownedWorkflowScope,
   unverifiedWorkflowScope,
+  mergeAnonymousSnapshot,
 } from "./accountSnapshot";
 import { loadStoredStateFromSession } from "./reducerCore";
 
@@ -42,6 +46,123 @@ function captured(rawText: string) {
 }
 
 describe("account snapshots", () => {
+  it("quarantines a copied normal claim before anonymous hydration", async () => {
+    const original = captured("Already reserved in a different tab");
+    storeAccountSnapshot("anonymous", original);
+    const key = accountSnapshotKey("anonymous");
+    const copiedSource = sessionStorage.getItem(key)!;
+    await claimAnonymousSnapshots("account:A");
+    sessionStorage.clear();
+    sessionStorage.setItem(key, copiedSource);
+    expect(await safeUnownedWorkflowScope("anonymous")).not.toBe("anonymous");
+    expect(sessionStorage.getItem(key)).toBe(copiedSource);
+  });
+
+  it("quarantines a mixed-owner legacy source without blocking any account", async () => {
+    const first = captured("A's owned work");
+    const second = captured("B's owned work");
+    const original = mergeAnonymousSnapshot(first, second);
+    storeAccountSnapshot("anonymous", original);
+    const key = accountSnapshotKey("anonymous");
+    const bytes = sessionStorage.getItem(key);
+    await reserveCaptureWriteOwners("A", [first.captureItems[0].id]);
+    await reserveCaptureWriteOwners("B", [second.captureItems[0].id]);
+    for (const account of ["account:C", "account:A", "account:B"]) {
+      const owners = {};
+      const claimed = await claimAnonymousSnapshots(
+        account,
+        undefined,
+        undefined,
+        owners,
+      );
+      expect(claimed.state.captureItems).toEqual([]);
+      expect(claimed.storageBlocked).toBe(true);
+      expect(owners).toEqual({ anonymous: null });
+      expect(sessionStorage.getItem(key)).toBe(bytes);
+    }
+    expect(await safeUnownedWorkflowScope("anonymous")).not.toBe("anonymous");
+  });
+
+  it.each([false, true])(
+    "keeps a stale copied source recoverable by A without blocking B (quota=%s)",
+    async (quota) => {
+      const original = captured("Copied before A signed in");
+      storeAccountSnapshot("anonymous", original);
+      const key = accountSnapshotKey("anonymous");
+      const copiedSource = sessionStorage.getItem(key)!;
+      await claimAnonymousSnapshots("account:A");
+      // The copied tab was away during A's auth event. It returns as B.
+      sessionStorage.clear();
+      sessionStorage.setItem(key, copiedSource);
+      const writes = quota
+        ? vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+            throw new DOMException("Quota", "QuotaExceededError");
+          })
+        : undefined;
+      for (let retry = 0; retry < 2; retry += 1) {
+        expect(
+          (await claimAnonymousSnapshots("account:B")).state.captureItems,
+        ).toEqual([]);
+      }
+      writes?.mockRestore();
+      expect(
+        (await claimAnonymousSnapshots("account:A")).state.captureItems,
+      ).toEqual(original.captureItems);
+      await expect(
+        reserveCaptureWriteOwners("B", [original.captureItems[0].id]),
+      ).rejects.toThrow();
+      // Closing this tab must not poison a new, unrelated account tab.
+      sessionStorage.clear();
+      expect(
+        (await claimAnonymousSnapshots("account:C")).state.captureItems,
+      ).toEqual([]);
+    },
+  );
+
+  it.each(["session", "fallback"])(
+    "repairs an old conflicting %s owner without exposing A's capture to B",
+    async (kind) => {
+      const original = captured("Previously poisoned source");
+      storeAccountSnapshot("anonymous", original);
+      const key = accountSnapshotKey("anonymous");
+      const copiedSource = sessionStorage.getItem(key)!;
+      const id = await snapshotRecoveryId("anonymous", copiedSource, original);
+      // Seed the persisted state left by the old version, not a new claim.
+      await reserveCaptureWriteOwners("A", [original.captureItems[0].id]);
+      if (kind === "session") {
+        sessionStorage.setItem(
+          key,
+          JSON.stringify({
+            heldFor: "account:B",
+            state: original,
+            snapshotClaimId: id,
+          }),
+        );
+      } else {
+        await reserveSnapshotRecovery(
+          {
+            id,
+            scope: "anonymous",
+            owner: "account:B",
+            state: original,
+            unanchored: true,
+          },
+          mergeAnonymousSnapshot,
+        );
+        sessionStorage.clear();
+      }
+      expect(
+        (await claimAnonymousSnapshots("account:C")).state.captureItems,
+      ).toEqual([]);
+      expect(
+        (await claimAnonymousSnapshots("account:B")).state.captureItems,
+      ).toEqual([]);
+      expect(
+        (await claimAnonymousSnapshots("account:A")).state.captureItems,
+      ).toEqual(original.captureItems);
+    },
+  );
+
   it("starts a fresh unverified generation after retiring an account even when storage is blocked", () => {
     const initial = unverifiedWorkflowScope();
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {

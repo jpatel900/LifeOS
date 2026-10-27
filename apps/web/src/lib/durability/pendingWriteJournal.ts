@@ -88,9 +88,13 @@ const DB_NAME = "lifeos-pending-writes";
  * v1 was never wired into any UI, so no user data can exist in it and the
  * upgrade recreates the store outright rather than migrating rows.
  */
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_NAME = "pending";
 const CAPTURE_OWNERS = "capture_owners";
+const SNAPSHOT_OWNERS = "snapshot_owners";
+// A non-account marker keeps ambiguous work durable and ineligible for
+// visibility, adoption and replay, including late enqueues after reload.
+const QUARANTINED_OWNER = "quarantine:snapshot-owner-conflict";
 const CLIENT_WRITE_ID_INDEX = "by_client_write_id";
 
 /**
@@ -243,6 +247,10 @@ function openDatabase(): Promise<IDBDatabase> {
       // v3 adds ownership reservations without touching v2's queued rows.
       if (!db.objectStoreNames.contains(CAPTURE_OWNERS))
         db.createObjectStore(CAPTURE_OWNERS);
+      // v4 fences a copied snapshot token in the same transaction as its
+      // captures. Keep v3 reservations and all queued rows unchanged.
+      if (!db.objectStoreNames.contains(SNAPSHOT_OWNERS))
+        db.createObjectStore(SNAPSHOT_OWNERS);
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -344,6 +352,7 @@ export async function enqueuePendingWrite<
     // the caller captured before opening IndexedDB, not a later session.
     // Finish this unchanged transaction before rejecting.
     if (
+      (reservedOwner === QUARANTINED_OWNER && ownerStamp !== undefined) ||
       (existing?.owner_user_id !== undefined &&
         existing.owner_user_id !== ownerStamp) ||
       (reservedOwner !== undefined &&
@@ -379,6 +388,125 @@ export async function enqueuePendingWrite<
 
     await transactionDone(transaction);
     return { ...fields, seq };
+  } finally {
+    db.close();
+  }
+}
+
+/** Inspect without claiming, including legacy capture-only reservations.
+ * null means contradictory owners; undefined means genuinely unclaimed.
+ */
+export function readSnapshotCaptureOwner(
+  snapshotId: string,
+  captureIds: readonly string[],
+): Promise<string | null | undefined> {
+  return resolveSnapshotCaptureOwner(snapshotId, captureIds);
+}
+
+/** One ownership decision for copied tokens, captures and late enqueues.
+ * Existing evidence wins over a proposed owner. Conflicts stay untouched.
+ */
+export async function reserveSnapshotCaptureOwner(
+  snapshotId: string,
+  proposedOwner: string,
+  captureIds: readonly string[],
+): Promise<string | null> {
+  const owner = await resolveSnapshotCaptureOwner(
+    snapshotId,
+    captureIds,
+    proposedOwner,
+  );
+  if (owner === undefined)
+    throw new Error("Cannot reserve snapshot ownership.");
+  return owner;
+}
+
+async function resolveSnapshotCaptureOwner(
+  snapshotId: string,
+  captureIds: readonly string[],
+  proposedOwner?: string,
+): Promise<string | null | undefined> {
+  if (!hasIndexedDb()) throw new Error("Cannot verify snapshot ownership.");
+  const ids = new Set(captureIds);
+  const db = await openDatabase();
+  try {
+    const transaction = db.transaction(
+      [STORE_NAME, CAPTURE_OWNERS, SNAPSHOT_OWNERS],
+      proposedOwner === undefined ? "readonly" : "readwrite",
+    );
+    const done = transactionDone(transaction);
+    try {
+      const store = transaction.objectStore(STORE_NAME);
+      const captures = transaction.objectStore(CAPTURE_OWNERS);
+      const snapshots = transaction.objectStore(SNAPSHOT_OWNERS);
+      const writes = (await requestToPromise(store.getAll())) as PendingWrite[];
+      const evidence = new Set<string>();
+      const snapshotOwner = await requestToPromise(snapshots.get(snapshotId));
+      if (snapshotOwner !== undefined) evidence.add(snapshotOwner);
+      const reservations = await Promise.all(
+        [...ids].map((id) => requestToPromise(captures.get(id))),
+      );
+      for (const reserved of reservations)
+        if (reserved !== undefined) evidence.add(reserved);
+      const matchingWrites = writes.filter(
+        (write) =>
+          write.entity === "capture" &&
+          ids.has(String(write.payload.workflow_capture_id)),
+      );
+      for (const write of matchingWrites)
+        if (write.owner_user_id !== undefined)
+          evidence.add(write.owner_user_id);
+      if (evidence.size > 1 || evidence.has(QUARANTINED_OWNER)) {
+        if (proposedOwner !== undefined) {
+          snapshots.put(QUARANTINED_OWNER, snapshotId);
+          const heldOwners = new Map<string, string>();
+          for (const [index, id] of [...ids].entries()) {
+            const owned = new Set(
+              matchingWrites
+                .filter(
+                  (write) => String(write.payload.workflow_capture_id) === id,
+                )
+                .flatMap((write) =>
+                  write.owner_user_id === undefined
+                    ? []
+                    : [write.owner_user_id],
+                ),
+            );
+            const held =
+              reservations[index] ??
+              (owned.size === 1 ? owned.values().next().value : undefined) ??
+              QUARANTINED_OWNER;
+            heldOwners.set(id, held);
+            if (reservations[index] === undefined) captures.put(held, id);
+          }
+          for (const write of matchingWrites) {
+            if (write.owner_user_id === undefined)
+              store.put({
+                ...write,
+                owner_user_id: heldOwners.get(
+                  String(write.payload.workflow_capture_id),
+                ),
+              });
+          }
+        }
+        await done;
+        return null;
+      }
+      const owner = evidence.values().next().value ?? proposedOwner;
+      if (proposedOwner !== undefined && owner !== undefined) {
+        snapshots.put(owner, snapshotId);
+        for (const id of ids) captures.put(owner, id);
+        for (const write of matchingWrites) {
+          if (write.owner_user_id === undefined)
+            store.put({ ...write, owner_user_id: owner });
+        }
+      }
+      await done;
+      return owner;
+    } catch (error) {
+      await done.catch(() => undefined);
+      throw error;
+    }
   } finally {
     db.close();
   }
@@ -479,7 +607,9 @@ export async function listPendingWrites(
 export async function listVisiblePendingWrites(
   entity?: PendingWriteEntity,
 ): Promise<PendingWrite[]> {
-  return visibleToAccount(await listPendingWrites(entity));
+  return visibleToAccount(await listPendingWrites(entity)).filter(
+    (write) => write.owner_user_id !== QUARANTINED_OWNER,
+  );
 }
 
 /** W3-16 #1: `pendingWriteCount` for the account signed in now. */
@@ -664,6 +794,24 @@ export function replayPendingWrites(
   return replay;
 }
 
+async function readCaptureReplayOwner(
+  captureId: string,
+): Promise<string | undefined> {
+  const db = await openDatabase();
+  try {
+    const transaction = db.transaction(CAPTURE_OWNERS, "readonly");
+    const owner = await requestToPromise(
+      transaction.objectStore(CAPTURE_OWNERS).get(captureId) as IDBRequest<
+        string | undefined
+      >,
+    );
+    await transactionDone(transaction);
+    return owner;
+  } finally {
+    db.close();
+  }
+}
+
 async function replayPendingWritesUnlocked(
   handlers: PendingWriteHandlers,
 ): Promise<ReplaySummary> {
@@ -675,8 +823,32 @@ async function replayPendingWritesUnlocked(
     // session. Checked per write, right before its handler, so an account
     // switch part-way through a pass holds back the rest of the pass too.
     // The write stays queued, untouched, for its own account.
-    if (!maySendAs(write.owner_user_id)) {
+    if (
+      write.owner_user_id === QUARANTINED_OWNER ||
+      !maySendAs(write.owner_user_id)
+    ) {
       continue;
+    }
+
+    if (
+      write.entity === "capture" &&
+      typeof write.payload.workflow_capture_id === "string"
+    ) {
+      // A preceding handler can yield while another tab reserves or
+      // quarantines this capture. Do not trust the pass's old queue copy.
+      try {
+        const owner = await readCaptureReplayOwner(
+          write.payload.workflow_capture_id,
+        );
+        if (
+          owner === QUARANTINED_OWNER ||
+          !maySendAs(owner ?? write.owner_user_id)
+        )
+          continue;
+      } catch {
+        summary.failed += 1;
+        continue;
+      }
     }
 
     const handler = handlers[write.entity];

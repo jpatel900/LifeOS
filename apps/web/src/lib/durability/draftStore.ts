@@ -259,7 +259,7 @@ let anonymousClaimTail: Promise<void> = Promise.resolve();
 
 export function claimAnonymousTaskDrafts(
   accountScope: string,
-  reservedOwners: Readonly<Record<string, string>> = {},
+  reservedOwners: Readonly<Record<string, string | null>> = {},
 ): Promise<void> {
   const claim = anonymousClaimTail.then(() =>
     claimAnonymousTaskDraftsOnce(accountScope, reservedOwners),
@@ -270,7 +270,7 @@ export function claimAnonymousTaskDrafts(
 
 async function claimAnonymousTaskDraftsOnce(
   accountScope: string,
-  reservedOwners: Readonly<Record<string, string>>,
+  reservedOwners: Readonly<Record<string, string | null>>,
 ): Promise<void> {
   if (!hasIndexedDb()) return;
   const db = await openDatabase();
@@ -288,6 +288,9 @@ async function claimAnonymousTaskDraftsOnce(
         !isUnownedWorkflowScope(record.scope)
       )
         continue;
+      // null is an explicit ownership conflict, never anonymous work to
+      // assign to whichever account happens to finish initialization.
+      if (reservedOwners[record.scope] === null) continue;
       const owner = reservedOwners[record.scope] ?? accountScope;
       const id = JSON.stringify([owner, record.draft.id]);
       if (!byId.has(id)) store.put({ ...record, id, scope: owner });

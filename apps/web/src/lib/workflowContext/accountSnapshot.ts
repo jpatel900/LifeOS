@@ -1,6 +1,9 @@
 import { STORAGE_KEY, type WorkflowState } from "../workflow/shared";
 import { isUnownedWorkflowScope } from "../durability/deviceAccount";
-import { reserveCaptureWriteOwners } from "../durability/pendingWriteJournal";
+import {
+  readSnapshotCaptureOwner,
+  reserveSnapshotCaptureOwner,
+} from "../durability/pendingWriteJournal";
 import {
   decodeStoredWorkflowState,
   loadStoredStateFromSession,
@@ -8,6 +11,7 @@ import {
 import {
   listSnapshotRecoveries,
   reserveSnapshotRecovery,
+  repairSnapshotRecoveryOwner,
   snapshotRecoveryId,
 } from "./snapshotRecovery";
 
@@ -117,6 +121,11 @@ export async function safeUnownedWorkflowScope(scope: string): Promise<string> {
   if (value?.heldFor) return unownedScope("reserved", kind);
   if (!source) return scope;
   const id = await snapshotRecoveryId(scope, stored, source);
+  const owner = await readSnapshotCaptureOwner(
+    id,
+    source.captureItems.map((capture) => capture.id),
+  );
+  if (owner !== undefined) return unownedScope("reserved", kind);
   const claims = await listSnapshotRecoveries();
   return claims.some((record) => record.id === id)
     ? unownedScope("reserved", kind)
@@ -166,20 +175,54 @@ export async function claimAnonymousSnapshots(
   accountScope: string,
   live?: { scope: string; state: WorkflowState },
   heldTarget?: WorkflowState,
-  memoryOwners: Record<string, string> = {},
+  memoryOwners: Record<string, string | null> = {},
   sourceScopes?: readonly string[],
-): Promise<{ state: WorkflowState; storageBlocked: boolean }> {
+): Promise<{
+  state: WorkflowState;
+  storageBlocked: boolean;
+  draftOwners: Record<string, string | null>;
+}> {
   let destination =
     heldTarget ??
     loadStoredStateFromSession(accountSnapshotKey(accountScope)).state;
   if (!destination) throw new Error("The account snapshot needs recovery.");
   const recoveries = await listSnapshotRecoveries();
-  for (const record of recoveries) {
-    if (record.state)
-      await reserveCaptureWriteOwners(
-        record.owner.slice("account:".length),
-        record.state.captureItems.map((capture) => capture.id),
-      );
+  const blockedRecoveries = new Set<string>();
+  const draftOwners: Record<string, string | null> = {};
+  const noteDraftOwner = (scope: string, owner: string | null) => {
+    // Draft scopes can be shared by unrelated tabs. Conflicting evidence
+    // holds the drafts; it must never change a local snapshot's owner.
+    if (scope in draftOwners && draftOwners[scope] !== owner)
+      draftOwners[scope] = null;
+    else draftOwners[scope] = owner;
+  };
+  let storageBlocked = false;
+  for (const [index, record] of recoveries.entries()) {
+    if (!record.state) {
+      noteDraftOwner(record.scope, record.owner);
+      continue;
+    }
+    const owner = await reserveSnapshotCaptureOwner(
+      record.id,
+      record.owner.slice("account:".length),
+      record.state.captureItems.map((capture) => capture.id),
+    );
+    const repaired =
+      owner === null
+        ? null
+        : record.owner === `account:${owner}`
+          ? record
+          : await repairSnapshotRecoveryOwner(record, `account:${owner}`);
+    if (repaired) {
+      recoveries[index] = repaired;
+      noteDraftOwner(repaired.scope, repaired.owner);
+    } else {
+      // An inconsistent record or concurrent reset is not permission to
+      // publish its payload, nor a reason to block unrelated accounts.
+      blockedRecoveries.add(record.id);
+      noteDraftOwner(record.scope, null);
+      if (record.owner === accountScope) storageBlocked = true;
+    }
   }
   const storedAccount = window.sessionStorage.getItem(
     accountSnapshotKey(accountScope),
@@ -196,6 +239,7 @@ export async function claimAnonymousSnapshots(
   for (const record of recoveries) {
     if (
       record.owner === accountScope &&
+      !blockedRecoveries.has(record.id) &&
       record.unanchored &&
       record.state &&
       !receipts.has(record.id)
@@ -205,22 +249,12 @@ export async function claimAnonymousSnapshots(
     }
   }
   const consumed: string[] = [];
-  let storageBlocked = false;
   for (const scope of sourceScopes ?? anonymousScopes(live?.scope)) {
     if (memoryOwners[scope] && memoryOwners[scope] !== accountScope) continue;
     const key = accountSnapshotKey(scope);
     const stored = window.sessionStorage.getItem(key);
     const value = stored ? JSON.parse(stored) : null;
     const heldFor = value?.heldFor;
-    if (heldFor && heldFor !== accountScope) {
-      const held = decodeStoredWorkflowState(value.state);
-      if (held)
-        await reserveCaptureWriteOwners(
-          heldFor.slice("account:".length),
-          held.captureItems.map((capture) => capture.id),
-        );
-      continue;
-    }
     let source = heldFor
       ? decodeStoredWorkflowState(value.state)
       : live?.scope === scope
@@ -229,6 +263,11 @@ export async function claimAnonymousSnapshots(
     if (!source) continue;
     const id = await snapshotRecoveryId(scope, stored, source);
     const recovery = recoveries.find((record) => record.id === id);
+    if (blockedRecoveries.has(id)) {
+      memoryOwners[scope] = null;
+      storageBlocked = true;
+      continue;
+    }
     if (recovery && recovery.owner === accountScope && appliedAtStart.has(id)) {
       memoryOwners[scope] = recovery.owner;
       continue;
@@ -246,13 +285,24 @@ export async function claimAnonymousSnapshots(
         live?.scope === scope
           ? mergeAnonymousSnapshot(source, recovery.state)
           : recovery.state;
-      receipts.add(recovery.id);
     }
+    const owner = await reserveSnapshotCaptureOwner(
+      id,
+      (recovery?.owner ?? heldFor ?? accountScope).slice("account:".length),
+      source.captureItems.map((capture) => capture.id),
+    );
+    if (owner === null) {
+      memoryOwners[scope] = null;
+      storageBlocked = true;
+      continue;
+    }
+    const sourceOwner = `account:${owner}`;
+    let recovered = Boolean(recovery?.state);
     try {
       window.sessionStorage.setItem(
         key,
         JSON.stringify({
-          heldFor: accountScope,
+          heldFor: sourceOwner,
           state: source,
           snapshotClaimId: id,
         }),
@@ -262,38 +312,52 @@ export async function claimAnonymousSnapshots(
         {
           id,
           scope,
-          owner: accountScope,
+          owner: sourceOwner,
           state: source,
           unanchored: stored === null,
         },
         mergeAnonymousSnapshot,
       );
-      if (reserved.owner !== accountScope) {
-        memoryOwners[scope] = reserved.owner;
+      if (reserved.owner !== sourceOwner) {
+        memoryOwners[scope] = null;
+        storageBlocked = true;
         continue;
       }
       if (!reserved.state) continue;
-      source = reserved.state ?? source;
-      receipts.add(reserved.id);
+      source = reserved.state;
+      // A concurrent fallback merge may have added captures since our read.
+      // Validate its complete payload before publishing it to any account.
+      if (
+        (await reserveSnapshotCaptureOwner(
+          id,
+          owner,
+          source.captureItems.map((capture) => capture.id),
+        )) !== owner
+      ) {
+        memoryOwners[scope] = null;
+        storageBlocked = true;
+        continue;
+      }
+      recovered = true;
       storageBlocked = true;
       // Keep the source as this tab's recovery anchor until its destination
       // commits. Another tab must not consume this tab's only durable copy.
     }
-    await reserveCaptureWriteOwners(
-      accountScope.slice("account:".length),
-      source.captureItems.map((capture) => capture.id),
-    );
-    memoryOwners[scope] = accountScope;
+    memoryOwners[scope] = sourceOwner;
+    if (sourceOwner !== accountScope) continue;
+    if (recovered) receipts.add(id);
     destination = mergeAnonymousSnapshot(destination, source);
     consumed.push(key);
   }
+  for (const [scope, owner] of Object.entries(memoryOwners))
+    noteDraftOwner(scope, owner);
   try {
     window.sessionStorage.setItem(
       accountSnapshotKey(accountScope),
       JSON.stringify({ ...destination, recoveredSnapshotIds: [...receipts] }),
     );
   } catch {
-    return { state: destination, storageBlocked: true };
+    return { state: destination, storageBlocked: true, draftOwners };
   }
   for (const key of consumed) {
     try {
@@ -305,5 +369,5 @@ export async function claimAnonymousSnapshots(
   // A duplicated tab can share the same source token. Its session-local
   // receipt cannot consume the device's only fallback payload. Retain the
   // owner-qualified recovery and use receipts to prevent reapplication.
-  return { state: destination, storageBlocked };
+  return { state: destination, storageBlocked, draftOwners };
 }
