@@ -288,7 +288,8 @@ jobs:
     name: Playwright E2E
     needs: changes
     if: needs.changes.outputs.heavy == 'true'
-    runs-on: ubuntu-latest
+    # Playwright 1.60 does not support Ubuntu 26.04 browser dependencies.
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -360,7 +361,8 @@ jobs:
     name: Playwright E2E (signed-in tier)
     needs: changes
     if: needs.changes.outputs.heavy == 'true'
-    runs-on: ubuntu-latest
+    # Keep both browser tiers on Playwright's supported runner image.
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
