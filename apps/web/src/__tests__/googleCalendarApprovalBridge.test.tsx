@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarPage from "../app/calendar/page";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
 import {
   GOOGLE_CALENDAR_NOT_SET_UP,
   GOOGLE_CALENDAR_UNAVAILABLE_HERE,
@@ -18,7 +19,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-const STORAGE_KEY = "lifeos.phase2.workflow";
+const ACCOUNT_USER_ID = "00000000-0000-0000-0000-000000000001";
 const PROPOSAL_UUID = "3f2c8a34-9b1e-4c5d-8e2f-1a2b3c4d5e6f";
 const BLOCK_UUID = "9d8c7b6a-5f4e-4d3c-9b2a-0f1e2d3c4b5a";
 const GOOGLE_EVENT_ID = `lifeos${"a1b2c3d4".repeat(4)}`;
@@ -120,8 +121,12 @@ function stateWithGoogleScheduledBlock(eventId: string = GOOGLE_EVENT_ID) {
 // Promise) — resolve it before handing the element to `render`.
 async function renderPlanStage(
   state: ReturnType<typeof stateWithSyncedProposal>,
+  scope = `account:${ACCOUNT_USER_ID}`,
 ) {
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  window.sessionStorage.setItem(
+    accountSnapshotKey(scope),
+    JSON.stringify(state),
+  );
   const calendarPageElement = await CalendarPage({
     searchParams: Promise.resolve({}),
   });
@@ -148,7 +153,13 @@ beforeEach(() => {
     error: null,
   });
   mocks.createSupabaseBrowserClient.mockReturnValue({
-    auth: { getSession: mocks.getSession },
+    auth: {
+      getSession: mocks.getSession,
+      getUser: async () => ({
+        data: { user: { id: ACCOUNT_USER_ID } },
+        error: null,
+      }),
+    },
   });
 });
 
@@ -187,7 +198,7 @@ describe("Google Calendar approval bridge", () => {
     mocks.createSupabaseBrowserClient.mockReturnValue(null);
     stubFetch({});
 
-    await renderPlanStage(stateWithSyncedProposal());
+    await renderPlanStage(stateWithSyncedProposal(), "demo");
 
     const approveButton = await screen.findByRole("button", {
       name: `Approve Google event for ${TASK_TITLE}`,
@@ -390,3 +401,4 @@ describe("Google Calendar approval bridge", () => {
     ).toBeNull();
   });
 });
+import "fake-indexeddb/auto";

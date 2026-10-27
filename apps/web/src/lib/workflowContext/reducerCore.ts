@@ -1130,25 +1130,36 @@ export function workflowReducer(
   }
 }
 
-export function loadStoredStateFromSession(): {
+export function decodeStoredWorkflowState(
+  value: unknown,
+): WorkflowState | null {
+  const parsed = normalizeStoredWorkflowState(value);
+  return isStoredWorkflowState(parsed) ? parsed : null;
+}
+
+export function loadStoredStateFromSession(storageKey = STORAGE_KEY): {
   state: WorkflowState | null;
   storageBlocked: boolean;
 } {
   if (typeof window === "undefined") {
     return { state: null, storageBlocked: false };
   }
+  const freshState = () =>
+    storageKey === STORAGE_KEY
+      ? createSyncedBrowserInitialState()
+      : createSyncedEmptyState();
 
   try {
-    const stored = window.sessionStorage.getItem(STORAGE_KEY);
+    const stored = window.sessionStorage.getItem(storageKey);
     if (!stored) {
       return {
-        state: createSyncedBrowserInitialState(),
+        state: freshState(),
         storageBlocked: false,
       };
     }
 
-    const parsed = normalizeStoredWorkflowState(JSON.parse(stored));
-    if (!isStoredWorkflowState(parsed)) {
+    const parsed = decodeStoredWorkflowState(JSON.parse(stored));
+    if (!parsed) {
       return { state: null, storageBlocked: false };
     }
 
@@ -1158,7 +1169,7 @@ export function loadStoredStateFromSession(): {
     // Keep the existing demo fallback when storage cannot be read, while
     // preserving the warning. An existing corrupt snapshot still blocks
     // reseeding through createInitialWorkflowState's presence check.
-    return { state: createSyncedBrowserInitialState(), storageBlocked: true };
+    return { state: freshState(), storageBlocked: true };
   }
 }
 

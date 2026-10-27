@@ -309,6 +309,7 @@ describe("Today capture before account area hydration", () => {
       }),
     );
     mountToday();
+    await waitFor(() => expect(listAreas).toHaveBeenCalled());
     pressCaptureShortcut();
     // Before inventory there is no real picker choice. After inventory, choosing
     // no area must remain explicit through a subsequent account read.

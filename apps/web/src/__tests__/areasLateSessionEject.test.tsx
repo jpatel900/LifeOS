@@ -72,13 +72,20 @@ const AUTH_SESSION_MISSING_ERROR = {
 // GoTrueClient does — a single-slot callback would let whichever component
 // subscribes last silently evict the other.
 let authStateCallbacks: Array<
-  (event: string, session: { user: { email: string } } | null) => void
+  (
+    event: string,
+    session: { user: { id: string; email: string } } | null,
+  ) => void
 > = [];
 
 function emitAuthEvent(
   event: string,
-  session: { user: { email: string } } | null,
+  session: { user: { id: string; email: string } } | null,
 ) {
+  mocks.getUser.mockResolvedValue({
+    data: { user: session?.user ?? null },
+    error: session ? null : AUTH_SESSION_MISSING_ERROR,
+  });
   for (const callback of [...authStateCallbacks]) {
     callback(event, session);
   }
@@ -93,7 +100,18 @@ function buildClient() {
   mocks.getSession.mockResolvedValue({ data: { session: null }, error: null });
   mocks.onAuthStateChange.mockImplementation((callback) => {
     authStateCallbacks.push(callback);
-    return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
+    return {
+      data: {
+        subscription: {
+          unsubscribe: () => {
+            mocks.unsubscribe();
+            authStateCallbacks = authStateCallbacks.filter(
+              (item) => item !== callback,
+            );
+          },
+        },
+      },
+    };
   });
   return {
     auth: {
@@ -162,7 +180,12 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
       });
 
       await act(async () => {
-        emitAuthEvent(event, { user: { email: "jay@example.com" } });
+        emitAuthEvent(event, {
+          user: {
+            id: "22222222-2222-4222-8222-222222222222",
+            email: "jay@example.com",
+          },
+        });
         await Promise.resolve();
       });
 
@@ -174,7 +197,12 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
       // `reload()` only schedules a navigation. Before it lands, another copy
       // of the same session event must not schedule a second reload.
       await act(async () => {
-        emitAuthEvent(event, { user: { email: "jay@example.com" } });
+        emitAuthEvent(event, {
+          user: {
+            id: "22222222-2222-4222-8222-222222222222",
+            email: "jay@example.com",
+          },
+        });
         await Promise.resolve();
       });
       expect(mocks.reload).toHaveBeenCalledTimes(1);
@@ -245,7 +273,12 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
       value: { ...originalLocation, pathname: "/login", reload: mocks.reload },
     });
     await act(async () => {
-      emitAuthEvent("SIGNED_IN", { user: { email: "jay@example.com" } });
+      emitAuthEvent("SIGNED_IN", {
+        user: {
+          id: "22222222-2222-4222-8222-222222222222",
+          email: "jay@example.com",
+        },
+      });
       await Promise.resolve();
     });
 
@@ -284,7 +317,12 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     );
 
     await act(async () => {
-      emitAuthEvent("SIGNED_IN", { user: { email: "jay@example.com" } });
+      emitAuthEvent("SIGNED_IN", {
+        user: {
+          id: "22222222-2222-4222-8222-222222222222",
+          email: "jay@example.com",
+        },
+      });
       await Promise.resolve();
     });
 
@@ -296,7 +334,10 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
 
     await act(async () => {
       emitAuthEvent("TOKEN_REFRESHED", {
-        user: { email: "jay@example.com" },
+        user: {
+          id: "22222222-2222-4222-8222-222222222222",
+          email: "jay@example.com",
+        },
       });
       await Promise.resolve();
     });
@@ -304,3 +345,4 @@ describe("a late-resolving session does not eject /settings/areas (Part of #960)
     expect(mocks.routerReplace).toHaveBeenCalledTimes(1);
   });
 });
+import "fake-indexeddb/auto";

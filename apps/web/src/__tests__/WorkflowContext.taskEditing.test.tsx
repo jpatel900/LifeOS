@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import type { TaskEditResult } from "@/lib/workflowContext/types";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
 import type { Area, Task } from "@lifeos/schemas";
 import {
   GOLDEN_AREA_ID,
@@ -19,11 +20,11 @@ import {
  * account-mode assertions override `persistBacklogTaskEdit` at the
  * persistence-sync seam only (same technique as `reviewClosureTruth.test.tsx`
  * and `WorkflowContext.areas.test.tsx`), so `createSupabaseBrowserClient`
- * only needs to report present/absent — its real methods are never called by
- * this file's account-mode cases.
+ * reports an explicit fixture identity for account-mode cases.
  */
 
 const OTHER_AREA_ID = "area-personal";
+let fixtureStorageKey = STORAGE_KEY;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
@@ -109,7 +110,7 @@ function seedBacklogTask() {
   if (!task) {
     throw new Error("Seed produced no backlog task.");
   }
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  window.sessionStorage.setItem(fixtureStorageKey, JSON.stringify(state));
   return task;
 }
 
@@ -123,7 +124,7 @@ function seedTwoBacklogTasks() {
   if (tasks.length !== 2) {
     throw new Error("Seed did not produce two backlog tasks.");
   }
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  window.sessionStorage.setItem(fixtureStorageKey, JSON.stringify(state));
   return { target: tasks[0], unrelated: tasks[1] };
 }
 
@@ -161,7 +162,7 @@ function seedProjectLinkedBacklogTask() {
     updated_at: "2026-07-04T09:00:00.000Z",
   };
   state = { ...state, projects: [project], tasks: [task] };
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  window.sessionStorage.setItem(fixtureStorageKey, JSON.stringify(state));
   return task;
 }
 
@@ -225,13 +226,13 @@ function EditProbe({
   );
 }
 
-function renderProbe(
+async function renderProbe(
   taskId: string,
   areaId: string,
   title?: string,
   syncAreas?: Area[],
 ) {
-  return render(
+  const rendered = render(
     <WorkflowProvider>
       <EditProbe
         taskId={taskId}
@@ -241,9 +242,14 @@ function renderProbe(
       />
     </WorkflowProvider>,
   );
+  await waitFor(() =>
+    expect(screen.getByTestId("task-title")).toHaveTextContent(/\S/),
+  );
+  return rendered;
 }
 
 beforeEach(() => {
+  fixtureStorageKey = STORAGE_KEY;
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
   window.sessionStorage.clear();
@@ -263,7 +269,7 @@ afterEach(() => {
 describe("editBacklogTask — demo (no account)", () => {
   it("saves title/description/area, confirms the sessionStorage snapshot, and reports success", async () => {
     const task = seedBacklogTask();
-    renderProbe(task.id, OTHER_AREA_ID);
+    await renderProbe(task.id, OTHER_AREA_ID);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -291,7 +297,7 @@ describe("editBacklogTask — demo (no account)", () => {
 
   it("rejects a blank title, leaving the canonical task unchanged", async () => {
     const task = seedBacklogTask();
-    renderProbe(task.id, GOLDEN_AREA_ID, "   ");
+    await renderProbe(task.id, GOLDEN_AREA_ID, "   ");
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -319,7 +325,7 @@ describe("editBacklogTask — demo (no account)", () => {
 
   it("blocks a project-inconsistent area change but still saves the title", async () => {
     const task = seedProjectLinkedBacklogTask();
-    renderProbe(task.id, OTHER_AREA_ID);
+    await renderProbe(task.id, OTHER_AREA_ID);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -434,7 +440,16 @@ function ConcurrencyProbe({
 
 describe("editBacklogTask — configured account", () => {
   beforeEach(() => {
-    mockCreateSupabaseBrowserClient.mockReturnValue({ mocked: true });
+    fixtureStorageKey = accountSnapshotKey(`account:${WRITER_USER_ID}`);
+    mockCreateSupabaseBrowserClient.mockReturnValue({
+      mocked: true,
+      auth: {
+        getUser: async () => ({
+          data: { user: { id: WRITER_USER_ID } },
+          error: null,
+        }),
+      },
+    });
     // The default for tests that aren't specifically about the identity
     // guard: the fresh check finds the SAME user who performed the write,
     // so the confirmed fields reflect normally.
@@ -451,7 +466,7 @@ describe("editBacklogTask — configured account", () => {
         task: confirmedTask,
         userId: WRITER_USER_ID,
       });
-    renderProbe(task.id, GOLDEN_AREA_ID);
+    await renderProbe(task.id, GOLDEN_AREA_ID);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -501,7 +516,7 @@ describe("editBacklogTask — configured account", () => {
         task: confirmedTask,
         userId: WRITER_USER_ID,
       });
-    renderProbe(task.id, GOLDEN_AREA_ID, undefined, [persistedArea]);
+    await renderProbe(task.id, GOLDEN_AREA_ID, undefined, [persistedArea]);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -529,7 +544,7 @@ describe("editBacklogTask — configured account", () => {
     // account switch during the write's own await. Being authenticated is
     // not enough: this must not reflect.
     isSameSignedInUserOverride.current = () => Promise.resolve(false);
-    renderProbe(task.id, GOLDEN_AREA_ID);
+    await renderProbe(task.id, GOLDEN_AREA_ID);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -569,7 +584,7 @@ describe("editBacklogTask — configured account", () => {
         userId: WRITER_USER_ID,
       });
     };
-    renderProbe(task.id, GOLDEN_AREA_ID);
+    await renderProbe(task.id, GOLDEN_AREA_ID);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
@@ -614,6 +629,11 @@ describe("editBacklogTask — configured account", () => {
       <WorkflowProvider>
         <ConcurrencyProbe targetId={target.id} unrelatedId={unrelated.id} />
       </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("target-title")).toHaveTextContent(
+        target.title,
+      ),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -664,6 +684,11 @@ describe("editBacklogTask — configured account", () => {
         <ConcurrencyProbe targetId={target.id} unrelatedId={unrelated.id} />
       </WorkflowProvider>,
     );
+    await waitFor(() =>
+      expect(screen.getByTestId("target-title")).toHaveTextContent(
+        target.title,
+      ),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     // Still pending — a genuine concurrent local action on the UNRELATED
@@ -707,7 +732,7 @@ describe("editBacklogTask — configured account", () => {
     const task = seedBacklogTask();
     persistBacklogTaskEditOverride.current = () =>
       Promise.resolve({ status: "conflict" });
-    renderProbe(task.id, GOLDEN_AREA_ID);
+    await renderProbe(task.id, GOLDEN_AREA_ID);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -721,7 +746,7 @@ describe("editBacklogTask — configured account", () => {
     const task = seedBacklogTask();
     persistBacklogTaskEditOverride.current = () =>
       Promise.resolve({ status: "unreachable" });
-    renderProbe(task.id, GOLDEN_AREA_ID);
+    await renderProbe(task.id, GOLDEN_AREA_ID);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -735,7 +760,7 @@ describe("editBacklogTask — configured account", () => {
     const task = seedBacklogTask();
     persistBacklogTaskEditOverride.current = () =>
       Promise.reject(new Error("Sign in before saving task edits."));
-    renderProbe(task.id, GOLDEN_AREA_ID);
+    await renderProbe(task.id, GOLDEN_AREA_ID);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -745,3 +770,4 @@ describe("editBacklogTask — configured account", () => {
     expect(screen.getByTestId("task-title")).toHaveTextContent(task.title);
   });
 });
+import "fake-indexeddb/auto";

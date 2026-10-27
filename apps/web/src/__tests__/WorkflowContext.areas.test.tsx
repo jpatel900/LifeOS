@@ -798,6 +798,18 @@ describe("WorkflowProvider persisted area sync", () => {
   // prime the cookie (the current, primary path), not the legacy bridge.
   describe("?area= URL precedence", () => {
     it("a valid ?area= wins over a stored device preference on mount", async () => {
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [
+          persistedArea,
+          {
+            ...persistedArea,
+            id: "44444444-4444-4444-8444-444444444444",
+            name: "Volunteer Work",
+            slug: "volunteer-work",
+          },
+        ],
+      });
       // The cookie already remembers "area-personal" from an earlier visit;
       // the URL now names a different area — the URL must win.
       document.cookie = `lifeos_moments_prefs=${encodeURIComponent(

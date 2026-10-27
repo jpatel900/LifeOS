@@ -1,3 +1,4 @@
+import "fake-indexeddb/auto";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ReviewPage from "../app/review/page";
@@ -22,7 +23,15 @@ const {
   mockListCaptureItems: vi.fn(),
   mockListPlanningItems: vi.fn(),
   mockListExecutionReviewItems: vi.fn(),
-  mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
+  mockCreateSupabaseBrowserClient: vi.fn(() => ({
+    mocked: true,
+    auth: {
+      getUser: async () => ({
+        data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+        error: null,
+      }),
+    },
+  })),
 }));
 
 vi.mock("@/lib/data/workflow", async () => {
@@ -156,7 +165,15 @@ const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
 beforeEach(() => {
   window.sessionStorage.clear();
   vi.clearAllMocks();
-  mockCreateSupabaseBrowserClient.mockReturnValue({ mocked: true });
+  mockCreateSupabaseBrowserClient.mockReturnValue({
+    mocked: true,
+    auth: {
+      getUser: async () => ({
+        data: { user: { id: persistedArea.user_id } },
+        error: null,
+      }),
+    },
+  });
   mockNoWorkflowRows();
   process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
 });
