@@ -566,16 +566,19 @@ function prContext(repo, prNumber) {
     "--repo",
     repo,
     "--json",
-    "number,state,labels,headRefName,autoMergeRequest,title,body,comments,url",
+    "id,number,state,isDraft,labels,headRefName,headRefOid,autoMergeRequest,title,body,comments,url",
   ]);
   return {
+    id: pr.id,
     number: pr.number,
     state: pr.state,
+    draft: pr.isDraft,
     labels: (pr.labels ?? []).map((label) => label.name),
     headRef: pr.headRefName,
+    headSha: pr.headRefOid,
     autoMergeArmed: Boolean(pr.autoMergeRequest),
     title: typeof pr.title === "string" ? pr.title : "",
-    body: pr.body ?? "",
+    body: pr.body,
     comments: pr.comments ?? [],
     url: pr.url,
   };
@@ -610,21 +613,24 @@ function ensureLabel(repo, name, color, description) {
   }
 }
 
-function runConfirmArm(argv) {
+async function runConfirmArm(argv) {
   const repo = repoSlug(argv);
   const context = prContext(repo, argv.pr);
-  const result = evaluateConfirmArm(context);
+  const result =
+    context.draft !== false
+      ? { arm: false, comment: null, reason: "Draft or unreadable PR." }
+      : evaluateConfirmArm(context);
 
   if (result.arm) {
-    gh([
-      "pr",
-      "merge",
-      String(context.number),
-      "--repo",
+    const { writeAutoMerge } = await import("./selfmerge-window.mjs");
+    writeAutoMerge({
+      id: context.id,
+      enabled: true,
+      number: context.number,
       repo,
-      "--squash",
-      "--auto",
-    ]);
+      headSha: context.headSha,
+      mergeWhenReady: true,
+    });
     gh([
       "pr",
       "comment",
@@ -637,6 +643,8 @@ function runConfirmArm(argv) {
     console.log(`ARMED auto-merge for PR #${context.number}: ${result.reason}`);
     return;
   }
+  const { writeAutoMerge } = await import("./selfmerge-window.mjs");
+  writeAutoMerge({ id: context.id, enabled: false });
   if (result.comment) {
     gh([
       "pr",
@@ -651,7 +659,7 @@ function runConfirmArm(argv) {
   console.log(`Not armed: ${result.reason}`);
 }
 
-function runStandDown(argv) {
+async function runStandDown(argv) {
   const repo = repoSlug(argv);
   const revertRunId = String(argv["revert-run-id"] ?? "");
   if (!revertRunId) throw new Error("--stand-down requires --revert-run-id.");
@@ -701,14 +709,8 @@ function runStandDown(argv) {
     WONT_FIX_LABEL,
   ]);
   if (result.disarm) {
-    gh([
-      "pr",
-      "merge",
-      String(context.number),
-      "--repo",
-      repo,
-      "--disable-auto",
-    ]);
+    const { writeAutoMerge } = await import("./selfmerge-window.mjs");
+    writeAutoMerge({ id: context.id, enabled: false });
   }
   gh([
     "pr",
@@ -1044,13 +1046,13 @@ const isDirectRun =
   process.argv[1] &&
   process.argv[1].replace(/\\/g, "/").endsWith("red-guard-diagnose.mjs");
 
-if (isDirectRun) {
+async function main() {
   const argv = parseArgv(process.argv.slice(2));
   try {
     if (argv["self-test"]) runSelfTest();
     else if (argv.diagnose) runDiagnose(argv);
-    else if (argv["confirm-arm"]) runConfirmArm(argv);
-    else if (argv["stand-down"]) runStandDown(argv);
+    else if (argv["confirm-arm"]) await runConfirmArm(argv);
+    else if (argv["stand-down"]) await runStandDown(argv);
     else {
       console.error(
         "usage: red-guard-diagnose.mjs --diagnose --pr <url|number> --run-id <id>\n" +
@@ -1069,3 +1071,11 @@ if (isDirectRun) {
     throw error;
   }
 }
+
+// Do not await the CLI at module scope: confirmation lazily imports the writer,
+// which imports this module's pure recovery policy. Module evaluation must finish.
+if (isDirectRun)
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

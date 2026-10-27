@@ -6,6 +6,12 @@ LifeOS product/runtime automation remains tightly restricted by `AGENTS.md` and 
 Engineering automations may write only to isolated branches and approved GitHub metadata surfaces such as pull requests or issue comments. They must be label-gated, path-guarded, validation-gated, and must not touch production data, secrets, non-GitHub external systems (sole exception: owner-configured notify-only channels — see the instant self-merge section), or LifeOS runtime state.
 Safe auto-merge also requires the repository-level GitHub auto-merge setting to be enabled. Without that repo setting, the workflow remains a guard/evaluator and cannot successfully arm auto-merge.
 
+`scripts/agent/selfmerge-window.mjs` owns every auto-merge setting mutation. Safe Auto-merge calls `check-safe-automerge.mjs` and hands over a PR/head/base-bound verdict, including evaluator failure. The writer rechecks current labels, owner gates, draft state and the complete file list before combining the existing eligible routes. Main Red Guard supplies its separate human-confirmed recovery decision through the same writer. An ambiguous disable is successful only after a fresh read proves the setting is off.
+
+Enabling binds the evaluated head through GraphQL `expectedHeadOid` or CLI `--match-head-commit`. The safe-only route keeps its GraphQL enable. Notified self-merge and confirmed recovery keep their existing `gh pr merge --auto --squash` behavior, which can complete immediately when required checks already pass. The writer never uses an admin bypass.
+
+Mutation jobs execute code from `main` and share a concurrency group for the head repository and branch, with `queue: max` and no active cancellation. GitHub permits 100 pending jobs per group, so overflow or unavailable Actions/API access still requires operator attention. CI-completion scans include opted-in and already-armed PRs, including removed-label cases. These locks serialize automation, not simultaneous human edits. GitHub's required checks remain the merge gate. Changes to this writer or its workflows remain T2 and require owner merge.
+
 If a task spans multiple categories, apply the highest tier.
 If classification is unclear, choose the stricter tier.
 CI and validation requirements from `AGENTS.md` still apply. This policy adds human-gate rules; it does not create exceptions.
