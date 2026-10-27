@@ -35,6 +35,7 @@ on:
 
 concurrency:
   group: main-red-guard-${{ github.event.workflow_run.head_sha || github.sha }}
+  queue: max
   cancel-in-progress: false
 
 permissions:
@@ -219,6 +220,10 @@ jobs:
   confirm-to-arm:
     name: Arm auto-merge when a human confirms the revert
     runs-on: ubuntu-latest
+    concurrency:
+      group: pr-automerge-${{ github.event.pull_request.head.repo.full_name }}-${{ github.event.pull_request.head.ref }}
+      queue: max
+      cancel-in-progress: false
     if: >-
       github.event_name == 'pull_request' &&
       github.event.label.name == 'revert:confirm' &&
@@ -253,6 +258,10 @@ jobs:
   stand-down:
     name: Stand down when the revert does not fix main
     runs-on: ubuntu-latest
+    concurrency:
+      group: pr-automerge-${{ github.repository }}-${{ github.event.workflow_run.head_branch }}
+      queue: max
+      cancel-in-progress: false
     if: >-
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'failure' &&

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 import {
   ADDITIVE_TESTS_LABEL,
@@ -184,7 +185,7 @@ function collectContext() {
 // `automerge:tests-additive`, ADR 0008 move 1b). Reasons reported are the
 // attempted route's; when both labels are present, either route arming
 // suffices and reasons come from whichever came closer.
-function classifyCombinedEligibility(context) {
+export function classifyCombinedEligibility(context) {
   // Owner decision 2026-08-30: the owner-gate/ratification block sits above
   // both routes. Neither route may arm auto-merge while it applies, no
   // matter what labels or paths would otherwise clear it.
@@ -705,6 +706,19 @@ function main() {
   const context = collectContext();
   const result = classifyCombinedEligibility(context);
 
+  if (process.env.GITHUB_OUTPUT) {
+    const pr = readEventPayload().pull_request;
+    appendFileSync(
+      process.env.GITHUB_OUTPUT,
+      `verdict=${JSON.stringify({
+        number: pr?.number,
+        headSha: process.env.PR_HEAD_SHA || pr?.head?.sha,
+        baseSha: process.env.PR_BASE_SHA || pr?.base?.sha,
+        eligible: result.eligible,
+      })}\n`,
+    );
+  }
+
   writeOutputs({
     changedPaths: context.changedPaths,
     eligible: result.eligible,
@@ -727,4 +741,5 @@ function main() {
   );
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  main();
