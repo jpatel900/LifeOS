@@ -10,26 +10,33 @@ const program = readFileSync(
 );
 const currentProgramState =
   program.split("## 6. Program state")[1]?.split("\n> ##")[0] ?? "";
-const failureDate = "2026-10-27";
-const datedFailure =
-  currentProgramState
-    .split("\n")
-    .find((line) => line.startsWith(`- **${failureDate} —`)) ?? "";
+const failureCheckpoint =
+  "- **2026-10-27 — TRIAL STILL UNSET; CAPTURE VISIBILITY FAILED BEFORE SORT:**";
+function findHistoricalFailure(checkpoints: string) {
+  return (
+    checkpoints
+      .split("\n")
+      .find((line) => line.startsWith(failureCheckpoint)) ?? ""
+  );
+}
 
-function latestReadinessDate(checkpoints: string) {
+const datedFailure = findHistoricalFailure(currentProgramState);
+
+function latestReadinessCheckpoint(checkpoints: string) {
   return [
     ...checkpoints.matchAll(/^- \*\*(\d{4}-\d{2}-\d{2}) — ([^*\n]+):\*\*/gm),
-  ].find((entry) => /\b(TRIAL|READINESS)\b/i.test(entry[2] ?? ""))?.[1];
+  ].find((entry) => /\b(TRIAL|READINESS)\b/i.test(entry[2] ?? ""))?.[0];
 }
 
 function assertCurrentFailureSummary(
   summary: string,
-  latestDate: string | undefined,
+  latestCheckpoint: string | undefined,
 ) {
-  expect(latestDate, "Missing dated readiness checkpoint").toBeDefined();
-  // A newer readiness checkpoint supersedes this failure-specific contract.
+  expect(latestCheckpoint, "Missing dated readiness checkpoint").toBeDefined();
+  // Checkpoints are newest first. A different readiness heading can supersede
+  // this failure-specific contract even when both checkpoints share a date.
   // It may truthfully record a started trial and a different next action.
-  if (latestDate !== failureDate) return;
+  if (latestCheckpoint !== failureCheckpoint) return;
   const nextAction =
     summary.split("## Next action")[1]?.split("\n## ")[0] ?? "";
   expect(summary).not.toMatch(/have not been checked by it yet/);
@@ -52,9 +59,9 @@ describe("trial readiness reflects the recorded smoke attempts (#820)", () => {
   });
 
   it("does not direct the next agent to wait for an already-completed smoke", () => {
-    const latestDate = latestReadinessDate(currentProgramState);
-    expect(latestDate).toBeDefined();
-    assertCurrentFailureSummary(state, latestDate);
+    const latestCheckpoint = latestReadinessCheckpoint(currentProgramState);
+    expect(latestCheckpoint).toBeDefined();
+    assertCurrentFailureSummary(state, latestCheckpoint);
   });
 
   it("retains the durable production-confirmation rule without requiring a pending status forever", () => {
@@ -69,11 +76,46 @@ describe("trial readiness reflects the recorded smoke attempts (#820)", () => {
       currentProgramState;
     const startedTrial =
       "Trial started 2026-10-28. C2 owner glance completed.\n## Next action\nUse LifeOS for the trial.";
-    const latestDate = latestReadinessDate(laterEvidence);
-    expect(latestDate).toBe("2026-10-28");
+    const latestCheckpoint = latestReadinessCheckpoint(laterEvidence);
+    expect(latestCheckpoint).toBe("- **2026-10-28 — TRIAL START CONFIRMED:**");
     expect(() =>
-      assertCurrentFailureSummary(startedTrial, latestDate),
+      assertCurrentFailureSummary(startedTrial, latestCheckpoint),
     ).not.toThrow();
+  });
+
+  it.each(["NAVIGATION COPY", "TRIAL START CONFIRMED"])(
+    "keeps the historical evidence when a same-day %s checkpoint is prepended",
+    (heading) => {
+      const sameDayEvidence =
+        `- **2026-10-27 — ${heading}:** A later checkpoint.\n` +
+        currentProgramState;
+      expect(findHistoricalFailure(sameDayEvidence)).toBe(datedFailure);
+    },
+  );
+
+  it("allows a newer same-day confirmed trial to supersede the failure summary", () => {
+    const sameDayEvidence =
+      "- **2026-10-27 — TRIAL START CONFIRMED:** Production capture and Sort passed.\n" +
+      currentProgramState;
+    const startedTrial =
+      "Trial started 2026-10-27.\n## Next action\nUse LifeOS for the trial.";
+    expect(() =>
+      assertCurrentFailureSummary(
+        startedTrial,
+        latestReadinessCheckpoint(sameDayEvidence),
+      ),
+    ).not.toThrow();
+  });
+
+  it("still rejects stale instructions after an unrelated same-day checkpoint", () => {
+    const sameDayEvidence =
+      "- **2026-10-27 — NAVIGATION COPY:** Labels clarified.\n" + datedFailure;
+    expect(() =>
+      assertCurrentFailureSummary(
+        "## Next action\nWait for the next weekly smoke.",
+        latestReadinessCheckpoint(sameDayEvidence),
+      ),
+    ).toThrow();
   });
 
   it("still rejects stale instructions when a newer checkpoint is unrelated to readiness", () => {
@@ -81,12 +123,12 @@ describe("trial readiness reflects the recorded smoke attempts (#820)", () => {
       "- **2026-10-28 — NAVIGATION COPY:** Labels clarified.\n" + datedFailure;
     // The guard is live while the dated failure remains current, including
     // if an unrelated program note is inserted ahead of it.
-    const latestDate = latestReadinessDate(unrelatedCheckpoint);
-    expect(latestDate).toBe(failureDate);
+    const latestCheckpoint = latestReadinessCheckpoint(unrelatedCheckpoint);
+    expect(latestCheckpoint).toBe(failureCheckpoint);
     expect(() =>
       assertCurrentFailureSummary(
         "## Next action\nWait for the next weekly smoke.",
-        latestDate,
+        latestCheckpoint,
       ),
     ).toThrow();
   });
