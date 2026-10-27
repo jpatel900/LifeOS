@@ -626,7 +626,7 @@ describe("CloseMoment — F5 map-revision offer", () => {
     });
 
     expect(screen.getByTestId("taskmap-revision-offer")).toHaveTextContent(
-      "The map for “Ship the report” may be out of date.",
+      "Request an updated map for “Ship the report”.",
     );
     fireEvent.click(screen.getByTestId("taskmap-revision-offer-propose"));
     expect(onPropose).toHaveBeenCalledTimes(1);
