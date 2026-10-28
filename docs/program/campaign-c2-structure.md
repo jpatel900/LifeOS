@@ -1,6 +1,6 @@
 # Historical plan — Campaign C2: Structure (Final UX Loop)
 
-This records the original C2 port scope and brief conventions, not an execution queue. Current slice states and merged references live in [the campaign registry](campaigns.json). Current priorities, resume conditions and acceptance live in [the program](final-ux-loop.md) §§3–5.
+**STATUS: HISTORICAL.** This records the original C2 port scope and brief conventions, not an execution queue. Current slice states and merged references live in [the campaign registry](campaigns.json). Current priorities, resume conditions and acceptance live in [the program](final-ux-loop.md) §§3–5.
 
 The owner decision of 2026-09-29 retired further C2 re-scoring and the automatic campaign queue. The program governs the five-minute owner glance and any trial finding that warrants more implementation. This historical plan does not declare campaign closure or authorize another build round.
 
