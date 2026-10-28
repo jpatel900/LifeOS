@@ -194,8 +194,9 @@ jobs:
                 let body;
                 try {
                   body = JSON.parse(raw);
-                } catch (error) {
-                  console.error("stdout was not valid JSON: " + error.message);
+                } catch {
+                  // JSON.parse diagnostics can quote private response content.
+                  console.error("stdout was not valid JSON");
                   process.exitCode = 1;
                   return;
                 }

@@ -171,6 +171,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: CLI smoke stdout privacy regression
+        run: node --test scripts/agent/cli-smoke-output.test.mjs
+
       - name: Type-check
         run: pnpm type-check
 
