@@ -102,6 +102,10 @@ function countBlindWaits(source: string): number {
   );
 }
 
+function normalizeScriptPath(path: string): string {
+  return path.replace(/\\/g, "/");
+}
+
 function scanBlindWaits(): Map<string, number> {
   const files = walkScripts(testsRoot);
   // About 60 scripts today; 20 only trips on a broken walk.
@@ -109,12 +113,22 @@ function scanBlindWaits(): Map<string, number> {
   const counts = new Map<string, number>();
   for (const file of files) {
     const count = countBlindWaits(readFileSync(file, "utf8"));
-    if (count > 0) counts.set(relative(testsRoot, file), count);
+    if (count > 0)
+      counts.set(normalizeScriptPath(relative(testsRoot, file)), count);
   }
   return counts;
 }
 
 describe("blind-wait guard for browser tests", () => {
+  it.each([
+    "e2e/helpers/signedInAccount.ts",
+    "e2e\\helpers\\signedInAccount.ts",
+  ])("matches the same allowlist entry for %s", (path) => {
+    const key = normalizeScriptPath(path);
+    expect(key).toBe("e2e/helpers/signedInAccount.ts");
+    expect(BLIND_WAIT_ALLOWLIST[key]?.count).toBe(3);
+  });
+
   it("adds no new fixed-time waits under apps/web/tests", () => {
     const found = scanBlindWaits();
     const problems: string[] = [];
