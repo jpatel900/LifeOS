@@ -12,6 +12,8 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import {
   claimGoogleCalendarApprovalForAccessToken,
+  dispatchGoogleCalendarApprovalForAccessToken,
+  finishGoogleCalendarApprovalForAccessToken,
   createPendingExternalWriteEventForAccessToken,
   updateExternalWriteEventResultForAccessToken,
 } from "./server";
@@ -79,7 +81,7 @@ describe("external write audit helpers", () => {
     expect(
       await claimGoogleCalendarApprovalForAccessToken("token", approval),
     ).toEqual(auditRow);
-    expect(rpc).toHaveBeenCalledWith("claim_google_calendar_approval", {
+    expect(rpc).toHaveBeenCalledWith("reserve_google_calendar_approval", {
       p_user_id: user.id,
       p_proposal_id: approval.proposalId,
       p_task_id: approval.taskId,
@@ -91,6 +93,64 @@ describe("external write audit helpers", () => {
       p_request_summary: approval.requestSummary,
     });
   });
+
+  const recoveryProof = {
+    auditId: auditRow.id,
+    proposalId: approval.proposalId,
+    connectionId: approval.connectionId,
+    connectedAt: approval.connectedAt,
+    calendarId: approval.calendarId,
+    googleEventId: "lifeos550e8400e29b41d4a716446655440501",
+    proposedStart: approval.proposedStart,
+    proposedEnd: approval.proposedEnd,
+    googleEventEtag: "synthetic-etag",
+  };
+
+  it("uses only the authenticated owner for the one-use dispatch", async () => {
+    const rpc = vi.fn().mockResolvedValue({ error: null });
+    mocks.requireSupabaseServiceRoleClient.mockReturnValue({ rpc });
+    await dispatchGoogleCalendarApprovalForAccessToken("token", auditRow.id);
+    expect(rpc).toHaveBeenCalledWith("dispatch_google_calendar_approval", {
+      p_user_id: user.id,
+      p_audit_id: auditRow.id,
+    });
+  });
+
+  it("passes the exact origin and verified event to the transactional finalizer", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "private backend detail" },
+    });
+    mocks.requireSupabaseServiceRoleClient.mockReturnValue({ rpc });
+    await expect(
+      finishGoogleCalendarApprovalForAccessToken("token", recoveryProof),
+    ).rejects.toThrow("Calendar approval conflict.");
+    expect(rpc).toHaveBeenCalledWith("finish_google_calendar_approval", {
+      p_user_id: user.id,
+      p_audit_id: auditRow.id,
+      p_proposal_id: approval.proposalId,
+      p_connection_id: approval.connectionId,
+      p_connected_at: approval.connectedAt,
+      p_calendar_id: "primary",
+      p_google_event_id: recoveryProof.googleEventId,
+      p_start: approval.proposedStart,
+      p_end: approval.proposedEnd,
+      p_etag: "synthetic-etag",
+    });
+  });
+
+  it.each(["dispatch", "finish"])(
+    "requires authentication before privileged %s",
+    async (kind) => {
+      mocks.requireSupabaseServerUser.mockRejectedValue(new Error("Sign in"));
+      const call =
+        kind === "dispatch"
+          ? dispatchGoogleCalendarApprovalForAccessToken("token", auditRow.id)
+          : finishGoogleCalendarApprovalForAccessToken("token", recoveryProof);
+      await expect(call).rejects.toThrow("Sign in");
+      expect(mocks.requireSupabaseServiceRoleClient).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects a forged owner before obtaining the privileged client", async () => {
     await expect(
@@ -143,7 +203,7 @@ describe("external write audit helpers", () => {
       absentAttemptIds: [attempt.auditId],
     });
     expect(rpc).toHaveBeenLastCalledWith(
-      "claim_google_calendar_approval",
+      "reserve_google_calendar_approval",
       expect.objectContaining({ p_absent_attempt_ids: [attempt.auditId] }),
     );
   });
@@ -199,7 +259,7 @@ describe("external write audit helpers", () => {
       absentAttemptIds: [first, second],
     });
     expect(rpc).toHaveBeenLastCalledWith(
-      "claim_google_calendar_approval",
+      "reserve_google_calendar_approval",
       expect.objectContaining({ p_absent_attempt_ids: [first, second] }),
     );
   });

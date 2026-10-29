@@ -5,15 +5,16 @@ const mocks = vi.hoisted(() => ({
   createCalendarBlockForProposalForAccessToken: vi.fn(),
   createPendingExternalWriteEventForAccessToken: vi.fn(),
   claimGoogleCalendarApprovalForAccessToken: vi.fn(),
+  dispatchGoogleCalendarApprovalForAccessToken: vi.fn(),
   getCalendarBlockForProposalForAccessToken: vi.fn(),
   getGoogleCalendarConfig: vi.fn(),
   getGoogleCalendarStoredConnectionForAccessToken: vi.fn(),
   getTaskForAccessToken: vi.fn(),
   getTimeBlockProposalForAccessToken: vi.fn(),
-  insertGoogleCalendarEventForConnection: vi.fn(),
+  recoverApprovedGoogleCalendarEventForConnection: vi.fn(),
   resolveGoogleCalendarWriteAccessToken: vi.fn(),
   markTimeBlockProposalAcceptedForAccessToken: vi.fn(),
-  recordGoogleCalendarPlacementForAccessToken: vi.fn(),
+  finishGoogleCalendarApprovalForAccessToken: vi.fn(),
   findGoogleBackedScheduledBlockForTaskForAccessToken: vi.fn(),
   requireSupabaseServerUser: vi.fn(),
   updateCalendarBlockGoogleEventForAccessToken: vi.fn(),
@@ -34,8 +35,8 @@ vi.mock("@/lib/googleCalendar/server", () => ({
 }));
 
 vi.mock("@/lib/googleCalendar/events", () => ({
-  insertGoogleCalendarEventForConnection:
-    mocks.insertGoogleCalendarEventForConnection,
+  recoverApprovedGoogleCalendarEventForConnection:
+    mocks.recoverApprovedGoogleCalendarEventForConnection,
   resolveGoogleCalendarWriteAccessToken:
     mocks.resolveGoogleCalendarWriteAccessToken,
   GoogleCalendarInsertRejectedError: mocks.InsertRejected,
@@ -43,6 +44,10 @@ vi.mock("@/lib/googleCalendar/events", () => ({
 }));
 
 vi.mock("@/lib/externalWrites/server", () => ({
+  dispatchGoogleCalendarApprovalForAccessToken:
+    mocks.dispatchGoogleCalendarApprovalForAccessToken,
+  finishGoogleCalendarApprovalForAccessToken:
+    mocks.finishGoogleCalendarApprovalForAccessToken,
   claimGoogleCalendarApprovalForAccessToken:
     mocks.claimGoogleCalendarApprovalForAccessToken,
   createPendingExternalWriteEventForAccessToken:
@@ -60,8 +65,6 @@ vi.mock("@/lib/planning/server", () => ({
   getTimeBlockProposalForAccessToken: mocks.getTimeBlockProposalForAccessToken,
   markTimeBlockProposalAcceptedForAccessToken:
     mocks.markTimeBlockProposalAcceptedForAccessToken,
-  recordGoogleCalendarPlacementForAccessToken:
-    mocks.recordGoogleCalendarPlacementForAccessToken,
   findGoogleBackedScheduledBlockForTaskForAccessToken:
     mocks.findGoogleBackedScheduledBlockForTaskForAccessToken,
   updateCalendarBlockGoogleEventForAccessToken:
@@ -170,8 +173,9 @@ describe("google-calendar create-event route", () => {
     mocks.claimGoogleCalendarApprovalForAccessToken.mockResolvedValue({
       id: "550e8400-e29b-41d4-a716-446655440701",
     });
-    mocks.insertGoogleCalendarEventForConnection.mockResolvedValue({
+    mocks.recoverApprovedGoogleCalendarEventForConnection.mockResolvedValue({
       googleEventId: "google-event-1",
+      googleEventEtag: "verified-etag",
     });
     mocks.resolveGoogleCalendarWriteAccessToken.mockResolvedValue(
       "google-access-token",
@@ -188,10 +192,14 @@ describe("google-calendar create-event route", () => {
     mocks.findGoogleBackedScheduledBlockForTaskForAccessToken.mockResolvedValue(
       null,
     );
-    mocks.recordGoogleCalendarPlacementForAccessToken.mockResolvedValue({
+    mocks.finishGoogleCalendarApprovalForAccessToken.mockResolvedValue({
       proposal: { ...proposal, status: "accepted" },
       block,
       task: { id: proposal.task_id, status: "scheduled" },
+      audit: {
+        id: "550e8400-e29b-41d4-a716-446655440701",
+        result_status: "succeeded",
+      },
     });
   });
 
@@ -209,7 +217,9 @@ describe("google-calendar create-event route", () => {
     expect(
       mocks.claimGoogleCalendarApprovalForAccessToken,
     ).not.toHaveBeenCalled();
-    expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).not.toHaveBeenCalled();
   });
 
   describe("W7-6 absence evidence", () => {
@@ -252,7 +262,7 @@ describe("google-calendar create-event route", () => {
       ).not.toHaveBeenCalled();
       expect(mocks.isProposalEventGoneFromGoogle).not.toHaveBeenCalled();
       expect(
-        mocks.insertGoogleCalendarEventForConnection,
+        mocks.recoverApprovedGoogleCalendarEventForConnection,
       ).not.toHaveBeenCalled();
     });
 
@@ -280,7 +290,7 @@ describe("google-calendar create-event route", () => {
         expect.objectContaining({ providerAccessToken: "google-access-token" }),
       );
       expect(
-        mocks.insertGoogleCalendarEventForConnection,
+        mocks.recoverApprovedGoogleCalendarEventForConnection,
       ).not.toHaveBeenCalled();
     });
 
@@ -304,7 +314,7 @@ describe("google-calendar create-event route", () => {
       expect(response.status).toBe(409);
       expect(mocks.isProposalEventGoneFromGoogle).not.toHaveBeenCalled();
       expect(
-        mocks.insertGoogleCalendarEventForConnection,
+        mocks.recoverApprovedGoogleCalendarEventForConnection,
       ).not.toHaveBeenCalled();
     });
 
@@ -329,7 +339,7 @@ describe("google-calendar create-event route", () => {
           mocks.claimGoogleCalendarApprovalForAccessToken,
         ).toHaveBeenCalledTimes(2);
         expect(
-          mocks.insertGoogleCalendarEventForConnection,
+          mocks.recoverApprovedGoogleCalendarEventForConnection,
         ).toHaveBeenCalledTimes(1);
       },
     );
@@ -383,7 +393,7 @@ describe("google-calendar create-event route", () => {
         expect.objectContaining({ absentAttemptIds: [auditId] }),
       );
       expect(
-        mocks.insertGoogleCalendarEventForConnection,
+        mocks.recoverApprovedGoogleCalendarEventForConnection,
       ).toHaveBeenCalledTimes(1);
     });
 
@@ -398,7 +408,7 @@ describe("google-calendar create-event route", () => {
         mocks.claimGoogleCalendarApprovalForAccessToken,
       ).toHaveBeenCalledTimes(1);
       expect(
-        mocks.insertGoogleCalendarEventForConnection,
+        mocks.recoverApprovedGoogleCalendarEventForConnection,
       ).not.toHaveBeenCalled();
     });
 
@@ -457,15 +467,15 @@ describe("google-calendar create-event route", () => {
       );
     const responses = await Promise.all([approve(proposal), approve(sibling)]);
     expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
-    expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalledTimes(
-      1,
-    );
     expect(
-      mocks.recordGoogleCalendarPlacementForAccessToken,
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
     ).toHaveBeenCalledTimes(1);
-    expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalledWith(
-      expect.objectContaining({ proposalId: winner }),
-    );
+    expect(
+      mocks.finishGoogleCalendarApprovalForAccessToken,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).toHaveBeenCalledWith(expect.objectContaining({ proposalId: winner }));
   });
 
   it("requires first-write warning acknowledgement before the first write", async () => {
@@ -491,7 +501,9 @@ describe("google-calendar create-event route", () => {
     expect(
       mocks.claimGoogleCalendarApprovalForAccessToken,
     ).not.toHaveBeenCalled();
-    expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).not.toHaveBeenCalled();
   });
 
   it("fails closed before Google if the durable claim cannot be saved", async () => {
@@ -507,7 +519,9 @@ describe("google-calendar create-event route", () => {
       }),
     );
     expect(response.status).toBe(502);
-    expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).not.toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
     ).not.toHaveBeenCalled();
@@ -533,7 +547,9 @@ describe("google-calendar create-event route", () => {
     expect(
       mocks.claimGoogleCalendarApprovalForAccessToken,
     ).not.toHaveBeenCalled();
-    expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).not.toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
     ).not.toHaveBeenCalled();
@@ -547,7 +563,7 @@ describe("google-calendar create-event route", () => {
   ])(
     "records whether %s proved no event was created",
     async (_label, definitive) => {
-      mocks.insertGoogleCalendarEventForConnection.mockRejectedValue(
+      mocks.recoverApprovedGoogleCalendarEventForConnection.mockRejectedValue(
         definitive
           ? new mocks.InsertRejected("Google Calendar event insert failed.")
           : new Error("timeout after possible insert"),
@@ -561,17 +577,17 @@ describe("google-calendar create-event route", () => {
         }),
       );
       expect(response.status).toBe(502);
-      const [, , result] =
-        mocks.updateExternalWriteEventResultForAccessToken.mock.calls[0]!;
-      expect(result.resultStatus).toBe("failed");
       if (definitive) {
+        const [, , result] =
+          mocks.updateExternalWriteEventResultForAccessToken.mock.calls[0]!;
+        expect(result.resultStatus).toBe("failed");
         expect(result.resultSummary).toMatchObject({
           provider_event_created: false,
         });
       } else {
-        expect(result.resultSummary).not.toHaveProperty(
-          "provider_event_created",
-        );
+        expect(
+          mocks.updateExternalWriteEventResultForAccessToken,
+        ).not.toHaveBeenCalled();
       }
     },
   );
@@ -596,7 +612,9 @@ describe("google-calendar create-event route", () => {
       mocks.claimGoogleCalendarApprovalForAccessToken.mock
         .invocationCallOrder[0]!,
     );
-    expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalledWith(
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({ providerAccessToken: "google-access-token" }),
     );
   });
@@ -624,11 +642,11 @@ describe("google-calendar create-event route", () => {
         },
       );
       if (failure === "provider timeout") {
-        mocks.insertGoogleCalendarEventForConnection.mockRejectedValueOnce(
+        mocks.recoverApprovedGoogleCalendarEventForConnection.mockRejectedValueOnce(
           new Error("timeout after possible insert"),
         );
       } else {
-        mocks.recordGoogleCalendarPlacementForAccessToken.mockRejectedValueOnce(
+        mocks.finishGoogleCalendarApprovalForAccessToken.mockRejectedValueOnce(
           new Error("account unavailable"),
         );
       }
@@ -645,10 +663,10 @@ describe("google-calendar create-event route", () => {
       expect((await approve(sibling.id)).status).toBe(409);
       expect((await approve(proposal.id)).status).toBe(200);
       expect(
-        mocks.insertGoogleCalendarEventForConnection,
+        mocks.recoverApprovedGoogleCalendarEventForConnection,
       ).toHaveBeenCalledTimes(2);
-      for (const [params] of mocks.insertGoogleCalendarEventForConnection.mock
-        .calls) {
+      for (const [params] of mocks
+        .recoverApprovedGoogleCalendarEventForConnection.mock.calls) {
         expect(params.proposalId).toBe(proposal.id);
       }
     },
@@ -692,9 +710,12 @@ describe("google-calendar create-event route", () => {
       mocks.claimGoogleCalendarApprovalForAccessToken.mock
         .invocationCallOrder[0],
     ).toBeLessThan(
-      mocks.insertGoogleCalendarEventForConnection.mock.invocationCallOrder[0]!,
+      mocks.recoverApprovedGoogleCalendarEventForConnection.mock
+        .invocationCallOrder[0]!,
     );
-    expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalledWith(
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         proposedEnd: proposal.proposed_end,
         proposedStart: proposal.proposed_start,
@@ -707,11 +728,14 @@ describe("google-calendar create-event route", () => {
     // proposal is accepted, sibling proposals are superseded, and the task is
     // scheduled.
     expect(
-      mocks.recordGoogleCalendarPlacementForAccessToken,
+      mocks.finishGoogleCalendarApprovalForAccessToken,
     ).toHaveBeenCalledWith(
       "supabase-access-token",
-      proposal.id,
-      "google-event-1",
+      expect.objectContaining({
+        proposalId: proposal.id,
+        googleEventId: "google-event-1",
+        googleEventEtag: "verified-etag",
+      }),
     );
     expect(body.task).toEqual(expect.objectContaining({ status: "scheduled" }));
     expect(
@@ -722,18 +746,12 @@ describe("google-calendar create-event route", () => {
     ).not.toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
-    ).toHaveBeenCalledWith(
-      "supabase-access-token",
-      "550e8400-e29b-41d4-a716-446655440701",
-      expect.objectContaining({
-        errorMessage: null,
-        resultStatus: "succeeded",
-      }),
-    );
+    ).not.toHaveBeenCalled();
+    expect(body.audit.result_status).toBe("succeeded");
   });
 
-  it("logs a failed external write and preserves the local proposal", async () => {
-    mocks.insertGoogleCalendarEventForConnection.mockRejectedValue(
+  it("preserves the pending reservation after an ambiguous provider failure", async () => {
+    mocks.recoverApprovedGoogleCalendarEventForConnection.mockRejectedValue(
       new Error("Google Calendar event insert failed."),
     );
 
@@ -753,26 +771,18 @@ describe("google-calendar create-event route", () => {
       "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
     );
     expect(
-      mocks.recordGoogleCalendarPlacementForAccessToken,
+      mocks.finishGoogleCalendarApprovalForAccessToken,
     ).not.toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
-    ).toHaveBeenCalledWith(
-      "supabase-access-token",
-      "550e8400-e29b-41d4-a716-446655440701",
-      expect.objectContaining({
-        errorMessage:
-          "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
-        resultStatus: "failed",
-      }),
-    );
+    ).not.toHaveBeenCalled();
   });
 
   // Calendar hunt #6: once Google has the event, the write SUCCEEDED. A
   // later account failure must not be logged as a failed write or told to the
   // person as "Local proposal data is unchanged" while the event exists.
   it("says the event exists when Google insert succeeds but the account record fails", async () => {
-    mocks.recordGoogleCalendarPlacementForAccessToken.mockRejectedValue(
+    mocks.finishGoogleCalendarApprovalForAccessToken.mockRejectedValue(
       new Error("calendar_blocks insert failed."),
     );
 
@@ -791,21 +801,12 @@ describe("google-calendar create-event route", () => {
     expect(body.google_event_created).toBe(true);
     expect(body.error).toContain("is on your Google Calendar");
     expect(body.error).not.toContain("unchanged");
-    expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalled();
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
-    ).toHaveBeenCalledWith(
-      "supabase-access-token",
-      "550e8400-e29b-41d4-a716-446655440701",
-      expect.objectContaining({
-        resultStatus: "succeeded",
-        resultSummary: expect.objectContaining({
-          google_event_id_stored: false,
-          provider_event_id_present: true,
-          follow_up: "account_record_failed",
-        }),
-      }),
-    );
+    ).not.toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
     ).not.toHaveBeenCalledWith(
@@ -815,7 +816,7 @@ describe("google-calendar create-event route", () => {
     );
   });
 
-  it("still reports success when only the audit follow-up throws after everything landed", async () => {
+  it("returns the audit from the placement transaction without a second audit write", async () => {
     mocks.updateExternalWriteEventResultForAccessToken.mockRejectedValueOnce(
       new Error("incident rule failed"),
     );
@@ -833,6 +834,10 @@ describe("google-calendar create-event route", () => {
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.google_event_id).toBe("google-event-1");
+    expect(body.audit.result_status).toBe("succeeded");
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).not.toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
     ).not.toHaveBeenCalledWith(
@@ -858,7 +863,9 @@ describe("google-calendar create-event route", () => {
     expect(
       mocks.claimGoogleCalendarApprovalForAccessToken,
     ).not.toHaveBeenCalled();
-    expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).not.toHaveBeenCalled();
   });
 
   it("refuses a second Google event for a task that already has one (calendar hunt #1)", async () => {
@@ -879,11 +886,13 @@ describe("google-calendar create-event route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(409);
-    expect(body.error).toContain("conflicts with an earlier approval");
+    expect(body.error).toContain("Retry that same proposal");
     expect(
       mocks.claimGoogleCalendarApprovalForAccessToken,
     ).toHaveBeenCalledTimes(1);
-    expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).not.toHaveBeenCalled();
   });
 
   it("refuses when the approved time is not the time the account holds (calendar hunt #4)", async () => {
@@ -903,7 +912,9 @@ describe("google-calendar create-event route", () => {
     expect(
       mocks.claimGoogleCalendarApprovalForAccessToken,
     ).not.toHaveBeenCalled();
-    expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).not.toHaveBeenCalled();
   });
 
   it("accepts the same instant written with a numeric offset", async () => {
@@ -942,13 +953,18 @@ describe("google-calendar create-event route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalled();
     expect(
-      mocks.recordGoogleCalendarPlacementForAccessToken,
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).toHaveBeenCalled();
+    expect(
+      mocks.finishGoogleCalendarApprovalForAccessToken,
     ).toHaveBeenCalledWith(
       "supabase-access-token",
-      proposal.id,
-      "google-event-1",
+      expect.objectContaining({
+        proposalId: proposal.id,
+        googleEventId: "google-event-1",
+        googleEventEtag: "verified-etag",
+      }),
     );
   });
 
@@ -985,7 +1001,9 @@ describe("google-calendar create-event route", () => {
     );
 
     expect(response.status).toBe(409);
-    expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+    expect(
+      mocks.recoverApprovedGoogleCalendarEventForConnection,
+    ).not.toHaveBeenCalled();
   });
 
   it("logs an unexpected failure server-side without echoing it (#670)", async () => {

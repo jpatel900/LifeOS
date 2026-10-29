@@ -235,6 +235,7 @@ Test:
 - frontend never receives service-role key
 - transactional RPCs (`accept_time_block_proposal`, `place_time_block`, `record_google_calendar_placement`, `apply_execution_session_outcome`) deny cross-user calls and enforce status guards
 - any new transactional RPC ships a two-user denial test and an invalid-state test in the same PR
+- Calendar crash recovery: `phase4aRls.local.calendarApproval.test.ts` covers service-only reserve/dispatch/finish, two-user denial, dispatch racing replacement, predecessor scope, reconnect refusal and terminal states. Mocked provider tests cover original-ID adoption, same-ID retry, dispatch refusal, strict readback and ambiguous absence. These layers do not prove behavior against a real Google account.
 
 Acceptance criteria:
 
