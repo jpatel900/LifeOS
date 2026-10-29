@@ -1,20 +1,18 @@
 import type { ExternalWriteEvent } from "@lifeos/schemas";
 import { ExternalWriteEventSchema } from "@lifeos/schemas";
 import { getGoogleCalendarStoredConnectionForAccessToken } from "@/lib/googleCalendar/server";
-import { getGoogleCalendarEventForConnection } from "@/lib/googleCalendar/events";
 import {
-  getTimeBlockProposalForAccessToken,
-  recordGoogleCalendarPlacementForAccessToken,
-} from "@/lib/planning/server";
+  buildDeterministicGoogleEventId,
+  getGoogleCalendarEventForConnection,
+  requireApprovedGoogleCalendarEvent,
+} from "@/lib/googleCalendar/events";
+import { getTimeBlockProposalForAccessToken } from "@/lib/planning/server";
 import {
   requireSupabaseServiceRoleClient,
   requireSupabaseServerUser,
 } from "@/lib/supabase/server";
-import {
-  EXTERNAL_WRITE_FAILURE_INCIDENT_THRESHOLD,
-  EXTERNAL_WRITE_FAILURE_INCIDENT_WINDOW_MS,
-  updateExternalWriteEventResultForAccessToken,
-} from "./server";
+import { finishGoogleCalendarApprovalForAccessToken } from "./server";
+import { isCalendarRecoveryOriginCurrent } from "./calendarRecovery";
 
 export const EXTERNAL_WRITE_RECONCILIATION_PENDING_AFTER_MS = 60 * 60 * 1000;
 
@@ -43,10 +41,6 @@ function getSupabaseMessage(error: unknown) {
 
 function parseRows(data: unknown): ExternalWriteEvent[] {
   return ExternalWriteEventSchema.array().parse(data ?? []);
-}
-
-function buildDeterministicGoogleEventId(proposalId: string) {
-  return `lifeos${proposalId.replace(/-/g, "").toLowerCase()}`;
 }
 
 async function readStalePendingExternalWrites(
@@ -115,7 +109,10 @@ export async function reconcilePendingGoogleCalendarInsertAuditsForAccessToken(
         getTimeBlockProposalForAccessToken(accessToken, proposalId),
       ]);
 
-      if (!connection || connection.status !== "connected") {
+      if (
+        !connection ||
+        !isCalendarRecoveryOriginCurrent(audit, proposal, connection)
+      ) {
         result.leftPending += 1;
         continue;
       }
@@ -127,50 +124,24 @@ export async function reconcilePendingGoogleCalendarInsertAuditsForAccessToken(
         supabaseAccessToken: accessToken,
       });
 
-      // Calendar hunt #7: a cancelled event (deleted in Google, which keeps
-      // it readable with status "cancelled") is not a write that landed.
-      if (remote.exists && remote.status !== "cancelled") {
-        // Calendar hunt #1: heal with the same one-transaction placement the
-        // create-event route uses, so the task is scheduled as well.
-        const placement = await recordGoogleCalendarPlacementForAccessToken(
-          accessToken,
-          proposal.id,
-          expectedEventId,
-        );
-        const healedBlock = placement.block;
-
-        await updateExternalWriteEventResultForAccessToken(
-          accessToken,
-          audit.id,
-          {
-            errorMessage: null,
-            resultStatus: "succeeded",
-            resultSummary: {
-              calendar_block_id: healedBlock.id,
-              google_event_id_stored: true,
-              provider_event_id_present: true,
-              reconciled: true,
-            },
-          },
-        );
-        result.succeeded += 1;
-      } else {
-        await updateExternalWriteEventResultForAccessToken(
-          accessToken,
-          audit.id,
-          {
-            errorMessage:
-              "Google Calendar reconciliation did not find the remote event.",
-            resultStatus: "failed",
-            resultSummary: {
-              google_event_id_stored: false,
-              provider_event_id_present: false,
-              reconciled: true,
-            },
-          },
-        );
-        result.failed += 1;
-      }
+      // Absence cannot prove that a paused request will never reach Google.
+      const confirmed = requireApprovedGoogleCalendarEvent(remote, {
+        proposalId: proposal.id,
+        proposedStart: proposal.proposed_start,
+        proposedEnd: proposal.proposed_end,
+      });
+      await finishGoogleCalendarApprovalForAccessToken(accessToken, {
+        auditId: audit.id,
+        proposalId: proposal.id,
+        connectionId: connection.id,
+        connectedAt: connection.connected_at!,
+        calendarId: connection.calendar_id,
+        googleEventId: confirmed.googleEventId,
+        googleEventEtag: confirmed.googleEventEtag!,
+        proposedStart: proposal.proposed_start,
+        proposedEnd: proposal.proposed_end,
+      });
+      result.succeeded += 1;
     } catch {
       result.leftPending += 1;
     }

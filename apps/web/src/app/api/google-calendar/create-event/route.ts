@@ -7,12 +7,14 @@ import {
 import { getGoogleCalendarConfig } from "@/lib/googleCalendar/config";
 import {
   GoogleCalendarInsertRejectedError,
-  insertGoogleCalendarEventForConnection,
+  recoverApprovedGoogleCalendarEventForConnection,
   isProposalEventGoneFromGoogle,
   resolveGoogleCalendarWriteAccessToken,
 } from "@/lib/googleCalendar/events";
 import {
   claimGoogleCalendarApprovalForAccessToken,
+  dispatchGoogleCalendarApprovalForAccessToken,
+  finishGoogleCalendarApprovalForAccessToken,
   type CalendarAbsenceAttempt,
   updateExternalWriteEventResultForAccessToken,
 } from "@/lib/externalWrites/server";
@@ -20,7 +22,6 @@ import {
   getCalendarBlockForProposalForAccessToken,
   getTaskForAccessToken,
   getTimeBlockProposalForAccessToken,
-  recordGoogleCalendarPlacementForAccessToken,
 } from "@/lib/planning/server";
 import {
   isGoogleCalendarRouteAuthFailure,
@@ -62,7 +63,7 @@ function mapCreateEventFailure(error: unknown) {
     return {
       status: 409,
       error:
-        "This calendar approval conflicts with an earlier approval or its saved details changed. Review the earlier event on its original Google Calendar. Reconnecting does not clear an unresolved approval. Local planning remains available.",
+        "An earlier approval still needs checking. Retry that same proposal to check its original Google event and finish saving it. Reconnecting or choosing another proposal cannot clear an uncertain result. Local planning remains available.",
     };
   }
   // #670: the raw message is only inspected to pick a status; the client
@@ -349,7 +350,7 @@ export async function POST(request: Request) {
     }
     auditEventId = auditEvent.id;
 
-    const insertResult = await insertGoogleCalendarEventForConnection({
+    const insertResult = await recoverApprovedGoogleCalendarEventForConnection({
       connection,
       description:
         "Created by LifeOS from an explicitly approved local time-block proposal.",
@@ -360,6 +361,11 @@ export async function POST(request: Request) {
       supabaseAccessToken: accessToken,
       timezone: input.timezone,
       title,
+      beforeInsert: () =>
+        dispatchGoogleCalendarApprovalForAccessToken(
+          accessToken,
+          auditEvent.id,
+        ),
     });
 
     // Calendar hunt #6: from here on the Google write HAS happened. Nothing
@@ -372,28 +378,23 @@ export async function POST(request: Request) {
       // same semantics as placing a block — block stored with its event id,
       // proposal accepted, the task's other pending proposals superseded,
       // and the task scheduled.
-      placement = await recordGoogleCalendarPlacementForAccessToken(
+      placement = await finishGoogleCalendarApprovalForAccessToken(
         accessToken,
-        proposal.id,
-        insertResult.googleEventId,
+        {
+          auditId: auditEvent.id,
+          proposalId: proposal.id,
+          connectionId: connection.id,
+          connectedAt: connection.connected_at,
+          calendarId: connection.calendar_id,
+          googleEventId: insertResult.googleEventId,
+          googleEventEtag: insertResult.googleEventEtag!,
+          proposedStart: proposal.proposed_start,
+          proposedEnd: proposal.proposed_end,
+        },
       );
     } catch {
-      await updateExternalWriteEventResultForAccessToken(
-        accessToken,
-        auditEvent.id,
-        {
-          errorMessage: null,
-          resultStatus: "succeeded",
-          resultSummary: {
-            follow_up: "account_record_failed",
-            google_event_etag: insertResult.googleEventEtag,
-            google_event_id_stored: false,
-            google_event_snapshot: insertResult.eventSnapshot,
-            provider_event_id_present: true,
-          },
-        },
-      ).catch(() => null);
-
+      // Keep the reservation pending. Placement and audit completion either
+      // commit together or roll back together, so a later retry can recover.
       return NextResponse.json(
         {
           ok: false,
@@ -407,27 +408,9 @@ export async function POST(request: Request) {
 
     const block = placement.block;
     const updatedProposal = placement.proposal;
-    // The audit row must say succeeded; a failure in its own follow-up work
-    // (the incident rule) must not turn a finished write into an error.
-    const audit = await updateExternalWriteEventResultForAccessToken(
-      accessToken,
-      auditEvent.id,
-      {
-        errorMessage: null,
-        resultStatus: "succeeded",
-        resultSummary: {
-          calendar_block_id: block.id,
-          google_event_etag: insertResult.googleEventEtag,
-          google_event_id_stored: true,
-          google_event_snapshot: insertResult.eventSnapshot,
-          provider_event_id_present: true,
-        },
-      },
-    ).catch(() => null);
-
     return NextResponse.json({
       ok: true,
-      audit,
+      audit: placement.audit,
       block,
       google_event_id: insertResult.googleEventId,
       proposal: updatedProposal,
@@ -436,7 +419,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const failure = mapCreateEventFailure(error);
 
-    if (auditEventId) {
+    if (auditEventId && error instanceof GoogleCalendarInsertRejectedError) {
       await updateExternalWriteEventResultForAccessToken(
         accessToken,
         auditEventId,

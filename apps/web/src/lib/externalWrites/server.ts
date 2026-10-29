@@ -1,5 +1,8 @@
 import {
   ExternalWriteEventSchema,
+  CalendarBlockSchema,
+  TimeBlockProposalSchema,
+  TaskSchema,
   type ExternalWriteEvent,
 } from "@lifeos/schemas";
 import { z } from "zod";
@@ -246,7 +249,7 @@ export async function claimGoogleCalendarApprovalForAccessToken(
     throw new Error("External write audit user mismatch.");
   }
   const client = requireSupabaseServiceRoleClient();
-  const { data, error } = await client.rpc("claim_google_calendar_approval", {
+  const { data, error } = await client.rpc("reserve_google_calendar_approval", {
     p_user_id: user.id,
     p_proposal_id: row.proposalId,
     p_task_id: row.taskId,
@@ -275,6 +278,70 @@ export async function claimGoogleCalendarApprovalForAccessToken(
     throw new Error(getSupabaseMessage(error));
   }
   return parseExternalWriteEvent(data);
+}
+
+export async function dispatchGoogleCalendarApprovalForAccessToken(
+  accessToken: string,
+  auditId: string,
+) {
+  assertServerRuntime();
+  const { user } = await requireSupabaseServerUser(accessToken);
+  const { error } = await requireSupabaseServiceRoleClient().rpc(
+    "dispatch_google_calendar_approval",
+    { p_user_id: user.id, p_audit_id: auditId },
+  );
+  if (error)
+    throw Object.assign(new Error("Calendar approval conflict."), {
+      code: "CALENDAR_APPROVAL_CONFLICT",
+    });
+}
+
+export async function finishGoogleCalendarApprovalForAccessToken(
+  accessToken: string,
+  proof: {
+    auditId: string;
+    proposalId: string;
+    connectionId: string;
+    connectedAt: string;
+    calendarId: string;
+    googleEventId: string;
+    proposedStart: string;
+    proposedEnd: string;
+    googleEventEtag: string;
+  },
+) {
+  assertServerRuntime();
+  const { user } = await requireSupabaseServerUser(accessToken);
+  const { data, error } = await requireSupabaseServiceRoleClient().rpc(
+    "finish_google_calendar_approval",
+    {
+      p_user_id: user.id,
+      p_audit_id: proof.auditId,
+      p_proposal_id: proof.proposalId,
+      p_connection_id: proof.connectionId,
+      p_connected_at: proof.connectedAt,
+      p_calendar_id: proof.calendarId,
+      p_google_event_id: proof.googleEventId,
+      p_start: proof.proposedStart,
+      p_end: proof.proposedEnd,
+      p_etag: proof.googleEventEtag,
+    },
+  );
+  if (error)
+    throw Object.assign(new Error("Calendar approval conflict."), {
+      code: "CALENDAR_APPROVAL_CONFLICT",
+    });
+  const result = (data ?? {}) as Record<string, unknown>;
+  const audit = ExternalWriteEventSchema.parse(result.audit);
+  // Account placement and its audit already committed. A health follow-up
+  // cannot turn that success into a failed external write.
+  await applyExternalWriteFailureIncidentRule(audit).catch(() => undefined);
+  return {
+    proposal: TimeBlockProposalSchema.parse(result.proposal),
+    block: CalendarBlockSchema.parse(result.block),
+    task: result.task ? TaskSchema.parse(result.task) : null,
+    audit,
+  };
 }
 
 export async function updateExternalWriteEventResultForAccessToken(

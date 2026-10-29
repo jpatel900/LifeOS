@@ -41,6 +41,8 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 ## Open questions
 
+- Calendar crash recovery (2026-10-29) is under review as an unmerged follow-up to #1105. Reservation fencing and original-event recovery are implemented. Focused mocked proof passes; full-schema and required CI proof remain pending. No migration or runtime change has reached production through this work.
+
 - Consumer wiring for the FR-032/034/037 policy kernels is unscoped — each needs its own owner-ratified issue before becoming user-visible.
 
 ## Next action

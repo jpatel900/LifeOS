@@ -153,6 +153,12 @@ async function withApprovalFixture(
     await must(userClient.from("calendar_blocks").delete().eq("id", blockId));
     await must(
       userClient
+        .from("calendar_blocks")
+        .delete()
+        .in("proposal_id", [winner, sibling]),
+    );
+    await must(
+      userClient
         .from("time_block_proposals")
         .delete()
         .in("id", [winner, sibling]),
@@ -429,6 +435,202 @@ local("calendar approval recovery — exact evidence and origin", () => {
   });
 });
 
+local("calendar crash recovery — reservation, dispatch and completion", () => {
+  type Fixture = Parameters<Parameters<typeof withApprovalFixture>[0]>[0];
+  const reserve = (f: Fixture, proposal = f.winner) =>
+    f.service.rpc(
+      "reserve_google_calendar_approval",
+      claimArgs(f.userId, proposal, f.taskId, f.connectionId),
+    );
+  const dispatch = (f: Fixture, id: string) =>
+    f.service.rpc("dispatch_google_calendar_approval", {
+      p_user_id: f.userId,
+      p_audit_id: id,
+    });
+  const proof = (f: Fixture, id: string) => ({
+    p_user_id: f.userId,
+    p_audit_id: id,
+    p_proposal_id: f.winner,
+    p_connection_id: f.connectionId,
+    p_connected_at: connectedAt,
+    p_calendar_id: "primary",
+    p_google_event_id: "lifeos" + f.winner.replace(/-/g, ""),
+    p_start: start,
+    p_end: end,
+    p_etag: "synthetic-verified-etag",
+  });
+  const complete = (f: Fixture, id: string) =>
+    f.service.rpc("finish_google_calendar_approval", proof(f, id));
+  const audit = (f: Fixture, id: string) =>
+    must(
+      f.service.from("external_write_events").select("*").eq("id", id).single(),
+    );
+
+  it("releases only an unsent reservation and prevents its paused worker from dispatching", async () => {
+    await withApprovalFixture(async (f) => {
+      const old = await must(reserve(f));
+      await must(reserve(f, f.sibling));
+      expect(await audit(f, old.id)).toMatchObject({
+        result_status: "failed",
+        result_summary_json: {
+          provider_event_created: false,
+          reservation_revoked: true,
+        },
+      });
+      expect((await dispatch(f, old.id)).error?.code).toBe("PCA01");
+    });
+  });
+
+  it("serializes a dispatch racing a replacement on independent requests", async () => {
+    await withApprovalFixture(async (f) => {
+      const old = await must(reserve(f));
+      const [sent, replaced] = await Promise.all([
+        dispatch(f, old.id),
+        reserve(f, f.sibling),
+      ]);
+      expect([sent, replaced].filter((result) => !result.error)).toHaveLength(
+        1,
+      );
+      expect(
+        [sent, replaced].filter((result) => result.error?.code === "PCA01"),
+      ).toHaveLength(1);
+      expect((await audit(f, old.id)).result_status).toBe(
+        sent.error ? "failed" : "pending",
+      );
+    });
+  });
+
+  it("atomically settles the crashed predecessor but leaves a newer attempt pending", async () => {
+    await withApprovalFixture(async (f) => {
+      const old = await must(f.claim(f.winner));
+      const retry = await must(reserve(f));
+      await must(dispatch(f, retry.id));
+      const newer = await must(reserve(f));
+      await must(dispatch(f, newer.id));
+      const result = await must(complete(f, retry.id));
+      expect(result).toMatchObject({
+        block: { google_event_id: proof(f, retry.id).p_google_event_id },
+        task: { status: "scheduled" },
+        audit: { result_status: "succeeded" },
+      });
+      expect(await audit(f, old.id)).toMatchObject({
+        result_status: "succeeded",
+        result_summary_json: { recovered_by_audit_id: retry.id },
+      });
+      expect((await audit(f, newer.id)).result_status).toBe("pending");
+      await must(
+        f.service
+          .from("external_write_events")
+          .update({ result_status: "failed", result_summary_json: {} })
+          .eq("id", old.id),
+      );
+      expect((await audit(f, old.id)).result_status).toBe("succeeded");
+    });
+  });
+
+  it("denies browser execution and forged ownership for every recovery RPC", async () => {
+    await withApprovalFixture(async (f) => {
+      const other = createClient(
+        loopbackUrl(),
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        clientOptions,
+      );
+      const { data, error } = await other.auth.signInWithPassword({
+        email: "user_b@example.test",
+        password: "password123",
+      });
+      expect(error).toBeNull();
+      const pending = await must(reserve(f));
+      const calls = [
+        [
+          "reserve_google_calendar_approval",
+          claimArgs(f.userId, f.winner, f.taskId, f.connectionId),
+        ],
+        [
+          "dispatch_google_calendar_approval",
+          { p_user_id: f.userId, p_audit_id: pending.id },
+        ],
+        ["finish_google_calendar_approval", proof(f, pending.id)],
+      ] as const;
+      for (const [name, args] of calls) {
+        expect((await f.userClient.rpc(name, args)).error).not.toBeNull();
+        expect((await other.rpc(name, args)).error).not.toBeNull();
+        expect(
+          (await f.service.rpc(name, { ...args, p_user_id: data.user!.id }))
+            .error?.code,
+        ).toBe("PCA01");
+      }
+      expect((await audit(f, pending.id)).result_status).toBe("pending");
+    });
+  });
+
+  it("rejects a reconnect before completion without saving a block", async () => {
+    await withApprovalFixture(async (f) => {
+      const pending = await must(reserve(f));
+      await must(dispatch(f, pending.id));
+      await must(
+        f.service
+          .from("google_calendar_connections")
+          .update({
+            connected_at: "2026-05-11T00:00:00Z",
+            credential_verified_at: "2026-05-11T00:00:00Z",
+          })
+          .eq("id", f.connectionId),
+      );
+      expect((await complete(f, pending.id)).error?.code).toBe("PCA01");
+      expect(
+        await must(
+          f.userClient
+            .from("calendar_blocks")
+            .select("id")
+            .eq("proposal_id", f.winner),
+        ),
+      ).toEqual([]);
+      expect((await audit(f, pending.id)).result_status).toBe("pending");
+    });
+  });
+
+  it.each(["cancelled", "completed", "missed"])(
+    "cannot resurrect a %s placement from a late legacy response",
+    async (status) => {
+      await withApprovalFixture(async (f) => {
+        const pending = await must(reserve(f));
+        await must(dispatch(f, pending.id));
+        await must(complete(f, pending.id));
+        await must(
+          f.userClient
+            .from("calendar_blocks")
+            .update({ status })
+            .eq("proposal_id", f.winner),
+        );
+        await must(
+          f.userClient
+            .from("tasks")
+            .update({ status: "active" })
+            .eq("id", f.taskId),
+        );
+        expect(
+          (
+            await f.userClient.rpc("record_google_calendar_placement", {
+              p_proposal_id: f.winner,
+              p_google_event_id: proof(f, pending.id).p_google_event_id,
+            })
+          ).error?.code,
+        ).toBe("PCA01");
+        expect(
+          await must(
+            f.userClient
+              .from("tasks")
+              .select("status")
+              .eq("id", f.taskId)
+              .single(),
+          ),
+        ).toMatchObject({ status: "active" });
+      });
+    },
+  );
+});
+
 async function signInUserA() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!key) throw new Error("A local Supabase anon key is required.");
@@ -478,6 +680,158 @@ async function must<T>(
   if (error) throw error;
   return data;
 }
+
+local("calendar recovery releases only unsent requests after reconnect", () => {
+  it.each(["original", "sibling"])(
+    "releases an unsent reservation for the %s proposal",
+    async (kind) => {
+      await withApprovalFixture(async (f) => {
+        const args = claimArgs(f.userId, f.winner, f.taskId, f.connectionId);
+        const old = await must(
+          f.service.rpc("reserve_google_calendar_approval", args),
+        );
+        const generation = "2026-05-11T00:00:00Z";
+        await must(
+          f.service
+            .from("google_calendar_connections")
+            .update({
+              connected_at: generation,
+              credential_verified_at: generation,
+            })
+            .eq("id", f.connectionId),
+        );
+        await must(
+          f.service.rpc("reserve_google_calendar_approval", {
+            ...args,
+            p_proposal_id: kind === "sibling" ? f.sibling : f.winner,
+            p_connected_at: generation,
+          }),
+        );
+        expect(
+          (
+            await f.service.rpc("dispatch_google_calendar_approval", {
+              p_user_id: f.userId,
+              p_audit_id: old.id,
+            })
+          ).error?.code,
+        ).toBe("PCA01");
+        expect(
+          await must(
+            f.service
+              .from("external_write_events")
+              .select("result_status,result_summary_json")
+              .eq("id", old.id)
+              .single(),
+          ),
+        ).toMatchObject({
+          result_status: "failed",
+          result_summary_json: {
+            provider_event_created: false,
+            reservation_revoked: true,
+          },
+        });
+      });
+    },
+  );
+
+  it("preserves a dispatched request after reconnect", async () => {
+    await withApprovalFixture(async (f) => {
+      const args = claimArgs(f.userId, f.winner, f.taskId, f.connectionId);
+      const old = await must(
+        f.service.rpc("reserve_google_calendar_approval", args),
+      );
+      await must(
+        f.service.rpc("dispatch_google_calendar_approval", {
+          p_user_id: f.userId,
+          p_audit_id: old.id,
+        }),
+      );
+      const generation = "2026-05-11T00:00:00Z";
+      await must(
+        f.service
+          .from("google_calendar_connections")
+          .update({
+            connected_at: generation,
+            credential_verified_at: generation,
+          })
+          .eq("id", f.connectionId),
+      );
+      expect(
+        (
+          await f.service.rpc("reserve_google_calendar_approval", {
+            ...args,
+            p_proposal_id: f.sibling,
+            p_connected_at: generation,
+          })
+        ).error?.code,
+      ).toBe("PCA01");
+      expect(
+        await must(
+          f.service
+            .from("external_write_events")
+            .select("result_status")
+            .eq("id", old.id)
+            .single(),
+        ),
+      ).toMatchObject({ result_status: "pending" });
+    });
+  });
+});
+
+local("calendar recovery respects terminal tasks", () => {
+  it.each(["done", "dropped", "archived"])(
+    "does not reschedule a %s task",
+    async (status) => {
+      await withApprovalFixture(async (f) => {
+        const pending = await must(
+          f.service.rpc(
+            "reserve_google_calendar_approval",
+            claimArgs(f.userId, f.winner, f.taskId, f.connectionId),
+          ),
+        );
+        await must(
+          f.service.rpc("dispatch_google_calendar_approval", {
+            p_user_id: f.userId,
+            p_audit_id: pending.id,
+          }),
+        );
+        await must(
+          f.userClient.from("tasks").update({ status }).eq("id", f.taskId),
+        );
+        const result = await f.service.rpc("finish_google_calendar_approval", {
+          p_user_id: f.userId,
+          p_audit_id: pending.id,
+          p_proposal_id: f.winner,
+          p_connection_id: f.connectionId,
+          p_connected_at: connectedAt,
+          p_calendar_id: "primary",
+          p_google_event_id: "lifeos" + f.winner.replace(/-/g, ""),
+          p_start: start,
+          p_end: end,
+          p_etag: "synthetic-verified-etag",
+        });
+        expect(result.error?.code).toBe("PCA01");
+        expect(
+          await must(
+            f.userClient
+              .from("tasks")
+              .select("status")
+              .eq("id", f.taskId)
+              .single(),
+          ),
+        ).toMatchObject({ status });
+        expect(
+          await must(
+            f.userClient
+              .from("calendar_blocks")
+              .select("id")
+              .eq("proposal_id", f.winner),
+          ),
+        ).toEqual([]);
+      });
+    },
+  );
+});
 
 local("calendar approval claim — real local PostgreSQL", () => {
   it("lets one sibling approval win, keeps its retry safe and freezes its time", async () => {

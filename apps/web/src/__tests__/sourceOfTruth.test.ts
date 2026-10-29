@@ -269,13 +269,25 @@ describe("source-of-truth boundaries", () => {
       "claimGoogleCalendarApprovalForAccessToken",
     );
     expect(readRepoFile("apps/web/src/lib/externalWrites/server.ts")).toContain(
-      'rpc("claim_google_calendar_approval"',
+      'rpc("reserve_google_calendar_approval"',
     );
     expect(
       readRepoFile(
         "supabase/migrations/20261023120000_claim_google_calendar_approval.sql",
       ),
     ).toMatch(/insert into public\.external_write_events[\s\S]*'pending'/);
+    const recoveryMigration = readRepoFile(
+      "supabase/migrations/20261028090000_recover_pending_calendar_approval.sql",
+    );
+    expect(recoveryMigration).toContain(
+      "public.claim_google_calendar_approval(",
+    );
+    expect(createEventRoute).toContain(
+      "dispatchGoogleCalendarApprovalForAccessToken",
+    );
+    expect(createEventRoute).toContain(
+      "finishGoogleCalendarApprovalForAccessToken",
+    );
     expect(createEventRoute).not.toMatch(/from ["']@\/lib\/ai\//);
   });
 
