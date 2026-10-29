@@ -10,14 +10,14 @@ const BANNED_WORDS = [
 ];
 
 describe("DriftRecoveryCard", () => {
-  it("shows the plain-language duration headline when minutes > 0", () => {
+  it("shows the plain-language duration context when minutes > 0", () => {
     render(<DriftRecoveryCard drift={{ minutes: 12 }} onReclaim={() => {}} />);
     expect(screen.getByTestId("drift-recovery-card")).toHaveTextContent(
       "You drifted for ~12 minutes.",
     );
   });
 
-  it("shows the truthful generic headline when minutes === 0 (v0 placeholder) — never invents a duration", () => {
+  it("shows truthful generic context when minutes === 0 (v0 placeholder) — never invents a duration", () => {
     render(<DriftRecoveryCard drift={{ minutes: 0 }} onReclaim={() => {}} />);
     const card = screen.getByTestId("drift-recovery-card");
     expect(card).toHaveTextContent("This block got away from you.");
@@ -76,9 +76,9 @@ describe("DriftRecoveryCard", () => {
     expect(onAbandon).toHaveBeenCalledTimes(1);
   });
 
-  // SP-3 numeric steadiness: the drift-minutes headline must not jiggle, so
+  // SP-3 numeric steadiness: the drift-minutes context must not jiggle, so
   // it renders with tabular figures.
-  it("renders the drift-minutes headline with tabular-nums", () => {
+  it("renders the drift-minutes context with tabular-nums", () => {
     render(<DriftRecoveryCard drift={{ minutes: 12 }} onReclaim={() => {}} />);
     expect(screen.getByText("You drifted for ~12 minutes.")).toHaveClass(
       "tabular-nums",

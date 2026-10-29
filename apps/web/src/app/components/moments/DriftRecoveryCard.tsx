@@ -30,7 +30,7 @@ export function DriftRecoveryCard({
   onReclaim,
   onAbandon,
 }: DriftRecoveryCardProps) {
-  const headline =
+  const durationLine =
     drift.minutes > 0
       ? `You drifted for ~${drift.minutes} minutes.`
       : "This block got away from you.";
@@ -44,9 +44,12 @@ export function DriftRecoveryCard({
       data-testid="drift-recovery-card"
     >
       <CardContent className="grid gap-3 p-5 sm:p-6">
-        <h2 className="workflow-surface-title moments-card-title tabular-nums">
-          {headline}
+        <h2 className="workflow-surface-title moments-card-title">
+          Reclaim the rest of this block.
         </h2>
+        <p className="text-sm text-muted-foreground tabular-nums">
+          {durationLine}
+        </p>
         {reasonLine ? (
           <p className="text-sm text-muted-foreground">{reasonLine}</p>
         ) : null}
