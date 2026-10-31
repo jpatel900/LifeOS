@@ -8,7 +8,7 @@ interface GoogleCalendarEventReadParams {
   supabaseAccessToken: string;
 }
 
-interface InsertGoogleCalendarEventParams {
+export interface InsertGoogleCalendarEventParams {
   connection: GoogleCalendarStoredConnection;
   description: string | null;
   proposalId: string;
@@ -82,6 +82,14 @@ export class GoogleCalendarInsertRejectedError extends Error {
   }
 }
 
+/** A mismatched or unconfirmed event is not proof that no write happened. */
+export class GoogleCalendarExistingEventMismatchError extends Error {
+  constructor() {
+    super("The earlier Google event cannot be confirmed at the approved time.");
+    this.name = "GoogleCalendarExistingEventMismatchError";
+  }
+}
+
 export class GoogleCalendarEventDriftError extends Error {
   constructor() {
     super(
@@ -143,7 +151,7 @@ export function isLifeOsOwnedGoogleEventId(eventId: string) {
   return /^lifeos[0-9a-f]{32}$/.test(eventId);
 }
 
-function buildDeterministicGoogleEventId(proposalId: string) {
+export function buildDeterministicGoogleEventId(proposalId: string) {
   const compactId = proposalId.replace(/-/g, "").toLowerCase();
 
   if (!/^[0-9a-f]{32}$/.test(compactId)) {
@@ -202,7 +210,7 @@ export async function getGoogleCalendarEventForConnection(
       googleEventEtag: null,
       lifeosProposalId: null,
       eventSnapshot: null,
-      status: null,
+      status: response.status === 410 ? "cancelled" : null,
     };
   }
 
@@ -303,6 +311,73 @@ export async function insertGoogleCalendarEventForConnection(
     googleEventEtag: readEtag(payload),
     eventSnapshot: payload,
   };
+}
+
+/** Only an active, owned event at the approved time can finish a lost reply. */
+export function requireApprovedGoogleCalendarEvent(
+  remote: GoogleCalendarEventReadResult,
+  approval: { proposalId: string; proposedStart: string; proposedEnd: string },
+): InsertGoogleCalendarEventResult {
+  const snapshot = remote.eventSnapshot;
+  const start = snapshot?.start as
+    | { date?: unknown; dateTime?: unknown }
+    | undefined;
+  const end = snapshot?.end as
+    | { date?: unknown; dateTime?: unknown }
+    | undefined;
+  const sameTime = (value: unknown, expected: string) =>
+    typeof value === "string" &&
+    Number.isFinite(Date.parse(value)) &&
+    Date.parse(value) === Date.parse(expected);
+  if (
+    !remote.exists ||
+    !["confirmed", "tentative"].includes(remote.status ?? "") ||
+    remote.googleEventId !==
+      buildDeterministicGoogleEventId(approval.proposalId) ||
+    remote.lifeosProposalId !== approval.proposalId ||
+    !remote.googleEventEtag ||
+    start?.date !== undefined ||
+    end?.date !== undefined ||
+    !sameTime(start?.dateTime, approval.proposedStart) ||
+    !sameTime(end?.dateTime, approval.proposedEnd) ||
+    snapshot?.recurrence ||
+    snapshot?.recurringEventId
+  ) {
+    throw new GoogleCalendarExistingEventMismatchError();
+  }
+  return {
+    googleEventId: remote.googleEventId,
+    googleEventEtag: remote.googleEventEtag,
+    eventSnapshot: snapshot,
+  };
+}
+
+/** Explicit approval may replay its original ID; a 409 alone is not success. */
+export async function recoverApprovedGoogleCalendarEventForConnection(
+  params: InsertGoogleCalendarEventParams & {
+    beforeInsert: () => Promise<void>;
+  },
+): Promise<InsertGoogleCalendarEventResult> {
+  const providerAccessToken =
+    params.providerAccessToken ??
+    (await resolveGoogleCalendarWriteAccessToken(params));
+  const read = () =>
+    getGoogleCalendarEventForConnection({
+      connection: params.connection,
+      eventId: buildDeterministicGoogleEventId(params.proposalId),
+      providerAccessToken,
+      supabaseAccessToken: params.supabaseAccessToken,
+    });
+  const prior = await read();
+  if (prior.exists || prior.status === "cancelled") {
+    return requireApprovedGoogleCalendarEvent(prior, params);
+  }
+  await params.beforeInsert();
+  await insertGoogleCalendarEventForConnection({
+    ...params,
+    providerAccessToken,
+  });
+  return requireApprovedGoogleCalendarEvent(await read(), params);
 }
 
 export async function deleteGoogleCalendarEventForConnection(

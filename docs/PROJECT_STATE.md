@@ -41,6 +41,8 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 ## Open questions
 
+- Calendar crash recovery is under review in unmerged #1132, based on #1105. Its 2026-10-29 checkpoint passed focused, full-schema RLS and monorepo validation. The integration candidate adds #1130's tested Windows/browser-runner fixes and incorporates #1117's conflict response plus a route/adapter retry regression while retaining the stricter recovery validator and atomic completion. Current head-specific evidence belongs in #1132; the unchanged #1117 sibling must not be merged afterward. Human calendar/service-role/migration review remains required. No production migration or runtime change is claimed.
+
 - Consumer wiring for the FR-032/034/037 policy kernels is unscoped — each needs its own owner-ratified issue before becoming user-visible.
 
 ## Next action

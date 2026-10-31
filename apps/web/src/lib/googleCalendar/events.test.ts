@@ -13,6 +13,7 @@ import {
   GoogleCalendarInsertRejectedError,
   deleteGoogleCalendarEventForConnection,
   insertGoogleCalendarEventForConnection,
+  recoverApprovedGoogleCalendarEventForConnection,
   isProposalEventGoneFromGoogle,
 } from "./events";
 
@@ -286,6 +287,127 @@ describe("Google Calendar event insert helper", () => {
 
     expect(result.googleEventEtag).toBe('"etag-42"');
     expect(result.eventSnapshot).toMatchObject({ etag: '"etag-42"' });
+  });
+});
+
+describe("Google Calendar original-identity recovery", () => {
+  const proposalId = "550e8400-e29b-41d4-a716-446655440501";
+  const eventId = "lifeos550e8400e29b41d4a716446655440501";
+  const start = "2026-05-10T16:00:00.000Z";
+  const end = "2026-05-10T17:00:00.000Z";
+  const snapshot = {
+    id: eventId,
+    etag: '"verified"',
+    status: "confirmed",
+    start: { dateTime: start },
+    end: { dateTime: end },
+    extendedProperties: { private: { lifeos_proposal_id: proposalId } },
+  };
+  const beforeInsert = vi.fn();
+  const params = {
+    connection,
+    description: null,
+    proposalId,
+    proposedStart: start,
+    proposedEnd: end,
+    supabaseAccessToken: "synthetic",
+    timezone: "UTC",
+    title: "Synthetic",
+    beforeInsert,
+  };
+  const response = (value: unknown, status = 200) =>
+    new Response(JSON.stringify(value), { status });
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal("fetch", vi.fn());
+    mocks.resolveGoogleCalendarAccessToken.mockResolvedValue(
+      "synthetic-provider-token",
+    );
+  });
+
+  it("adopts the original verified event after a lost response without another POST", async () => {
+    vi.mocked(fetch).mockResolvedValue(response(snapshot));
+    expect(
+      await recoverApprovedGoogleCalendarEventForConnection(params),
+    ).toMatchObject({ googleEventId: eventId, googleEventEtag: '"verified"' });
+    expect(beforeInsert).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetch).mock.calls[0]?.[1]?.method).toBe("GET");
+  });
+
+  it.each([200, 409])(
+    "replays only the original ID and verifies readback after POST %s",
+    async (status) => {
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(response({}, 404))
+        .mockImplementationOnce(async () => {
+          expect(beforeInsert).toHaveBeenCalledTimes(1);
+          return response({ id: eventId }, status);
+        })
+        .mockResolvedValueOnce(response(snapshot));
+      await expect(
+        recoverApprovedGoogleCalendarEventForConnection(params),
+      ).resolves.toMatchObject({ googleEventId: eventId });
+      expect(
+        vi.mocked(fetch).mock.calls.map((call) => call[1]?.method),
+      ).toEqual(["GET", "POST", "GET"]);
+      expect(
+        JSON.parse(String(vi.mocked(fetch).mock.calls[1]?.[1]?.body)).id,
+      ).toBe(eventId);
+      expect(mocks.resolveGoogleCalendarAccessToken).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("never POSTs when another request revokes the unsent reservation", async () => {
+    vi.mocked(fetch).mockResolvedValue(response({}, 404));
+    beforeInsert.mockRejectedValue(new Error("revoked"));
+    await expect(
+      recoverApprovedGoogleCalendarEventForConnection(params),
+    ).rejects.toThrow("revoked");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["wrong ID", { ...snapshot, id: "unrelated" }],
+    ["wrong marker", { ...snapshot, extendedProperties: {} }],
+    [
+      "moved time",
+      { ...snapshot, start: { dateTime: "2026-05-10T18:00:00Z" } },
+    ],
+    ["cancelled", { ...snapshot, status: "cancelled" }],
+    ["unknown status", { ...snapshot, status: "unknown" }],
+    ["missing etag", { ...snapshot, etag: null }],
+    ["all day", { ...snapshot, start: { date: "2026-05-10" } }],
+    ["recurring", { ...snapshot, recurrence: ["RRULE:FREQ=DAILY"] }],
+  ])(
+    "preserves ambiguity for %s without another POST",
+    async (_label, remote) => {
+      vi.mocked(fetch).mockResolvedValue(response(remote));
+      await expect(
+        recoverApprovedGoogleCalendarEventForConnection(params),
+      ).rejects.toThrow(/cannot be confirmed/);
+      expect(beforeInsert).not.toHaveBeenCalled();
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([410, 503])("does not POST after GET %s", async (status) => {
+    vi.mocked(fetch).mockResolvedValue(response({}, status));
+    await expect(
+      recoverApprovedGoogleCalendarEventForConnection(params),
+    ).rejects.toThrow();
+    expect(beforeInsert).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not finalize an opaque conflict followed by absence", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response({}, 404))
+      .mockResolvedValueOnce(response({}, 409))
+      .mockResolvedValueOnce(response({}, 404));
+    await expect(
+      recoverApprovedGoogleCalendarEventForConnection(params),
+    ).rejects.toThrow(/cannot be confirmed/);
   });
 });
 
