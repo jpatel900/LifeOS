@@ -82,6 +82,14 @@ export class GoogleCalendarInsertRejectedError extends Error {
   }
 }
 
+/** A mismatched or unconfirmed event is not proof that no write happened. */
+export class GoogleCalendarExistingEventMismatchError extends Error {
+  constructor() {
+    super("The earlier Google event cannot be confirmed at the approved time.");
+    this.name = "GoogleCalendarExistingEventMismatchError";
+  }
+}
+
 export class GoogleCalendarEventDriftError extends Error {
   constructor() {
     super(
@@ -335,9 +343,7 @@ export function requireApprovedGoogleCalendarEvent(
     snapshot?.recurrence ||
     snapshot?.recurringEventId
   ) {
-    throw new Error(
-      "The earlier Google event cannot be confirmed at the approved time.",
-    );
+    throw new GoogleCalendarExistingEventMismatchError();
   }
   return {
     googleEventId: remote.googleEventId,

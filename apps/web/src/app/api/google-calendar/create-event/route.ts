@@ -6,6 +6,7 @@ import {
 } from "@/lib/googleCalendar/server";
 import { getGoogleCalendarConfig } from "@/lib/googleCalendar/config";
 import {
+  GoogleCalendarExistingEventMismatchError,
   GoogleCalendarInsertRejectedError,
   recoverApprovedGoogleCalendarEventForConnection,
   isProposalEventGoneFromGoogle,
@@ -64,6 +65,13 @@ function mapCreateEventFailure(error: unknown) {
       status: 409,
       error:
         "An earlier approval still needs checking. Retry that same proposal to check its original Google event and finish saving it. Reconnecting or choosing another proposal cannot clear an uncertain result. Local planning remains available.",
+    };
+  }
+  if (error instanceof GoogleCalendarExistingEventMismatchError) {
+    return {
+      status: 409,
+      error:
+        "LifeOS could not confirm that this Google Calendar event still matches your approval. Check the event in its original Google Calendar before approving another time. Local planning remains available.",
     };
   }
   // #670: the raw message is only inspected to pick a status; the client
