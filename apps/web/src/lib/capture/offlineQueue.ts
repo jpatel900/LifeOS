@@ -23,6 +23,11 @@
  * the write path fails loudly instead.
  */
 
+import {
+  ownerStampForNewEntry,
+  visibleToAccount,
+} from "../durability/deviceAccount";
+
 const DB_NAME = "lifeos-capture-queue";
 const DB_VERSION = 1;
 const STORE_NAME = "pending";
@@ -33,6 +38,13 @@ export interface QueuedCapture {
   area_id: string | null;
   return_hook: string | null;
   created_at: string;
+  /**
+   * W3-16 #1: the account signed in when this capture was queued. Absent for
+   * a capture queued signed out (or before the account was known). An owned
+   * capture is sent only through its own account's session; see
+   * `../durability/deviceAccount.ts`.
+   */
+  owner_user_id?: string;
 }
 
 /** True when the browser's IndexedDB global is present and usable. */
@@ -93,12 +105,14 @@ export async function enqueueCapture(input: {
     );
   }
 
+  const owner = ownerStampForNewEntry();
   const capture: QueuedCapture = {
     client_capture_id: generateClientCaptureId(),
     raw_text: input.rawText,
     area_id: input.areaId,
     return_hook: input.returnHook ?? null,
     created_at: new Date().toISOString(),
+    ...(owner !== undefined ? { owner_user_id: owner } : {}),
   };
 
   const db = await openDatabase();
@@ -149,6 +163,15 @@ export async function markCaptureSynced(
   } finally {
     db.close();
   }
+}
+
+/**
+ * W3-16 #1: how many queued captures this account may see — its own, plus
+ * captures with no owner. A capture known to belong to another account is not
+ * counted for this one.
+ */
+export async function visiblePendingCaptureCount(): Promise<number> {
+  return visibleToAccount(await listPendingCaptures()).length;
 }
 
 export async function pendingCaptureCount(): Promise<number> {

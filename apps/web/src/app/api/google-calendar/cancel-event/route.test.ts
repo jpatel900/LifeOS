@@ -370,6 +370,157 @@ describe("google-calendar cancel-event route", () => {
     );
   });
 
+  it.each([false, true])(
+    "keeps remote deletion true when local saving fails (audit failure: %s)",
+    async (auditFails) => {
+      mocks.markCalendarBlockCancelledForAccessToken.mockRejectedValueOnce(
+        new Error("private database detail"),
+      );
+      if (auditFails) {
+        mocks.updateExternalWriteEventResultForAccessToken.mockRejectedValueOnce(
+          new Error("audit unavailable"),
+        );
+      }
+      const response = await POST(
+        request({ calendar_block_id: block.id, approved: true }),
+      );
+      const body = await response.json();
+      expect(response.status).toBe(502);
+      expect(body).toMatchObject({
+        ok: false,
+        event_deleted: true,
+        event_already_gone: false,
+      });
+      expect(body.error).toContain("gone from Google Calendar");
+      expect(body.error).toContain("could not confirm saving");
+      expect(body.error).not.toMatch(/unchanged|private database detail/);
+      expect(
+        mocks.deleteGoogleCalendarEventForConnection,
+      ).toHaveBeenCalledOnce();
+      expect(
+        mocks.updateExternalWriteEventResultForAccessToken,
+      ).toHaveBeenCalledOnce();
+      expect(
+        mocks.updateExternalWriteEventResultForAccessToken,
+      ).toHaveBeenCalledWith(
+        "supabase-access-token",
+        expect.any(String),
+        expect.objectContaining({
+          resultStatus: "succeeded",
+          resultSummary: expect.objectContaining({
+            event_deleted: true,
+            follow_up: "account_record_failed",
+          }),
+        }),
+      );
+    },
+  );
+
+  it("does not rewrite a successful cancellation as failed when audit follow-up rejects", async () => {
+    mocks.updateExternalWriteEventResultForAccessToken.mockRejectedValueOnce(
+      new Error("incident rule unavailable"),
+    );
+    const response = await POST(
+      request({ calendar_block_id: block.id, approved: true }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      event_deleted: true,
+      block: { status: "cancelled" },
+      audit: null,
+    });
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).toHaveBeenCalledOnce();
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken.mock.calls[0][2]
+        .resultStatus,
+    ).toBe("succeeded");
+  });
+
+  it("reports absence discovered by DELETE after an existing-event read", async () => {
+    mocks.deleteGoogleCalendarEventForConnection.mockResolvedValueOnce({
+      status: "already_gone",
+    });
+    const response = await POST(
+      request({ calendar_block_id: block.id, approved: true }),
+    );
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      event_deleted: true,
+      event_already_gone: true,
+    });
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken.mock.calls[0][2]
+        .resultSummary.event_already_gone,
+    ).toBe(true);
+  });
+
+  it.each(["missing", "cancelled"])(
+    "preserves observed %s absence when local saving fails",
+    async (status) => {
+      mocks.getGoogleCalendarEventForConnection.mockResolvedValueOnce({
+        ...eventRead,
+        exists: status !== "missing",
+        status,
+      });
+      mocks.markCalendarBlockCancelledForAccessToken.mockRejectedValueOnce(
+        new Error("local save unconfirmed"),
+      );
+      const response = await POST(
+        request({ calendar_block_id: block.id, approved: true }),
+      );
+      expect(response.status).toBe(502);
+      expect(await response.json()).toMatchObject({
+        ok: false,
+        event_deleted: true,
+        event_already_gone: true,
+      });
+      expect(
+        mocks.deleteGoogleCalendarEventForConnection,
+      ).not.toHaveBeenCalled();
+      expect(
+        mocks.updateExternalWriteEventResultForAccessToken.mock.calls[0][2]
+          .resultStatus,
+      ).toBe("succeeded");
+    },
+  );
+
+  it.each(["missing", "cancelled"])(
+    "preserves observed %s absence when pending audit creation fails",
+    async (status) => {
+      mocks.getGoogleCalendarEventForConnection.mockResolvedValueOnce({
+        ...eventRead,
+        exists: status !== "missing",
+        status,
+      });
+      mocks.createPendingExternalWriteEventForAccessToken.mockRejectedValueOnce(
+        new Error("private audit failure"),
+      );
+      const response = await POST(
+        request({ calendar_block_id: block.id, approved: true }),
+      );
+      const body = await response.json();
+      expect(response.status).toBe(502);
+      expect(body).toMatchObject({
+        ok: false,
+        event_deleted: true,
+        event_already_gone: true,
+      });
+      expect(body.error).not.toMatch(/unchanged|private audit failure/);
+      expect(
+        mocks.deleteGoogleCalendarEventForConnection,
+      ).not.toHaveBeenCalled();
+      expect(
+        mocks.markCalendarBlockCancelledForAccessToken,
+      ).not.toHaveBeenCalled();
+      expect(
+        mocks.updateExternalWriteEventResultForAccessToken,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
   it("blocks cancelling a block that is already cancelled", async () => {
     mocks.getCalendarBlockForAccessToken.mockResolvedValue({
       ...block,

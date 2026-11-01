@@ -150,3 +150,150 @@ describe("bug hunt #5: the offline drain keeps the chosen area", () => {
     );
   });
 });
+
+// W3-16 finding 8: the drain uses "the account has no areas" as its signal
+// for "the areas have not loaded yet". The source comment above promises
+// that once the areas ARE known and the chosen one is gone, the capture
+// goes up with no area. A read that SUCCEEDS with zero areas looks exactly
+// like a read still in flight, so the capture stays queued forever.
+//
+// Each case also queues a capture with no area as a positive signal: it is
+// never gated, so once it is sent the drain has really run.
+describe("offline drain when the chosen area is gone (W3-16 #8)", () => {
+  const otherArea = {
+    ...persistedArea,
+    id: "33333333-3333-4333-8333-333333333333",
+    name: "Side Project",
+    slug: "side-project",
+  };
+
+  async function queueSubjectAndSignal() {
+    const subject = await enqueueCapture({
+      rawText: "Book physio",
+      areaId: "area-main-job",
+      returnHook: "after lunch",
+    });
+    const signal = await enqueueCapture({
+      rawText: "Signal capture with no area",
+      areaId: null,
+      returnHook: null,
+    });
+    return { subject, signal };
+  }
+
+  function sentIds() {
+    return (mockSyncQueuedCapture.mock.calls as unknown[][]).map(
+      (call) => (call[1] as { client_capture_id: string }).client_capture_id,
+    );
+  }
+
+  async function waitForDrainSignal(signalId: string) {
+    await waitFor(() => expect(sentIds()).toContain(signalId), {
+      timeout: 3000,
+    });
+  }
+
+  it("control: a failed area read keeps the capture and its text queued", async () => {
+    mockListAreas.mockRejectedValue(new Error("network down"));
+    const { subject, signal } = await queueSubjectAndSignal();
+
+    render(
+      <WorkflowProvider>
+        <div />
+      </WorkflowProvider>,
+    );
+
+    await waitForDrainSignal(signal.client_capture_id);
+    expect(sentIds()).not.toContain(subject.client_capture_id);
+    const pending = await listPendingCaptures();
+    expect(pending.map((item) => item.client_capture_id)).toEqual([
+      subject.client_capture_id,
+    ]);
+    expect(pending[0]).toMatchObject({
+      raw_text: "Book physio",
+      area_id: "area-main-job",
+      return_hook: "after lunch",
+    });
+  });
+
+  it("control: while the area read is still pending, a reconnect keeps the capture queued", async () => {
+    mockListAreas.mockImplementation(() => new Promise(() => undefined));
+    const { subject, signal } = await queueSubjectAndSignal();
+
+    render(
+      <WorkflowProvider>
+        <div />
+      </WorkflowProvider>,
+    );
+    window.dispatchEvent(new Event("online"));
+
+    await waitForDrainSignal(signal.client_capture_id);
+    expect(sentIds()).not.toContain(subject.client_capture_id);
+    expect(
+      (await listPendingCaptures()).map((item) => item.client_capture_id),
+    ).toEqual([subject.client_capture_id]);
+  });
+
+  it("control: the chosen area is gone but another exists, so the capture goes up with no area", async () => {
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [otherArea],
+    });
+    const { subject, signal } = await queueSubjectAndSignal();
+
+    render(
+      <WorkflowProvider>
+        <div />
+      </WorkflowProvider>,
+    );
+
+    await waitForDrainSignal(signal.client_capture_id);
+    await waitFor(() => expect(sentIds()).toContain(subject.client_capture_id));
+    const subjectCalls = (mockSyncQueuedCapture.mock.calls as unknown[][])
+      .map((call) => call[1] as Record<string, unknown>)
+      .filter((args) => args.client_capture_id === subject.client_capture_id);
+    expect(subjectCalls[0]).toMatchObject({
+      raw_text: "Book physio",
+      area_id: null,
+      return_hook: "after lunch",
+    });
+    await waitFor(async () =>
+      expect(await listPendingCaptures()).toHaveLength(0),
+    );
+  });
+
+  // KNOWN BUG (W3-16 #8): expected failure. A successful read with zero
+  // areas is treated as "not loaded yet", so the capture never leaves the
+  // queue. Flip to `it` once the drain tells the two apart.
+  it.fails(
+    "the account read succeeds with no areas, so the capture goes up once with no area",
+    async () => {
+      mockListAreas.mockResolvedValue({ provider: "supabase", areas: [] });
+      const { subject, signal } = await queueSubjectAndSignal();
+
+      render(
+        <WorkflowProvider>
+          <div />
+        </WorkflowProvider>,
+      );
+
+      await waitForDrainSignal(signal.client_capture_id);
+      await waitFor(() =>
+        expect(sentIds()).toContain(subject.client_capture_id),
+      );
+      const subjectCalls = (mockSyncQueuedCapture.mock.calls as unknown[][])
+        .map((call) => call[1] as Record<string, unknown>)
+        .filter((args) => args.client_capture_id === subject.client_capture_id);
+      expect(subjectCalls).toHaveLength(1);
+      expect(subjectCalls[0]).toMatchObject({
+        raw_text: "Book physio",
+        area_id: null,
+        return_hook: "after lunch",
+        client_capture_id: subject.client_capture_id,
+      });
+      await waitFor(async () =>
+        expect(await listPendingCaptures()).toHaveLength(0),
+      );
+    },
+  );
+});

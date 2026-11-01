@@ -1,3 +1,5 @@
+import { SupabaseAuthRejectedError } from "@/lib/supabase/server";
+
 export const USER_DATA_EXPORT_FORMAT_VERSION = 1;
 
 // Every user-owned table except google_calendar_connections, which holds
@@ -39,9 +41,16 @@ interface MinimalExportClient {
   from: (table: string) => {
     select: (columns: string) => PromiseLike<{
       data: unknown;
-      error: { message?: string } | null;
+      error: { message?: string; code?: string } | null;
     }>;
   };
+}
+
+// PostgREST answers PGRST301 when the JWT is expired or invalid. Some paths
+// only carry the "JWT ..." text, so match that too (same pattern the shared
+// route classifier uses for mid-request expiry).
+function isTableReadAuthRejection(error: { message?: string; code?: string }) {
+  return error.code === "PGRST301" || /\bjwt\b/i.test(error.message ?? "");
 }
 
 function assertServerRuntime() {
@@ -69,6 +78,13 @@ export async function buildUserDataExport(
     const { data, error } = await client.from(table).select("*");
 
     if (error) {
+      // A sign-in that expires mid-export keeps its typed auth signal so the
+      // route answers the 401 sign-in-again response. The raw text and any
+      // rows read so far never leave this function.
+      if (isTableReadAuthRejection(error)) {
+        throw new SupabaseAuthRejectedError();
+      }
+
       throw new Error(
         `Data export failed while reading ${table}. Nothing was exported; try again.`,
       );

@@ -1,4 +1,7 @@
-export type PersistenceFailureKind = "server-capability-missing" | "unknown";
+export type PersistenceFailureKind =
+  | "server-capability-missing"
+  | "invalid-write"
+  | "unknown";
 
 const serverCapabilityCodes = new Set(["PGRST202", "42883", "42703"]);
 
@@ -28,11 +31,31 @@ export class PersistenceWriteError extends Error {
   }
 }
 
+/** Only use for input validation before an account write can begin. */
+export function parsePersistenceWriteInput<T>(
+  schema: {
+    safeParse: (
+      input: unknown,
+    ) => { success: true; data: T } | { success: false };
+  },
+  input: unknown,
+): T {
+  const result = schema.safeParse(input);
+  if (!result.success) {
+    throw new PersistenceWriteError(
+      "This saved change contains invalid information.",
+      "invalid-write",
+    );
+  }
+  return result.data;
+}
+
 export function getPersistenceFailureKind(
   error: unknown,
 ): PersistenceFailureKind {
   if (error instanceof PersistenceWriteError) {
-    return error.failureKind === "server-capability-missing"
+    return error.failureKind === "server-capability-missing" ||
+      error.failureKind === "invalid-write"
       ? error.failureKind
       : "unknown";
   }

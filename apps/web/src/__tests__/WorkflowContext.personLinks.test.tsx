@@ -8,27 +8,15 @@ import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 import type { ParsedWorkflowResult } from "@/lib/ai/parseCaptureWorkflow";
 
-// S3 (#255): accept-path person/commitment persistence. These tests drive the
-// real accept orchestration from WorkflowContext, mocking only the data-layer
-// writes so we can assert what gets sent to `createTask`,
-// `findOrCreatePerson`, and `recordPersonLinkAcceptance`.
-//
-// RE-ANCHORED BY #737 C1 S3. Two things moved under these tests, and neither
-// changed what they assert:
-//
-//  1. The orchestration moved out of `persistAcceptedTaskDraft` (which now only
-//     journals) into `syncJournaledTaskDraftAccept`, which runs on REPLAY.
-//  2. That module imports its writes from the LEAF modules
-//     (`data/workflow/planning`, `/people`, `/calendar`) rather than the
-//     barrel, so the barrel mock below no longer intercepts them. The write
-//     mocks are therefore installed on the leaves; the barrel mock stays for
-//     the `list*` reads, which WorkflowContext still imports from it.
+// Drive real journal replay to a mocked atomic RPC. This proves submitted
+// approvals and post-commit learning, not PostgreSQL link creation or isolation.
 
 const {
   mockListAreas,
   mockListCaptureItems,
   mockListPlanningItems,
   mockListExecutionReviewItems,
+  mockAcceptRpc,
   mockCreateTask,
   mockCreateTimeBlockProposal,
   mockFindOrCreatePerson,
@@ -39,22 +27,20 @@ const {
   mockListCaptureItems: vi.fn(),
   mockListPlanningItems: vi.fn(),
   mockListExecutionReviewItems: vi.fn(),
+  mockAcceptRpc: vi.fn(),
   mockCreateTask: vi.fn(),
   mockCreateTimeBlockProposal: vi.fn(),
   mockFindOrCreatePerson: vi.fn(),
   mockRecordPersonLinkAcceptance: vi.fn(),
-  // #737 C1 S3: the replay path calls `requireSupabaseUser` and looks the task
-  // up by `client_write_id` before deciding to insert, so the stand-in client
-  // needs those two surfaces. Everything it would WRITE is still mocked at the
-  // leaf modules below -- this only lets the real orchestration get that far.
-  // The lookup deliberately finds nothing: these tests are about the FIRST
-  // attempt, which is the one that resolves person links.
+  // Real journal replay authenticates, then calls the atomic RPC. The remaining
+  // query stubs serve snapshot loading and compensation lookup only.
   mockCreateSupabaseBrowserClient: vi.fn(() => {
     const maybeSingle = vi.fn(async () => ({ data: null, error: null }));
     const eqInner = vi.fn(() => ({ maybeSingle }));
     const eqOuter = vi.fn(() => ({ eq: eqInner }));
     return {
       mocked: true,
+      rpc: (...args: unknown[]) => mockAcceptRpc(...args),
       from: vi.fn(() => ({
         select: vi.fn(() => ({ eq: eqOuter })),
         upsert: vi.fn(async () => ({ error: null })),
@@ -87,12 +73,13 @@ vi.mock("@/lib/data/workflow", async () => {
   };
 });
 
-// The leaf modules `syncJournaledTaskDraftAccept` actually calls.
+// Keep post-commit learning observable and forbid legacy dependent writes.
 vi.mock("@/lib/data/workflow/planning", async () => ({
   ...(await vi.importActual<typeof import("@/lib/data/workflow/planning")>(
     "@/lib/data/workflow/planning",
   )),
   createTask: mockCreateTask,
+  recordTaskAcceptance: vi.fn(),
 }));
 
 vi.mock("@/lib/data/workflow/people", async () => ({
@@ -284,6 +271,33 @@ function renderProbe() {
 }
 
 beforeEach(async () => {
+  // A response fixture, not a simulation of PostgreSQL transactions or RLS.
+  mockAcceptRpc.mockImplementation(
+    async (
+      _fn: string,
+      args: {
+        p_task: Record<string, unknown>;
+        p_person_mentions: Array<{
+          name: string;
+          role: string;
+          normalized_name: string;
+        }>;
+      },
+    ) => ({
+      data: {
+        task: { ...persistedTask, ...args.p_task },
+        proposal: null,
+        deduplicated: false,
+        accepted_links: args.p_person_mentions.map((mention) => ({
+          name: mention.name,
+          role: mention.role,
+          person_id: mention.role === "mention" ? null : SARAH_ID,
+        })),
+      },
+      error: null,
+    }),
+  );
+
   // The provider persists workflow state to sessionStorage; clear it so drafts
   // from a prior test do not leak into the next render.
   window.sessionStorage.clear();
@@ -349,7 +363,7 @@ describe("WorkflowProvider accept-path person/commitment persistence", () => {
     await waitFor(() => expect(mockListAreas).toHaveBeenCalled());
   }
 
-  it("writes waiting_on_person_id + waiting_on_since when a waiting-on link is accepted", async () => {
+  it("submits the approved waiting-on link and acceptance time atomically", async () => {
     renderProbe();
     await waitForPersistedAreas();
 
@@ -360,11 +374,13 @@ describe("WorkflowProvider accept-path person/commitment persistence", () => {
 
     fireEvent.click(screen.getByText("Accept"));
 
-    await waitFor(() => expect(mockCreateTask).toHaveBeenCalled());
-    const taskInput = mockCreateTask.mock.calls[0][1];
-    expect(taskInput.waiting_on_person_id).toBe(SARAH_ID);
-    expect(typeof taskInput.waiting_on_since).toBe("string");
-    expect(taskInput.committed_to_person_id).toBeNull();
+    await waitFor(() => expect(mockAcceptRpc).toHaveBeenCalled());
+    const acceptInput = mockAcceptRpc.mock.calls[0][1];
+    const taskInput = acceptInput.p_task;
+    expect(acceptInput.p_person_mentions).toEqual([
+      { name: "Sarah", role: "waiting_on", normalized_name: "sarah" },
+    ]);
+    expect(typeof acceptInput.p_accepted_at).toBe("string");
     expect(taskInput.is_commitment).toBe(false);
 
     // The pending person-link proposal is resolved to accepted.
@@ -376,7 +392,7 @@ describe("WorkflowProvider accept-path person/commitment persistence", () => {
     );
   });
 
-  it("creates the person then links committed_to + is_commitment on accept (and is idempotent via findOrCreatePerson)", async () => {
+  it("submits the normalized committed-to link and commitment atomically", async () => {
     renderProbe();
     await waitForPersistedAreas();
 
@@ -387,22 +403,14 @@ describe("WorkflowProvider accept-path person/commitment persistence", () => {
 
     fireEvent.click(screen.getByText("Accept"));
 
-    // Person is found-or-created (idempotent primitive) before the task insert.
-    await waitFor(() =>
-      expect(mockFindOrCreatePerson).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          display_name: "Sarah",
-          normalized_name: "sarah",
-        }),
-      ),
-    );
-
-    await waitFor(() => expect(mockCreateTask).toHaveBeenCalled());
-    const taskInput = mockCreateTask.mock.calls[0][1];
-    expect(taskInput.committed_to_person_id).toBe(SARAH_ID);
+    await waitFor(() => expect(mockAcceptRpc).toHaveBeenCalled());
+    const acceptInput = mockAcceptRpc.mock.calls[0][1];
+    const taskInput = acceptInput.p_task;
+    expect(acceptInput.p_person_mentions).toEqual([
+      { name: "Sarah", role: "committed_to", normalized_name: "sarah" },
+    ]);
     expect(taskInput.is_commitment).toBe(true);
-    expect(taskInput.waiting_on_person_id).toBeNull();
+    expect(mockFindOrCreatePerson).not.toHaveBeenCalled();
   });
 
   it("links nothing when the person link was rejected before accept", async () => {
@@ -418,12 +426,12 @@ describe("WorkflowProvider accept-path person/commitment persistence", () => {
     fireEvent.click(screen.getByText("Reject link"));
     fireEvent.click(screen.getByText("Accept"));
 
-    await waitFor(() => expect(mockCreateTask).toHaveBeenCalled());
-    const taskInput = mockCreateTask.mock.calls[0][1];
+    await waitFor(() => expect(mockAcceptRpc).toHaveBeenCalled());
+    const acceptInput = mockAcceptRpc.mock.calls[0][1];
+    const taskInput = acceptInput.p_task;
     // No surviving mention -> no person link; rejecting a committed_to mention
     // also cleared is_commitment (rejectPersonMention degrades it).
-    expect(taskInput.waiting_on_person_id).toBeNull();
-    expect(taskInput.committed_to_person_id).toBeNull();
+    expect(acceptInput.p_person_mentions).toEqual([]);
     expect(taskInput.is_commitment).toBe(false);
     // No person is created and no acceptance suggestion fires for a rejected link.
     expect(mockFindOrCreatePerson).not.toHaveBeenCalled();
@@ -440,10 +448,10 @@ describe("WorkflowProvider accept-path person/commitment persistence", () => {
     );
     fireEvent.click(screen.getByText("Accept"));
 
-    await waitFor(() => expect(mockCreateTask).toHaveBeenCalled());
-    const taskInput = mockCreateTask.mock.calls[0][1];
-    expect(taskInput.waiting_on_person_id).toBeNull();
-    expect(taskInput.committed_to_person_id).toBeNull();
+    await waitFor(() => expect(mockAcceptRpc).toHaveBeenCalled());
+    const acceptInput = mockAcceptRpc.mock.calls[0][1];
+    const taskInput = acceptInput.p_task;
+    expect(acceptInput.p_person_mentions).toEqual([]);
     expect(taskInput.is_commitment).toBe(false);
     // A plain task creates no person and fires no acceptance suggestion.
     expect(mockFindOrCreatePerson).not.toHaveBeenCalled();
@@ -460,13 +468,15 @@ describe("WorkflowProvider accept-path person/commitment persistence", () => {
     );
     fireEvent.click(screen.getByText("Accept"));
 
-    await waitFor(() => expect(mockCreateTask).toHaveBeenCalled());
-    const taskInput = mockCreateTask.mock.calls[0][1];
+    await waitFor(() => expect(mockAcceptRpc).toHaveBeenCalled());
+    const acceptInput = mockAcceptRpc.mock.calls[0][1];
+    const taskInput = acceptInput.p_task;
     // role "mention" is informational: no person row (FR-017 approval is only
     // granted by a waiting_on/committed_to link) and no column linked.
     expect(mockFindOrCreatePerson).not.toHaveBeenCalled();
-    expect(taskInput.waiting_on_person_id).toBeNull();
-    expect(taskInput.committed_to_person_id).toBeNull();
+    expect(acceptInput.p_person_mentions).toEqual([
+      { name: "Sarah", role: "mention", normalized_name: "sarah" },
+    ]);
     expect(taskInput.is_commitment).toBe(false);
     // The dangling pending proposal for the mention is still resolved.
     await waitFor(() =>
