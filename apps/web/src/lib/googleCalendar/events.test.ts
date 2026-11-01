@@ -10,8 +10,10 @@ vi.mock("./freebusy", () => ({
 
 import {
   GoogleCalendarEventDriftError,
+  GoogleCalendarInsertRejectedError,
   deleteGoogleCalendarEventForConnection,
   insertGoogleCalendarEventForConnection,
+  isProposalEventGoneFromGoogle,
 } from "./events";
 
 const connection = {
@@ -41,6 +43,24 @@ describe("Google Calendar event insert helper", () => {
     vi.stubGlobal("fetch", vi.fn());
     mocks.resolveGoogleCalendarAccessToken.mockResolvedValue(
       "google-access-token",
+    );
+  });
+
+  it("checks absence with the already resolved token on the exact calendar", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 404 }));
+    const gone = await isProposalEventGoneFromGoogle({
+      connection: { ...connection, calendar_id: "synthetic calendar" },
+      proposalId: "550e8400-e29b-41d4-a716-446655440501",
+      supabaseAccessToken: "supabase-access-token",
+      providerAccessToken: "fixed-provider-token",
+    });
+    expect(gone).toBe(true);
+    expect(mocks.resolveGoogleCalendarAccessToken).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      "https://www.googleapis.com/calendar/v3/calendars/synthetic%20calendar/events/lifeos550e8400e29b41d4a716446655440501",
+      expect.objectContaining({
+        headers: { Authorization: "Bearer fixed-provider-token" },
+      }),
     );
   });
 
@@ -101,6 +121,117 @@ describe("Google Calendar event insert helper", () => {
     expect(body.attendees).toBeUndefined();
     expect(body.conferenceData).toBeUndefined();
     expect(body.recurrence).toBeUndefined();
+  });
+
+  it("uses an access token resolved before the approval claim without refreshing again", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: "lifeos550e8400e29b41d4a716446655440501" }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await insertGoogleCalendarEventForConnection({
+      connection,
+      description: null,
+      proposalId: "550e8400-e29b-41d4-a716-446655440501",
+      proposedEnd: "2026-05-10T17:00:00.000Z",
+      proposedStart: "2026-05-10T16:00:00.000Z",
+      providerAccessToken: "pre-resolved-google-token",
+      supabaseAccessToken: "supabase-access-token",
+      timezone: "America/Toronto",
+      title: "Call dentist tomorrow",
+    });
+
+    expect(mocks.resolveGoogleCalendarAccessToken).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer pre-resolved-google-token",
+        }),
+      }),
+    );
+  });
+
+  it.each([400, 401, 403, 404, 429])(
+    "marks a definitive Google %s insert rejection as proven not created",
+    async (status) => {
+      vi.mocked(fetch).mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: status } }), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      const error = await insertGoogleCalendarEventForConnection({
+        connection,
+        description: null,
+        proposalId: "550e8400-e29b-41d4-a716-446655440501",
+        proposedEnd: "2026-05-10T17:00:00.000Z",
+        proposedStart: "2026-05-10T16:00:00.000Z",
+        supabaseAccessToken: "supabase-access-token",
+        timezone: "America/Toronto",
+        title: "Call dentist tomorrow",
+      }).catch((failure: unknown) => failure);
+      expect(error).toBeInstanceOf(GoogleCalendarInsertRejectedError);
+    },
+  );
+
+  it.each([
+    ["not found", new Response("", { status: 404 }), true],
+    [
+      "a cancelled tombstone",
+      new Response(
+        JSON.stringify({
+          id: "lifeos550e8400e29b41d4a716446655440599",
+          status: "cancelled",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+      true,
+    ],
+    [
+      "a live event",
+      new Response(
+        JSON.stringify({
+          id: "lifeos550e8400e29b41d4a716446655440599",
+          status: "confirmed",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+      false,
+    ],
+  ])(
+    "reports a sibling event as gone from Google only for %s",
+    async (_label, response, gone) => {
+      vi.mocked(fetch).mockResolvedValue(response);
+      await expect(
+        isProposalEventGoneFromGoogle({
+          connection,
+          proposalId: "550e8400-e29b-41d4-a716-446655440599",
+          supabaseAccessToken: "supabase-access-token",
+        }),
+      ).resolves.toBe(gone);
+      expect(vi.mocked(fetch).mock.calls[0]?.[0]).toContain(
+        "/events/lifeos550e8400e29b41d4a716446655440599",
+      );
+    },
+  );
+
+  it("keeps a Google 5xx insert failure ambiguous", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response("", { status: 503 }));
+    const error = await insertGoogleCalendarEventForConnection({
+      connection,
+      description: null,
+      proposalId: "550e8400-e29b-41d4-a716-446655440501",
+      proposedEnd: "2026-05-10T17:00:00.000Z",
+      proposedStart: "2026-05-10T16:00:00.000Z",
+      supabaseAccessToken: "supabase-access-token",
+      timezone: "America/Toronto",
+      title: "Call dentist tomorrow",
+    }).catch((failure: unknown) => failure);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(GoogleCalendarInsertRejectedError);
   });
 
   it("treats a deterministic Google event id conflict as an idempotent insert result", async () => {

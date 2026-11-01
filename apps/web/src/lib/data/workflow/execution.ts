@@ -9,6 +9,10 @@ import {
 } from "@lifeos/schemas";
 import { isDailyCloseConflict } from "@/lib/review/dayClose";
 import {
+  PersistenceWriteError,
+  parsePersistenceWriteInput,
+} from "../../persistenceFailureKind";
+import {
   type CalendarBlockUnplanResult,
   type ExecutionReviewItemsResult,
   type ExecutionSessionCreateResult,
@@ -453,7 +457,10 @@ export async function syncJournaledExecutionSession(
     throw new Error("A journalled session needs a client write id.");
   }
   if (!RECORDABLE_SESSION_OUTCOMES.includes(input.outcome)) {
-    throw new Error("That session outcome is not one LifeOS can record.");
+    throw new PersistenceWriteError(
+      "That session outcome is not one LifeOS can record.",
+      "invalid-write",
+    );
   }
 
   if (!client) return { provider: "mock" };
@@ -506,7 +513,10 @@ export async function syncJournaledReviewEntry(
   client: MinimalSupabaseClient | null,
   input: SyncJournaledReviewEntryInput,
 ): Promise<{ provider: "mock" } | { provider: "supabase"; userId: string }> {
-  const parsedInput = CreateReviewEntryInputSchema.parse(input);
+  const parsedInput = parsePersistenceWriteInput(
+    CreateReviewEntryInputSchema,
+    input,
+  );
   const clientWriteId = input.client_write_id?.trim();
   if (!clientWriteId) {
     throw new Error("A journalled review needs a client write id.");

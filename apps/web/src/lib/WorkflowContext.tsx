@@ -225,9 +225,9 @@ export { decidedPolicyKeysFromSuggestionRecords, mergePersistedCalendarBlocks };
 /**
  * #967 typed failure category: a SAFE AGGREGATE derived from only the
  * CURRENTLY FAILED rows of the pending-write journal — never the whole
- * queue, never a raw thrown value. `"server-capability-missing"` only when
+ * queue, never a raw thrown value. A recognized kind only when
  * at least one row is failed AND every failed row's own
- * `last_attempt_failure_kind` is exactly that value; any mix, any
+ * `last_attempt_failure_kind` is exactly that kind; any mix, any
  * `"unknown"` row, or any legacy/invalid stored value forces `"unknown"`.
  * Zero failed rows leaves the category `undefined` (absent), matching how
  * `pendingSaveFailed` itself reads as false with nothing failed. Shared by
@@ -243,12 +243,12 @@ function derivePendingSaveFailureAggregate(pending: PendingWrite[]): {
     (write) => write.last_attempt_failed === true,
   );
   const pendingSaveFailed = failedRows.length > 0;
+  const firstKind = failedRows[0]?.last_attempt_failure_kind;
   const pendingSaveFailureKind = pendingSaveFailed
-    ? failedRows.every(
-        (write) =>
-          write.last_attempt_failure_kind === "server-capability-missing",
-      )
-      ? "server-capability-missing"
+    ? (firstKind === "server-capability-missing" ||
+        firstKind === "invalid-write") &&
+      failedRows.every((write) => write.last_attempt_failure_kind === firstKind)
+      ? firstKind
       : "unknown"
     : undefined;
   return { pendingSaveFailed, pendingSaveFailureKind };
@@ -418,6 +418,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // Without this a second concurrent run could read `persistedAreasRef`
   // mid-write from the first.
   const accountSyncInFlightRef = useRef(false);
+  const accountSyncCompletionRef = useRef<Promise<void>>(Promise.resolve());
+  const manualAccountRetryRef = useRef<Promise<void> | null>(null);
   // #967 follow-up review, finding 1: every read that can set
   // `syncStatus.pendingSaveFailed` (`refreshJournalledDurableState`'s own
   // computation, and the narrower `refreshPendingSaveFailed` below) shares
@@ -2403,6 +2405,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // from the first.
       if (accountSyncInFlightRef.current) return;
       accountSyncInFlightRef.current = true;
+      let finishPass!: () => void;
+      accountSyncCompletionRef.current = new Promise<void>((resolve) => {
+        finishPass = resolve;
+      });
 
       try {
         const client = createSupabaseBrowserClient();
@@ -2440,6 +2446,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         // true if one ever stops.
         if (mountedRef.current) setAreasReadbackSettled(true);
         accountSyncInFlightRef.current = false;
+        finishPass();
       }
     },
     [
@@ -3337,11 +3344,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // directly, bypassing this hydration/identity/closed-day handling; see
     // the `online` handler's own comment). No new drain, no direct
     // `replayJournaledWrites` call, no change to `refreshPersistedWorkflow`
-    // above (still read-only). `runAccountSync`'s own in-flight guard makes
-    // this a safe no-op if a pass is already running; callers must judge
-    // the result from `syncStatus`, not from this promise resolving.
+    // above (still read-only). A manual retry may arrive after a failed
+    // capture while the mount pass still awaits readback. Join that pass,
+    // then run one fresh attempt. Repeated clicks share the same retry.
     retryPendingAccountWrites: async () => {
-      await runAccountSync({ replayAfter: true });
+      if (manualAccountRetryRef.current) return manualAccountRetryRef.current;
+      const retry = (async () => {
+        while (accountSyncInFlightRef.current) {
+          await accountSyncCompletionRef.current;
+        }
+        if (!mountedRef.current) return;
+        await runAccountSync({ replayAfter: true });
+      })();
+      manualAccountRetryRef.current = retry;
+      try {
+        await retry;
+      } finally {
+        if (manualAccountRetryRef.current === retry) {
+          manualAccountRetryRef.current = null;
+        }
+      }
     },
     addArea: (name, color) => dispatch({ type: "addArea", name, color }),
     updateAreaColor: (areaId, color) =>
