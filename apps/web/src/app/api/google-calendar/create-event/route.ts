@@ -6,6 +6,7 @@ import {
 } from "@/lib/googleCalendar/server";
 import { getGoogleCalendarConfig } from "@/lib/googleCalendar/config";
 import {
+  GoogleCalendarExistingEventMismatchError,
   GoogleCalendarInsertRejectedError,
   insertGoogleCalendarEventForConnection,
   isProposalEventGoneFromGoogle,
@@ -63,6 +64,15 @@ function mapCreateEventFailure(error: unknown) {
       status: 409,
       error:
         "This calendar approval conflicts with an earlier approval or its saved details changed. Review the earlier event on its original Google Calendar. Reconnecting does not clear an unresolved approval. Local planning remains available.",
+    };
+  }
+  // W3-16 #2: approving again after "on Google, not saved here" found the
+  // event moved or cancelled on Google. Nothing is recorded at the old time.
+  if (error instanceof GoogleCalendarExistingEventMismatchError) {
+    return {
+      status: 409,
+      error:
+        "This event was moved or cancelled in Google Calendar after you approved it, so LifeOS did not save that time. Check the event in Google Calendar before you approve another time.",
     };
   }
   // #670: the raw message is only inspected to pick a status; the client
