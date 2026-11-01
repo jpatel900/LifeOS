@@ -58,6 +58,21 @@ describe("persistenceFailureKind", () => {
     expect(error).toBeInstanceOf(PersistenceWriteError);
   });
 
+  it("reads invalid-write only from a genuine persistence write error", () => {
+    const error = new PersistenceWriteError(
+      "This saved change contains invalid information.",
+      "invalid-write" as ConstructorParameters<typeof PersistenceWriteError>[1],
+    );
+
+    expect(getPersistenceFailureKind(error)).toBe("invalid-write");
+    expect(getPersistenceFailureKind({ failureKind: "invalid-write" })).toBe(
+      "unknown",
+    );
+    expect(classifyPersistenceFailure(error)).toBe("unknown");
+    expect(classifyPersistenceFailure({ name: "ZodError", issues: [] })).toBe(
+      "unknown",
+    );
+  });
   it("reads failure kind only from wrapped failure errors", () => {
     expect(getPersistenceFailureKind(new Error("just a plain error"))).toBe(
       "unknown",
