@@ -107,7 +107,7 @@ import {
   clearQueue,
   listPendingCaptures,
   markCaptureSynced,
-  pendingCaptureCount,
+  visiblePendingCaptureCount,
 } from "./capture/offlineQueue";
 import {
   clearStoredTaskDrafts,
@@ -194,10 +194,17 @@ import {
 import {
   clearPendingWrites,
   listPendingWrites,
-  pendingWriteCount,
+  visiblePendingWriteCount,
   type PendingWrite,
   type ReplaySummary,
 } from "./durability/pendingWriteJournal";
+import {
+  getDeviceAccount,
+  maySendAs,
+  setDeviceAccount,
+  visibleToAccount,
+  type DeviceAccount,
+} from "./durability/deviceAccount";
 import type { PersistenceFailureKind } from "./persistenceFailureKind";
 // Final UX Loop C1, Target Cards 1+7 (audit P0#4): one definition of which
 // calendar day a close belongs to, and one answer to "is it closed already?".
@@ -385,12 +392,28 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       mountedRef.current = false;
     };
   }, []);
+  // W3-16 #1: the account that owns device-held work is not known until this
+  // provider reads the session, so a fresh mount starts at "not known", never
+  // at whatever an earlier provider in this document last saw. See
+  // `durability/deviceAccount.ts`.
+  const deviceIdentityGenerationRef = useRef(0);
+  const deviceVisibilityRefreshRef = useRef<Promise<void>>(Promise.resolve());
+  useEffect(() => {
+    deviceIdentityGenerationRef.current += 1;
+    setDeviceAccount(undefined);
+    return () => {
+      deviceIdentityGenerationRef.current += 1;
+      setDeviceAccount(undefined);
+    };
+  }, []);
   // #960 defect 1: guards `runAccountSync` against running twice at once —
   // the mount-effect call and a `SIGNED_IN` event fired by the auth listener
   // in quick succession (e.g. a session already present at first paint).
   // Without this a second concurrent run could read `persistedAreasRef`
   // mid-write from the first.
   const accountSyncInFlightRef = useRef(false);
+  const accountSyncCompletionRef = useRef<Promise<void>>(Promise.resolve());
+  const manualAccountRetryRef = useRef<Promise<void> | null>(null);
   // #967 follow-up review, finding 1: every read that can set
   // `syncStatus.pendingSaveFailed` (`refreshJournalledDurableState`'s own
   // computation, and the narrower `refreshPendingSaveFailed` below) shares
@@ -612,6 +635,19 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // FR-027 (F-G1a): refresh the unsynced-count signal from the device queue.
+  const refreshUnsyncedCount = useCallback(async () => {
+    try {
+      const count = await visiblePendingCaptureCount();
+      // See `mountedRef`'s note above the ref/refs block — a provider
+      // unmounted while this read was in flight must not touch state.
+      if (!mountedRef.current) return;
+      setUnsyncedCaptureCount(count);
+    } catch {
+      // best-effort signal; a queue read failure must not break capture
+    }
+  }, []);
+
   /**
    * #737 C1 S5 — THE MISSING HALF OF `pendingLocalChanges`, flagged on #736.
    *
@@ -652,7 +688,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const refreshPendingLocalChanges = useCallback(async () => {
     let queued: number;
     try {
-      queued = (await pendingWriteCount()) + (await pendingCaptureCount());
+      // W3-16 #1: only this account's own (or unowned) device-held work.
+      queued =
+        (await visiblePendingWriteCount()) +
+        (await visiblePendingCaptureCount());
     } catch {
       return;
     }
@@ -1752,7 +1791,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const myPendingSaveFailedGeneration =
       ++pendingSaveFailedGenerationRef.current;
     try {
-      const pending = await listPendingWrites();
+      // W3-16 #1: another account's held work is never shown to this one.
+      const pending = visibleToAccount(await listPendingWrites());
       // See `mountedRef`'s note above the ref/refs block — a provider
       // unmounted while this read was in flight must not touch state. One
       // check covers every setter below: none of them awaits between here
@@ -1918,7 +1958,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     ) => {
       const myGeneration = ++pendingSaveFailedGenerationRef.current;
       try {
-        const pending = await listPendingWrites();
+        const pending = visibleToAccount(await listPendingWrites());
         if (!mountedRef.current) return;
         if (pendingSaveFailedGenerationRef.current !== myGeneration) return;
 
@@ -2066,6 +2106,21 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // mount replay has been removed (see its effect's own comment): this is
   // now the ONE mechanism that owns "replay the journal on mount", ordered
   // strictly after the refs populate, on every mount, signed in or not.
+  // Owner changes must reveal retained device evidence even while offline.
+  // Same-owner events do not refresh: a drained close may still be awaiting
+  // account confirmation under the post-replay readback gate below.
+  const adoptDeviceAccount = useCallback(
+    (account: DeviceAccount) => {
+      if (getDeviceAccount() === account) return;
+      setDeviceAccount(account);
+      deviceVisibilityRefreshRef.current = Promise.all([
+        refreshUnsyncedCount(),
+        refreshJournalledDurableState(),
+      ]).then(() => undefined);
+    },
+    [refreshUnsyncedCount, refreshJournalledDurableState],
+  );
+
   const runAccountSync = useCallback(
     async (options?: { replayAfter?: boolean }): Promise<void> => {
       // #960 defect 1: the mount effect and a `SIGNED_IN` event can land in
@@ -2074,6 +2129,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // from the first.
       if (accountSyncInFlightRef.current) return;
       accountSyncInFlightRef.current = true;
+      let finishPass!: () => void;
+      accountSyncCompletionRef.current = new Promise<void>((resolve) => {
+        finishPass = resolve;
+      });
 
       try {
         const client = createSupabaseBrowserClient();
@@ -2104,11 +2163,38 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             // change that happens during replay itself.
             let expectedUserId: string | null = null;
             try {
+              const identityGeneration = deviceIdentityGenerationRef.current;
               const currentUser = await client.auth?.getUser();
+              if (!mountedRef.current) return;
               expectedUserId = currentUser?.data.user?.id ?? null;
+              // W3-16 #1: the replay below sends only this account's own
+              // device-held work (see `durability/deviceAccount.ts`). Only a
+              // clean answer moves it: supabase-js reports a network or
+              // auth-server failure as `{ user: null, error }`, which means
+              // "not known", never "signed out".
+              // An auth event or provider cleanup supersedes this read,
+              // even if it eventually returns a clean but older identity.
+              if (
+                currentUser &&
+                !currentUser.error &&
+                identityGeneration === deviceIdentityGenerationRef.current
+              ) {
+                adoptDeviceAccount(expectedUserId);
+              }
             } catch {
               expectedUserId = null;
             }
+
+            // An auth event can also establish the owner while getUser is
+            // pending. Snapshot its visible device evidence before replay
+            // removes rows. If another event starts a newer refresh, wait
+            // for that one too.
+            let visibilityRefresh: Promise<void>;
+            do {
+              visibilityRefresh = deviceVisibilityRefreshRef.current;
+              await visibilityRefresh;
+              if (!mountedRef.current) return;
+            } while (visibilityRefresh !== deviceVisibilityRefreshRef.current);
 
             // #967 review: the specific daily-review periods this pass is
             // responsible for confirming, snapshotted IMMEDIATELY BEFORE
@@ -2126,7 +2212,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             let expectedDailyPeriods: string[] = [];
             let expectedDailyPeriodsSnapshotFailed = false;
             try {
-              expectedDailyPeriods = (await listPendingWrites("review"))
+              // W3-16 #1: only this account's own (or unowned) closes. Another
+              // account's held close can never be confirmed by this account's
+              // readback, and must not block this account's own release.
+              expectedDailyPeriods = visibleToAccount(
+                await listPendingWrites("review"),
+              )
                 .map(
                   (write) =>
                     write.payload as {
@@ -2224,9 +2315,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         // true if one ever stops.
         if (mountedRef.current) setAreasReadbackSettled(true);
         accountSyncInFlightRef.current = false;
+        finishPass();
       }
     },
     [
+      adoptDeviceAccount,
       applyPersistedAreas,
       markAccountSynced,
       markPersistedLoadFailure,
@@ -2274,8 +2367,21 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    let active = true;
     const { data: subscription } = client.auth.onAuthStateChange(
       (event, session) => {
+        if (!active) return;
+        deviceIdentityGenerationRef.current += 1;
+        // W3-16 #1: keep the owner of device-held work current on EVERY auth
+        // event, before the early returns below. A sign-out means no account
+        // may receive the last account's queued work.
+        if (event === "SIGNED_OUT") {
+          adoptDeviceAccount(null);
+        } else if (session?.user?.id) {
+          adoptDeviceAccount(session.user.id);
+        } else if (event === "INITIAL_SESSION") {
+          adoptDeviceAccount(null);
+        }
         if (!session) return;
         if (
           event !== "SIGNED_IN" &&
@@ -2291,9 +2397,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     );
 
     return () => {
+      active = false;
       subscription?.subscription?.unsubscribe();
     };
-  }, [runAccountSync]);
+  }, [adoptDeviceAccount, runAccountSync]);
 
   useEffect(() => {
     if (!hasHydratedFromStorage) {
@@ -2437,19 +2544,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }, [hasHydratedFromStorage, selectedAreaId]);
 
-  // FR-027 (F-G1a): refresh the unsynced-count signal from the device queue.
-  const refreshUnsyncedCount = useCallback(async () => {
-    try {
-      const count = await pendingCaptureCount();
-      // See `mountedRef`'s note above the ref/refs block — a provider
-      // unmounted while this read was in flight must not touch state.
-      if (!mountedRef.current) return;
-      setUnsyncedCaptureCount(count);
-    } catch {
-      // best-effort signal; a queue read failure must not break capture
-    }
-  }, []);
-
   // Drain the offline queue to the spine when online. Idempotent (upsert on the
   // client_capture_id unique index), fault-isolated per item, and a failed item
   // stays queued for the next reconnect. Refreshes local rows after any sync so
@@ -2469,6 +2563,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     let syncedAny = false;
     for (const queued of pending) {
+      // W3-16 #1: a capture queued while another account was signed in waits
+      // on this device for that account. It is never sent through this one.
+      // Checked per item, so an account switch mid-drain holds the rest back.
+      if (!maySendAs(queued.owner_user_id)) {
+        continue;
+      }
       // Bug hunt #5: an item whose chosen area cannot be resolved while the
       // account's areas are not known yet stays queued — sending it now would
       // file it with no area and delete the person's choice for good. Once
@@ -3105,11 +3205,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // directly, bypassing this hydration/identity/closed-day handling; see
     // the `online` handler's own comment). No new drain, no direct
     // `replayJournaledWrites` call, no change to `refreshPersistedWorkflow`
-    // above (still read-only). `runAccountSync`'s own in-flight guard makes
-    // this a safe no-op if a pass is already running; callers must judge
-    // the result from `syncStatus`, not from this promise resolving.
+    // above (still read-only). A manual retry may arrive after a failed
+    // capture while the mount pass still awaits readback. Join that pass,
+    // then run one fresh attempt. Repeated clicks share the same retry.
     retryPendingAccountWrites: async () => {
-      await runAccountSync({ replayAfter: true });
+      if (manualAccountRetryRef.current) return manualAccountRetryRef.current;
+      const retry = (async () => {
+        while (accountSyncInFlightRef.current) {
+          await accountSyncCompletionRef.current;
+        }
+        if (!mountedRef.current) return;
+        await runAccountSync({ replayAfter: true });
+      })();
+      manualAccountRetryRef.current = retry;
+      try {
+        await retry;
+      } finally {
+        if (manualAccountRetryRef.current === retry) {
+          manualAccountRetryRef.current = null;
+        }
+      }
     },
     addArea: (name, color) => dispatch({ type: "addArea", name, color }),
     updateAreaColor: (areaId, color) =>
