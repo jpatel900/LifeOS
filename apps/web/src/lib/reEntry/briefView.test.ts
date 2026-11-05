@@ -100,6 +100,68 @@ describe("recordBriefViewFireAndForget", () => {
 });
 
 describe("createBriefViewRecorder", () => {
+  const today = new Date(2026, 6, 18, 9, 0);
+
+  it.each(["returned error", "rejection"])(
+    "retries after a %s on the next visit and deduplicates success",
+    async (failure) => {
+      const write = vi.fn(async () => ({ error: null as unknown }));
+      if (failure === "rejection")
+        write.mockRejectedValueOnce(new Error("offline"));
+      else write.mockResolvedValueOnce({ error: { message: "offline" } });
+      const { client } = makeClient({ upsertImpl: write });
+      const recorder = createBriefViewRecorder();
+      recorder.recordIfNeeded(client, today);
+      await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+      recorder.recordIfNeeded(client, today);
+      recorder.recordIfNeeded(client, today);
+      await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+      recorder.recordIfNeeded(client, today);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(write).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("records after a demo or signed-out visit on the same day", async () => {
+    const auth = { userId: null as string | null };
+    const { client, upsert } = makeClient(auth);
+    const recorder = createBriefViewRecorder();
+    recorder.recordIfNeeded(null, today);
+    recorder.recordIfNeeded(client, today);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(upsert).not.toHaveBeenCalled();
+    auth.userId = "signed-in";
+    recorder.recordIfNeeded(client, today);
+    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+    expect(upsert).toHaveBeenCalledWith(
+      { user_id: "signed-in", viewed_on: "2026-07-18" },
+      { onConflict: "user_id,viewed_on", ignoreDuplicates: true },
+    );
+  });
+
+  it("records each signed-in account's visit when the client survives an account switch", async () => {
+    const auth = { userId: "first" };
+    const { client, upsert } = makeClient(auth);
+    const getUser = client.auth!.getUser;
+    client.auth!.getSession = vi.fn(async () => ({
+      data: { session: { user: { id: auth.userId }, access_token: "fixture" } },
+      error: null,
+    }));
+    const recorder = createBriefViewRecorder();
+    recorder.recordIfNeeded(client, today);
+    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+    recorder.recordIfNeeded(client, today);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(getUser).toHaveBeenCalledTimes(1); // Re-rendering Start needs no new auth request.
+    auth.userId = "second";
+    recorder.recordIfNeeded(client, today);
+    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
+    expect(upsert).toHaveBeenLastCalledWith(
+      { user_id: "second", viewed_on: "2026-07-18" },
+      { onConflict: "user_id,viewed_on", ignoreDuplicates: true },
+    );
+  });
+
   it("records exactly once per local render-day even across repeated calls", async () => {
     const { client, upsert } = makeClient({ userId: "user-1" });
     const recorder = createBriefViewRecorder();
