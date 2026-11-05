@@ -163,9 +163,11 @@ export async function GET(request: Request) {
     const encryptedAccessToken = encryptGoogleCalendarToken(
       tokenResponse.accessToken,
     );
+    // No stable Google account subject is stored. An old refresh token may
+    // belong to a different account than this callback's new access token.
     const encryptedRefreshToken = tokenResponse.refreshToken
       ? encryptGoogleCalendarToken(tokenResponse.refreshToken)
-      : (storedConnection?.encrypted_refresh_token ?? null);
+      : null;
 
     if (!encryptedRefreshToken) {
       await markConnectionError(
@@ -185,11 +187,13 @@ export async function GET(request: Request) {
       return response;
     }
 
+    const connectedAt = new Date().toISOString();
     await upsertGoogleCalendarConnectionForAccessToken(
       statePayload.accessToken,
       {
         calendar_id: storedConnection?.calendar_id ?? "primary",
-        connected_at: new Date().toISOString(),
+        connected_at: connectedAt,
+        credential_verified_at: connectedAt,
         disconnected_at: null,
         encrypted_access_token: encryptedAccessToken,
         encrypted_refresh_token: encryptedRefreshToken,

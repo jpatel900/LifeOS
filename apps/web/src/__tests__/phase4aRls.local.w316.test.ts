@@ -4,12 +4,9 @@
 // phase4aRls.local` with RUN_SUPABASE_RLS_TESTS=1), never against a shared or
 // production database. Both scenarios write only synthetic rows and clean up.
 //
-// Known-bug convention in this file: the scenario and its harness checks run
-// as ordinary assertions, so a broken harness fails loudly. Only the single
-// assertion that names the bug goes through `expectKnownBug`, which passes
-// while the bug is present and FAILS once it is fixed. When that happens,
-// replace `expectKnownBug(() => X)` with `X`. (Plain `it.fails` would also
-// pass on a broken harness, and this lane cannot be probed locally.)
+// Both bugs are fixed (#3: export paging; #5: 20261024120000). The harness
+// checks still run as ordinary assertions, so a scenario that did not really
+// happen (too few rows seeded, replays that never overlapped) fails loudly.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -18,8 +15,6 @@ import {
   createLocalClient as createHarnessClient,
   psql as runLocalSql,
   startLockHolder,
-  expectKnownExportCap,
-  expectKnownSessionReplay,
 } from "@/testing/w316DatabaseHarness";
 
 const runLocalRlsTests = process.env.RUN_SUPABASE_RLS_TESTS === "1";
@@ -156,9 +151,11 @@ describeLocalRls("W3-16 #3: full export above the API row cap", () => {
       expect(
         (exported.tables.areas as Array<{ id: string }>).map((row) => row.id),
       ).toContain(areaId);
-      // KNOWN BUG (W3-16 #3): one unpaginated select per table returns at
-      // most `max_rows` rows, so the export silently drops the rest.
-      expectKnownExportCap(titles, expectedTitles, titlePrefix);
+      // W3-16 #3: the export pages past the API's `max_rows` cap, so every
+      // row comes through, exactly once.
+      expect(
+        titles.filter((title) => title.startsWith(titlePrefix)),
+      ).toHaveLength(cap + 1);
     } finally {
       await client.from("tasks").delete().like("title", `${titlePrefix}%`);
       await client.from("areas").delete().eq("id", areaId);
@@ -276,17 +273,15 @@ describeLocalRls(
         // Exactly one logical session, whatever the callers were told.
         expect(rows).toHaveLength(1);
 
-        // KNOWN BUG (W3-16 #5): the replay short-circuit runs BEFORE the
-        // task lock, so the second replay inserts after the first commits and
-        // hits the (user_id, client_write_id) unique index instead of being
-        // acknowledged as a duplicate.
-        expectKnownSessionReplay([one, two], rows!, {
-          user_id: userA.id,
-          task_id: taskId,
-          client_write_id: args.p_client_write_id,
-          notes,
-          outcome: args.p_outcome,
-        });
+        // W3-16 #5: the replay check runs again after the task lock
+        // (20261024120000), so the second replay is acknowledged as a
+        // duplicate with the first one's session, not a unique-index error.
+        expect(one.error).toBeNull();
+        expect(two.error).toBeNull();
+        expect([one.data?.deduplicated, two.data?.deduplicated].sort()).toEqual(
+          [false, true],
+        );
+        expect(one.data?.session?.id).toBe(two.data?.session?.id);
       } finally {
         holder.kill();
         await clientOne.from("execution_sessions").delete().eq("notes", notes);

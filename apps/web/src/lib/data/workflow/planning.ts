@@ -3,6 +3,7 @@ import {
   CreateTaskInputSchema,
   type CreateProjectInput,
   type CreateTaskInput,
+  type Task,
 } from "@lifeos/schemas";
 import {
   type MinimalSupabaseClient,
@@ -115,6 +116,19 @@ export async function createTask(
   }
 
   const task = parseTask(data);
+  recordTaskAcceptance(client, task);
+
+  return {
+    provider: "supabase",
+    task,
+  };
+}
+
+/** Optional learning stays outside the required workflow transaction. */
+export function recordTaskAcceptance(
+  client: MinimalSupabaseClient,
+  task: Task,
+) {
   recordSuggestionFireAndForget(client, {
     area_id: task.area_id,
     policy_identifier: "triage.default_accept_task",
@@ -130,11 +144,6 @@ export async function createTask(
     status: "accepted",
     resolved_at: new Date().toISOString(),
   });
-
-  return {
-    provider: "supabase",
-    task,
-  };
 }
 
 export async function createProject(

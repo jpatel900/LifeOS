@@ -1249,10 +1249,11 @@ test("historical C2 plan sends builders to current authority without reopening d
     new URL("../../docs/program/campaign-c2-structure.md", import.meta.url),
     "utf8",
   );
+  // The title also says "Historical"; only the declaration after it sets the plan's status.
   assert.match(
     plan,
-    /historical/i,
-    "the old plan must identify itself as history",
+    /^# [^\r\n]+\r?\n(?:[ \t]*\r?\n)*\*\*STATUS: HISTORICAL\.\*\*(?=\s|$)/,
+    "the opening C2 status declaration must be HISTORICAL",
   );
   for (const target of ["campaigns.json", "final-ux-loop.md"]) {
     assert.ok(
