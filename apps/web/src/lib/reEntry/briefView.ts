@@ -22,62 +22,107 @@ interface BriefViewsQuery {
   ) => PromiseLike<{ error: unknown }>;
 }
 
-async function insertBriefView(
-  client: MinimalSupabaseClient,
-  viewedOn: string,
-): Promise<void> {
-  if (!client.auth) return;
+type RenderDay = {
+  client: MinimalSupabaseClient;
+  viewedOn: string;
+  saved: Set<string>;
+  pending: Map<string, { repeated: boolean }>;
+};
 
-  const { data: userData, error: userError } = await client.auth.getUser();
-  if (userError || !userData.user) return;
-
-  const query = client.from("brief_views") as BriefViewsQuery;
-
-  // Idempotent by construction (matches syncQueuedCapture's
-  // client_capture_id precedent): the (user_id, viewed_on) primary key means
-  // a replayed render on the same local day is a silent no-op, never a
-  // thrown unique-violation.
-  await query.upsert(
-    { user_id: userData.user.id, viewed_on: viewedOn },
-    { onConflict: "user_id,viewed_on", ignoreDuplicates: true },
-  );
+function startDay(client: MinimalSupabaseClient, viewedOn: string): RenderDay {
+  return { client, viewedOn, saved: new Set(), pending: new Map() };
 }
 
-/**
- * Fire-and-forget: never awaited by the caller, never throws into the
- * render path. `client === null` is demo/mock mode (no Supabase configured)
- * and is skipped silently — there is nothing to write to.
- */
+async function alreadySavedForSession(day: RenderDay): Promise<boolean> {
+  if (!day.saved.size || !day.client.auth?.getSession) return false;
+  try {
+    // The local session can skip an already confirmed row. It never authorizes an insert.
+    const {
+      data: { session },
+      error,
+    } = await day.client.auth.getSession();
+    const user = session && "user" in session ? session.user : undefined;
+    return (
+      !error &&
+      typeof user === "object" &&
+      user !== null &&
+      "id" in user &&
+      typeof user.id === "string" &&
+      day.saved.has(user.id)
+    );
+  } catch {
+    return false; // Verify the user below if a local session is unavailable.
+  }
+}
+
+async function trySave(day: RenderDay, userId: string): Promise<boolean> {
+  try {
+    const query = day.client.from("brief_views") as BriefViewsQuery;
+    const { error } = await query.upsert(
+      { user_id: userId, viewed_on: day.viewedOn },
+      { onConflict: "user_id,viewed_on", ignoreDuplicates: true },
+    );
+    return error === null;
+  } catch {
+    return false;
+  }
+}
+
+async function recordView(day: RenderDay): Promise<void> {
+  const { auth } = day.client;
+  if (!auth || (await alreadySavedForSession(day))) return;
+  const {
+    data: { user },
+    error,
+  } = await auth.getUser();
+  if (error || !user || day.saved.has(user.id)) return;
+
+  // A second account has its own row, even while the first account's write is pending.
+  const pending = day.pending.get(user.id);
+  if (pending) {
+    pending.repeated = true;
+    return;
+  }
+  const attempt = { repeated: false };
+  day.pending.set(user.id, attempt);
+  do {
+    attempt.repeated = false;
+    if (await trySave(day, user.id)) {
+      day.saved.add(user.id);
+      break;
+    }
+    // Retry only when a real view arrived during the failed write.
+  } while (attempt.repeated);
+  day.pending.delete(user.id);
+}
+
+function recordSilently(day: RenderDay): void {
+  void recordView(day).catch(() => {
+    // Auth failures must never interrupt the Start or re-entry surface.
+  });
+}
+
 export function recordBriefViewFireAndForget(
   client: MinimalSupabaseClient | null,
   viewedOn: string,
 ): void {
-  if (!client) return;
-
-  void insertBriefView(client, viewedOn).catch(() => {
-    // Telemetry-only write; a failure here must never surface to the user
-    // or affect the ritual it instruments.
-  });
+  if (client) recordSilently(startDay(client, viewedOn));
 }
 
-/**
- * Per-hook-instance "once per local day" gate. The (user_id, viewed_on)
- * primary key already makes a duplicate insert harmless, but this avoids
- * firing a redundant network call on every re-latch within the same day.
- */
 export interface BriefViewRecorder {
   recordIfNeeded(client: MinimalSupabaseClient | null, now: Date): void;
 }
 
 export function createBriefViewRecorder(): BriefViewRecorder {
-  let lastRecordedDay: string | null = null;
-
+  let current: RenderDay | undefined;
   return {
     recordIfNeeded(client, now) {
+      if (!client) return;
       const viewedOn = localDayStamp(now);
-      if (lastRecordedDay === viewedOn) return;
-      lastRecordedDay = viewedOn;
-      recordBriefViewFireAndForget(client, viewedOn);
+      if (current?.client !== client || current.viewedOn !== viewedOn) {
+        current = startDay(client, viewedOn);
+      }
+      recordSilently(current);
     },
   };
 }
