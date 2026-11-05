@@ -30,5 +30,18 @@ test("builder orientation names current authority in both its truth map and cold
         .length > 0,
     );
   }
-  assert.match(map, /historical.*(?:execution queue|work queue)/i);
+  const roadmapRows = truthMap
+    .split(/\r?\n/)
+    .filter((row) => /^\|\s*Roadmap \+ vision placement\s*\|/.test(row));
+  assert.equal(
+    roadmapRows.length,
+    1,
+    "expected one Roadmap + vision placement row",
+  );
+  const location = roadmapRows[0].split("|")[2].trim();
+  assert.match(
+    location,
+    /(?:^|;\s*)tracker #293; stage cards and epics — historical placement, not the execution queue$/,
+    "tracker #293 must be historical placement, not the execution queue",
+  );
 });
