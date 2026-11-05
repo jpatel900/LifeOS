@@ -4,9 +4,13 @@
 // from the queue, losing the choice for good. The drain must wait for the
 // areas, and an item whose area is not known yet must stay queued.
 import "fake-indexeddb/auto";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WorkflowProvider } from "@/lib/WorkflowContext";
+import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
+import {
+  getDeviceAccount,
+  setDeviceAccount,
+} from "@/lib/durability/deviceAccount";
 import {
   enqueueCapture,
   listPendingCaptures,
@@ -23,6 +27,8 @@ const {
   mockListSuggestionRecords,
   mockSyncQueuedCapture,
   mockCreateSupabaseBrowserClient,
+  mockGetUser,
+  authListener,
 } = vi.hoisted(() => ({
   mockListAreas: vi.fn(),
   mockListCaptureItems: vi.fn(),
@@ -34,6 +40,10 @@ const {
   mockListSuggestionRecords: vi.fn(),
   mockSyncQueuedCapture: vi.fn(async () => ({ provider: "supabase" })),
   mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
+  mockGetUser: vi.fn(),
+  authListener: {
+    callback: null as ((event: string, session: unknown) => void) | null,
+  },
 }));
 
 vi.mock("@/lib/data/workflow", async () => {
@@ -73,6 +83,8 @@ const persistedArea = {
 };
 
 beforeEach(async () => {
+  mockCreateSupabaseBrowserClient.mockImplementation(() => ({ mocked: true }));
+  setDeviceAccount(undefined);
   window.sessionStorage.clear();
   await new Promise<void>((resolve) => {
     const req = indexedDB.deleteDatabase("lifeos-capture-queue");
@@ -123,6 +135,396 @@ beforeEach(async () => {
 afterEach(() => {
   vi.clearAllMocks();
   window.sessionStorage.clear();
+  setDeviceAccount(undefined);
+});
+
+describe("W7-8: offline area readiness belongs to the active account", () => {
+  const accountA = persistedArea.user_id;
+  const accountB = "55555555-5555-4555-8555-555555555555";
+  const areaB = {
+    ...persistedArea,
+    id: "66666666-6666-4666-8666-666666666666",
+    user_id: accountB,
+  };
+  let workflow: ReturnType<typeof useWorkflow>;
+
+  function Harness() {
+    workflow = useWorkflow();
+    return null;
+  }
+
+  beforeEach(() => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: accountA } },
+      error: null,
+    });
+    mockCreateSupabaseBrowserClient.mockImplementation(() => ({
+      mocked: true,
+      auth: {
+        getUser: mockGetUser,
+        onAuthStateChange: (
+          callback: (event: string, session: unknown) => void,
+        ) => {
+          authListener.callback = callback;
+          return { data: { subscription: { unsubscribe: () => undefined } } };
+        },
+      },
+    }));
+  });
+
+  async function switchAccount(userId: string) {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: userId } },
+      error: null,
+    });
+    await act(async () => {
+      authListener.callback!("SIGNED_IN", { user: { id: userId } });
+    });
+  }
+
+  async function queueAndDrain() {
+    const subject = await enqueueCapture({
+      rawText: "Keep the selected account area",
+      areaId: "area-main-job",
+      returnHook: "after lunch",
+    });
+    const signal = await enqueueCapture({
+      rawText: "Drain signal",
+      areaId: null,
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await waitFor(() =>
+      expect(mockSyncQueuedCapture).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          client_capture_id: signal.client_capture_id,
+        }),
+      ),
+    );
+    await waitFor(async () =>
+      expect(
+        (await listPendingCaptures()).some(
+          (row) => row.client_capture_id === signal.client_capture_id,
+        ),
+      ).toBe(false),
+    );
+    return subject;
+  }
+
+  async function expectHeld(subjectId: string) {
+    expect(
+      mockSyncQueuedCapture.mock.calls.some(
+        (call) =>
+          (call as unknown[])[1] &&
+          ((call as unknown[])[1] as { client_capture_id: string })
+            .client_capture_id === subjectId,
+      ),
+    ).toBe(false);
+    expect(await listPendingCaptures()).toEqual([
+      expect.objectContaining({
+        client_capture_id: subjectId,
+        raw_text: "Keep the selected account area",
+        area_id: "area-main-job",
+        return_hook: "after lunch",
+      }),
+    ]);
+  }
+
+  it.each([{ areas: [] }, { areas: [persistedArea] }])(
+    "holds B's capture while B's read is pending after A loaded $areas",
+    async ({ areas }) => {
+      mockListAreas.mockResolvedValue({ provider: "supabase", areas });
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() => expect(workflow.syncStatus.account).toBe("synced"));
+      let resolveB!: (value: unknown) => void;
+      mockListAreas.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveB = resolve;
+          }),
+      );
+      await switchAccount(accountB);
+      await waitFor(() => expect(resolveB).toBeTypeOf("function"));
+      const subject = await queueAndDrain();
+      await expectHeld(subject.client_capture_id);
+      await act(async () => {
+        resolveB({ provider: "supabase", areas: [areaB] });
+      });
+      await waitFor(async () =>
+        expect(await listPendingCaptures()).toHaveLength(0),
+      );
+      const sends = (mockSyncQueuedCapture.mock.calls as unknown[][]).filter(
+        (call) =>
+          (call[1] as { client_capture_id: string }).client_capture_id ===
+          subject.client_capture_id,
+      );
+      expect(sends).toHaveLength(1);
+      expect(sends[0]![1]).toMatchObject({
+        area_id: areaB.id,
+        raw_text: "Keep the selected account area",
+        return_hook: "after lunch",
+      });
+    },
+  );
+
+  it("holds B's selected area after B's read fails", async () => {
+    mockListAreas.mockResolvedValue({ provider: "supabase", areas: [] });
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(workflow.syncStatus.account).toBe("synced"));
+    mockListAreas.mockRejectedValue(new Error("B area read failed"));
+    await switchAccount(accountB);
+    await act(async () => workflow.retryPendingAccountWrites());
+    await waitFor(() => expect(workflow.syncStatus.account).toBe("sync-error"));
+    const subject = await queueAndDrain();
+    await expectHeld(subject.client_capture_id);
+  });
+
+  it("retries an identity read superseded by a same-account token refresh", async () => {
+    mockListAreas
+      .mockRejectedValueOnce(new Error("First area read failed"))
+      .mockResolvedValue({ provider: "supabase", areas: [persistedArea] });
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(workflow.syncStatus.account).toBe("sync-error"));
+    let resolveIdentity!: (value: unknown) => void;
+    let resolveFreshIdentity!: (value: unknown) => void;
+    mockGetUser
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveIdentity = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFreshIdentity = resolve;
+          }),
+      );
+    const subject = await enqueueCapture({
+      rawText: "Keep the selected account area",
+      areaId: "area-main-job",
+      returnHook: "after lunch",
+    });
+    let retry!: Promise<void>;
+    act(() => {
+      retry = workflow.retryPendingAccountWrites();
+    });
+    await waitFor(() => expect(resolveIdentity).toBeTypeOf("function"));
+    await act(async () => {
+      authListener.callback!("TOKEN_REFRESHED", { user: { id: accountA } });
+      resolveIdentity({ data: { user: { id: accountB } }, error: null });
+      await retry;
+    });
+    await waitFor(() => expect(resolveFreshIdentity).toBeTypeOf("function"));
+    expect(getDeviceAccount()).toBe(accountA);
+    expect(mockListAreas).toHaveBeenCalledTimes(1);
+    await expectHeld(subject.client_capture_id);
+    await act(async () => {
+      resolveFreshIdentity({ data: { user: { id: accountA } }, error: null });
+    });
+    await waitFor(async () =>
+      expect(await listPendingCaptures()).toHaveLength(0),
+    );
+    const sends = (mockSyncQueuedCapture.mock.calls as unknown[][]).filter(
+      (call) =>
+        (call[1] as { client_capture_id: string }).client_capture_id ===
+        subject.client_capture_id,
+    );
+    expect(sends).toHaveLength(1);
+    expect(sends[0]![1]).toMatchObject({ area_id: persistedArea.id });
+  });
+
+  it("remembers a manual retry while an older account read is still pending", async () => {
+    let rejectFirst!: (error: Error) => void;
+    mockListAreas
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectFirst = reject;
+          }),
+      )
+      .mockResolvedValue({ provider: "supabase", areas: [persistedArea] });
+    const subject = await enqueueCapture({
+      rawText: "Retry after the pending account read",
+      areaId: "area-main-job",
+      returnHook: "after lunch",
+    });
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(rejectFirst).toBeTypeOf("function"));
+    let retry!: Promise<void>;
+    act(() => {
+      retry = workflow.retryPendingAccountWrites();
+    });
+    expect(mockSyncQueuedCapture).not.toHaveBeenCalled();
+    await act(async () => {
+      rejectFirst(new Error("Older account read failed"));
+      await retry;
+    });
+    await waitFor(async () =>
+      expect(await listPendingCaptures()).toHaveLength(0),
+    );
+    expect(mockListAreas).toHaveBeenCalledTimes(2);
+    const sends = mockSyncQueuedCapture.mock.calls as unknown[][];
+    // Settled-read and area-map signals may both drain. The writer deduplicates
+    // by client_capture_id; every attempt must retain the same payload.
+    expect(sends.length).toBeGreaterThan(0);
+    for (const send of sends) {
+      expect(send[1]).toMatchObject({
+        client_capture_id: subject.client_capture_id,
+        area_id: persistedArea.id,
+        raw_text: "Retry after the pending account read",
+        return_hook: "after lunch",
+      });
+    }
+  });
+
+  it.each([accountB, accountA])(
+    "ignores A's old read after switching through B to %s",
+    async (destination) => {
+      let resolveOld!: (value: unknown) => void;
+      let resolveCurrent!: (value: unknown) => void;
+      mockListAreas
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveOld = resolve;
+            }),
+        )
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveCurrent = resolve;
+            }),
+        );
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() => expect(resolveOld).toBeTypeOf("function"));
+      await switchAccount(accountB);
+      if (destination === accountA) await switchAccount(accountA);
+      await act(async () => {
+        resolveOld({ provider: "supabase", areas: [] });
+      });
+      // The switch owes a new read even though A's read was already running.
+      await waitFor(() => expect(resolveCurrent).toBeTypeOf("function"));
+      const subject = await queueAndDrain();
+      await expectHeld(subject.client_capture_id);
+      const area = destination === accountA ? persistedArea : areaB;
+      await act(async () => {
+        resolveCurrent({ provider: "supabase", areas: [area] });
+      });
+      await waitFor(async () =>
+        expect(await listPendingCaptures()).toHaveLength(0),
+      );
+      const sends = (mockSyncQueuedCapture.mock.calls as unknown[][]).filter(
+        (call) =>
+          (call[1] as { client_capture_id: string }).client_capture_id ===
+          subject.client_capture_id,
+      );
+      expect(sends).toHaveLength(1);
+      expect(sends[0]![1]).toMatchObject({ area_id: area.id });
+    },
+  );
+
+  it("does not treat an untagged area update as B's completed read", async () => {
+    mockListAreas.mockResolvedValue({ provider: "supabase", areas: [] });
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(workflow.syncStatus.account).toBe("synced"));
+    mockListAreas.mockImplementation(() => new Promise(() => undefined));
+    await switchAccount(accountB);
+    await act(async () => {
+      workflow.syncPersistedAreas([]);
+    });
+    const subject = await queueAndDrain();
+    await expectHeld(subject.client_capture_id);
+  });
+
+  it("ignores area rows owned by A when reading B", async () => {
+    mockListAreas.mockResolvedValue({ provider: "supabase", areas: [] });
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(workflow.syncStatus.account).toBe("synced"));
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [persistedArea],
+    });
+    await switchAccount(accountB);
+    await waitFor(() => expect(workflow.syncStatus.account).toBe("sync-error"));
+    const subject = await queueAndDrain();
+    await expectHeld(subject.client_capture_id);
+  });
+
+  it("revalidates an untagged area replacement after B was already ready", async () => {
+    mockListAreas.mockResolvedValue({ provider: "supabase", areas: [] });
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => expect(workflow.syncStatus.account).toBe("synced"));
+    mockListAreas.mockResolvedValue({ provider: "supabase", areas: [areaB] });
+    await switchAccount(accountB);
+    await waitFor(() =>
+      expect(workflow.state.areas).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ user_id: accountB }),
+        ]),
+      ),
+    );
+    let resolveFresh!: (value: unknown) => void;
+    mockListAreas.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFresh = resolve;
+        }),
+    );
+    await act(async () => {
+      workflow.syncPersistedAreas([]);
+    });
+    const subject = await queueAndDrain();
+    await expectHeld(subject.client_capture_id);
+    await waitFor(() => expect(resolveFresh).toBeTypeOf("function"));
+    await act(async () => {
+      resolveFresh({ provider: "supabase", areas: [areaB] });
+    });
+    await waitFor(async () =>
+      expect(await listPendingCaptures()).toHaveLength(0),
+    );
+    const sends = (mockSyncQueuedCapture.mock.calls as unknown[][]).filter(
+      (call) =>
+        (call[1] as { client_capture_id: string }).client_capture_id ===
+        subject.client_capture_id,
+    );
+    expect(sends).toHaveLength(1);
+    expect(sends[0]![1]).toMatchObject({ area_id: areaB.id });
+  });
 });
 
 describe("bug hunt #5: the offline drain keeps the chosen area", () => {
@@ -262,38 +664,32 @@ describe("offline drain when the chosen area is gone (W3-16 #8)", () => {
     );
   });
 
-  // KNOWN BUG (W3-16 #8): expected failure. A successful read with zero
-  // areas is treated as "not loaded yet", so the capture never leaves the
-  // queue. Flip to `it` once the drain tells the two apart.
-  it.fails(
-    "the account read succeeds with no areas, so the capture goes up once with no area",
-    async () => {
-      mockListAreas.mockResolvedValue({ provider: "supabase", areas: [] });
-      const { subject, signal } = await queueSubjectAndSignal();
+  // W3-16 #8: a successful read with zero areas counts as "areas known", so
+  // the capture whose area is gone goes up once with no area.
+  it("the account read succeeds with no areas, so the capture goes up once with no area", async () => {
+    mockListAreas.mockResolvedValue({ provider: "supabase", areas: [] });
+    const { subject, signal } = await queueSubjectAndSignal();
 
-      render(
-        <WorkflowProvider>
-          <div />
-        </WorkflowProvider>,
-      );
+    render(
+      <WorkflowProvider>
+        <div />
+      </WorkflowProvider>,
+    );
 
-      await waitForDrainSignal(signal.client_capture_id);
-      await waitFor(() =>
-        expect(sentIds()).toContain(subject.client_capture_id),
-      );
-      const subjectCalls = (mockSyncQueuedCapture.mock.calls as unknown[][])
-        .map((call) => call[1] as Record<string, unknown>)
-        .filter((args) => args.client_capture_id === subject.client_capture_id);
-      expect(subjectCalls).toHaveLength(1);
-      expect(subjectCalls[0]).toMatchObject({
-        raw_text: "Book physio",
-        area_id: null,
-        return_hook: "after lunch",
-        client_capture_id: subject.client_capture_id,
-      });
-      await waitFor(async () =>
-        expect(await listPendingCaptures()).toHaveLength(0),
-      );
-    },
-  );
+    await waitForDrainSignal(signal.client_capture_id);
+    await waitFor(() => expect(sentIds()).toContain(subject.client_capture_id));
+    const subjectCalls = (mockSyncQueuedCapture.mock.calls as unknown[][])
+      .map((call) => call[1] as Record<string, unknown>)
+      .filter((args) => args.client_capture_id === subject.client_capture_id);
+    expect(subjectCalls).toHaveLength(1);
+    expect(subjectCalls[0]).toMatchObject({
+      raw_text: "Book physio",
+      area_id: null,
+      return_hook: "after lunch",
+      client_capture_id: subject.client_capture_id,
+    });
+    await waitFor(async () =>
+      expect(await listPendingCaptures()).toHaveLength(0),
+    );
+  });
 });
