@@ -240,7 +240,7 @@ export function LifeOSCockpit({
         if (receipt && !acknowledgeAreaSave(receipt, result.area)) return;
         const areasResult = await listAreas(client);
         if (areasResult.provider === "supabase") {
-          syncPersistedAreas(areasResult.areas, receipt);
+          if (!syncPersistedAreas(areasResult.areas, receipt)) return;
           setSelectedAreaId(workflowAreaIdForPersistedArea(result.area));
         }
       } else {

@@ -626,6 +626,11 @@ describe("capture storage and account notice truth (#967)", () => {
         (area) => area.name === PERSISTED_AREA.name,
       )!.id;
       let storedColor = PERSISTED_AREA.color;
+      // Revalidation reads the same simulated account the write updates.
+      mockListAreas.mockImplementation(async () => ({
+        provider: "supabase",
+        areas: [{ ...PERSISTED_AREA, color: storedColor }],
+      }));
       const deliveries: Array<() => void> = [];
       const write = vi.fn(async (color: string) => {
         await new Promise<void>((resolve) => deliveries.push(resolve));

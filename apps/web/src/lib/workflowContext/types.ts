@@ -112,7 +112,7 @@ export interface WorkflowContextValue {
   selectedAreaId: string | null;
   setSelectedAreaId: (areaId: string | null) => void;
   syncStatus: WorkflowSyncStatus;
-  syncPersistedAreas: (areas: Area[], cursor?: SnapshotCursor) => void;
+  syncPersistedAreas: (areas: Area[], cursor?: SnapshotCursor) => boolean;
   refreshPersistedWorkflow: () => Promise<void>;
   // #967 manual retry: a thin, public wrapper around the EXISTING
   // `runAccountSync({ replayAfter: true })` pass — the same ordered

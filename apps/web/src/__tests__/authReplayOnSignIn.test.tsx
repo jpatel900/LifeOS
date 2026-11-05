@@ -30,6 +30,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LifeOSCockpit } from "../app/components/LifeOSCockpit";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import {
   clearPendingWrites,
@@ -46,6 +47,7 @@ import {
   SIGNED_OUT_SAVING_ON_THIS_DEVICE,
 } from "@/lib/statusVocabulary";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { setDeviceAccount } from "@/lib/durability/deviceAccount";
 import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
 import { PersistenceWriteError } from "@/lib/persistenceFailureKind";
 import { snapshotCursor } from "@/lib/workflowContext/snapshotOwnership";
@@ -151,6 +153,7 @@ const PERSISTED_AREA = {
 };
 
 const {
+  mockCreateArea,
   mockListAreas,
   mockListCaptureItems,
   mockListPlanningItems,
@@ -167,6 +170,7 @@ const {
   mockListPendingWrites,
   authListener,
 } = vi.hoisted(() => ({
+  mockCreateArea: vi.fn(),
   mockListAreas: vi.fn(),
   mockListCaptureItems: vi.fn(),
   mockListPlanningItems: vi.fn(),
@@ -212,6 +216,7 @@ vi.mock("@/lib/data/workflow", async () => {
   );
   return {
     ...actual,
+    createArea: mockCreateArea,
     listAreas: mockListAreas,
     listCaptureItems: mockListCaptureItems,
     listPlanningItems: mockListPlanningItems,
@@ -222,7 +227,16 @@ vi.mock("@/lib/data/workflow", async () => {
     listSuggestionRecords: mockListSuggestionRecords,
     syncJournaledCapture: mockSyncJournaledCapture,
     syncJournaledWin: mockSyncJournaledWin,
-    syncJournaledReviewEntry: mockSyncJournaledReviewEntry,
+    syncJournaledReviewEntry: async (
+      ...args: Parameters<typeof actual.syncJournaledReviewEntry>
+    ) => {
+      const result = await mockSyncJournaledReviewEntry(...args);
+      // Existing successful fixtures write to A. Account-switch fixtures
+      // explicitly override the transport's authenticated receipt owner.
+      return result?.provider === "supabase"
+        ? { userId: PERSISTED_AREA.user_id, ...result }
+        : result;
+    },
   };
 });
 
@@ -1778,11 +1792,8 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
         new Error("server rejected the review"),
       );
 
-      // After the two A hydration identity reads: `expectedUserId` is A
-      // before replay; `refreshPendingSaveFailed`'s own post-read recheck is
-      // recheck (B — the narrowest possible window, a session change
-      // spanning exactly this one read); call 3+ = the later review
-      // readback's own recheck (A again — out of scope for this test).
+      // Two A hydration reads precede replay. Its own read sees A; the
+      // post-read pending-save check sees B. The later readback sees A.
       mockGetUser
         .mockReset()
         .mockResolvedValueOnce({ data: { user: { id: userA } }, error: null })
@@ -3119,7 +3130,7 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       );
     });
 
-    it("is a no-op while an account sync is already in flight — no duplicate account hydration and no duplicate handler run", async () => {
+    it("queues one coalesced retry behind an active sync without concurrent hydration or duplicate delivery", async () => {
       const day = "2026-09-22";
 
       await journalReviewWrite({
@@ -3167,33 +3178,34 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       const listExecutionReviewItemsCallsBeforeRetry =
         mockListExecutionReviewItems.mock.calls.length;
 
-      fireEvent.click(screen.getByText("Retry pending writes"));
-
-      // #967 root review: an explicit boundary for the MANUAL WRAPPER's own
-      // settlement, not a fixed sleep — `runAccountSync`'s in-flight guard
-      // makes the retry's own call resolve near-instantly (an early
-      // return), so waiting for THAT specific call to settle is
-      // deterministic where a timer is not.
+      try {
+        await act(async () => {
+          fireEvent.click(screen.getByText("Retry pending writes"));
+          fireEvent.click(screen.getByText("Retry pending writes"));
+        });
+        // The manual callers wait for a fresh pass after mount completes.
+        // Neither caller may start concurrent hydration or another delivery.
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "0",
+        );
+        expect(mockListAreas.mock.calls.length).toBe(listAreasCallsBeforeRetry);
+        expect(mockListExecutionReviewItems.mock.calls.length).toBe(
+          listExecutionReviewItemsCallsBeforeRetry,
+        );
+        expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+      } finally {
+        // Always release the shared journal tail, even if an assertion fails.
+        releaseMountAttempt({ provider: "supabase" });
+      }
       await waitFor(() => {
         expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
-          "1",
+          "2",
         );
       });
-
-      // While the ORIGINAL pass is still held open: no duplicate account
-      // hydration (a second `runAccountSync` pass getting past its own
-      // guard would call `listAreas`/`listExecutionReviewItems` again,
-      // regardless of whether the journal's own serialization also happens
-      // to keep a second HANDLER call from running) and no duplicate
-      // handler call either.
-      expect(mockListAreas.mock.calls.length).toBe(listAreasCallsBeforeRetry);
-      expect(mockListExecutionReviewItems.mock.calls.length).toBe(
-        listExecutionReviewItemsCallsBeforeRetry,
+      expect(mockListAreas.mock.calls.length).toBe(
+        listAreasCallsBeforeRetry + 1,
       );
       expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
-
-      // The mount pass's own attempt still completes normally afterward.
-      releaseMountAttempt({ provider: "supabase" });
       await waitFor(async () => {
         const pending = await listPendingWrites("review");
         expect(pending).toHaveLength(0);
@@ -3337,4 +3349,961 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
       expect(screen.getByTestId("task-count")).toHaveTextContent("1");
     });
   });
+});
+
+// W3-16 finding 1: pending private work across sign-out and a different
+// account on the same device. Sign-out (`AuthAffordance.handleSignOut`) only
+// calls `auth.signOut()`. The provider's auth listener ignores events with no
+// session, and pending-write journal entries carry no owner. So a capture
+// account A could not deliver waits in the journal, and is replayed through
+// account B's session once B signs in on this device.
+//
+// The provider sees sign-out only as the SIGNED_OUT event that
+// `auth.signOut()` emits, so this test fires that event directly.
+async function settleJournalReads(from: number) {
+  // Follow the actual asynchronous journal reads started by this pass.
+  // A drained queue alone precedes account readback and evidence refresh.
+  await act(async () => {
+    for (
+      let index = from;
+      index < mockListPendingWrites.mock.results.length;
+      index += 1
+    ) {
+      const result = mockListPendingWrites.mock.results[index];
+      if (result?.type === "return") {
+        await Promise.allSettled([result.value]);
+      }
+    }
+  });
+}
+
+describe("W3-16 #1: pending work never crosses to another account", () => {
+  const ACCOUNT_B_USER = "88888888-8888-4888-8888-888888888888";
+  const ACCOUNT_B_AREA = {
+    ...PERSISTED_AREA,
+    id: "99999999-9999-4999-8999-999999999999",
+    user_id: ACCOUNT_B_USER,
+  };
+  const ACCOUNT_A_TEXT = "Call the landlord back";
+
+  it("does not select an old account's newly saved area when its delayed list arrives after switching accounts", async () => {
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    const added = {
+      ...PERSISTED_AREA,
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      name: "Synthetic delayed area",
+      slug: "synthetic-delayed-area",
+    };
+    mockCreateArea.mockResolvedValue({ provider: "supabase", area: added });
+    render(
+      <WorkflowProvider>
+        <Harness />
+        <LifeOSCockpit initialStage="overview" />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    let finishOldList!: (result: unknown) => void;
+    mockListAreas.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOldList = resolve;
+        }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add area" }));
+    const input = screen.getByRole("textbox", { name: "New area name" });
+    fireEvent.change(input, { target: { value: added.name } });
+    fireEvent.submit(input.closest("form")!);
+    await waitFor(() => expect(finishOldList).toBeTypeOf("function"));
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: ACCOUNT_B_USER } },
+      error: null,
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [ACCOUNT_B_AREA],
+    });
+    await act(async () => {
+      authListener.callback?.("SIGNED_IN", { user: { id: ACCOUNT_B_USER } });
+    });
+    await waitFor(() =>
+      expect(observedWorkflow.state.snapshotOwnership?.userId).toBe(
+        ACCOUNT_B_USER,
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        Object.keys(observedWorkflow.workflowAreaIdByPersistedId),
+      ).toContain(ACCOUNT_B_AREA.id),
+    );
+    act(() => {
+      observedWorkflow.setSelectedAreaId(null);
+    });
+    await act(async () => {
+      finishOldList({ provider: "supabase", areas: [PERSISTED_AREA, added] });
+    });
+    expect(observedWorkflow.selectedAreaId).toBeNull();
+    expect(
+      observedWorkflow.workflowAreaIdByPersistedId[added.id],
+    ).toBeUndefined();
+  });
+
+  it("reconnect discovers a new account before its auth event, rehydrates it and delivers only its work", async () => {
+    const dayA = "2026-10-21",
+      dayB = "2026-10-22";
+    for (const [owner, day] of [
+      [PERSISTED_AREA.user_id, dayA],
+      [ACCOUNT_B_USER, dayB],
+    ] as const) {
+      setDeviceAccount(owner);
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+    }
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    mockSyncJournaledReviewEntry.mockRejectedValue(
+      new TypeError("Synthetic offline"),
+    );
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    expect(
+      (await listPendingWritesActual("review"))
+        .map((row) => row.owner_user_id)
+        .sort(),
+    ).toEqual([PERSISTED_AREA.user_id, ACCOUNT_B_USER].sort());
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: ACCOUNT_B_USER } },
+      error: null,
+    });
+    let finishAreas!: (result: unknown) => void;
+    mockListAreas.mockReset().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishAreas = resolve;
+        }),
+    );
+    let finishWorkflow!: (value: unknown) => void;
+    mockListCaptureItems.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishWorkflow = resolve;
+        }),
+    );
+    let workflowReleased = false;
+    const earlyDeliveries: string[] = [];
+    mockSyncJournaledReviewEntry
+      .mockReset()
+      .mockImplementation(async (_client, row) => {
+        if (!workflowReleased) earlyDeliveries.push(row.period_start);
+        return { provider: "supabase", userId: ACCOUNT_B_USER };
+      });
+    // No SIGNED_IN notification: the online pass must notice B itself.
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await waitFor(() => expect(mockListAreas).toHaveBeenCalled());
+    expect(mockSyncJournaledReviewEntry).not.toHaveBeenCalled();
+    const reconnectWhileHeld = async () => {
+      const from = mockListPendingWrites.mock.results.length;
+      await act(async () => {
+        window.dispatchEvent(new Event("online"));
+        await listPendingWritesActual("review");
+      });
+      await settleJournalReads(from);
+      expect(mockSyncJournaledReviewEntry).not.toHaveBeenCalled();
+    };
+    await reconnectWhileHeld();
+    await act(async () => {
+      finishAreas({ provider: "supabase", areas: [ACCOUNT_B_AREA] });
+    });
+    await waitFor(() => expect(finishWorkflow).toBeTypeOf("function"));
+    await reconnectWhileHeld();
+    await act(async () => {
+      workflowReleased = true;
+      finishWorkflow({ provider: "supabase", captures: [] });
+    });
+    await waitFor(async () =>
+      expect(
+        (await listPendingWritesActual("review")).map(
+          (row) => row.owner_user_id,
+        ),
+      ).toEqual([PERSISTED_AREA.user_id]),
+    );
+    expect(earlyDeliveries).toEqual([]);
+    expect(
+      mockSyncJournaledReviewEntry.mock.calls.map(
+        (call) => (call[1] as { period_start: string }).period_start,
+      ),
+    ).toEqual([dayB]);
+  });
+
+  it("reconnect retains the trusted current owner when its identity lookup temporarily fails", async () => {
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    const day = "2026-10-23";
+    await journalReviewWrite({
+      workflowAreaId: null,
+      persistedAreaId: null,
+      reviewType: "daily",
+      periodStart: day,
+      periodEnd: day,
+      summaryJson: {},
+    });
+    mockGetUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: "Synthetic offline" },
+    });
+    mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await waitFor(async () =>
+      expect(await listPendingWritesActual("review")).toHaveLength(0),
+    );
+    expect(mockSyncJournaledReviewEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ period_start: day }),
+    );
+  });
+
+  // A's undelivered capture is held on the device for A (see
+  // `durability/deviceAccount.ts`), never replayed under B.
+  it("a capture account A could not deliver is never sent through account B's session", async () => {
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    mockSyncJournaledCapture.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+
+    const firstMount = render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+
+    // Account A captures. The account write fails, so it waits on device.
+    fireEvent.click(screen.getByText("Capture"));
+    await waitFor(async () => {
+      expect(await listPendingWrites("capture")).toHaveLength(1);
+    });
+    await waitFor(() => expect(mockSyncJournaledCapture).toHaveBeenCalled());
+
+    // A signs out.
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+    mockListAreas.mockRejectedValue(SIGNED_OUT_ERROR());
+    await act(async () => {
+      authListener.callback?.("SIGNED_OUT", null);
+      await Promise.resolve();
+    });
+
+    // B signs in on the same device, without a remount ...
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: ACCOUNT_B_USER } },
+      error: null,
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [ACCOUNT_B_AREA],
+    });
+    mockSyncJournaledCapture.mockReset().mockResolvedValue({
+      provider: "supabase",
+      captureId: "77777777-7777-4777-8777-777777777777",
+    });
+    await act(async () => {
+      authListener.callback?.("SIGNED_IN", {
+        user: { id: ACCOUNT_B_USER },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // ... and then the page reloads as B.
+    firstMount.unmount();
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    // One explicit, fully settled replay pass as B: a deterministic
+    // boundary, so the check below never races the mount's own replay.
+    fireEvent.click(screen.getByText("Retry pending writes"));
+    await waitFor(() =>
+      expect(screen.getByTestId("retry-settled-count")).toHaveTextContent("1"),
+    );
+
+    const sentTexts = mockSyncJournaledCapture.mock.calls.map(
+      (call) => (call[1] as { raw_text?: string }).raw_text,
+    );
+    expect(sentTexts).not.toContain(ACCOUNT_A_TEXT);
+  });
+});
+
+// W3-16 finding 4: a daily close queued offline is delivered by the
+// RECONNECT path (the `online` event). That path replays the journal and then
+// refreshes device evidence directly. Unlike the account-sync path, it does
+// not first confirm the day in the account. So the device tier can drop the
+// day while the account tier does not hold it yet: a closed day reads open.
+describe("W3-16 #4: reconnect keeps a closed day closed until the account confirms it", () => {
+  const day = "2026-09-04";
+
+  async function mountWithUndeliveredClose(otherDays: string[] = []) {
+    for (const period of [day, ...otherDays])
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: period,
+        periodEnd: period,
+        summaryJson: {},
+      });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    // Mount while the account write cannot get through.
+    mockSyncJournaledReviewEntry.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalled(),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("journalled-closed-days")).toHaveTextContent(
+        day,
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    expect(await listPendingWritesActual("review")).toHaveLength(
+      1 + otherDays.length,
+    );
+    expect(screen.getByTestId("account-closed-days")).not.toHaveTextContent(
+      day,
+    );
+  }
+
+  async function reconnectAndDeliver() {
+    mockSyncJournaledReviewEntry
+      .mockReset()
+      .mockResolvedValue({ provider: "supabase" });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await Promise.resolve();
+    });
+    await waitFor(async () => {
+      expect(await listPendingWritesActual("review")).toHaveLength(0);
+    });
+    expect(mockSyncJournaledReviewEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ review_type: "daily", period_start: day }),
+    );
+  }
+
+  function closedDayTiers() {
+    return {
+      journalled: screen.getByTestId("journalled-closed-days").textContent,
+      account: screen.getByTestId("account-closed-days").textContent,
+    };
+  }
+
+  // The reconnect path hands off device evidence only after the account
+  // confirms the day (W3-16 #4).
+  it("control: the account read holds the day, so the account tier takes it over on reconnect", async () => {
+    await mountWithUndeliveredClose();
+    mockListExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [
+        {
+          id: "66666666-6666-4666-8666-666666666666",
+          user_id: PERSISTED_AREA.user_id,
+          review_type: "daily",
+          period_start: day,
+          period_end: day,
+        },
+      ],
+    });
+
+    await reconnectAndDeliver();
+
+    await waitFor(() => {
+      expect(closedDayTiers().account).toContain(day);
+    });
+    await waitFor(() => {
+      expect(closedDayTiers().journalled).not.toContain(day);
+    });
+  });
+
+  it("the account read omits the day: the day still reads closed after reconnect", async () => {
+    await mountWithUndeliveredClose();
+    // Every later account read answers without the day.
+    mockListExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+
+    await reconnectAndDeliver();
+
+    // The device tier must keep the day: the account never confirmed it.
+    // A wait (not a one-off check) so the post-replay journal refresh has
+    // run before the final read.
+    await waitFor(() => {
+      expect(closedDayTiers().journalled).not.toContain(day);
+    }).catch(() => undefined);
+    const tiers = closedDayTiers();
+    expect(
+      tiers.journalled?.includes(day) || tiers.account?.includes(day),
+    ).toBe(true);
+  });
+
+  it("the account read fails: the day still reads closed after reconnect", async () => {
+    await mountWithUndeliveredClose();
+    mockListExecutionReviewItems.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+
+    await reconnectAndDeliver();
+
+    await waitFor(() => {
+      expect(closedDayTiers().journalled).not.toContain(day);
+    }).catch(() => undefined);
+    const tiers = closedDayTiers();
+    expect(
+      tiers.journalled?.includes(day) || tiers.account?.includes(day),
+    ).toBe(true);
+  });
+
+  function accountReviewRead(confirmedDays: string[] = []) {
+    return {
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: confirmedDays.map((period) => ({
+        id: "66666666-6666-4666-8666-666666666666",
+        user_id: PERSISTED_AREA.user_id,
+        review_type: "daily",
+        period_start: period,
+        period_end: period,
+      })),
+    };
+  }
+
+  async function settledReconnect(confirmedDays: string[], failRead = false) {
+    const journalReadsBefore = mockListPendingWrites.mock.results.length;
+    const accountReadsBefore = mockListExecutionReviewItems.mock.calls.length;
+    let reachedReadback!: () => void;
+    const readbackStarted = new Promise<void>((resolve) => {
+      reachedReadback = resolve;
+    });
+    mockListExecutionReviewItems.mockImplementationOnce(async () => {
+      reachedReadback();
+      if (failRead) throw new TypeError("Failed to fetch");
+      return accountReviewRead(confirmedDays);
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await readbackStarted;
+    });
+    await settleJournalReads(journalReadsBefore);
+    expect(mockListExecutionReviewItems).toHaveBeenCalledTimes(
+      accountReadsBefore + 1,
+    );
+  }
+
+  it.each([false, true])(
+    "W7-10: a second reconnect retains a drained close until confirmation (first read fails: %s)",
+    async (failFirstRead) => {
+      await mountWithUndeliveredClose();
+      mockSyncJournaledReviewEntry
+        .mockReset()
+        .mockResolvedValue({ provider: "supabase" });
+
+      await settledReconnect([], failFirstRead);
+      expect(await listPendingWritesActual("review")).toHaveLength(0);
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+      expect(closedDayTiers().journalled).toContain(day);
+      expect(closedDayTiers().account).not.toContain(day);
+
+      // The journal is already empty. This read must still confirm day.
+      await settledReconnect([]);
+      expect(closedDayTiers().journalled).toContain(day);
+      expect(closedDayTiers().account).not.toContain(day);
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+
+      await settledReconnect([day]);
+      expect(closedDayTiers().account).toContain(day);
+      expect(closedDayTiers().journalled).not.toContain(day);
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("W7-10: snapshot failure cannot discard the obligation on a later reconnect", async () => {
+    await journalReviewWrite({
+      workflowAreaId: null,
+      persistedAreaId: null,
+      reviewType: "daily",
+      periodStart: day,
+      periodEnd: day,
+      summaryJson: {},
+    });
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    mockSyncJournaledReviewEntry.mockResolvedValue({ provider: "supabase" });
+    let rejectSnapshot = true;
+    mockListPendingWrites.mockImplementation((entity) => {
+      if (entity === "review" && rejectSnapshot) {
+        rejectSnapshot = false;
+        return Promise.reject(new Error("snapshot unavailable"));
+      }
+      return listPendingWritesActual(entity);
+    });
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+        "true",
+      ),
+    );
+    expect(rejectSnapshot).toBe(false);
+    expect(await listPendingWritesActual("review")).toHaveLength(0);
+    expect(closedDayTiers().journalled).toContain(day);
+    expect(closedDayTiers().account).not.toContain(day);
+
+    await settledReconnect([]);
+    expect(closedDayTiers().journalled).toContain(day);
+    expect(closedDayTiers().account).not.toContain(day);
+    await settledReconnect([day]);
+    expect(closedDayTiers().account).toContain(day);
+    expect(closedDayTiers().journalled).not.toContain(day);
+    expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("W7-10: overlapping reconnects cannot release an older unconfirmed close", async () => {
+    await mountWithUndeliveredClose();
+    mockSyncJournaledReviewEntry
+      .mockReset()
+      .mockResolvedValue({ provider: "supabase" });
+    let releaseFirstRead!: (
+      value: ReturnType<typeof accountReviewRead>,
+    ) => void;
+    let reachedFirstRead!: () => void;
+    const firstReadStarted = new Promise<void>((resolve) => {
+      reachedFirstRead = resolve;
+    });
+    mockListExecutionReviewItems.mockImplementationOnce(() => {
+      reachedFirstRead();
+      return new Promise<ReturnType<typeof accountReviewRead>>((resolve) => {
+        releaseFirstRead = resolve;
+      });
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await firstReadStarted;
+    });
+    expect(await listPendingWritesActual("review")).toHaveLength(0);
+
+    await settledReconnect([]);
+    expect(closedDayTiers().journalled).toContain(day);
+    await act(async () => {
+      releaseFirstRead(accountReviewRead());
+    });
+    await settleJournalReads(0);
+    expect(closedDayTiers().journalled).toContain(day);
+
+    await settledReconnect([day]);
+    expect(closedDayTiers().account).toContain(day);
+    expect(closedDayTiers().journalled).not.toContain(day);
+    expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("W7-10: an older incomplete read cannot overwrite a newer confirming read", async () => {
+    await mountWithUndeliveredClose();
+    mockSyncJournaledReviewEntry
+      .mockReset()
+      .mockResolvedValue({ provider: "supabase" });
+    let releaseOldRead!: (value: ReturnType<typeof accountReviewRead>) => void;
+    let reachedOldRead!: () => void;
+    const oldReadStarted = new Promise<void>((resolve) => {
+      reachedOldRead = resolve;
+    });
+    mockListExecutionReviewItems.mockImplementationOnce(() => {
+      reachedOldRead();
+      return new Promise<ReturnType<typeof accountReviewRead>>((resolve) => {
+        releaseOldRead = resolve;
+      });
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await oldReadStarted;
+    });
+    await settledReconnect([day]);
+    expect(closedDayTiers().account).toContain(day);
+    expect(closedDayTiers().journalled).not.toContain(day);
+
+    await act(async () => {
+      releaseOldRead(accountReviewRead());
+    });
+    await settleJournalReads(0);
+    expect(closedDayTiers().account).toContain(day);
+    expect(closedDayTiers().journalled).not.toContain(day);
+  });
+
+  it("W7-10: partial confirmation releases only the confirmed day", async () => {
+    const otherDay = "2026-09-05";
+    await mountWithUndeliveredClose([otherDay]);
+    mockSyncJournaledReviewEntry
+      .mockReset()
+      .mockResolvedValue({ provider: "supabase" });
+    await settledReconnect([day]);
+    expect(await listPendingWritesActual("review")).toHaveLength(0);
+    expect(closedDayTiers().account).toContain(day);
+    expect(closedDayTiers().journalled).not.toContain(day);
+    expect(closedDayTiers().journalled).toContain(otherDay);
+
+    await settledReconnect([day]);
+    expect(closedDayTiers().journalled).toContain(otherDay);
+    await settledReconnect([day, otherDay]);
+    expect(closedDayTiers().journalled).not.toContain(otherDay);
+    expect(closedDayTiers().account).toContain(otherDay);
+    expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["before replay", "failed replay"])(
+    "W7-16: A does not retain an unowned close delivered by B after %s",
+    async (switchPoint) => {
+      setDeviceAccount(null);
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+      expect(
+        (await listPendingWritesActual("review"))[0]?.owner_user_id,
+      ).toBeUndefined();
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      mockSyncJournaledReviewEntry.mockRejectedValue(
+        new TypeError("Failed to fetch"),
+      );
+      let releaseSnapshot!: () => void;
+      let snapshotStarted!: () => void;
+      const snapshotReached = new Promise<void>((resolve) => {
+        snapshotStarted = resolve;
+      });
+      if (switchPoint === "before replay") {
+        const hold = new Promise<void>((resolve) => {
+          releaseSnapshot = resolve;
+        });
+        let held = false;
+        mockListPendingWrites.mockImplementation(async (entity) => {
+          const pending = await listPendingWritesActual(entity);
+          if (entity === "review" && !held) {
+            held = true;
+            snapshotStarted();
+            await hold;
+          }
+          return pending;
+        });
+      }
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      if (switchPoint === "before replay") {
+        await act(async () => {
+          await snapshotReached;
+        });
+        expect(mockSyncJournaledReviewEntry).not.toHaveBeenCalled();
+      } else {
+        await waitFor(() =>
+          expect(
+            screen.getByTestId("areas-readback-settled"),
+          ).toHaveTextContent("true"),
+        );
+        expect(mockSyncJournaledReviewEntry).toHaveBeenCalled();
+      }
+      expect(closedDayTiers().journalled).toContain(day);
+      expect(
+        (await listPendingWritesActual("review"))[0]?.owner_user_id,
+      ).toBeUndefined();
+
+      const otherUser = "77777777-7777-4777-8777-777777777777";
+      async function changeOwner(userId: string) {
+        const readsBefore = mockListPendingWrites.mock.results.length;
+        // B has no areas. Its successful read must not return an A-owned row.
+        mockListAreas.mockResolvedValue({
+          provider: "supabase",
+          areas: userId === PERSISTED_AREA.user_id ? [PERSISTED_AREA] : [],
+        });
+        mockGetUser.mockResolvedValue({
+          data: { user: { id: userId } },
+          error: null,
+        });
+        await act(async () => {
+          authListener.callback?.("USER_UPDATED", { user: { id: userId } });
+        });
+        await settleJournalReads(readsBefore);
+      }
+      await changeOwner(otherUser);
+      if (switchPoint === "before replay") {
+        await act(async () => {
+          releaseSnapshot();
+        });
+        await waitFor(() =>
+          expect(
+            screen.getByTestId("areas-readback-settled"),
+          ).toHaveTextContent("true"),
+        );
+      }
+      mockSyncJournaledReviewEntry
+        .mockReset()
+        .mockResolvedValue({ provider: "supabase", userId: otherUser });
+      const bRead = accountReviewRead([day]);
+      bRead.reviewEntries = bRead.reviewEntries.map((entry) => ({
+        ...entry,
+        user_id: otherUser,
+      }));
+      mockListExecutionReviewItems.mockResolvedValue(bRead);
+      const bReads = mockListPendingWrites.mock.results.length;
+      fireEvent.click(screen.getByText("Retry pending writes"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "1",
+        ),
+      );
+      await settleJournalReads(bReads);
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+      expect(await listPendingWritesActual("review")).toHaveLength(0);
+      expect(closedDayTiers().account).toContain(day);
+
+      mockListExecutionReviewItems.mockResolvedValue(accountReviewRead());
+      await changeOwner(PERSISTED_AREA.user_id);
+      fireEvent.click(screen.getByText("Retry pending writes"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "2",
+        ),
+      );
+      await settleJournalReads(0);
+      expect(closedDayTiers().account).not.toContain(day);
+      expect(closedDayTiers().journalled).not.toContain(day);
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["A", "B"])(
+    "W7-16: a delayed receipt belongs to %s after the visible account changes to B",
+    async (deliveredTo) => {
+      setDeviceAccount(null);
+      await journalReviewWrite({
+        workflowAreaId: null,
+        persistedAreaId: null,
+        reviewType: "daily",
+        periodStart: day,
+        periodEnd: day,
+        summaryJson: {},
+      });
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        areas: [PERSISTED_AREA],
+      });
+      let acknowledge!: (value: {
+        provider: "supabase";
+        userId: string;
+      }) => void;
+      mockSyncJournaledReviewEntry.mockReturnValue(
+        new Promise((resolve) => {
+          acknowledge = resolve;
+        }),
+      );
+      render(
+        <WorkflowProvider>
+          <Harness />
+        </WorkflowProvider>,
+      );
+      await waitFor(() =>
+        expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1),
+      );
+      expect(
+        (await listPendingWritesActual("review"))[0]?.owner_user_id,
+      ).toBeUndefined();
+      const otherUser = "77777777-7777-4777-8777-777777777777";
+      async function changeOwner(userId: string) {
+        const readsBefore = mockListPendingWrites.mock.results.length;
+        // B has no areas. Its successful read must not return an A-owned row.
+        mockListAreas.mockResolvedValue({
+          provider: "supabase",
+          areas: userId === PERSISTED_AREA.user_id ? [PERSISTED_AREA] : [],
+        });
+        mockGetUser.mockResolvedValue({
+          data: { user: { id: userId } },
+          error: null,
+        });
+        await act(async () => {
+          authListener.callback?.("USER_UPDATED", { user: { id: userId } });
+        });
+        await settleJournalReads(readsBefore);
+      }
+      await changeOwner(otherUser);
+      const receiptOwner =
+        deliveredTo === "A" ? PERSISTED_AREA.user_id : otherUser;
+      await act(async () => {
+        acknowledge({ provider: "supabase", userId: receiptOwner });
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId("areas-readback-settled")).toHaveTextContent(
+          "true",
+        ),
+      );
+      expect(await listPendingWritesActual("review")).toHaveLength(0);
+
+      fireEvent.click(screen.getByText("Retry pending writes"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "1",
+        ),
+      );
+      await settleJournalReads(0);
+      expect(closedDayTiers().account).not.toContain(day);
+      expect(closedDayTiers().journalled?.includes(day)).toBe(
+        deliveredTo === "B",
+      );
+      await changeOwner(PERSISTED_AREA.user_id);
+      fireEvent.click(screen.getByText("Retry pending writes"));
+      await waitFor(() =>
+        expect(screen.getByTestId("retry-settled-count")).toHaveTextContent(
+          "2",
+        ),
+      );
+      await settleJournalReads(0);
+      expect(closedDayTiers().account).not.toContain(day);
+      expect(closedDayTiers().journalled?.includes(day)).toBe(
+        deliveredTo === "A",
+      );
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([false, true])(
+    "W7-10: owner refreshes hide another account's retained day and restore its owner's obligation (same-owner event: %s)",
+    async (repeatSameOwnerEvent) => {
+      await mountWithUndeliveredClose();
+      mockSyncJournaledReviewEntry
+        .mockReset()
+        .mockResolvedValue({ provider: "supabase" });
+      await settledReconnect([]);
+      const otherUser = "77777777-7777-4777-8777-777777777777";
+      async function changeVisibleOwner(userId: string, repeatEvent = false) {
+        const readsBefore = mockListPendingWrites.mock.results.length;
+        mockGetUser.mockResolvedValue({
+          data: { user: { id: userId } },
+          error: null,
+        });
+        let releaseVisibility!: () => void;
+        if (repeatEvent) {
+          const hold = new Promise<void>((resolve) => {
+            releaseVisibility = resolve;
+          });
+          mockListPendingWrites.mockImplementationOnce(async (entity) => {
+            const pending = await listPendingWritesActual(entity);
+            await hold;
+            return pending;
+          });
+        }
+        await act(async () => {
+          // This auth event changes device visibility without starting an
+          // unrelated account hydration. It exercises the refresh bypass.
+          authListener.callback?.("USER_UPDATED", { user: { id: userId } });
+        });
+        if (repeatEvent) {
+          await act(async () => {
+            authListener.callback?.("USER_UPDATED", { user: { id: userId } });
+            releaseVisibility();
+          });
+        }
+        await settleJournalReads(readsBefore);
+      }
+      await changeVisibleOwner(otherUser);
+      expect(closedDayTiers().journalled).not.toContain(day);
+      await changeVisibleOwner(PERSISTED_AREA.user_id, repeatSameOwnerEvent);
+      expect(closedDayTiers().journalled).toContain(day);
+      expect(closedDayTiers().account).not.toContain(day);
+      await settledReconnect([day]);
+      expect(closedDayTiers().account).toContain(day);
+      expect(closedDayTiers().journalled).not.toContain(day);
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1);
+    },
+  );
 });

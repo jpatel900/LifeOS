@@ -66,6 +66,13 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
     syncPersistedWorkflowRows,
   } = deps;
 
+  // W3-16 #9: monotonically increasing request id. Each request takes the
+  // next id; dismissing bumps it too, so a dismissed request can never match.
+  // `phase` + `taskId` alone cannot tell two requests for the SAME task
+  // apart (dismiss, then ask again). Kept in a ref, not in TaskMapDraftState,
+  // so the draft shapes consumers read stay unchanged.
+  const latestRequestIdRef = useRef(0);
+
   // Map writes replace the whole graph. Keep account writes in user-action
   // order, while applying every optimistic edit immediately. Receipts alone
   // cannot prevent a slower older request from overwriting a newer saved graph.
@@ -123,6 +130,8 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
         options?.revisionSignals && options.revisionSignals.length > 0
           ? ("revision" as const)
           : undefined;
+
+      const requestId = ++latestRequestIdRef.current;
 
       const setDraft = (next: TaskMapDraftState) => {
         taskMapDraftRef.current = next;
@@ -208,8 +217,10 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
             : null,
       });
 
-      // Ignore a stale response if the focused task changed mid-flight.
+      // Ignore a stale response: this request was dismissed or superseded by
+      // a newer one (even for the same task), or the focused task changed.
       if (
+        requestId !== latestRequestIdRef.current ||
         taskMapDraftRef.current.phase !== "pending" ||
         taskMapDraftRef.current.taskId !== taskId
       ) {
@@ -260,6 +271,8 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
       }
     }
 
+    // Invalidate any in-flight request so its late answer cannot land.
+    latestRequestIdRef.current += 1;
     taskMapDraftRef.current = { phase: "idle" };
     setTaskMapDraft({ phase: "idle" });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see note above
