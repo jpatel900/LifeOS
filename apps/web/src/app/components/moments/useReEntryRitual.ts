@@ -48,6 +48,7 @@ export interface UseReEntryRitualInput {
   workflowAreaIdByPersistedId?: Readonly<Record<string, string>>;
 }
 export interface UseReEntryRitualResult {
+  visitorId: string | null;
   status: ReEntryRitualStatus;
   summary: WhileYouWereOutSummary | null;
   plan: ReEntryDeferralPlan | null;
@@ -244,7 +245,7 @@ export function useReEntryRitual(
         openedAt: attempted.openedAt,
         userId: client ? attempted.scope : undefined,
       });
-      recorder.current.recordIfNeeded(client, now);
+      recorder.current.recordIfNeeded(client, now, attempted.scope);
       if (!client) {
         setStatus("ready");
         return;
@@ -374,6 +375,7 @@ export function useReEntryRitual(
     [save],
   );
   return {
+    visitorId: client ? identity.userId : null,
     status: current && available ? status : "idle",
     summary: current?.summary ?? null,
     plan: current?.plan ?? null,
