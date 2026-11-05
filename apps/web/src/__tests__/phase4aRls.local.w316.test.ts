@@ -18,7 +18,6 @@ import {
   createLocalClient as createHarnessClient,
   psql as runLocalSql,
   startLockHolder,
-  expectKnownExportCap,
   expectKnownSessionReplay,
 } from "@/testing/w316DatabaseHarness";
 
@@ -156,9 +155,11 @@ describeLocalRls("W3-16 #3: full export above the API row cap", () => {
       expect(
         (exported.tables.areas as Array<{ id: string }>).map((row) => row.id),
       ).toContain(areaId);
-      // KNOWN BUG (W3-16 #3): one unpaginated select per table returns at
-      // most `max_rows` rows, so the export silently drops the rest.
-      expectKnownExportCap(titles, expectedTitles, titlePrefix);
+      // W3-16 #3: the export pages past the API's `max_rows` cap, so every
+      // row comes through, exactly once.
+      expect(
+        titles.filter((title) => title.startsWith(titlePrefix)),
+      ).toHaveLength(cap + 1);
     } finally {
       await client.from("tasks").delete().like("title", `${titlePrefix}%`);
       await client.from("areas").delete().eq("id", areaId);

@@ -19,6 +19,8 @@ import {
 import type { ApprovedRollupSummary } from "./review/approvedRollups";
 import {
   acceptDraft,
+  addWorkflowArea,
+  updateWorkflowAreaColor,
   acceptProposal,
   backlogDraft,
   carryForwardTask,
@@ -131,7 +133,7 @@ import {
   loadStoredStateFromSession,
   mergePersistedCalendarBlocks,
   NIL_UUID,
-  persistedAreaIdForWorkflowId,
+  persistedAreaIdForWorkflowId as findPersistedAreaIdForWorkflowId,
   persistedIdForLocalId,
   workflowIdForPersistedId,
   isSignedOutError,
@@ -151,6 +153,17 @@ import {
   type AccountIdAliasFamily,
 } from "./workflow/shared";
 import { createApplyWorkflowState } from "./workflowContext/applyWorkflowState";
+import {
+  hasSnapshotWork,
+  acceptsSnapshotRead,
+  snapshotCursor,
+  snapshotReceipt,
+  snapshotAreaId,
+  acknowledgeSnapshot,
+  trackSnapshotChanges,
+  restoreSnapshotChanges,
+} from "./workflowContext/snapshotOwnership";
+import { createOrderedWrites } from "./workflowContext/orderedWrites";
 import {
   createPersistenceSync,
   type PersistenceSyncOps,
@@ -257,7 +270,7 @@ function derivePendingSaveFailureAggregate(pending: PendingWrite[]): {
 const WorkflowContext = createContext<WorkflowContextValue | null>(null);
 
 export function WorkflowProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(
+  const [state, dispatchReducer] = useReducer(
     workflowReducer,
     undefined,
     createSyncedInitialState,
@@ -304,8 +317,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   //  - ACCOUNT: `period_start` of every daily `review_entries` row loaded for
   //    this user. Outlives the device; this is what a second machine sees.
   //  - DEVICE: `period_start` of every daily review still sitting in the
-  //    pending-write journal. Durable (IndexedDB survives a reload and is
-  //    visible to a new tab) but the account does not have it yet.
+  //    pending-write journal, plus delivered days awaiting confirmation in
+  //    this provider. Queued rows survive reload through IndexedDB; the
+  //    delivered-but-unconfirmed obligations below last for this mount.
   //
   // Provider state rather than reducer state on purpose: both are FETCHED
   // (one from Supabase, one from IndexedDB), the same tier as
@@ -315,6 +329,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [journalledClosedDays, setJournalledClosedDays] = useState<string[]>(
     [],
   );
+  // Delivery removes the journal row before account readback can confirm
+  // it. Retain that obligation across reconnects for this provider's life,
+  // partitioned by owner so an account change only changes visibility.
+  const unconfirmedClosedDaysRef = useRef(new Map<string, Set<string>>());
+  const reviewReadbackGenerationRef = useRef(0);
   // #737 C1 re-score GAP 1 — the same two tiers, for the same reason, one
   // question over: "has this win already been logged?". Before these, the
   // Close moment answered it from React state initialised empty on every
@@ -365,7 +384,44 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const activeParseCaptureIdRef = useRef<string | null>(null);
   const stateRef = useRef(state);
+  const areaWrites = useRef(createOrderedWrites()).current;
+  const persistedAreaIdForWorkflowId = useCallback(
+    (areaId: string, areas: Area[]) =>
+      findPersistedAreaIdForWorkflowId(
+        snapshotAreaId(stateRef.current, areaId),
+        areas,
+      ),
+    [],
+  );
+  // One synchronous owner for domain mutations, aliases and delivery receipts.
+  // A later local apply in the same batch must see earlier bookkeeping too.
+  const dispatch = useCallback(
+    (action: Parameters<typeof workflowReducer>[1]) => {
+      const next = workflowReducer(stateRef.current, action);
+      stateRef.current = next;
+      dispatchReducer({ type: "hydrate", state: next });
+    },
+    [],
+  );
   const persistedAreasRef = useRef<Area[]>([]);
+  // A successful empty read is useful evidence only for the account and
+  // generation that started it. Object identity also rejects A -> B -> A.
+  const areaAccountRef = useRef<{ account: DeviceAccount }>({
+    account: undefined,
+  });
+  const knownAreaAccountRef = useRef<typeof areaAccountRef.current | null>(
+    null,
+  );
+  const accountSyncRequestedRef = useRef(false);
+  // Reconnect can discover an account before its auth event. Only an applied
+  // area and workflow read for that owner releases its queued writes.
+  const reconnectHydrationOwnerRef = useRef<string | null>(null);
+  const observeAreaAccount = useCallback((account: DeviceAccount) => {
+    if (areaAccountRef.current.account === account) return false;
+    areaAccountRef.current = { account };
+    knownAreaAccountRef.current = null;
+    return true;
+  }, []);
   const persistedCaptureIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedTaskIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedProposalIdByLocalIdRef = useRef(new Map<string, string>());
@@ -412,6 +468,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // Without this a second concurrent run could read `persistedAreasRef`
   // mid-write from the first.
   const accountSyncInFlightRef = useRef(false);
+  const snapshotIdentityRef = useRef<{
+    userId: string | null | undefined;
+    generation: number;
+  }>({ userId: undefined, generation: 0 });
   const accountSyncCompletionRef = useRef<Promise<void>>(Promise.resolve());
   const manualAccountRetryRef = useRef<Promise<void> | null>(null);
   // #967 follow-up review, finding 1: every read that can set
@@ -556,49 +616,144 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     stateRef.current = state;
   }, [state]);
 
-  const applyPersistedAreas = useCallback((areas: Area[]) => {
-    persistedAreasRef.current = areas;
-    // The reactive twin of the ref above, set in the same beat so the two can
-    // never disagree. Consumers that must RECOMPUTE when areas land (the
-    // rollup suppression key) read this; everything that only needs the value
-    // synchronously inside a callback keeps reading the ref.
-    setWorkflowAreaIdByPersistedId(
-      Object.fromEntries(
-        areas.map((area) => [area.id, workflowAreaIdForPersistedArea(area)]),
-      ),
-    );
-    const syncedAreas = areas.map((area) => ({
-      id: workflowAreaIdForPersistedArea(area),
-      user_id: area.user_id,
-      name: area.name,
-      color: area.color ?? "#64748b",
-      created_at: area.created_at,
-    }));
-
-    dispatch({ type: "syncAreas", areas: syncedAreas });
-    setSelectedAreaId((current) => {
-      // #691: `null` is the user's explicit All-areas choice, not a missing
-      // value — an area sync must never stomp it back to the first area.
-      if (current === null) {
+  const beginAccountSnapshotRead = useCallback(
+    async (
+      client: MinimalSupabaseClient,
+      onIdentity?: (account: string | null) => void,
+    ) => {
+      const generation = snapshotIdentityRef.current.generation;
+      const authGeneration = deviceIdentityGenerationRef.current;
+      const identity = await client.auth?.getUser();
+      if (authGeneration !== deviceIdentityGenerationRef.current) {
+        // A newer auth event supersedes even a same-account getUser result.
+        if (onIdentity && mountedRef.current)
+          accountSyncRequestedRef.current = true;
         return null;
       }
-      if (syncedAreas.some((area) => area.id === current)) {
-        return current;
+      if (
+        !mountedRef.current ||
+        generation !== snapshotIdentityRef.current.generation
+      )
+        return null;
+      if (identity?.error) throw new Error(identity.error.message);
+      const userId = identity?.data.user?.id;
+      if (client.auth) onIdentity?.(userId ?? null);
+      if (client.auth && !userId) {
+        markSignedOutLocal();
+        return null;
       }
-      // C2-S8 (#687 finding 1): this reconcile can run long after mount (it
-      // fires whenever the account's real areas arrive from Supabase, an
-      // async fetch) — if the account's area list no longer includes the id
-      // the URL was naming (a stale/shared link, or the area itself was
-      // renamed/removed since), the selection is about to move away from
-      // `current`. Left alone, the address bar would keep claiming `current`
-      // even though the screen no longer shows it. No special-casing needed
-      // HERE for that: the URL-sync effect below (gated on
-      // `hasHydratedFromStorage`, reactive to every `selectedAreaId` change)
-      // is the one place that keeps `?area=` truthful regardless of WHY the
-      // selection moved — this reconcile just needs to change the state.
-      return syncedAreas[0]?.id ?? null;
-    });
-  }, []);
+      if (userId) {
+        if (snapshotIdentityRef.current.userId !== userId) {
+          snapshotIdentityRef.current = { userId, generation: generation + 1 };
+        }
+        const epoch = snapshotCursor(stateRef.current).epoch;
+        dispatch({ type: "bindSnapshotAccount", userId });
+        if (snapshotCursor(stateRef.current).epoch !== epoch) {
+          persistedAreasRef.current = [];
+          setWorkflowAreaIdByPersistedId({});
+          setAccountClosedDays([]);
+          setAccountLoggedWins([]);
+          setOverrideRecords([]);
+          setDurationProfiles([]);
+          setDecidedPolicyKeys(new Set());
+          const refs = {
+            captures: persistedCaptureIdByLocalIdRef,
+            tasks: persistedTaskIdByLocalIdRef,
+            proposals: persistedProposalIdByLocalIdRef,
+            blocks: persistedBlockIdByLocalIdRef,
+            sessions: persistedSessionIdByLocalIdRef,
+          };
+          for (const [family, ref] of Object.entries(refs))
+            ref.current = new Map(
+              Object.entries(
+                stateRef.current.accountIdByLocalId[
+                  family as AccountIdAliasFamily
+                ] ?? {},
+              ),
+            );
+        }
+      }
+      return {
+        cursor: snapshotCursor(stateRef.current),
+        userId,
+        generation: snapshotIdentityRef.current.generation,
+      };
+    },
+    [dispatch, markSignedOutLocal],
+  );
+
+  const accountSnapshotReadIsCurrent = useCallback(
+    (read: { cursor: ReturnType<typeof snapshotCursor>; generation: number }) =>
+      mountedRef.current &&
+      read.generation === snapshotIdentityRef.current.generation &&
+      read.cursor.epoch === snapshotCursor(stateRef.current).epoch,
+    [],
+  );
+
+  const applyPersistedAreas = useCallback(
+    (
+      areas: Area[],
+      cursor = snapshotCursor(stateRef.current),
+      readUserId = stateRef.current.snapshotOwnership?.userId,
+    ) => {
+      if (
+        !acceptsSnapshotRead(stateRef.current, "areas", cursor) ||
+        (readUserId && areas.some((area) => area.user_id !== readUserId))
+      )
+        return false;
+      persistedAreasRef.current = areas;
+      // The reactive twin of the ref above, set in the same beat so the two can
+      // never disagree. Consumers that must RECOMPUTE when areas land (the
+      // rollup suppression key) read this; everything that only needs the value
+      // synchronously inside a callback keeps reading the ref.
+      setWorkflowAreaIdByPersistedId(
+        Object.fromEntries(
+          areas.map((area) => [area.id, workflowAreaIdForPersistedArea(area)]),
+        ),
+      );
+      const syncedAreas = areas.map((area) => ({
+        id: workflowAreaIdForPersistedArea(area),
+        user_id: area.user_id,
+        name: area.name,
+        color: area.color ?? "#64748b",
+        created_at: area.created_at,
+      }));
+
+      const merged = workflowReducer(stateRef.current, {
+        type: "syncAreas",
+        areas: syncedAreas,
+        cursor,
+        readUserId,
+      });
+      dispatch({ type: "syncAreas", areas: syncedAreas, cursor, readUserId });
+      setSelectedAreaId((current) => {
+        // #691: `null` is the user's explicit All-areas choice, not a missing
+        // value — an area sync must never stomp it back to the first area.
+        if (current === null) {
+          return null;
+        }
+        if (merged.areas.some((area) => area.id === current)) {
+          return current;
+        }
+        const deliveredId = snapshotAreaId(merged, current);
+        if (merged.areas.some((area) => area.id === deliveredId))
+          return deliveredId;
+        // C2-S8 (#687 finding 1): this reconcile can run long after mount (it
+        // fires whenever the account's real areas arrive from Supabase, an
+        // async fetch) — if the account's area list no longer includes the id
+        // the URL was naming (a stale/shared link, or the area itself was
+        // renamed/removed since), the selection is about to move away from
+        // `current`. Left alone, the address bar would keep claiming `current`
+        // even though the screen no longer shows it. No special-casing needed
+        // HERE for that: the URL-sync effect below (gated on
+        // `hasHydratedFromStorage`, reactive to every `selectedAreaId` change)
+        // is the one place that keeps `?area=` truthful regardless of WHY the
+        // selection moved — this reconcile just needs to change the state.
+        return syncedAreas[0]?.id ?? null;
+      });
+    },
+    [dispatch],
+  );
 
   // #844 AGENT-TODO 2: the MAP, not its key-set. The reducer retires a local
   // row only when the mapped twin is present in the payload, so these
@@ -632,7 +787,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       refByFamily[family].current.set(localId, accountId);
       dispatch({ type: "recordAccountId", family, localId, accountId });
     },
-    [],
+    [dispatch],
   );
 
   // FR-027 (F-G1a): refresh the unsynced-count signal from the device queue.
@@ -648,44 +803,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  /**
-   * #737 C1 S5 — THE MISSING HALF OF `pendingLocalChanges`, flagged on #736.
-   *
-   * Nine call sites set this flag to `true`; not one ever set it back. So the
-   * moment anything went local-only — a signed-out session, one flaky save —
-   * every surface reading it was pinned to "some of your work is on this
-   * device" for the rest of the page's life, including long after the work had
-   * reached the account. #736's masthead indicator was built on that flag,
-   * which is why it could not be trusted and why S5 rebuilds it.
-   *
-   * ## What makes the recomputation honest rather than merely convenient
-   *
-   * The flag means "there is work on this device the account does not have".
-   * The queues answer that directly: the pending-writes journal and the
-   * offline capture queue hold exactly the writes still owed to the account.
-   *
-   * What the queues do NOT hold are the writes with no server destination at
-   * all — a proposal edit, a first-move edit, an approved task map, a draft
-   * edit with no accept, a WIP swap. Those also set the flag, and clearing it
-   * on an empty queue while one of them was outstanding would be a new
-   * falsehood in place of the old one.
-   *
-   * They are not outstanding here, and the reason is the CALLER, not this
-   * function: this runs only after a drain or a completed
-   * `syncPersistedWorkflowRows`, and that sync re-reads the account and
-   * reconciles local state against it. Anything the account lacked and could
-   * never receive has been overwritten by the account's own row by the time
-   * this runs — it is no longer on the device to be reported. So after a full
-   * sync, "work the account does not have" IS "work still queued".
-   *
-   * That is also why this is deliberately NOT called from anywhere else. Run
-   * mid-session, off the back of no sync, it would clear the flag over exactly
-   * the unsendable writes the paragraph above rules out.
-   *
-   * Best-effort on read failure: the flag is left exactly as it was rather
-   * than being cleared on a guess.
-   */
+  // Queues own journalled writes; the reducer owns memory-only work. Neither
+  // an empty queue nor an account refresh is a receipt for unrelated edits.
+  const pendingReadGenerationRef = useRef(0);
   const refreshPendingLocalChanges = useCallback(async () => {
+    const generation = ++pendingReadGenerationRef.current;
+    const cursor = snapshotCursor(stateRef.current);
     let queued: number;
     try {
       // W3-16 #1: only this account's own (or unowned) device-held work.
@@ -699,10 +822,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // The provider that started this read may already be unmounted by the
     // time it resolves (see the jsdom-teardown race note by `mountedRef`
     // above) — do no work rather than call a state setter into nothing.
-    if (!mountedRef.current) return;
+    const latest = snapshotCursor(stateRef.current);
+    if (
+      !mountedRef.current ||
+      generation !== pendingReadGenerationRef.current ||
+      cursor.epoch !== latest.epoch ||
+      cursor.revision !== latest.revision
+    )
+      return;
 
     setSyncStatus((current) => {
-      const pendingLocalChanges = queued > 0;
+      const pendingLocalChanges =
+        queued > 0 || hasSnapshotWork(stateRef.current);
       if (current.pendingLocalChanges === pendingLocalChanges) return current;
       return {
         ...current,
@@ -720,6 +851,17 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  useEffect(() => {
+    if (hasSnapshotWork(state)) {
+      setSyncStatus((current) =>
+        current.pendingLocalChanges
+          ? current
+          : { ...current, pendingLocalChanges: true },
+      );
+    }
+    void refreshPendingLocalChanges();
+  }, [state, refreshPendingLocalChanges]);
+
   const syncPersistedWorkflowRows = useCallback(
     async (
       client: MinimalSupabaseClient | null,
@@ -734,9 +876,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
         return;
       }
-      if (!areas.length) {
-        return;
-      }
+      const read = await beginAccountSnapshotRead(client);
+      if (!read) return;
+      areas = areas.filter(
+        (area) => !read.userId || area.user_id === read.userId,
+      );
 
       /**
        * #840 follow-up — THE DROP-SET IS SNAPSHOT BEFORE THE READS, NOT AFTER.
@@ -767,6 +911,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
        * it documents the invariant and costs nothing.
        */
       const idAliases = buildIdAliasSnapshot();
+      const cursor = read.cursor;
 
       const [capturesResult, planningResult, executionResult] =
         await Promise.all([
@@ -779,7 +924,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // unmounted during this read must not dispatch, touch state below, or
       // start the four further un-awaited reads (`listWinRecords` and
       // siblings) that follow later in this function.
-      if (!mountedRef.current) return;
+      if (!accountSnapshotReadIsCurrent(read)) return;
 
       if (
         capturesResult.provider !== "supabase" ||
@@ -792,6 +937,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
       dispatch({
         type: "syncPersistedWorkflow",
+        cursor,
+        readUserId: read.userId,
         payload: {
           captures: capturesResult.captures.map((capture) =>
             toWorkflowCapture(capture, areas),
@@ -815,6 +962,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           idAliases,
         },
       });
+      if (
+        options?.preserveLocalOnlyWhilePending &&
+        read.userId &&
+        reconnectHydrationOwnerRef.current === read.userId &&
+        knownAreaAccountRef.current === areaAccountRef.current &&
+        areaAccountRef.current.account === read.userId
+      ) {
+        reconnectHydrationOwnerRef.current = null;
+      }
       // Audit P0#4: `reviewEntryLine` flattens each row to a display string,
       // so the reviewLog above cannot answer "is today closed?". The dates are
       // kept structured here instead — the account tier of that answer.
@@ -824,9 +980,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           .map((entry) => entry.period_start),
       );
       markAccountSynced(options);
-      // #737 C1 S5: the account has just been re-read and local state
-      // reconciled against it, which is the ONLY moment "still queued" and
-      // "not in the account" mean the same thing. See
+      // Reconcile queue evidence as well as reducer-owned work. See
       // `refreshPendingLocalChanges` for why it is called here and nowhere
       // else.
       void refreshPendingLocalChanges();
@@ -840,6 +994,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // row — the two halves of the fix are independent on purpose.
       void listWinRecords(client)
         .then((result) => {
+          if (!accountSnapshotReadIsCurrent(read)) return;
           if (result.provider !== "supabase") return;
           setAccountLoggedWins(
             result.winRecords
@@ -872,6 +1027,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // override read must never knock the workflow sync into local-only.
       void listOverrideRecords(client)
         .then((result) => {
+          if (!accountSnapshotReadIsCurrent(read)) return;
           if (result.provider === "supabase") {
             setOverrideRecords(result.overrideRecords);
           }
@@ -886,6 +1042,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // to raw estimates.
       void listDurationProfiles(client)
         .then((result) => {
+          if (!accountSnapshotReadIsCurrent(read)) return;
           if (result.provider === "supabase") {
             setDurationProfiles(result.durationProfiles);
           }
@@ -900,6 +1057,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // decision made this session before the load resolves is preserved.
       void listSuggestionRecords(client)
         .then((result) => {
+          if (!accountSnapshotReadIsCurrent(read)) return;
           if (result.provider !== "supabase") return;
           const decided = decidedPolicyKeysFromSuggestionRecords(
             result.suggestionRecords,
@@ -913,6 +1071,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     [
       buildIdAliasSnapshot,
+      beginAccountSnapshotRead,
+      accountSnapshotReadIsCurrent,
+      dispatch,
       markAccountSynced,
       markLocalOnly,
       refreshPendingLocalChanges,
@@ -946,9 +1107,35 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         return { synced: 0, failed: 0, skipped: 0 };
       }
 
+      const replayEpoch = snapshotCursor(stateRef.current).epoch;
+      const recordReplayAlias: typeof recordAccountAlias = (...args) => {
+        if (
+          mountedRef.current &&
+          snapshotCursor(stateRef.current).epoch === replayEpoch
+        )
+          recordAccountAlias(...args);
+      };
+
       return replayDurableWrites({
         syncWin: (args) => syncJournaledWin(client, args),
-        syncReview: (args) => syncJournaledReviewEntry(client, args),
+        syncReview: async (args) => {
+          const receipt = await syncJournaledReviewEntry(client, args);
+          // An unowned row is visible to any account until delivery. Only
+          // the server write's authenticated owner can inherit its retained
+          // confirmation obligation, including a success after switching away.
+          if (
+            mountedRef.current &&
+            receipt.provider === "supabase" &&
+            args.review_type === "daily"
+          ) {
+            const unconfirmed =
+              unconfirmedClosedDaysRef.current.get(receipt.userId) ??
+              new Set<string>();
+            unconfirmed.add(args.period_start);
+            unconfirmedClosedDaysRef.current.set(receipt.userId, unconfirmed);
+          }
+          return receipt;
+        },
         syncExecutionSession: (args) =>
           syncJournaledExecutionSession(client, args),
         // Late id resolution: a win journalled while signed out carries only its
@@ -1031,14 +1218,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         // would fall back to its local-only path.
         recordPlanPlacementIds: (payload, result) => {
           if (payload.workflow_proposal_id && result.persistedProposalId) {
-            recordAccountAlias(
+            recordReplayAlias(
               "proposals",
               String(payload.workflow_proposal_id),
               result.persistedProposalId,
             );
           }
           if (payload.workflow_block_id && result.persistedBlockId) {
-            recordAccountAlias(
+            recordReplayAlias(
               "blocks",
               String(payload.workflow_block_id),
               result.persistedBlockId,
@@ -1072,14 +1259,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         }),
         recordTaskDraftAcceptIds: (payload, result) => {
           if (result.persistedTaskId) {
-            recordAccountAlias(
+            recordReplayAlias(
               "tasks",
               String(payload.workflow_task_id),
               result.persistedTaskId,
             );
           }
           if (payload.workflow_proposal_id && result.persistedProposalId) {
-            recordAccountAlias(
+            recordReplayAlias(
               "proposals",
               String(payload.workflow_proposal_id),
               result.persistedProposalId,
@@ -1194,7 +1381,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         // only retires a local row whose alias is recorded).
         recordCaptureId: (payload, result) => {
           if (result.captureId) {
-            recordAccountAlias(
+            recordReplayAlias(
               "captures",
               payload.workflow_capture_id,
               result.captureId,
@@ -1202,10 +1389,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           }
         },
       });
-    }, [recordAccountAlias]);
+    }, [recordAccountAlias, persistedAreaIdForWorkflowId]);
 
   const applyWorkflowState = createApplyWorkflowState(stateRef, dispatch);
 
+  const persistenceEpoch = snapshotCursor(stateRef.current).epoch;
+  const persistenceStillCurrent = () =>
+    mountedRef.current &&
+    snapshotCursor(stateRef.current).epoch === persistenceEpoch;
   const persistenceOps: PersistenceSyncOps = createPersistenceSync({
     persistedAreasRef,
     persistedCaptureIdByLocalIdRef,
@@ -1214,12 +1405,32 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     persistedBlockIdByLocalIdRef,
     persistedSessionIdByLocalIdRef,
     selectedAreaId,
-    recordAccountAlias,
-    markLocalOnly,
-    markDeviceStorageBlocked,
+    resolveWorkflowAreaId: (areaId) => snapshotAreaId(stateRef.current, areaId),
+    recordAccountAlias: (...args) => {
+      if (persistenceStillCurrent()) recordAccountAlias(...args);
+    },
+    registerDraftTransfer: (draftId, taskId, proposalId) => {
+      if (persistenceStillCurrent())
+        dispatch({
+          type: "registerDraftTransfer",
+          draftId,
+          taskId,
+          proposalId,
+        });
+    },
+    markLocalOnly: (...args) => {
+      if (persistenceStillCurrent()) markLocalOnly(...args);
+    },
+    markDeviceStorageBlocked: (...args) => {
+      if (persistenceStillCurrent()) markDeviceStorageBlocked(...args);
+    },
     replayJournaledWrites,
-    markPersistedLoadFailure,
-    syncPersistedWorkflowRows,
+    markPersistedLoadFailure: (...args) => {
+      if (persistenceStillCurrent()) markPersistedLoadFailure(...args);
+    },
+    syncPersistedWorkflowRows: async (...args) => {
+      if (persistenceStillCurrent()) await syncPersistedWorkflowRows(...args);
+    },
   });
 
   // S7 (#259), made durable by #737-A slice 2. Only ever called on explicit
@@ -1302,6 +1513,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       markDeviceStorageBlocked,
       markLocalOnly,
       replayJournaledWrites,
+      persistedAreaIdForWorkflowId,
     ],
   );
 
@@ -1320,6 +1532,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     taskMapDraftRef,
     setTaskMapDraft,
     stateRef,
+    isActive: () => mountedRef.current,
     persistedAreasRef,
     persistedTaskIdByLocalIdRef,
     markLocalOnly,
@@ -1394,6 +1607,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       markDeviceStorageBlocked,
       markLocalOnly,
       replayJournaledWrites,
+      persistedAreaIdForWorkflowId,
     ],
   );
 
@@ -1483,7 +1697,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           : null,
         estimateMinutes,
       ),
-    [durationProfiles],
+    [durationProfiles, persistedAreaIdForWorkflowId],
   );
 
   // The sourced duration recalibration for a proposal in `areaId`, or null when
@@ -1504,7 +1718,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         estimateMinutes,
       );
     },
-    [state.executionSessions, durationProfiles],
+    [state.executionSessions, durationProfiles, persistedAreaIdForWorkflowId],
   );
 
   // Decide a shown recalibration. On accept it ACTS: (1) records the decision
@@ -1730,7 +1944,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     }
     setHasHydratedFromStorage(true);
-  }, []);
+  }, [dispatch]);
 
   /**
    * Audit P0#4 — read the DEVICE tier of "which days are closed" back out of
@@ -1790,23 +2004,51 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // see `pendingSaveFailedGenerationRef`'s own comment.
     const myPendingSaveFailedGeneration =
       ++pendingSaveFailedGenerationRef.current;
+    const account = getDeviceAccount();
     try {
       // W3-16 #1: another account's held work is never shown to this one.
-      const pending = visibleToAccount(await listPendingWrites());
+      const pending = visibleToAccount(await listPendingWrites(), account);
       // See `mountedRef`'s note above the ref/refs block — a provider
       // unmounted while this read was in flight must not touch state. One
       // check covers every setter below: none of them awaits between here
       // and the end of this try block.
-      if (!mountedRef.current) return;
-      setJournalledClosedDays(
-        pending
-          .filter((write) => write.entity === "review")
-          .map(
-            (write) =>
-              (write.payload as { period_start?: unknown }).period_start,
-          )
-          .filter((day): day is string => typeof day === "string"),
-      );
+      if (!mountedRef.current || account !== getDeviceAccount()) return;
+      // Keep evidence from this owner-bound read too: the narrower period
+      // snapshot before replay can fail even when this read succeeded.
+      if (typeof account === "string") {
+        const unconfirmed =
+          unconfirmedClosedDaysRef.current.get(account) ?? new Set<string>();
+        for (const write of pending) {
+          if (write.entity !== "review" || write.owner_user_id !== account)
+            continue;
+          const payload = write.payload as {
+            review_type?: unknown;
+            period_start?: unknown;
+          };
+          if (
+            payload.review_type === "daily" &&
+            typeof payload.period_start === "string"
+          ) {
+            unconfirmed.add(payload.period_start);
+          }
+        }
+        if (unconfirmed.size > 0)
+          unconfirmedClosedDaysRef.current.set(account, unconfirmed);
+      }
+      setJournalledClosedDays([
+        ...new Set([
+          ...pending
+            .filter((write) => write.entity === "review")
+            .map(
+              (write) =>
+                (write.payload as { period_start?: unknown }).period_start,
+            )
+            .filter((day): day is string => typeof day === "string"),
+          ...(typeof account === "string"
+            ? (unconfirmedClosedDaysRef.current.get(account) ?? [])
+            : []),
+        ]),
+      ]);
       // #737 C1 re-score GAP 1. Read out of the SAME `listPendingWrites()`
       // pass, and therefore on exactly the same lifecycle as the closed days
       // above (mount, after every replay drain, and on `online`). That is not
@@ -2016,8 +2258,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
    * point the caller clearing journal-derived evidence on this boolean alone
    * would leave NEITHER tier reporting the day closed. Two guards close
    * that gap:
-   *  - `expectedDailyPeriods` — the daily-review periods still pending
-   *    immediately BEFORE replay ran (the caller's snapshot) — must ALL
+   *  - `expectedDailyPeriods` — the daily-review periods pending before
+   *    replay, including earlier unconfirmed deliveries — must ALL
    *    appear in this read's own daily reviews. A read that succeeds but
    *    omits one is treated the same as a failed read.
    *  - `expectedUserId` — the authenticated user id the CALLER captured
@@ -2056,9 +2298,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       client: MinimalSupabaseClient | null,
       expectedDailyPeriods: string[],
       expectedUserId: string | null,
+      releaseDeviceEvidence: boolean,
     ): Promise<boolean> => {
       if (!client?.auth) return false;
       if (!expectedUserId) return false;
+      const readbackGeneration = ++reviewReadbackGenerationRef.current;
+      const identityGeneration = deviceIdentityGenerationRef.current;
       try {
         const result = await listExecutionReviewItems(client);
         if (!mountedRef.current) return false;
@@ -2066,7 +2311,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
         const after = await client.auth.getUser();
         const afterUserId = after.data.user?.id ?? null;
-        if (afterUserId !== expectedUserId) return false;
+        if (
+          !mountedRef.current ||
+          after.error ||
+          afterUserId !== expectedUserId ||
+          getDeviceAccount() !== expectedUserId ||
+          identityGeneration !== deviceIdentityGenerationRef.current ||
+          readbackGeneration !== reviewReadbackGenerationRef.current
+        )
+          return false;
 
         const dailyReviews = result.reviewEntries.filter(
           (entry) => entry.review_type === "daily",
@@ -2077,15 +2330,283 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
         const dailyClosedDays = dailyReviews.map((entry) => entry.period_start);
         setAccountClosedDays(dailyClosedDays);
-
-        return expectedDailyPeriods.every((period) =>
+        const allExpectedDaysConfirmed = expectedDailyPeriods.every((period) =>
           dailyClosedDays.includes(period),
         );
+
+        // A partial read releases only the periods it actually confirms.
+        // Never clear the shared set from this pass's older snapshot: another
+        // reconnect may have added an obligation while this read was pending.
+        const unconfirmed =
+          unconfirmedClosedDaysRef.current.get(expectedUserId);
+        const confirmed = new Set(
+          dailyClosedDays.filter((day) => unconfirmed?.has(day)),
+        );
+        if (releaseDeviceEvidence && unconfirmed && confirmed.size > 0) {
+          for (const day of confirmed) unconfirmed.delete(day);
+          if (unconfirmed.size === 0)
+            unconfirmedClosedDaysRef.current.delete(expectedUserId);
+          // Full confirmation keeps the existing overlap until the normal
+          // journal refresh settles. Partial confirmation cannot wait for
+          // that all-period gate, so transfer just its confirmed periods.
+          if (!allExpectedDaysConfirmed) {
+            setJournalledClosedDays((days) =>
+              days.filter((day) => !confirmed.has(day)),
+            );
+          }
+        }
+
+        return allExpectedDaysConfirmed;
       } catch {
         return false;
       }
     },
     [],
+  );
+
+  // Owner changes must reveal retained device evidence even while offline.
+  // Same-owner events do not need another device visibility refresh.
+  const adoptDeviceAccount = useCallback(
+    (account: DeviceAccount) => {
+      if (getDeviceAccount() === account) return;
+      setDeviceAccount(account);
+      deviceVisibilityRefreshRef.current = Promise.all([
+        refreshUnsyncedCount(),
+        refreshJournalledDurableState(),
+      ]).then(() => undefined);
+    },
+    [refreshUnsyncedCount, refreshJournalledDurableState],
+  );
+
+  // W3-16 #4: the replay -> account readback -> device-evidence release
+  // sequence, moved out of `runAccountSync` unchanged so the reconnect
+  // (`online`) path can run the SAME sequence instead of releasing device
+  // evidence the account never confirmed. Every comment below is from its
+  // original home; "this pass" means one call of this function.
+  const replayAndReleaseJournal = useCallback(
+    async (
+      client: MinimalSupabaseClient,
+      hydrationRead?: {
+        cursor: ReturnType<typeof snapshotCursor>;
+        generation: number;
+        userId?: string | null;
+      },
+    ): Promise<"resync" | void> => {
+      const read = hydrationRead ?? {
+        cursor: snapshotCursor(stateRef.current),
+        generation: snapshotIdentityRef.current.generation,
+        userId: snapshotIdentityRef.current.userId,
+      };
+      // #967 follow-up review, finding 1: the identity this pass is
+      // accountable to, captured BEFORE the pending-period snapshot and
+      // replay even start — see `readbackAccountReviewClosedDays`'s own
+      // comment for why capturing it any later cannot detect a session
+      // change that happens during replay itself.
+      let expectedUserId: string | null = null;
+      try {
+        const identityGeneration = deviceIdentityGenerationRef.current;
+        const currentUser = await client.auth?.getUser();
+        if (!accountSnapshotReadIsCurrent(read)) return;
+        expectedUserId = currentUser?.data.user?.id ?? null;
+        // W3-16 #1: the replay below sends only this account's own
+        // device-held work (see `durability/deviceAccount.ts`). Only a
+        // clean answer moves it: supabase-js reports a network or
+        // auth-server failure as `{ user: null, error }`, which means
+        // "not known", never "signed out".
+        // An auth event or provider cleanup supersedes this read,
+        // even if it eventually returns a clean but older identity.
+        if (
+          currentUser &&
+          !currentUser.error &&
+          identityGeneration === deviceIdentityGenerationRef.current
+        ) {
+          if (read.userId && read.userId !== expectedUserId) {
+            // The session changed without an auth event. Invalidate A before
+            // scheduling the new account area/workflow read; never replay on the stale pass.
+            reconnectHydrationOwnerRef.current = expectedUserId;
+            observeAreaAccount(expectedUserId);
+            adoptDeviceAccount(expectedUserId);
+            snapshotIdentityRef.current = {
+              userId: expectedUserId,
+              generation: read.generation + 1,
+            };
+            return "resync";
+          }
+          adoptDeviceAccount(expectedUserId);
+        } else if (hydrationRead?.userId) return;
+      } catch {
+        if (hydrationRead?.userId) return;
+        expectedUserId = null;
+      }
+
+      // An auth event can also establish the owner while getUser is
+      // pending. Snapshot its visible device evidence before replay
+      // removes rows. If another event starts a newer refresh, wait
+      // for that one too.
+      let visibilityRefresh: Promise<void>;
+      do {
+        visibilityRefresh = deviceVisibilityRefreshRef.current;
+        await visibilityRefresh;
+        if (!accountSnapshotReadIsCurrent(read)) return;
+      } while (visibilityRefresh !== deviceVisibilityRefreshRef.current);
+
+      // A newer auth event outranks the getUser answer above. A failed read
+      // also leaves that trusted owner intact. Without a known signed-in
+      // owner, keep the journal for a later sign-in/reconnect.
+      const account = getDeviceAccount();
+      if (
+        typeof account !== "string" ||
+        (read.userId && read.userId !== account)
+      )
+        return;
+      if (reconnectHydrationOwnerRef.current === account) {
+        // Join the account-bound pass rather than draining through stale refs.
+        // A failed pass leaves this gate in place for a later reconnect.
+        if (!hydrationRead && !accountSyncInFlightRef.current) return "resync";
+        return;
+      }
+      expectedUserId = account;
+      const identityGeneration = deviceIdentityGenerationRef.current;
+
+      // #967 review: the specific daily-review periods this pass is
+      // responsible for confirming, snapshotted IMMEDIATELY BEFORE
+      // replay removes them from the journal — a successful account
+      // read afterward is only trusted to release journal-derived
+      // evidence for periods THIS list names (see
+      // `readbackAccountReviewClosedDays`'s own comment).
+      //
+      // #967 follow-up review, finding 2: a failed snapshot must NOT be
+      // treated as "nothing pending" — `expectedDailyPeriods` staying
+      // `[]` makes the readback's own `every(...)` vacuously true, which
+      // would authorize clearing journal-derived evidence for a day this
+      // pass never actually confirmed. `expectedDailyPeriodsSnapshotFailed`
+      // tracks that distinction separately from an honestly-empty list.
+      let expectedDailyPeriods: string[] = [];
+      const ownedDailyPeriods: string[] = [];
+      let expectedDailyPeriodsSnapshotFailed = false;
+      try {
+        // Every visible close guards this pass's evidence release. Only
+        // owned rows create a lasting account obligation before delivery.
+        const pendingReviews = visibleToAccount(
+          await listPendingWrites("review"),
+          account,
+        );
+        for (const write of pendingReviews) {
+          const payload = write.payload as {
+            review_type?: unknown;
+            period_start?: unknown;
+          };
+          if (
+            payload.review_type === "daily" &&
+            typeof payload.period_start === "string"
+          ) {
+            expectedDailyPeriods.push(payload.period_start);
+            if (write.owner_user_id === account)
+              ownedDailyPeriods.push(payload.period_start);
+          }
+        }
+      } catch {
+        expectedDailyPeriodsSnapshotFailed = true;
+      }
+
+      if (
+        !accountSnapshotReadIsCurrent(read) ||
+        getDeviceAccount() !== account ||
+        identityGeneration !== deviceIdentityGenerationRef.current
+      )
+        return;
+
+      // Register synchronously BEFORE replay can drain the rows. An empty
+      // journal on a later pass does not erase an earlier confirmation debt.
+      const unconfirmed =
+        unconfirmedClosedDaysRef.current.get(account) ?? new Set<string>();
+      for (const period of ownedDailyPeriods) unconfirmed.add(period);
+      if (unconfirmed.size > 0)
+        unconfirmedClosedDaysRef.current.set(account, unconfirmed);
+      expectedDailyPeriods = [
+        ...new Set([...expectedDailyPeriods, ...unconfirmed]),
+      ];
+
+      // ORDERING IS LOAD-BEARING (#960 defect 1) — this must run AFTER
+      // the two calls above have populated `persistedAreasRef`.
+      try {
+        await replayJournaledWrites();
+      } catch {
+        // Best-effort: the journal stays populated and the next
+        // mount, reconnect, or sign-in retries it.
+      }
+      // Receipts for previously unowned rows arrive during replay, after
+      // the snapshot above. Include them before testing account confirmation.
+      expectedDailyPeriods = [
+        ...new Set([
+          ...expectedDailyPeriods,
+          ...(unconfirmedClosedDaysRef.current.get(account) ?? []),
+        ]),
+      ];
+      // #960 review finding 1: this was the only `replayJournaledWrites`
+      // call site with no matching refresh (compare the "sync on mount"
+      // effect and `persistCapture`/`persistMarkedSession` and friends,
+      // every one of which re-reads the journal right after draining
+      // it). Without this, a fully successful drain left
+      // `pendingLocalChanges` stale — `markAccountSynced` below reads it
+      // SYNCHRONOUSLY, so a stale `true` kept the masthead claiming
+      // "some work is saved on this device" even though nothing was.
+      // Awaited (not fire-and-forget) so `markAccountSynced` sees the
+      // POST-drain count on this very call, not one refresh cycle late.
+      if (!accountSnapshotReadIsCurrent(read)) return;
+      await refreshPendingLocalChanges();
+      // #967 follow-up review, finding 2: refresh ONLY
+      // `pendingSaveFailed` unconditionally right after replay — a
+      // write that just failed to reach the account, by definition,
+      // cannot have its day confirmed by the review readback below,
+      // so gating this specific flag behind that confirmation would
+      // mean it never updates on the pass that most needs it. The
+      // other four journalled arrays (closed days, logged wins,
+      // completed session days, rollup keys) each have their own real
+      // account tier — see `refreshJournalledDurableState`'s own
+      // comment — and stay gated behind the confirmation below exactly
+      // as before; `refreshPendingSaveFailed` is a narrower sibling
+      // that touches none of them.
+      if (!accountSnapshotReadIsCurrent(read)) return;
+      await refreshPendingSaveFailed(client, expectedUserId);
+      // #967: transfer a successfully replayed daily close to the
+      // account tier BEFORE the journal refresh below can clear its
+      // device-tier evidence — see `readbackAccountReviewClosedDays`'s
+      // own comment. A failed readback must not invent account
+      // confirmation, so `refreshJournalledDurableState` is skipped this
+      // pass rather than let a review with no account-tier evidence
+      // yet lose its device-tier evidence too; the next mount,
+      // reconnect, or sign-in reconciles it.
+      //
+      // #967 follow-up review, finding 2: the readback still runs even
+      // when the snapshot failed — it is truthful about what the
+      // account currently holds and worth recording — but its boolean
+      // is not enough by itself to authorize the journal refresh when
+      // the snapshot itself is the reason `expectedDailyPeriods` is
+      // empty, rather than there honestly being nothing to confirm.
+      if (!accountSnapshotReadIsCurrent(read)) return;
+      const accountConfirmedExpectedDays =
+        await readbackAccountReviewClosedDays(
+          client,
+          expectedDailyPeriods,
+          expectedUserId,
+          !expectedDailyPeriodsSnapshotFailed,
+        );
+      if (!accountSnapshotReadIsCurrent(read)) return;
+      if (accountConfirmedExpectedDays && !expectedDailyPeriodsSnapshotFailed) {
+        await refreshJournalledDurableState();
+      }
+    },
+    [
+      accountSnapshotReadIsCurrent,
+      observeAreaAccount,
+      adoptDeviceAccount,
+      replayJournaledWrites,
+      refreshPendingLocalChanges,
+      refreshJournalledDurableState,
+      refreshPendingSaveFailed,
+      readbackAccountReviewClosedDays,
+    ],
   );
 
   // #960 defects 1/2: extracted so both the mount effect below and the
@@ -2106,23 +2627,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // mount replay has been removed (see its effect's own comment): this is
   // now the ONE mechanism that owns "replay the journal on mount", ordered
   // strictly after the refs populate, on every mount, signed in or not.
-  // Owner changes must reveal retained device evidence even while offline.
-  // Same-owner events do not refresh: a drained close may still be awaiting
-  // account confirmation under the post-replay readback gate below.
-  const adoptDeviceAccount = useCallback(
-    (account: DeviceAccount) => {
-      if (getDeviceAccount() === account) return;
-      setDeviceAccount(account);
-      deviceVisibilityRefreshRef.current = Promise.all([
-        refreshUnsyncedCount(),
-        refreshJournalledDurableState(),
-      ]).then(() => undefined);
-    },
-    [refreshUnsyncedCount, refreshJournalledDurableState],
-  );
-
   const runAccountSync = useCallback(
-    async (options?: { replayAfter?: boolean }): Promise<void> => {
+    async function syncAccount(options?: {
+      replayAfter?: boolean;
+    }): Promise<void> {
       // #960 defect 1: the mount effect and a `SIGNED_IN` event can land in
       // the same tick (a session already present at first paint) — without
       // this guard the second call could read `persistedAreasRef` mid-write
@@ -2141,172 +2649,64 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        let readGeneration = snapshotIdentityRef.current.generation;
         try {
+          const read = await beginAccountSnapshotRead(client, (account) => {
+            observeAreaAccount(account);
+            adoptDeviceAccount(account);
+          });
+          if (!read) return;
+          readGeneration = read.generation;
+          const areaAccount = areaAccountRef.current;
           const result = await listAreas(client);
-          // jsdom-teardown race fix — same shape as `mountedRef`'s own note
-          // near its declaration. Bail first, before touching state at all.
-          if (!mountedRef.current) return;
+          if (
+            !accountSnapshotReadIsCurrent(read) ||
+            areaAccount !== areaAccountRef.current
+          )
+            return;
           if (result.provider !== "supabase") {
             markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
             return;
           }
-          applyPersistedAreas(result.areas);
+          if (
+            typeof areaAccount.account === "string" &&
+            result.areas.some((area) => area.user_id !== areaAccount.account)
+          ) {
+            throw new Error(
+              "The account changed while loading areas. Retry the account read.",
+            );
+          }
+          if (
+            applyPersistedAreas(result.areas, read.cursor, read.userId) ===
+            false
+          ) {
+            // A newer area-only read did not hydrate workflow or replay queued writes.
+            accountSyncRequestedRef.current = true;
+            return;
+          }
+          knownAreaAccountRef.current = areaAccount;
           await syncPersistedWorkflowRows(client, result.areas, {
             preserveLocalOnlyWhilePending: true,
           });
-          if (!mountedRef.current) return;
+          if (
+            !accountSnapshotReadIsCurrent(read) ||
+            (read.userId && reconnectHydrationOwnerRef.current === read.userId)
+          )
+            return;
           if (options?.replayAfter) {
-            // #967 follow-up review, finding 1: the identity this pass is
-            // accountable to, captured BEFORE the pending-period snapshot and
-            // replay even start — see `readbackAccountReviewClosedDays`'s own
-            // comment for why capturing it any later cannot detect a session
-            // change that happens during replay itself.
-            let expectedUserId: string | null = null;
-            try {
-              const identityGeneration = deviceIdentityGenerationRef.current;
-              const currentUser = await client.auth?.getUser();
-              if (!mountedRef.current) return;
-              expectedUserId = currentUser?.data.user?.id ?? null;
-              // W3-16 #1: the replay below sends only this account's own
-              // device-held work (see `durability/deviceAccount.ts`). Only a
-              // clean answer moves it: supabase-js reports a network or
-              // auth-server failure as `{ user: null, error }`, which means
-              // "not known", never "signed out".
-              // An auth event or provider cleanup supersedes this read,
-              // even if it eventually returns a clean but older identity.
-              if (
-                currentUser &&
-                !currentUser.error &&
-                identityGeneration === deviceIdentityGenerationRef.current
-              ) {
-                adoptDeviceAccount(expectedUserId);
-              }
-            } catch {
-              expectedUserId = null;
-            }
-
-            // An auth event can also establish the owner while getUser is
-            // pending. Snapshot its visible device evidence before replay
-            // removes rows. If another event starts a newer refresh, wait
-            // for that one too.
-            let visibilityRefresh: Promise<void>;
-            do {
-              visibilityRefresh = deviceVisibilityRefreshRef.current;
-              await visibilityRefresh;
-              if (!mountedRef.current) return;
-            } while (visibilityRefresh !== deviceVisibilityRefreshRef.current);
-
-            // #967 review: the specific daily-review periods this pass is
-            // responsible for confirming, snapshotted IMMEDIATELY BEFORE
-            // replay removes them from the journal — a successful account
-            // read afterward is only trusted to release journal-derived
-            // evidence for periods THIS list names (see
-            // `readbackAccountReviewClosedDays`'s own comment).
-            //
-            // #967 follow-up review, finding 2: a failed snapshot must NOT be
-            // treated as "nothing pending" — `expectedDailyPeriods` staying
-            // `[]` makes the readback's own `every(...)` vacuously true, which
-            // would authorize clearing journal-derived evidence for a day this
-            // pass never actually confirmed. `expectedDailyPeriodsSnapshotFailed`
-            // tracks that distinction separately from an honestly-empty list.
-            let expectedDailyPeriods: string[] = [];
-            let expectedDailyPeriodsSnapshotFailed = false;
-            try {
-              // W3-16 #1: only this account's own (or unowned) closes. Another
-              // account's held close can never be confirmed by this account's
-              // readback, and must not block this account's own release.
-              expectedDailyPeriods = visibleToAccount(
-                await listPendingWrites("review"),
-              )
-                .map(
-                  (write) =>
-                    write.payload as {
-                      review_type?: unknown;
-                      period_start?: unknown;
-                    },
-                )
-                .filter(
-                  (
-                    payload,
-                  ): payload is {
-                    review_type: "daily";
-                    period_start: string;
-                  } =>
-                    payload.review_type === "daily" &&
-                    typeof payload.period_start === "string",
-                )
-                .map((payload) => payload.period_start);
-            } catch {
-              expectedDailyPeriodsSnapshotFailed = true;
-            }
-
-            // ORDERING IS LOAD-BEARING (#960 defect 1) — this must run AFTER
-            // the two calls above have populated `persistedAreasRef`.
-            try {
-              await replayJournaledWrites();
-            } catch {
-              // Best-effort: the journal stays populated and the next
-              // mount, reconnect, or sign-in retries it.
-            }
-            // #960 review finding 1: this was the only `replayJournaledWrites`
-            // call site with no matching refresh (compare the "sync on mount"
-            // effect and `persistCapture`/`persistMarkedSession` and friends,
-            // every one of which re-reads the journal right after draining
-            // it). Without this, a fully successful drain left
-            // `pendingLocalChanges` stale — `markAccountSynced` below reads it
-            // SYNCHRONOUSLY, so a stale `true` kept the masthead claiming
-            // "some work is saved on this device" even though nothing was.
-            // Awaited (not fire-and-forget) so `markAccountSynced` sees the
-            // POST-drain count on this very call, not one refresh cycle late.
-            if (!mountedRef.current) return;
-            await refreshPendingLocalChanges();
-            // #967 follow-up review, finding 2: refresh ONLY
-            // `pendingSaveFailed` unconditionally right after replay — a
-            // write that just failed to reach the account, by definition,
-            // cannot have its day confirmed by the review readback below,
-            // so gating this specific flag behind that confirmation would
-            // mean it never updates on the pass that most needs it. The
-            // other four journalled arrays (closed days, logged wins,
-            // completed session days, rollup keys) each have their own real
-            // account tier — see `refreshJournalledDurableState`'s own
-            // comment — and stay gated behind the confirmation below exactly
-            // as before; `refreshPendingSaveFailed` is a narrower sibling
-            // that touches none of them.
-            if (!mountedRef.current) return;
-            await refreshPendingSaveFailed(client, expectedUserId);
-            // #967: transfer a successfully replayed daily close to the
-            // account tier BEFORE the journal refresh below can clear its
-            // device-tier evidence — see `readbackAccountReviewClosedDays`'s
-            // own comment. A failed readback must not invent account
-            // confirmation, so `refreshJournalledDurableState` (the only
-            // thing that can drop `journalledClosedDays`) is skipped this
-            // pass rather than let a review with no account-tier evidence
-            // yet lose its device-tier evidence too; the next mount,
-            // reconnect, or sign-in reconciles it.
-            //
-            // #967 follow-up review, finding 2: the readback still runs even
-            // when the snapshot failed — it is truthful about what the
-            // account currently holds and worth recording — but its boolean
-            // is not enough by itself to authorize the journal refresh when
-            // the snapshot itself is the reason `expectedDailyPeriods` is
-            // empty, rather than there honestly being nothing to confirm.
-            const accountConfirmedExpectedDays =
-              await readbackAccountReviewClosedDays(
-                client,
-                expectedDailyPeriods,
-                expectedUserId,
-              );
-            if (
-              accountConfirmedExpectedDays &&
-              !expectedDailyPeriodsSnapshotFailed
-            ) {
-              await refreshJournalledDurableState();
+            if ((await replayAndReleaseJournal(client, read)) === "resync") {
+              accountSyncRequestedRef.current = true;
+              return;
             }
           }
-          if (!mountedRef.current) return;
+          if (!accountSnapshotReadIsCurrent(read)) return;
           markAccountSynced({ preserveLocalOnlyWhilePending: true });
         } catch (error) {
-          if (mountedRef.current) markPersistedLoadFailure(error);
+          if (
+            mountedRef.current &&
+            readGeneration === snapshotIdentityRef.current.generation
+          )
+            markPersistedLoadFailure(error);
         }
       } finally {
         // #737 C1 re-score ROUND 2 GAP 2: settled in a `finally`, for the
@@ -2316,20 +2716,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         if (mountedRef.current) setAreasReadbackSettled(true);
         accountSyncInFlightRef.current = false;
         finishPass();
+        // An account switch must not lose its read behind the in-flight
+        // guard. Serialize one fresh pass after the stale pass releases it.
+        if (accountSyncRequestedRef.current && mountedRef.current) {
+          accountSyncRequestedRef.current = false;
+          void syncAccount({ replayAfter: true });
+        }
       }
     },
     [
       adoptDeviceAccount,
       applyPersistedAreas,
+      beginAccountSnapshotRead,
+      accountSnapshotReadIsCurrent,
       markAccountSynced,
       markPersistedLoadFailure,
       markLocalOnly,
+      markSignedOutLocal,
+      observeAreaAccount,
       syncPersistedWorkflowRows,
-      replayJournaledWrites,
-      refreshPendingLocalChanges,
-      refreshJournalledDurableState,
-      refreshPendingSaveFailed,
-      readbackAccountReviewClosedDays,
+      replayAndReleaseJournal,
     ],
   );
 
@@ -2372,17 +2778,33 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       (event, session) => {
         if (!active) return;
         deviceIdentityGenerationRef.current += 1;
+        let accountChanged = false;
         // W3-16 #1: keep the owner of device-held work current on EVERY auth
         // event, before the early returns below. A sign-out means no account
         // may receive the last account's queued work.
         if (event === "SIGNED_OUT") {
+          accountChanged = observeAreaAccount(null);
           adoptDeviceAccount(null);
         } else if (session?.user?.id) {
+          accountChanged = observeAreaAccount(session.user.id);
           adoptDeviceAccount(session.user.id);
         } else if (event === "INITIAL_SESSION") {
+          accountChanged = observeAreaAccount(null);
           adoptDeviceAccount(null);
         }
-        if (!session) return;
+        const userId = session?.user.id ?? null;
+        const snapshotChanged = snapshotIdentityRef.current.userId !== userId;
+        if (snapshotChanged) {
+          snapshotIdentityRef.current = {
+            userId,
+            generation: snapshotIdentityRef.current.generation + 1,
+          };
+        }
+        if (!session) {
+          if (event === "SIGNED_OUT" || event === "INITIAL_SESSION")
+            markSignedOutLocal();
+          return;
+        }
         if (
           event !== "SIGNED_IN" &&
           event !== "INITIAL_SESSION" &&
@@ -2391,8 +2813,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           return;
         }
         const posture = syncStatusRef.current;
-        if (posture.account !== "local-only" && !posture.signedOut) return;
-        void runAccountSync({ replayAfter: true });
+        if (
+          !accountChanged &&
+          !snapshotChanged &&
+          posture.account !== "local-only" &&
+          !posture.signedOut
+        )
+          return;
+        if (accountSyncInFlightRef.current) {
+          if (accountChanged || snapshotChanged)
+            accountSyncRequestedRef.current = true;
+          return;
+        }
+        // Leave the auth callback before another getUser call enters its lock.
+        queueMicrotask(() => {
+          if (active && mountedRef.current)
+            void runAccountSync({ replayAfter: true });
+        });
       },
     );
 
@@ -2400,7 +2837,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       active = false;
       subscription?.subscription?.unsubscribe();
     };
-  }, [adoptDeviceAccount, runAccountSync]);
+  }, [
+    adoptDeviceAccount,
+    markSignedOutLocal,
+    observeAreaAccount,
+    runAccountSync,
+  ]);
 
   useEffect(() => {
     if (!hasHydratedFromStorage) {
@@ -2415,7 +2857,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         ...current,
         storage: "blocked",
         message: DEVICE_STORAGE_BLOCKED,
-        pendingLocalChanges: true,
+        pendingLocalChanges:
+          current.pendingLocalChanges || hasSnapshotWork(state),
       }));
     }
   }, [hasHydratedFromStorage, state]);
@@ -2464,7 +2907,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [hasHydratedFromStorage]);
+  }, [hasHydratedFromStorage, dispatch]);
 
   /**
    * #737 C1 re-score GAP 3, write half — mirror the triage drafts to the
@@ -2569,6 +3012,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       if (!maySendAs(queued.owner_user_id)) {
         continue;
       }
+      // Gate every scoped item, including a matching slug left by another
+      // account. Untagged UI area updates cannot certify this read boundary.
+      if (
+        queued.area_id &&
+        (knownAreaAccountRef.current !== areaAccountRef.current ||
+          areaAccountRef.current.account !== getDeviceAccount())
+      ) {
+        continue;
+      }
       // Bug hunt #5: an item whose chosen area cannot be resolved while the
       // account's areas are not known yet stays queued — sending it now would
       // file it with no area and delete the person's choice for good. Once
@@ -2580,13 +3032,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             persistedAreasRef.current,
           )
         : null;
-      if (
-        queued.area_id &&
-        !persistedAreaId &&
-        persistedAreasRef.current.length === 0
-      ) {
-        continue;
-      }
       try {
         await syncQueuedCapture(client, {
           raw_text: queued.raw_text,
@@ -2626,9 +3071,28 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     await refreshUnsyncedCount();
     if (syncedAny) {
-      await syncPersistedWorkflowRows(client);
+      // Delivery has already been acknowledged. A failed refresh must not
+      // requeue it or report a load error to a different session.
+      const generation = deviceIdentityGenerationRef.current;
+      const snapshotGeneration = snapshotIdentityRef.current.generation;
+      try {
+        await syncPersistedWorkflowRows(client);
+      } catch (error) {
+        if (
+          mountedRef.current &&
+          generation === deviceIdentityGenerationRef.current &&
+          snapshotGeneration === snapshotIdentityRef.current.generation
+        ) {
+          markPersistedLoadFailure(error);
+        }
+      }
     }
-  }, [refreshUnsyncedCount, syncPersistedWorkflowRows]);
+  }, [
+    markPersistedLoadFailure,
+    refreshUnsyncedCount,
+    syncPersistedWorkflowRows,
+    persistedAreaIdForWorkflowId,
+  ]);
 
   // Purge the device-local queue (logout — High-sensitivity raw captures).
   const clearOfflineCaptures = useCallback(async () => {
@@ -2675,9 +3139,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
     const onOnline = () => {
       void syncOfflineQueue();
-      void replayJournaledWrites().finally(() => {
-        void refreshJournalledDurableState();
-        void refreshPendingLocalChanges();
+      const client = createSupabaseBrowserClient();
+      if (!client) {
+        // No account tier at all (demo, Supabase unconfigured): nothing is
+        // sent, so there is nothing for an account to confirm.
+        void replayJournaledWrites().finally(() => {
+          void refreshJournalledDurableState();
+          void refreshPendingLocalChanges();
+        });
+        return;
+      }
+      // W3-16 #4: the SAME replay -> readback -> release sequence the mount
+      // and sign-in paths run. Refreshing device evidence straight after the
+      // replay dropped a delivered daily close before the account confirmed
+      // it, so a closed day read open. Device evidence now goes only once the
+      // account holds the day; a failed or incomplete read keeps it.
+      void replayAndReleaseJournal(client).then((outcome) => {
+        if (outcome !== "resync" || !mountedRef.current) return;
+        if (accountSyncInFlightRef.current)
+          accountSyncRequestedRef.current = true;
+        else void runAccountSync({ replayAfter: true });
       });
     };
     window.addEventListener("online", onOnline);
@@ -2687,6 +3168,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     refreshJournalledDurableState,
     refreshPendingLocalChanges,
     replayJournaledWrites,
+    replayAndReleaseJournal,
+    runAccountSync,
     syncOfflineQueue,
   ]);
 
@@ -3109,10 +3592,22 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           due_at: persisted.task.due_at,
           updated_at: persisted.task.updated_at,
         };
-        applyWorkflowState({
+        const reflected = trackSnapshotChanges(stateRef.current, {
           ...stateRef.current,
           tasks: stateRef.current.tasks.map((item) =>
             item.id === taskId ? reflectedTask : item,
+          ),
+        });
+        dispatch({
+          type: "hydrate",
+          state: acknowledgeSnapshot(
+            reflected,
+            snapshotReceipt(reflected, "tasks", taskId, [
+              "title",
+              "description",
+              "area_id",
+              "due_at",
+            ]),
           ),
         });
       }
@@ -3177,7 +3672,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       taskId,
     );
     if (reverted) {
-      applyWorkflowState(reverted);
+      dispatch({
+        type: "hydrate",
+        state: restoreSnapshotChanges(stateRef.current, reverted, previous),
+      });
       // Only the app-update case has a banner-sized next step; the others
       // leave nothing on this device, so the banner has nothing to report.
       if (kind === "refused-needs-app-update") markPersistedSaveFailure(error);
@@ -3189,12 +3687,30 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     return kind === "transient" ? "failed" : kind;
   }
 
+  const syncPersistedAreas = useCallback(
+    (areas: Area[], cursor?: ReturnType<typeof snapshotCursor>) => {
+      if (applyPersistedAreas(areas, cursor) === false) return false;
+      // UI loaders do not carry the account generation that started their
+      // read. Show their update, but revalidate before using it for a write.
+      // Invalidate an in-flight read too: it predates this area replacement.
+      areaAccountRef.current = { account: areaAccountRef.current.account };
+      knownAreaAccountRef.current = null;
+      if (accountSyncInFlightRef.current) {
+        accountSyncRequestedRef.current = true;
+      } else {
+        void runAccountSync({ replayAfter: true });
+      }
+      return true;
+    },
+    [applyPersistedAreas, runAccountSync],
+  );
+
   const value: WorkflowContextValue = {
     state,
     selectedAreaId,
     setSelectedAreaId,
     syncStatus,
-    syncPersistedAreas: applyPersistedAreas,
+    syncPersistedAreas,
     refreshPersistedWorkflow: async () => {
       await syncPersistedWorkflowRows(createSupabaseBrowserClient());
     },
@@ -3226,9 +3742,49 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    addArea: (name, color) => dispatch({ type: "addArea", name, color }),
-    updateAreaColor: (areaId, color) =>
-      dispatch({ type: "updateAreaColor", areaId, color }),
+    addArea: (name, color) => {
+      const previous = stateRef.current;
+      applyWorkflowState(addWorkflowArea(previous, { name, color }));
+      const added = stateRef.current.areas.find(
+        (area) => !previous.areas.some((old) => old.id === area.id),
+      );
+      return added
+        ? snapshotReceipt(stateRef.current, "areas", added.id)
+        : undefined;
+    },
+    updateAreaColor: (areaId, color) => {
+      applyWorkflowState(
+        updateWorkflowAreaColor(stateRef.current, areaId, color),
+      );
+      return snapshotReceipt(stateRef.current, "areas", areaId, ["color"]);
+    },
+    acknowledgeAreaSave: (receipt, area) => {
+      if (
+        !mountedRef.current ||
+        snapshotCursor(stateRef.current).epoch !== receipt.epoch
+      )
+        return false;
+      dispatch({
+        type: "acknowledgeSnapshot",
+        receipt,
+        persistedId: workflowAreaIdForPersistedArea(area),
+      });
+      persistedAreasRef.current = [
+        ...persistedAreasRef.current.filter(
+          (existing) => existing.id !== area.id,
+        ),
+        area,
+      ];
+      return true;
+    },
+    runAreaWrite: (receipt, write) =>
+      areaWrites(snapshotAreaId(stateRef.current, receipt.id), async () => {
+        if (
+          mountedRef.current &&
+          snapshotCursor(stateRef.current).epoch === receipt.epoch
+        )
+          await write();
+      }),
     submitCaptureText: captureParseOps.submitCaptureText,
     sortCaptureIntoDrafts: captureParseOps.sortCaptureIntoDrafts,
     captureParse,
@@ -3429,7 +3985,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     updateTaskFirstTinyStep: (taskId, firstTinyStep) => {
       const previous = stateRef.current;
       const next = updateTaskFirstTinyStep(previous, taskId, firstTinyStep);
-      applyWorkflowState(next);
+      // Device-only by design: protected from account reads, never owed.
+      applyWorkflowState(next, { deviceOnly: true });
 
       if (next !== previous) {
         markLocalOnly(savedOnThisDeviceBanner("Your first move"));
