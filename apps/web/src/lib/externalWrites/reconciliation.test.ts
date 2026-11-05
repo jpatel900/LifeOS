@@ -11,13 +11,15 @@ const mocks = vi.hoisted(() => ({
   updateCalendarBlockGoogleEventForAccessToken: vi.fn(),
   updateExternalWriteEventResultForAccessToken: vi.fn(),
   recordGoogleCalendarPlacementForAccessToken: vi.fn(),
+  finishGoogleCalendarApprovalForAccessToken: vi.fn(),
 }));
 
 vi.mock("@/lib/googleCalendar/server", () => ({
   getGoogleCalendarStoredConnectionForAccessToken:
     mocks.getGoogleCalendarStoredConnectionForAccessToken,
 }));
-vi.mock("@/lib/googleCalendar/events", () => ({
+vi.mock("@/lib/googleCalendar/events", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/googleCalendar/events")>()),
   getGoogleCalendarEventForConnection:
     mocks.getGoogleCalendarEventForConnection,
 }));
@@ -37,6 +39,8 @@ vi.mock("@/lib/supabase/server", () => ({
   requireSupabaseServiceRoleClient: mocks.requireSupabaseServiceRoleClient,
 }));
 vi.mock("./server", () => ({
+  finishGoogleCalendarApprovalForAccessToken:
+    mocks.finishGoogleCalendarApprovalForAccessToken,
   updateExternalWriteEventResultForAccessToken:
     mocks.updateExternalWriteEventResultForAccessToken,
 }));
@@ -44,6 +48,15 @@ vi.mock("./server", () => ({
 import { reconcilePendingGoogleCalendarInsertAuditsForAccessToken } from "./reconciliation";
 
 const user = { id: "550e8400-e29b-41d4-a716-446655440001" };
+const connection = {
+  user_id: user.id,
+  id: "550e8400-e29b-41d4-a716-446655440901",
+  calendar_id: "primary",
+  status: "connected",
+  connected_at: "2026-05-09T00:00:00.000Z",
+  credential_verified_at: "2026-05-09T00:00:00.000Z",
+  encrypted_refresh_token: "synthetic-refresh",
+};
 const proposal = {
   id: "550e8400-e29b-41d4-a716-446655440501",
   user_id: user.id,
@@ -65,7 +78,15 @@ const auditRow = {
   operation: "calendar.events.insert",
   target_type: "time_block_proposal",
   target_id: proposal.id,
-  request_summary_json: { proposal_id: proposal.id },
+  request_summary_json: {
+    proposal_id: proposal.id,
+    claim_task_id: proposal.task_id,
+    claim_connection_id: connection.id,
+    claim_connected_at: connection.connected_at,
+    calendar_id: connection.calendar_id,
+    proposed_start: proposal.proposed_start,
+    proposed_end: proposal.proposed_end,
+  },
   result_summary_json: {},
   result_status: "pending",
   error_message: null,
@@ -89,14 +110,14 @@ describe("external write reconciliation", () => {
     vi.clearAllMocks();
     mocks.requireSupabaseServerUser.mockResolvedValue({ user });
     mocks.getGoogleCalendarStoredConnectionForAccessToken.mockResolvedValue({
-      connection: { calendar_id: "primary", status: "connected" },
+      connection,
     });
     mocks.getTimeBlockProposalForAccessToken.mockResolvedValue(proposal);
     mocks.getCalendarBlockForProposalForAccessToken.mockResolvedValue(null);
     mocks.createCalendarBlockForProposalForAccessToken.mockResolvedValue({
       id: "550e8400-e29b-41d4-a716-446655440601",
     });
-    mocks.recordGoogleCalendarPlacementForAccessToken.mockResolvedValue({
+    mocks.finishGoogleCalendarApprovalForAccessToken.mockResolvedValue({
       block: { id: "550e8400-e29b-41d4-a716-446655440601" },
       proposal,
       task: null,
@@ -107,6 +128,14 @@ describe("external write reconciliation", () => {
     const { lte } = mockPendingRows([auditRow]);
     mocks.getGoogleCalendarEventForConnection.mockResolvedValue({
       exists: true,
+      googleEventId: "lifeos550e8400e29b41d4a716446655440501",
+      googleEventEtag: '"verified"',
+      lifeosProposalId: proposal.id,
+      status: "confirmed",
+      eventSnapshot: {
+        start: { dateTime: proposal.proposed_start },
+        end: { dateTime: proposal.proposed_end },
+      },
     });
 
     const result =
@@ -124,19 +153,19 @@ describe("external write reconciliation", () => {
     // Healed with the same one-transaction placement the route uses
     // (calendar hunt #1/#7), so the task is scheduled too.
     expect(
-      mocks.recordGoogleCalendarPlacementForAccessToken,
+      mocks.finishGoogleCalendarApprovalForAccessToken,
     ).toHaveBeenCalledWith(
       "supabase-access-token",
-      proposal.id,
-      "lifeos550e8400e29b41d4a716446655440501",
+      expect.objectContaining({
+        auditId: auditRow.id,
+        proposalId: proposal.id,
+        googleEventId: "lifeos550e8400e29b41d4a716446655440501",
+        googleEventEtag: '"verified"',
+      }),
     );
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
-    ).toHaveBeenCalledWith(
-      "supabase-access-token",
-      auditRow.id,
-      expect.objectContaining({ resultStatus: "succeeded" }),
-    );
+    ).not.toHaveBeenCalled();
     expect(result).toEqual({
       checked: 1,
       failed: 0,
@@ -164,13 +193,10 @@ describe("external write reconciliation", () => {
     ).not.toHaveBeenCalled();
     expect(
       mocks.updateExternalWriteEventResultForAccessToken,
-    ).toHaveBeenCalledWith(
-      "supabase-access-token",
-      auditRow.id,
-      expect.objectContaining({ resultStatus: "failed" }),
-    );
+    ).not.toHaveBeenCalled();
     expect(result.succeeded).toBe(0);
-    expect(result.failed).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(result.leftPending).toBe(1);
   });
 
   it("leaves stale pending rows pending when Google is unreachable", async () => {
@@ -190,4 +216,68 @@ describe("external write reconciliation", () => {
     ).not.toHaveBeenCalled();
     expect(result.leftPending).toBe(1);
   });
+
+  it("does not release a crashed request from absence while its old POST could still arrive", async () => {
+    mockPendingRows([auditRow]);
+    mocks.getGoogleCalendarEventForConnection.mockResolvedValue({
+      exists: false,
+    });
+    const result =
+      await reconcilePendingGoogleCalendarInsertAuditsForAccessToken(
+        "supabase-access-token",
+        { now: () => new Date("2026-05-10T16:00:00.000Z") },
+      );
+    expect(result.leftPending).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(
+      mocks.recordGoogleCalendarPlacementForAccessToken,
+    ).not.toHaveBeenCalled();
+  });
+
+  it.each(["generation", "calendar", "unverified", "unknown", "null", "array"])(
+    "never probes a pending attempt through %s origin",
+    async (kind) => {
+      mockPendingRows([
+        {
+          ...auditRow,
+          request_summary_json:
+            kind === "unknown"
+              ? {}
+              : kind === "null"
+                ? null
+                : kind === "array"
+                  ? []
+                  : auditRow.request_summary_json,
+        },
+      ]);
+      mocks.getGoogleCalendarStoredConnectionForAccessToken.mockResolvedValue({
+        connection: {
+          ...connection,
+          ...(kind === "generation"
+            ? {
+                connected_at: "2026-05-10T00:00:00.000Z",
+                credential_verified_at: "2026-05-10T00:00:00.000Z",
+              }
+            : {}),
+          ...(kind === "calendar" ? { calendar_id: "other" } : {}),
+          ...(kind === "unverified" ? { credential_verified_at: null } : {}),
+        },
+      });
+      mocks.getGoogleCalendarEventForConnection.mockResolvedValue({
+        exists: false,
+      });
+      const result =
+        await reconcilePendingGoogleCalendarInsertAuditsForAccessToken(
+          "supabase-access-token",
+        );
+      expect(result.leftPending).toBe(1);
+      expect(mocks.getGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+      expect(
+        mocks.updateExternalWriteEventResultForAccessToken,
+      ).not.toHaveBeenCalled();
+    },
+  );
 });

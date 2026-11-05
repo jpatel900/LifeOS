@@ -15,6 +15,7 @@ import {
   getGoogleCalendarConnectionForAccessToken,
   getGoogleCalendarStoredConnectionForAccessToken,
   upsertGoogleCalendarConnectionForAccessToken,
+  updateGoogleCalendarRefreshForAccessToken,
 } from "./server";
 
 const user = { id: "550e8400-e29b-41d4-a716-446655440001" };
@@ -74,6 +75,38 @@ describe("Google Calendar server persistence helpers", () => {
     expect(select).toHaveBeenCalledWith(
       expect.stringContaining("credential_verified_at"),
     );
+  });
+
+  it("refuses a refresh after the original connected row disappears", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const query = {
+      eq: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnValue({ maybeSingle }),
+    };
+    const update = vi.fn().mockReturnValue(query);
+    mocks.requireSupabaseServiceRoleClient.mockReturnValue({
+      from: () => ({ update }),
+    });
+    await expect(
+      updateGoogleCalendarRefreshForAccessToken(
+        "token",
+        {
+          ...storedConnection,
+          status: "connected",
+          provider: "google_calendar",
+          token_type: "Bearer",
+        },
+        { last_error_json: null },
+      ),
+    ).rejects.toThrow("connection changed");
+    expect(query.eq.mock.calls).toEqual([
+      ["user_id", user.id],
+      ["id", storedConnection.id],
+      ["status", "connected"],
+      ["connected_at", storedConnection.connected_at],
+      ["calendar_id", "primary"],
+    ]);
+    expect(update).toHaveBeenCalledWith({ last_error_json: null });
   });
 
   it("persists and reads verification only through the service client", async () => {
