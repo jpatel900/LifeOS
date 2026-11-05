@@ -33,28 +33,6 @@ function startDay(client: MinimalSupabaseClient, viewedOn: string): RenderDay {
   return { client, viewedOn, saved: new Set(), pending: new Map() };
 }
 
-async function alreadySavedForSession(day: RenderDay): Promise<boolean> {
-  if (!day.saved.size || !day.client.auth?.getSession) return false;
-  try {
-    // The local session can skip an already confirmed row. It never authorizes an insert.
-    const {
-      data: { session },
-      error,
-    } = await day.client.auth.getSession();
-    const user = session && "user" in session ? session.user : undefined;
-    return (
-      !error &&
-      typeof user === "object" &&
-      user !== null &&
-      "id" in user &&
-      typeof user.id === "string" &&
-      day.saved.has(user.id)
-    );
-  } catch {
-    return false; // Verify the user below if a local session is unavailable.
-  }
-}
-
 async function trySave(day: RenderDay, userId: string): Promise<boolean> {
   try {
     const query = day.client.from("brief_views") as BriefViewsQuery;
@@ -68,36 +46,37 @@ async function trySave(day: RenderDay, userId: string): Promise<boolean> {
   }
 }
 
-async function recordView(day: RenderDay): Promise<void> {
+async function recordView(day: RenderDay, visitorId: string): Promise<void> {
   const { auth } = day.client;
-  if (!auth || (await alreadySavedForSession(day))) return;
+  if (!auth || day.saved.has(visitorId)) return;
   const {
     data: { user },
     error,
   } = await auth.getUser();
-  if (error || !user || day.saved.has(user.id)) return;
+  // Verification can finish after a switch. It may confirm the visitor, never replace them.
+  if (error || user?.id !== visitorId || day.saved.has(visitorId)) return;
 
   // A second account has its own row, even while the first account's write is pending.
-  const pending = day.pending.get(user.id);
+  const pending = day.pending.get(visitorId);
   if (pending) {
     pending.repeated = true;
     return;
   }
   const attempt = { repeated: false };
-  day.pending.set(user.id, attempt);
+  day.pending.set(visitorId, attempt);
   do {
     attempt.repeated = false;
-    if (await trySave(day, user.id)) {
-      day.saved.add(user.id);
+    if (await trySave(day, visitorId)) {
+      day.saved.add(visitorId);
       break;
     }
     // Retry only when a real view arrived during the failed write.
   } while (attempt.repeated);
-  day.pending.delete(user.id);
+  day.pending.delete(visitorId);
 }
 
-function recordSilently(day: RenderDay): void {
-  void recordView(day).catch(() => {
+function recordSilently(day: RenderDay, visitorId: string): void {
+  void recordView(day, visitorId).catch(() => {
     // Auth failures must never interrupt the Start or re-entry surface.
   });
 }
@@ -105,24 +84,30 @@ function recordSilently(day: RenderDay): void {
 export function recordBriefViewFireAndForget(
   client: MinimalSupabaseClient | null,
   viewedOn: string,
+  visitorId: string | null,
 ): void {
-  if (client) recordSilently(startDay(client, viewedOn));
+  if (client && visitorId)
+    recordSilently(startDay(client, viewedOn), visitorId);
 }
 
 export interface BriefViewRecorder {
-  recordIfNeeded(client: MinimalSupabaseClient | null, now: Date): void;
+  recordIfNeeded(
+    client: MinimalSupabaseClient | null,
+    now: Date,
+    visitorId: string | null,
+  ): void;
 }
 
 export function createBriefViewRecorder(): BriefViewRecorder {
   let current: RenderDay | undefined;
   return {
-    recordIfNeeded(client, now) {
-      if (!client) return;
+    recordIfNeeded(client, now, visitorId) {
+      if (!client || !visitorId) return;
       const viewedOn = localDayStamp(now);
       if (current?.client !== client || current.viewedOn !== viewedOn) {
         current = startDay(client, viewedOn);
       }
-      recordSilently(current);
+      recordSilently(current, visitorId);
     },
   };
 }
