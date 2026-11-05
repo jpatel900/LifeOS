@@ -6,6 +6,7 @@
  */
 import {
   CreateTaskInputSchema,
+  offsetDatetime,
   type Task,
   type TimeBlockProposal,
 } from "@lifeos/schemas";
@@ -148,8 +149,8 @@ const mentionSchema = z.object({
 });
 const acceptProposalSchema = z
   .object({
-    proposed_start: z.string().datetime({ offset: true }),
-    proposed_end: z.string().datetime({ offset: true }),
+    proposed_start: offsetDatetime(),
+    proposed_end: offsetDatetime(),
     rationale: z.string(),
   })
   .refine(
@@ -169,10 +170,10 @@ function validAcceptProposal(
 }
 const acceptanceResultSchema = z.object({
   task: z.unknown(),
-  proposal: z.unknown(),
+  proposal: z.unknown().optional(),
   deduplicated: z.boolean(),
   accepted_links: z.array(
-    mentionSchema.extend({ person_id: z.string().uuid().nullable() }),
+    mentionSchema.extend({ person_id: z.guid().nullable() }),
   ),
 });
 
@@ -226,10 +227,7 @@ export async function syncJournaledTaskDraftAccept(
     p_person_mentions: mentions,
     // Journals and PostgREST can carry "+00:00"; Z-only parsing would poison
     // a valid queued accept (2026-07-25 incident, .semgrep rule).
-    p_accepted_at: z
-      .string()
-      .datetime({ offset: true })
-      .parse(input.accepted_at),
+    p_accepted_at: offsetDatetime().parse(input.accepted_at),
     p_proposal:
       input.task_status === "active"
         ? validAcceptProposal(input.proposal)

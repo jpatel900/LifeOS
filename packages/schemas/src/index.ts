@@ -10,6 +10,9 @@ import {
   ROLLUP_PERIOD_TYPES,
 } from "./constants";
 import { JsonValueSchema } from "./json";
+import { offsetDatetime } from "./datetime";
+
+export { offsetDatetime };
 
 export * from "./constants";
 export * from "./json";
@@ -27,7 +30,7 @@ export const CreateCaptureItemInputSchema = z.object({
   return_hook: z.string().trim().nullable().optional(),
   // FR-027 (F-G1a): client-generated id for idempotent offline-queue sync.
   client_capture_id: z.string().trim().min(1).nullable().optional(),
-  area_id: z.string().uuid().nullable(),
+  area_id: z.guid().nullable(),
 });
 
 export type CreateCaptureItemInput = z.infer<
@@ -60,13 +63,13 @@ export const CreateAreaInputSchema = z.object({
 export type CreateAreaInput = z.input<typeof CreateAreaInputSchema>;
 
 export const SoftDeleteAreaInputSchema = z.object({
-  area_id: z.string().uuid(),
+  area_id: z.guid(),
 });
 
 export type SoftDeleteAreaInput = z.input<typeof SoftDeleteAreaInputSchema>;
 
 export const UpdateAreaColorInputSchema = z.object({
-  area_id: z.string().uuid(),
+  area_id: z.guid(),
   color: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
@@ -76,7 +79,7 @@ export const UpdateAreaColorInputSchema = z.object({
 export type UpdateAreaColorInput = z.input<typeof UpdateAreaColorInputSchema>;
 
 export const CreateProjectInputSchema = z.object({
-  area_id: z.string().uuid(),
+  area_id: z.guid(),
   title: z.string().trim().min(1),
   description: optionalNullableTrimmedText,
 });
@@ -85,9 +88,9 @@ export type CreateProjectInput = z.input<typeof CreateProjectInputSchema>;
 
 export const CreateTaskInputSchema = z
   .object({
-    area_id: z.string().uuid(),
-    project_id: z.string().uuid().nullable().optional(),
-    source_capture_item_id: z.string().uuid().nullable().optional(),
+    area_id: z.guid(),
+    project_id: z.guid().nullable().optional(),
+    source_capture_item_id: z.guid().nullable().optional(),
     title: z.string().trim().min(1),
     description: nullableTrimmedText,
     status: z.enum(["active", "backlog"]).optional().default("active"),
@@ -105,10 +108,10 @@ export const CreateTaskInputSchema = z
     // the persisted accept path only after explicit user approval (NS-INV-4).
     // Optional so every existing task-create call site is unaffected. The DB
     // remains the source of truth for the FKs and `is_commitment` default.
-    waiting_on_person_id: z.string().uuid().nullable().optional(),
+    waiting_on_person_id: z.guid().nullable().optional(),
     waiting_on_since: z.string().datetime().nullable().optional(),
     is_commitment: z.boolean().optional(),
-    committed_to_person_id: z.string().uuid().nullable().optional(),
+    committed_to_person_id: z.guid().nullable().optional(),
     // #737 C1 S3: idempotency key for a task created by replaying a journalled
     // triage accept. Optional and nullable so every existing call site is
     // unaffected and keeps writing NULL, which the plain unique index on
@@ -184,7 +187,7 @@ const proposalTimeRangeMessage = {
 
 export const CreateTimeBlockProposalInputSchema = z
   .object({
-    task_id: z.string().uuid(),
+    task_id: z.guid(),
     proposed_start: z.string().datetime(),
     proposed_end: z.string().datetime(),
     rationale_note: z
@@ -212,7 +215,7 @@ export type EditTimeBlockProposalInput = z.input<
 >;
 
 export const CheckTimeBlockProposalConflictInputSchema = z.object({
-  proposal_id: z.string().uuid(),
+  proposal_id: z.guid(),
   timezone: z.string().trim().min(1).default("UTC"),
 });
 
@@ -221,15 +224,15 @@ export type CheckTimeBlockProposalConflictInput = z.input<
 >;
 
 export const CreateGoogleCalendarEventInputSchema = z.object({
-  proposal_id: z.string().uuid(),
+  proposal_id: z.guid(),
   approved: z.literal(true),
   acknowledge_first_write_warning: z.boolean().optional().default(false),
   timezone: z.string().trim().min(1).default("UTC"),
   // Calendar hunt #4: the start and end the person saw when they approved.
   // The route refuses when the account holds a different time, so Google
   // never gets a time nobody approved.
-  approved_start: z.string().datetime({ offset: true }),
-  approved_end: z.string().datetime({ offset: true }),
+  approved_start: offsetDatetime(),
+  approved_end: offsetDatetime(),
 });
 
 export type CreateGoogleCalendarEventInput = z.input<
@@ -237,7 +240,7 @@ export type CreateGoogleCalendarEventInput = z.input<
 >;
 
 export const CancelGoogleCalendarEventInputSchema = z.object({
-  calendar_block_id: z.string().uuid(),
+  calendar_block_id: z.guid(),
   approved: z.literal(true),
 });
 
@@ -250,8 +253,8 @@ const isoDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected ISO date YYYY-MM-DD");
 
 export const CreateExecutionSessionInputSchema = z.object({
-  task_id: z.string().uuid(),
-  calendar_block_id: z.string().uuid().nullable().optional(),
+  task_id: z.guid(),
+  calendar_block_id: z.guid().nullable().optional(),
 });
 
 export type CreateExecutionSessionInput = z.input<
@@ -320,7 +323,7 @@ export type MarkExecutionSessionInput = z.input<
 
 export const CreateReviewEntryInputSchema = z
   .object({
-    area_id: z.string().uuid().nullable(),
+    area_id: z.guid().nullable(),
     review_type: z.enum(REVIEW_TYPES),
     period_start: isoDate,
     period_end: isoDate,
@@ -342,13 +345,13 @@ export type CreateReviewEntryInput = z.input<
 
 export const CreateWinRecordInputSchema = z
   .object({
-    area_id: z.string().uuid(),
-    source_task_id: z.string().uuid().nullable().optional().default(null),
-    source_project_id: z.string().uuid().nullable().optional().default(null),
+    area_id: z.guid(),
+    source_task_id: z.guid().nullable().optional().default(null),
+    source_project_id: z.guid().nullable().optional().default(null),
     title: z.string().trim().min(1, "A win needs a title."),
     detail: z.string().trim().min(1).nullable().optional().default(null),
     occurred_at: isoDate,
-    review_entry_id: z.string().uuid().nullable().optional().default(null),
+    review_entry_id: z.guid().nullable().optional().default(null),
   })
   .refine(
     (input) =>
@@ -363,7 +366,7 @@ export type CreateWinRecordInput = z.input<typeof CreateWinRecordInputSchema>;
 
 export const CreateRollupSummaryInputSchema = z
   .object({
-    area_id: z.string().uuid(),
+    area_id: z.guid(),
     period_type: z.enum(ROLLUP_PERIOD_TYPES),
     period_start: isoDate,
     period_end: isoDate,
