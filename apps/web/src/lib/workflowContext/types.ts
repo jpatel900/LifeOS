@@ -508,13 +508,15 @@ export interface WorkflowSyncStatus {
   // `refreshPendingSaveFailed`/`refreshJournalledDurableState` in
   // `WorkflowContext.tsx`, under the exact same generation/identity/
   // read-failure guards as `pendingSaveFailed`, and updated atomically with
-  // it. `"server-capability-missing"` iff at least one row is failed AND
+  // it. `"server-capability-missing"` or `"invalid-write"` iff a row failed AND
   // every failed row's own `last_attempt_failure_kind` is that exact
   // value. Any mix of kinds, any `"unknown"` row, any legacy/invalid
   // stored value, or no failed rows at all yields `"unknown"` (or this
   // field stays absent when nothing is failed — both read the same way to
-  // every consumer). Never widen this into a permanence/transience claim:
-  // it is a snapshot of the LATEST attempt per row, nothing more.
+  // every consumer). `"invalid-write"` is limited to adapter-proven input
+  // rejection before account mutation. It does not classify HTTP or SQL
+  // status, missing mappings, auth, or readback failures. This is not a full
+  // permanence/transience split: only the LATEST attempt per row is known.
   pendingSaveFailureKind?: PersistenceFailureKind;
 }
 

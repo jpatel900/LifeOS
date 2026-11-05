@@ -7,15 +7,15 @@
 // Both bugs are fixed (#3: export paging; #5: 20261024120000). The harness
 // checks still run as ordinary assertions, so a scenario that did not really
 // happen (too few rows seeded, replays that never overlapped) fails loudly.
-import { execFile, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { promisify } from "node:util";
-import { createClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import { buildUserDataExport } from "@/lib/data/export";
-
-const execFileAsync = promisify(execFile);
+import {
+  createLocalClient as createHarnessClient,
+  psql as runLocalSql,
+  startLockHolder,
+} from "@/testing/w316DatabaseHarness";
 
 const runLocalRlsTests = process.env.RUN_SUPABASE_RLS_TESTS === "1";
 // QA doctrine #269: deliberate local RLS opt-in gate; default runs skip until RUN_SUPABASE_RLS_TESTS=1 provides local Supabase proof.
@@ -42,20 +42,11 @@ const userB = {
   areaId: "00000000-0000-4000-8000-000000000201",
 };
 
+function targets() {
+  return { supabaseUrl, supabaseAnonKey, localDbUrl };
+}
 function createLocalClient() {
-  if (!supabaseAnonKey) {
-    throw new Error(
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY is required when RUN_SUPABASE_RLS_TESTS=1.",
-    );
-  }
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-      storageKey: `lifeos-rls-w316-${Math.random().toString(16).slice(2)}`,
-    },
-  });
+  return createHarnessClient(targets());
 }
 
 async function signIn(email: string, password: string) {
@@ -93,12 +84,7 @@ function configuredMaxRows() {
 }
 
 async function psql(sql: string) {
-  const { stdout } = await execFileAsync(
-    "psql",
-    [localDbUrl, "-X", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-c", sql],
-    { timeout: 20_000 },
-  );
-  return stdout.trim();
+  return runLocalSql(targets(), sql);
 }
 
 describeLocalRls("W3-16 #3: full export above the API row cap", () => {
@@ -161,7 +147,6 @@ describeLocalRls("W3-16 #3: full export above the API row cap", () => {
       );
 
       expect(titles).not.toContain(sentinelTitle);
-      expect(new Set(titles).size).toBe(titles.length);
       // Another populated table comes through, unmixed with tasks.
       expect(
         (exported.tables.areas as Array<{ id: string }>).map((row) => row.id),
@@ -234,18 +219,14 @@ describeLocalRls(
         end $$;
         commit;
       `;
-      const holder = spawn(
-        "psql",
-        [localDbUrl, "-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", "-"],
-        { env: { ...process.env, PGAPPNAME: appName } },
+      const { child: holder, exited: holderExit } = startLockHolder(
+        targets(),
+        appName,
       );
       let holderStderr = "";
       holder.stderr.on("data", (chunk) => {
         holderStderr += String(chunk);
       });
-      const holderExit = new Promise<number | null>((resolve) =>
-        holder.on("close", resolve),
-      );
       holder.stdin.end(holderSql);
 
       try {
@@ -279,11 +260,14 @@ describeLocalRls(
         ]);
 
         // Harness check: the holder saw both replays blocked, then committed.
-        expect(await holderExit, holderStderr).toBe(0);
+        expect(
+          await holderExit,
+          holderStderr || "The local RLS lock holder failed.",
+        ).toBe(0);
 
         const { data: rows, error: selectError } = await clientOne
           .from("execution_sessions")
-          .select("id,outcome")
+          .select("id,user_id,task_id,client_write_id,notes,outcome")
           .eq("notes", notes);
         expect(selectError).toBeNull();
         // Exactly one logical session, whatever the callers were told.

@@ -9,7 +9,7 @@ stale — check docs/program/final-ux-loop.md §6 and recent merged PRs before t
 
 ## Current objective
 
-**Real use first owns priority** (owner decision 2026-09-29, Option A). Prepare the 10-day trial, then use LifeOS before more campaign work. The [Final UX Loop](program/final-ux-loop.md) keeps its rules and history but gives up the serial queue. Campaign implementation C2–C6 is parked and resumes only from trial findings. New feature work stays frozen; FR-049 is the sole exception. Narrow repairs to trial blockers remain allowed.
+**Real use first owns priority** (owner decision 2026-09-29, Option A). Prepare the 10-day trial, then use LifeOS before more campaign work. The [Final UX Loop](program/final-ux-loop.md) keeps its rules and history but gives up the serial queue. Campaign implementation C2–C6 is parked and resumes only from trial findings. New feature work stays frozen except FR-049 and FR-028 ([program rule R8](program/final-ux-loop.md)). Bug and truth repairs continue, trial blockers first.
 
 State as of 2026-10-17: **The trial has not started**; its start stays UNSET until production proves capture and Sort (program §7). That proof is still missing and UNVERIFIED: the weekly production smoke (#1026) still fails, and the latest repairs, deployed 2026-10-13, have not been checked by it yet. Live readiness and evidence are recorded in the program's §6. **C1** remains closed at 10/10. **C2** has its implementation slices merged and awaits only the owner's five-minute glance (§5.2); no implementation or re-score is active, and C2 is not closed. **C3** has technical onboarding proof in PR #999; the owner's experience and adoption gate remains unverified.
 
