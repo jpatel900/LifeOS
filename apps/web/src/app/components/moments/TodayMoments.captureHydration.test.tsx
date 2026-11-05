@@ -26,7 +26,7 @@ import {
 } from "@/__tests__/helpers/todayMomentsHarness";
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: routeReplace }),
   usePathname: () => "/",
 }));
 vi.mock("@/lib/reEntry/briefView", async (importOriginal) => ({
@@ -34,21 +34,38 @@ vi.mock("@/lib/reEntry/briefView", async (importOriginal) => ({
   createBriefViewRecorder: () => ({ recordIfNeeded: vi.fn() }),
 }));
 
-const { listAreas, listCaptures, upsert, account } = vi.hoisted(() => ({
+const {
+  listAreas,
+  listCaptures,
+  listExecution,
+  upsert,
+  account,
+  routeReplace,
+  auth,
+} = vi.hoisted(() => ({
   listAreas: vi.fn(),
   listCaptures: vi.fn(),
+  listExecution: vi.fn(),
   upsert: vi.fn(),
   account: { available: false, captures: [] as Record<string, unknown>[] },
+  routeReplace: vi.fn(),
+  auth: {
+    userId: "22222222-2222-4222-8222-222222222222",
+    notify: undefined as
+      | ((event: "SIGNED_IN", session: { user: { id: string } }) => void)
+      | undefined,
+  },
 }));
 
 vi.mock("@/lib/supabase/browser", () => {
   const client = {
     auth: {
-      onAuthStateChange: () => ({
-        data: { subscription: { unsubscribe: vi.fn() } },
-      }),
+      onAuthStateChange: (callback: NonNullable<typeof auth.notify>) => {
+        auth.notify = callback;
+        return { data: { subscription: { unsubscribe: vi.fn() } } };
+      },
       getUser: async () => ({
-        data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+        data: { user: { id: auth.userId } },
         error: null,
       }),
     },
@@ -66,13 +83,7 @@ vi.mock("@/lib/data/workflow", async (importOriginal) => ({
     proposals: [],
     blocks: [],
   }),
-  listExecutionReviewItems: async () => ({
-    provider: "supabase",
-    tasks: [],
-    blocks: [],
-    sessions: [],
-    reviewEntries: [],
-  }),
+  listExecutionReviewItems: listExecution,
   listWinRecords: async () => ({ provider: "supabase", winRecords: [] }),
   listOverrideRecords: async () => ({
     provider: "supabase",
@@ -168,6 +179,16 @@ beforeEach(async () => {
   resetTodayMomentsMountTracking();
   await clearPendingWrites();
   vi.clearAllMocks();
+  auth.userId = customArea.user_id;
+  auth.notify = undefined;
+  listExecution.mockReset();
+  listExecution.mockResolvedValue({
+    provider: "supabase",
+    tasks: [],
+    blocks: [],
+    sessions: [],
+    reviewEntries: [],
+  });
   account.available = false;
   account.captures = [];
   listCaptures.mockImplementation(async () => ({
@@ -207,6 +228,63 @@ afterEach(async () => {
 });
 
 describe("Today capture before account area hydration", () => {
+  it.each([false, true])(
+    "waits for account B's area read before onboarding (empty account: %s)",
+    async (emptyAccount) => {
+      mountToday();
+      await waitFor(() =>
+        expect(providerState().map[customArea.id]).toBeDefined(),
+      );
+      const nextArea = {
+        ...customArea,
+        id: "88888888-8888-4888-8888-888888888888",
+        user_id: "99999999-9999-4999-8999-999999999999",
+        name: "Synthetic second account",
+        slug: "synthetic-second-account",
+      };
+      let release!: (value: {
+        provider: "supabase";
+        areas: (typeof customArea)[];
+      }) => void;
+      listAreas.mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+      );
+      await act(async () => {
+        auth.userId = nextArea.user_id;
+        auth.notify!("SIGNED_IN", { user: { id: auth.userId } });
+      });
+      await waitFor(() => expect(listAreas).toHaveBeenCalledTimes(2));
+      expect(
+        providerState().areas.some((area) => area.id === customArea.id),
+      ).toBe(false);
+      expect(providerState().map).toEqual({});
+      expect(routeReplace).not.toHaveBeenCalledWith("/welcome");
+      pressCaptureShortcut();
+      expect(screen.getByTestId("capture-save-destination")).toHaveTextContent(
+        "Will save without an area.",
+      );
+      await act(async () =>
+        release({
+          provider: "supabase",
+          areas: emptyAccount ? [] : [nextArea],
+        }),
+      );
+      if (emptyAccount) {
+        await waitFor(() => expect(providerState().areas).toEqual([]));
+        await waitFor(() =>
+          expect(routeReplace).toHaveBeenCalledWith("/welcome"),
+        );
+      } else {
+        await waitFor(() =>
+          expect(providerState().map[nextArea.id]).toBeDefined(),
+        );
+        expect(routeReplace).not.toHaveBeenCalledWith("/welcome");
+      }
+    },
+  );
+
   it("journals no implicit demo destination and delivers one account row after custom-only areas arrive", async () => {
     let resolveAreas!: (result: {
       provider: "supabase";
@@ -223,6 +301,7 @@ describe("Today capture before account area hydration", () => {
       providerState().areas.some((area) => area.id.startsWith("area-")),
     ).toBe(true);
     expect(providerState().map).toEqual({});
+    expect(routeReplace).not.toHaveBeenCalledWith("/welcome");
     pressCaptureShortcut();
     expect
       .soft(screen.getByTestId("capture-save-destination"))
@@ -334,6 +413,21 @@ describe("Today capture before account area hydration", () => {
   });
 
   it("keeps a deliberate real-area capture queued through account failure and sends that area on retry", async () => {
+    const emptyExecution = {
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    };
+    let finishMountReadback!: (value: typeof emptyExecution) => void;
+    listExecution.mockResolvedValueOnce(emptyExecution);
+    listExecution.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishMountReadback = resolve;
+        }),
+    );
     const chosenArea = {
       ...customArea,
       id: "44444444-4444-4444-8444-444444444444",
@@ -370,8 +464,13 @@ describe("Today capture before account area hydration", () => {
       persisted_area_id: chosenArea.id,
     });
     expect(account.captures).toHaveLength(0);
+    // Hold the mount pass after its replay. A failed capture can already
+    // offer Retry while that pass still waits for its account readback.
+    await waitFor(() => expect(finishMountReadback).toBeTypeOf("function"));
     account.available = true;
     fireEvent.click(screen.getByRole("button", { name: "Retry account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry account" }));
+    await act(async () => finishMountReadback(emptyExecution));
     await waitFor(() => expect(account.captures).toHaveLength(1));
     expect(account.captures[0].area_id).toBe(chosenArea.id);
     await waitFor(async () =>

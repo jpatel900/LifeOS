@@ -98,6 +98,19 @@ function mapCancelEventFailure(error: unknown) {
   };
 }
 
+function cancellationFollowUpFailure(eventAlreadyGone: boolean) {
+  return NextResponse.json(
+    {
+      ok: false,
+      event_deleted: true,
+      event_already_gone: eventAlreadyGone,
+      error:
+        "The event is gone from Google Calendar, but LifeOS could not confirm saving the cancellation here. Retry to finish.",
+    },
+    { status: 502 },
+  );
+}
+
 export async function POST(request: Request) {
   if (!getGoogleCalendarConfig()) {
     return NextResponse.json(
@@ -123,6 +136,8 @@ export async function POST(request: Request) {
   }
 
   let auditEventId: string | null = null;
+  let confirmedAbsent = false;
+  let eventAlreadyGone = false;
 
   try {
     const { user } = await requireSupabaseServerUser(accessToken);
@@ -195,6 +210,9 @@ export async function POST(request: Request) {
       supabaseAccessToken: accessToken,
     });
 
+    eventAlreadyGone = !eventRead.exists || eventRead.status === "cancelled";
+    confirmedAbsent = eventAlreadyGone;
+
     const auditEvent = await createPendingExternalWriteEventForAccessToken(
       accessToken,
       {
@@ -249,42 +267,70 @@ export async function POST(request: Request) {
           { status: failure.status },
         );
       } else {
-        await deleteGoogleCalendarEventForConnection({
+        const deleteResult = await deleteGoogleCalendarEventForConnection({
           connection,
           eventId: block.google_event_id,
           expectedEtag: eventRead.googleEventEtag,
           supabaseAccessToken: accessToken,
         });
+        eventAlreadyGone = deleteResult.status === "already_gone";
+        confirmedAbsent = true;
       }
     }
 
-    const cancelledBlock = await markCalendarBlockCancelledForAccessToken(
-      accessToken,
-      block.id,
-    );
+    // From here the event is confirmed absent. Local or audit follow-up cannot
+    // turn that observed remote outcome into a failed-delete report.
+    const remoteResult = {
+      calendar_block_id: block.id,
+      event_deleted: true,
+      event_already_gone: eventAlreadyGone,
+      google_event_etag: eventRead.googleEventEtag,
+      google_event_status: eventRead.status,
+      provenance_marker_matched: eventRead.exists ? true : null,
+    };
+    let cancelledBlock;
+    try {
+      cancelledBlock = await markCalendarBlockCancelledForAccessToken(
+        accessToken,
+        block.id,
+      );
+    } catch {
+      await updateExternalWriteEventResultForAccessToken(
+        accessToken,
+        auditEvent.id,
+        {
+          errorMessage: null,
+          resultStatus: "succeeded",
+          resultSummary: {
+            ...remoteResult,
+            follow_up: "account_record_failed",
+          },
+        },
+      ).catch(() => null);
+      return cancellationFollowUpFailure(eventAlreadyGone);
+    }
     const audit = await updateExternalWriteEventResultForAccessToken(
       accessToken,
       auditEvent.id,
       {
         errorMessage: null,
         resultStatus: "succeeded",
-        resultSummary: {
-          calendar_block_id: block.id,
-          event_already_gone: !eventRead.exists,
-          google_event_etag: eventRead.googleEventEtag,
-          google_event_status: eventRead.status,
-          provenance_marker_matched: eventRead.exists ? true : null,
-        },
+        resultSummary: remoteResult,
       },
-    );
+    ).catch(() => null);
 
     return NextResponse.json({
       ok: true,
       audit,
       block: cancelledBlock,
-      event_already_gone: !eventRead.exists,
+      event_deleted: true,
+      event_already_gone: eventAlreadyGone,
     });
   } catch (error) {
+    if (confirmedAbsent) {
+      logGoogleCalendarRouteFailure("google-calendar/cancel-event", error);
+      return cancellationFollowUpFailure(eventAlreadyGone);
+    }
     const failure = mapCancelEventFailure(error);
 
     if (auditEventId) {
