@@ -7,6 +7,7 @@ import {
   type ExecutionSession,
   type MarkExecutionSessionInput,
 } from "@lifeos/schemas";
+import { isDailyCloseConflict } from "@/lib/review/dayClose";
 import {
   PersistenceWriteError,
   parsePersistenceWriteInput,
@@ -511,7 +512,7 @@ export interface SyncJournaledReviewEntryInput extends CreateReviewEntryInput {
 export async function syncJournaledReviewEntry(
   client: MinimalSupabaseClient | null,
   input: SyncJournaledReviewEntryInput,
-): Promise<{ provider: "mock" | "supabase" }> {
+): Promise<{ provider: "mock" } | { provider: "supabase"; userId: string }> {
   const parsedInput = parsePersistenceWriteInput(
     CreateReviewEntryInputSchema,
     input,
@@ -548,8 +549,12 @@ export async function syncJournaledReviewEntry(
     { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
   );
 
-  if (error) throw toPersistenceWriteError(error);
-  return { provider: "supabase" };
+  // The exact daily-close conflict is terminal success: this account
+  // already owns the day. Preserve its actual authenticated identity in
+  // the receipt even if the visible session changed during the request.
+  if (error && !isDailyCloseConflict(error))
+    throw toPersistenceWriteError(error);
+  return { provider: "supabase", userId: user.id };
 }
 
 export async function createReviewEntry(

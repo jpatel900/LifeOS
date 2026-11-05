@@ -143,7 +143,12 @@ describe("demo seed data (#687)", () => {
       // Areas and health checks are structural, not sample content — reset
       // must not remove the areas a person may have been using.
       expect(afterReset.areas.length).toBeGreaterThan(0);
-      expect(afterReset).toEqual(createEmptyWorkflowState());
+      // #967: reset also advances the ownership epoch (bookkeeping, not
+      // content) so in-flight reads from before the reset are fenced. Every
+      // user-visible field still equals the genuinely-empty shape.
+      const { snapshotOwnership, ...content } = afterReset;
+      expect(content).toEqual(createEmptyWorkflowState());
+      expect(snapshotOwnership?.rows).toEqual({});
     });
   });
 
