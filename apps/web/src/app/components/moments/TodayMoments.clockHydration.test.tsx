@@ -70,11 +70,13 @@ function timezoneInput() {
   };
 }
 
+// Ordinary scenarios name local wall times, just like the moment heuristic.
+// Only the timezone-conversion scenario below pins an absolute UTC instant.
 for (const scenario of [
-  { id: "Flow noon", moment: "flow", client: "2026-09-28T12:00:00.000Z" },
-  { id: "Flow evening", moment: "flow", client: "2026-09-28T22:00:00.000Z" },
-  { id: "Start noon", moment: "start", client: "2026-09-28T12:00:00.000Z" },
-  { id: "Start evening", moment: "start", client: "2026-09-28T22:00:00.000Z" },
+  { id: "Flow noon", moment: "flow", client: "2026-09-28T12:00:00" },
+  { id: "Flow evening", moment: "flow", client: "2026-09-28T22:00:00" },
+  { id: "Start noon", moment: "start", client: "2026-09-28T12:00:00" },
+  { id: "Start evening", moment: "start", client: "2026-09-28T22:00:00" },
   {
     id: "same instant, different timezone",
     moment: "flow",
@@ -84,30 +86,30 @@ for (const scenario of [
   {
     id: "clock-selected moment",
     moment: undefined,
-    client: "2026-09-28T22:00:00.000Z",
+    client: "2026-09-28T22:00:00",
   },
   {
     id: "legacy remembered moment",
     moment: undefined,
-    client: "2026-09-28T22:00:00.000Z",
+    client: "2026-09-28T22:00:00",
     source: "legacy",
   },
   {
     id: "explicit URL",
     moment: "flow",
-    client: "2026-09-28T22:00:00.000Z",
+    client: "2026-09-28T22:00:00",
     source: "url",
   },
   {
     id: "explicit deep link",
     moment: "flow",
-    client: "2026-09-28T22:00:00.000Z",
+    client: "2026-09-28T22:00:00",
     source: "deepLink",
   },
   {
     id: "remembered cookie",
     moment: "flow",
-    client: "2026-09-28T22:00:00.000Z",
+    client: "2026-09-28T22:00:00",
     source: "cookie",
   },
 ] as const) {
@@ -168,6 +170,8 @@ for (const scenario of [
       vi.stubGlobal("window", browserWindow);
       document.body.append(container);
       vi.setSystemTime(new Date(scenario.client));
+      if (scenario.id === "clock-selected moment")
+        expect(new Date().getHours()).toBe(22);
       if (timezoneScenario) {
         const epoch = new Date().getTime();
         setZone!("Asia/Tokyo");

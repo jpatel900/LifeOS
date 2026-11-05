@@ -7,6 +7,11 @@ import {
   type ExecutionSession,
   type MarkExecutionSessionInput,
 } from "@lifeos/schemas";
+import { isDailyCloseConflict } from "@/lib/review/dayClose";
+import {
+  PersistenceWriteError,
+  parsePersistenceWriteInput,
+} from "../../persistenceFailureKind";
 import {
   type CalendarBlockUnplanResult,
   type ExecutionReviewItemsResult,
@@ -452,7 +457,10 @@ export async function syncJournaledExecutionSession(
     throw new Error("A journalled session needs a client write id.");
   }
   if (!RECORDABLE_SESSION_OUTCOMES.includes(input.outcome)) {
-    throw new Error("That session outcome is not one LifeOS can record.");
+    throw new PersistenceWriteError(
+      "That session outcome is not one LifeOS can record.",
+      "invalid-write",
+    );
   }
 
   if (!client) return { provider: "mock" };
@@ -504,8 +512,11 @@ export interface SyncJournaledReviewEntryInput extends CreateReviewEntryInput {
 export async function syncJournaledReviewEntry(
   client: MinimalSupabaseClient | null,
   input: SyncJournaledReviewEntryInput,
-): Promise<{ provider: "mock" | "supabase" }> {
-  const parsedInput = CreateReviewEntryInputSchema.parse(input);
+): Promise<{ provider: "mock" } | { provider: "supabase"; userId: string }> {
+  const parsedInput = parsePersistenceWriteInput(
+    CreateReviewEntryInputSchema,
+    input,
+  );
   const clientWriteId = input.client_write_id?.trim();
   if (!clientWriteId) {
     throw new Error("A journalled review needs a client write id.");
@@ -538,8 +549,12 @@ export async function syncJournaledReviewEntry(
     { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
   );
 
-  if (error) throw toPersistenceWriteError(error);
-  return { provider: "supabase" };
+  // The exact daily-close conflict is terminal success: this account
+  // already owns the day. Preserve its actual authenticated identity in
+  // the receipt even if the visible session changed during the request.
+  if (error && !isDailyCloseConflict(error))
+    throw toPersistenceWriteError(error);
+  return { provider: "supabase", userId: user.id };
 }
 
 export async function createReviewEntry(

@@ -343,7 +343,7 @@ describe("capture storage and account notice truth (#967)", () => {
     );
   });
 
-  it("A: failed account write leaves a real session copy and the account-failure notice", async () => {
+  it("A: failed account fallback retains the session copy, storage warning and account-failure status", async () => {
     await renderSettled();
     const restore = makeIndexedDbUnavailable();
     try {
@@ -358,8 +358,14 @@ describe("capture storage and account notice truth (#967)", () => {
       );
       expect(mockCreateCaptureItem).toHaveBeenCalledTimes(1);
       expectMemoryAndSnapshot(true);
-      expect(screen.getByTestId("notice-message").textContent).toBe(
+      expect(screen.getByTestId("sync-storage").textContent).toBe("blocked");
+      expect(screen.getByTestId("sync-message").textContent).toBe(
         ACCOUNT_SAVE_FAILED,
+      );
+      expect(await listPendingWrites()).toEqual([]);
+      expect(await listPendingCaptures()).toEqual([]);
+      expect(screen.getByTestId("notice-message").textContent).toBe(
+        DEVICE_STORAGE_BLOCKED,
       );
       expect(screen.getByTestId("notice-tone").textContent).toBe("alarm");
     } finally {

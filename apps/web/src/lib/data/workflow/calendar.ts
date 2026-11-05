@@ -7,6 +7,7 @@ import {
   type CreateTimeBlockProposalInput,
   type EditTimeBlockProposalInput,
 } from "@lifeos/schemas";
+import { parsePersistenceWriteInput } from "../../persistenceFailureKind";
 import {
   GoogleCalendarEventCreateError,
   type GoogleCalendarEventCreateResult,
@@ -137,7 +138,10 @@ export async function editTimeBlockProposal(
   proposalId: string,
   input: EditTimeBlockProposalInput,
 ): Promise<TimeBlockProposalUpdateResult> {
-  const parsedInput = EditTimeBlockProposalInputSchema.parse(input);
+  const parsedInput = parsePersistenceWriteInput(
+    EditTimeBlockProposalInputSchema,
+    input,
+  );
 
   if (!client) {
     throw new Error("Mock proposal edits use the local workflow context.");
@@ -171,7 +175,7 @@ export async function editTimeBlockProposal(
     .select(timeBlockProposalColumns)
     .single();
   if (error) {
-    throw new Error(getSupabaseMessage(error));
+    throw toPersistenceWriteError(error);
   }
 
   const proposal = parseTimeBlockProposal(data);
