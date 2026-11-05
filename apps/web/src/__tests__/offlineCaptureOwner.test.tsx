@@ -263,15 +263,26 @@ describe("W3-16 #1 sibling: the offline queue holds a capture for its own accoun
     },
   );
 
-  it.each([ACCOUNT_A, null])(
-    "ignores a stale successful identity answer (%s) after B signs in",
-    async (staleAccount) => {
+  it.each(
+    [ACCOUNT_A, null].flatMap((staleAccount) => [
+      { staleAccount, phase: "before areas" },
+      { staleAccount, phase: "before replay" },
+    ]),
+  )(
+    "ignores a stale successful identity answer ($staleAccount, $phase) after B signs in",
+    async ({ staleAccount, phase }) => {
       await queueAccountACaptureAndSignal();
       let resolveIdentity!: (value: unknown) => void;
       mockGetUser.mockResolvedValue({
         data: { user: { id: ACCOUNT_B } },
         error: null,
       });
+      if (phase === "before replay") {
+        mockGetUser.mockResolvedValueOnce({
+          data: { user: { id: ACCOUNT_A } },
+          error: null,
+        });
+      }
       mockGetUser.mockImplementationOnce(
         () =>
           new Promise((resolve) => {
