@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createPersistenceSync } from "./persistenceSync";
 import type { WorkflowState } from "../workflow";
+import { PendingWriteOwnershipError } from "../durability/pendingWriteJournal";
 
 /**
  * #960 review finding 3 — a storage-blocked device must not lose account
@@ -174,6 +175,21 @@ describe("persistCapture falls back to a direct POST when the device journal ref
       preservePendingLocalChanges: true,
     });
     expect(markPersistedLoadFailure).not.toHaveBeenCalled();
+  });
+
+  it("never falls back to a POST after a journal ownership conflict", async () => {
+    const conflict = new PendingWriteOwnershipError();
+    journalCaptureWriteMock.mockRejectedValue(conflict);
+    createCaptureItemMock.mockResolvedValue({
+      provider: "supabase",
+      capture: { id: PERSISTED_CAPTURE_ID },
+    });
+    const { ops, replayJournaledWrites, markDeviceStorageBlocked } = makeSync();
+
+    await expect(ops.persistCapture(localCapture())).rejects.toBe(conflict);
+    expect(createCaptureItemMock).not.toHaveBeenCalled();
+    expect(replayJournaledWrites).not.toHaveBeenCalled();
+    expect(markDeviceStorageBlocked).not.toHaveBeenCalled();
   });
 
   it("still reaches the account for a capture with no area at all", async () => {
