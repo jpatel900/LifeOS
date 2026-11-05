@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { psql } from "@/testing/w316DatabaseHarness";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 import { recoverApprovedGoogleCalendarEventForConnection } from "@/lib/googleCalendar/events";
@@ -658,6 +659,18 @@ local("calendar crash recovery — reservation, dispatch and completion", () => 
     async (kind) => {
       await withApprovalFixture(async (f) => {
         const areaId = randomUUID();
+        // Only the disposable database administrator may hard-delete an area.
+        const deleteArea = () =>
+          psql(
+            {
+              supabaseUrl: loopbackUrl(),
+              supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+              localDbUrl:
+                process.env.DB_URL ??
+                "postgresql://postgres:postgres@127.0.0.1:15433/postgres",
+            },
+            `delete from public.areas where id = '${areaId}'::uuid returning id`,
+          );
         await must(
           f.userClient.from("areas").insert({
             id: areaId,
@@ -681,29 +694,14 @@ local("calendar crash recovery — reservation, dispatch and completion", () => 
             await must(reserve(f, f.sibling));
           }
           const before = await audit(f, a.id);
-          expect(
-            await must(
-              f.service
-                .from("areas")
-                .delete()
-                .eq("id", areaId)
-                .eq("user_id", f.userId)
-                .select("id"),
-            ),
-          ).toEqual([{ id: areaId }]);
+          expect(await deleteArea()).toBe(areaId);
           expect(await audit(f, a.id)).toMatchObject({
             area_id: null,
             result_status: before.result_status,
             result_summary_json: before.result_summary_json,
           });
         } finally {
-          await must(
-            f.service
-              .from("areas")
-              .delete()
-              .eq("id", areaId)
-              .eq("user_id", f.userId),
-          );
+          await deleteArea();
         }
       });
     },
@@ -801,56 +799,29 @@ local("calendar crash recovery — reservation, dispatch and completion", () => 
     "refuses dispatch across different %s and proposal areas",
     async (kind) => {
       await withApprovalFixture(async (f) => {
-        const areaId = randomUUID();
-        await must(
-          f.userClient.from("areas").insert({
-            id: areaId,
-            user_id: f.userId,
-            name: "Synthetic area",
-            slug: areaId,
-          }),
-        );
-        try {
-          const a = await must(reserve(f));
-          if (kind === "task")
-            await must(
-              f.userClient
-                .from("tasks")
-                .update({ area_id: areaId })
-                .eq("id", f.taskId),
-            );
-          else
-            await must(
-              f.userClient.from("calendar_blocks").insert({
-                id: f.blockId,
-                user_id: f.userId,
-                task_id: f.taskId,
-                area_id: areaId,
-                proposal_id: f.winner,
-                start_at: start,
-                end_at: end,
-                status: "scheduled",
-              }),
-            );
-          expect((await dispatch(f, a.id)).error?.code).toBe("PCA01");
-        } finally {
+        const areaId = "00000000-0000-4000-8000-000000000102"; // second seeded area for user A
+        const a = await must(reserve(f));
+        if (kind === "task")
           await must(
             f.userClient
               .from("tasks")
-              .update({ area_id: areaA })
+              .update({ area_id: areaId })
               .eq("id", f.taskId),
           );
+        else
           await must(
-            f.userClient.from("calendar_blocks").delete().eq("id", f.blockId),
+            f.userClient.from("calendar_blocks").insert({
+              id: f.blockId,
+              user_id: f.userId,
+              task_id: f.taskId,
+              area_id: areaId,
+              proposal_id: f.winner,
+              start_at: start,
+              end_at: end,
+              status: "scheduled",
+            }),
           );
-          await must(
-            f.service
-              .from("areas")
-              .delete()
-              .eq("id", areaId)
-              .eq("user_id", f.userId),
-          );
-        }
+        expect((await dispatch(f, a.id)).error?.code).toBe("PCA01");
       });
     },
   );
