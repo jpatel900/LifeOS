@@ -2,7 +2,13 @@
 // write, so a run with no IndexedDB exercises the device-blocked branch and
 // never reaches the person-link writes these tests are about.
 import "fake-indexeddb/auto";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
@@ -355,9 +361,12 @@ beforeEach(async () => {
   // test's `WorkflowProvider` mount effect. Same clear
   // `durableWinsReviewsGuard.test.tsx` has always done.
   await clearPendingWrites();
+  // Draft decisions live independently of the pending-write journal.
+  await clearStoredTaskDrafts();
 });
 
 afterEach(async () => {
+  cleanup();
   vi.clearAllMocks();
   await clearPendingWrites();
   await clearStoredTaskDrafts();
