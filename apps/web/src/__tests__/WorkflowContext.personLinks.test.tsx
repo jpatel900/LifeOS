@@ -2,10 +2,17 @@
 // write, so a run with no IndexedDB exercises the device-blocked branch and
 // never reaches the person-link writes these tests are about.
 import "fake-indexeddb/auto";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
+import { clearStoredTaskDrafts } from "@/lib/durability/draftStore";
 import type { ParsedWorkflowResult } from "@/lib/ai/parseCaptureWorkflow";
 
 // Drive real journal replay to a mocked atomic RPC. This proves submitted
@@ -301,6 +308,9 @@ beforeEach(async () => {
   // The provider persists workflow state to sessionStorage; clear it so drafts
   // from a prior test do not leak into the next render.
   window.sessionStorage.clear();
+  // Account reads now await identity first. Keep durable drafts isolated too,
+  // so a later mount cannot restore a preceding case's draft during setup.
+  await clearStoredTaskDrafts();
   mockListAreas.mockResolvedValue({
     provider: "supabase",
     areas: [persistedArea],
@@ -351,11 +361,15 @@ beforeEach(async () => {
   // test's `WorkflowProvider` mount effect. Same clear
   // `durableWinsReviewsGuard.test.tsx` has always done.
   await clearPendingWrites();
+  // Draft decisions live independently of the pending-write journal.
+  await clearStoredTaskDrafts();
 });
 
 afterEach(async () => {
+  cleanup();
   vi.clearAllMocks();
   await clearPendingWrites();
+  await clearStoredTaskDrafts();
 });
 
 describe("WorkflowProvider accept-path person/commitment persistence", () => {
