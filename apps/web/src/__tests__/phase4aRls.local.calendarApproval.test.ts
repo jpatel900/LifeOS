@@ -472,6 +472,35 @@ local("calendar crash recovery — reservation, dispatch and completion", () => 
       f.service.from("external_write_events").select("*").eq("id", id).single(),
     );
 
+  it("refuses a sibling the old poller's absence while the legacy sender can still POST", async () => {
+    await withApprovalFixture(async (f) => {
+      const a = await must(f.claim(f.winner));
+      const poll = await f.service
+        .from("external_write_events")
+        .update({
+          result_status: "failed",
+          result_summary_json: {
+            reconciled: true,
+            google_event_id_stored: false,
+            provider_event_id_present: false,
+          },
+        })
+        .eq("user_id", f.userId)
+        .eq("id", a.id);
+      expect(poll.error?.code).toBe("PCA01");
+      expect((await audit(f, a.id)).result_status).toBe("pending");
+
+      for (const ids of [[], [a.id]]) {
+        const result = await f.service.rpc("reserve_google_calendar_approval", {
+          ...claimArgs(f.userId, f.sibling, f.taskId, f.connectionId),
+          p_absent_attempt_ids: ids,
+        });
+        expect(result.error?.code).toBe("PCA01");
+        expect(result.error?.details ?? "").not.toContain("checkable-v2:");
+      }
+    });
+  });
+
   it.each([
     "disconnect",
     "done",
