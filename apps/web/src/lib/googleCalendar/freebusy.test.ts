@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   decryptGoogleCalendarToken: vi.fn(),
   encryptGoogleCalendarToken: vi.fn(),
   refreshGoogleCalendarAccessToken: vi.fn(),
-  upsertGoogleCalendarConnectionForAccessToken: vi.fn(),
+  updateGoogleCalendarRefreshForAccessToken: vi.fn(),
 }));
 
 vi.mock("./tokens", () => ({
@@ -28,8 +28,8 @@ vi.mock("./server", async () => {
 
   return {
     ...actual,
-    upsertGoogleCalendarConnectionForAccessToken:
-      mocks.upsertGoogleCalendarConnectionForAccessToken,
+    updateGoogleCalendarRefreshForAccessToken:
+      mocks.updateGoogleCalendarRefreshForAccessToken,
   };
 });
 
@@ -217,15 +217,36 @@ describe("Google Calendar free/busy helper", () => {
       refreshToken: "google-refresh-token",
     });
     expect(
-      mocks.upsertGoogleCalendarConnectionForAccessToken,
+      mocks.updateGoogleCalendarRefreshForAccessToken,
     ).toHaveBeenCalledWith(
       "supabase-access-token",
+      connection,
       expect.objectContaining({
         encrypted_access_token: "encrypted-refreshed-access",
         encrypted_refresh_token: "encrypted-google-refresh-token",
         token_expires_at: "2026-05-09T02:00:00.000Z",
       }),
     );
+  });
+
+  it("does not return the refreshed token after its connected generation disappears", async () => {
+    mocks.refreshGoogleCalendarAccessToken.mockResolvedValue({
+      accessToken: "synthetic-new",
+      expiresIn: 3600,
+      refreshToken: null,
+      scope: null,
+      tokenType: "Bearer",
+    });
+    mocks.updateGoogleCalendarRefreshForAccessToken.mockRejectedValueOnce(
+      new Error("Google Calendar connection changed during refresh."),
+    );
+    await expect(
+      resolveGoogleCalendarAccessToken({
+        connection,
+        supabaseAccessToken: "synthetic",
+      }),
+    ).rejects.toThrow("connection changed");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("persists Google's error reason on a failed refresh without changing connection status (#743)", async () => {
@@ -247,19 +268,16 @@ describe("Google Calendar free/busy helper", () => {
     ).rejects.toMatchObject({ code: "invalid_grant" });
 
     expect(
-      mocks.upsertGoogleCalendarConnectionForAccessToken,
+      mocks.updateGoogleCalendarRefreshForAccessToken,
     ).toHaveBeenCalledWith(
       "supabase-access-token",
+      connection,
       expect.objectContaining({
         last_error_json: expect.objectContaining({
           code: "invalid_grant",
           description: "Token has been expired or revoked.",
           http_status: 400,
         }),
-        // Status is left as-is here -- this is a diagnostic write, not a
-        // connection-state change; the connection stays "connected" until
-        // the owner reconnects or a full callback marks it "error".
-        status: "connected",
       }),
     );
   });
@@ -280,17 +298,20 @@ describe("Google Calendar free/busy helper", () => {
     ).rejects.toThrow("network socket hang up");
 
     expect(
-      mocks.upsertGoogleCalendarConnectionForAccessToken,
+      mocks.updateGoogleCalendarRefreshForAccessToken,
     ).toHaveBeenCalledWith(
       "supabase-access-token",
+      connection,
       expect.objectContaining({
         last_error_json: expect.objectContaining({
           code: "refresh_failed",
           description: "network socket hang up",
         }),
-        status: "connected",
       }),
     );
+    expect(
+      mocks.updateGoogleCalendarRefreshForAccessToken.mock.calls[0][2],
+    ).not.toHaveProperty("status");
   });
 
   it("reports a conflict when the free/busy response contains busy windows", async () => {
