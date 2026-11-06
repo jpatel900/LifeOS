@@ -81,7 +81,6 @@ import {
   recordPersonLinkRejection,
   recordWipEnforcementEvent,
   syncQueuedCapture,
-  syncJournaledCapture,
   unplanCalendarBlock,
   type MinimalSupabaseClient,
 } from "./data/workflow";
@@ -183,6 +182,7 @@ import {
 } from "./workflowContext/persistenceSync";
 import { createCalendarApproval } from "./workflowContext/calendarApproval";
 import { createCaptureParseOps } from "./workflowContext/captureParse";
+import { replayCapture } from "./workflowContext/replayCapture";
 import { useTaskMapDraftActions } from "./workflowContext/taskMapDraft";
 import {
   classifyTaskReviewWriteFailure,
@@ -1692,19 +1692,8 @@ function AccountWorkflowProvider({
         },
 
         // --- #960 defect 3: raw captures ---------------------------------
-        syncCapture: (args) => syncJournaledCapture(client, args),
-        // Same late resolution as the review's area, and the same rule: a
-        // capture whose CHOSEN area still has no account id waits rather than
-        // being filed under no area. A capture with no area at all resolves
-        // this to `null` too, but `captureHandler` tells the two apart via
-        // `workflow_area_id`.
-        resolveCaptureAreaId: (payload) =>
-          payload.workflow_area_id === null
-            ? null
-            : persistedAreaIdForWorkflowId(
-                String(payload.workflow_area_id),
-                persistedAreasRef.current,
-              ),
+        syncCaptureWrite: (payload, clientCaptureId) =>
+          replayCapture(client, payload, clientCaptureId),
         // Without this the local optimistic capture would never learn its
         // account id and would sit alongside its own account twin forever
         // once `syncPersistedWorkflowRows` next loads it (`mergePersistedRows`

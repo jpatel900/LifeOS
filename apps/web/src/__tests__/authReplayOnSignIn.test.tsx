@@ -764,14 +764,18 @@ describe("#960 defects 1+2: a session arriving without a remount drains the jour
     // a raw HTTP mock (see `syncJournaledCapture`'s own request-shape unit
     // tests in `lib/data/workflow.test.ts`).
     await waitFor(() => expect(mockSyncJournaledCapture).toHaveBeenCalled());
-    // `syncCapture` is wired as `(args) => syncJournaledCapture(client, args)`
-    // — the client is the first argument, the request shape is the second.
+    // Replay carries the chosen area and binds the actual write to this
+    // account across the writer's own asynchronous identity read.
     expect(mockSyncJournaledCapture).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         area_id: PERSISTED_AREA.id,
         raw_text: "Call the landlord back",
       }),
+      {
+        expectedUserId: PERSISTED_AREA.user_id,
+        assertCurrentAccount: expect.any(Function),
+      },
     );
 
     // (b) the win leaves the journal — ORDER was the bug: replay must run
@@ -4573,6 +4577,120 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
 
   // The reconnect path hands off device evidence only after the account
   // confirms the day (W3-16 #4).
+  it("an unchanged reconnect identity cannot cancel the active journal snapshot", async () => {
+    const added = vi.spyOn(window, "addEventListener");
+    const removed = vi.spyOn(window, "removeEventListener");
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [PERSISTED_AREA],
+    });
+    mockListExecutionReviewItems.mockResolvedValue(accountReviewRead());
+    render(
+      <WorkflowProvider>
+        <Harness />
+      </WorkflowProvider>,
+    );
+    await waitFor(() => {
+      expect(observedWorkflow.syncStatus.account).toBe("synced");
+      expect(observedWorkflow.areasReadbackSettled).toBe(true);
+    });
+    await journalReviewWrite({
+      workflowAreaId: null,
+      persistedAreaId: null,
+      reviewType: "daily",
+      periodStart: day,
+      periodEnd: day,
+      summaryJson: {},
+    });
+    mockSyncJournaledReviewEntry.mockResolvedValue({
+      provider: "supabase",
+      userId: PERSISTED_AREA.user_id,
+    });
+    mockListExecutionReviewItems.mockResolvedValue(accountReviewRead([day]));
+    const onlineHandlers = [
+      ...new Set(
+        added.mock.calls
+          .filter(([type]) => type === "online")
+          .map(([, handler]) => handler),
+      ),
+    ].filter(
+      (handler) =>
+        !removed.mock.calls.some(
+          ([type, old]) => type === "online" && old === handler,
+        ),
+    );
+    expect(onlineHandlers).toHaveLength(2);
+    const identity = {
+      data: { user: { id: PERSISTED_AREA.user_id } },
+      error: null,
+    };
+    const identityResolvers: Array<(value: typeof identity) => void> = [];
+    let captureIdentityReads = true;
+    mockGetUser.mockImplementation(() =>
+      captureIdentityReads
+        ? new Promise<typeof identity>((resolve) =>
+            identityResolvers.push(resolve),
+          )
+        : Promise.resolve(identity),
+    );
+    let snapshotStarted!: () => void;
+    let releaseSnapshot!: () => void;
+    const started = new Promise<void>((resolve) => {
+      snapshotStarted = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    let held = false;
+    mockListPendingWrites.mockImplementation(async (entity) => {
+      if (entity === "review" && !held) {
+        held = true;
+        snapshotStarted();
+        await gate;
+      }
+      return listPendingWritesActual(entity);
+    });
+    let inner!: (value: typeof identity) => void;
+    let outer!: (value: typeof identity) => void;
+    act(() => {
+      for (const handler of onlineHandlers) {
+        const readsBefore = identityResolvers.length;
+        const clientsBefore = mockCreateSupabaseBrowserClient.mock.calls.length;
+        const event = new Event("online");
+        if (typeof handler === "function") handler.call(window, event);
+        else handler.handleEvent(event);
+        expect(identityResolvers).toHaveLength(readsBefore + 1);
+        const resolve = identityResolvers[readsBefore];
+        if (mockCreateSupabaseBrowserClient.mock.calls.length > clientsBefore)
+          inner = resolve;
+        else outer = resolve;
+      }
+      captureIdentityReads = false;
+    });
+    expect(inner).toBeTypeOf("function");
+    expect(outer).toBeTypeOf("function");
+    await act(async () => {
+      inner(identity);
+      await started;
+    });
+    await act(async () => {
+      outer(identity);
+    });
+    await act(async () => {
+      releaseSnapshot();
+    });
+    await waitFor(() =>
+      expect(mockSyncJournaledReviewEntry).toHaveBeenCalledTimes(1),
+    );
+    await waitFor(async () =>
+      expect(await listPendingWritesActual("review")).toHaveLength(0),
+    );
+    await waitFor(() => {
+      expect(closedDayTiers().account).toContain(day);
+      expect(closedDayTiers().journalled).not.toContain(day);
+    });
+  });
+
   it("retains A's delivered close across keyed B and A mounts until confirmed", async () => {
     const accountA = PERSISTED_AREA.user_id;
     const accountB = "77777777-7777-4777-8777-777777777777";

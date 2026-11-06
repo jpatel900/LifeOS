@@ -145,6 +145,11 @@ export interface SyncJournaledCaptureResult {
   captureId: string | null;
 }
 
+export interface CaptureReplayAccount {
+  expectedUserId: string;
+  assertCurrentAccount: () => void;
+}
+
 /**
  * #960 defect 3: push one journalled raw capture to the account.
  *
@@ -153,13 +158,11 @@ export interface SyncJournaledCaptureResult {
  * `captureParse.ts`'s `enqueueOfflineCapture`), a capture reaching THIS path
  * already lives in local state. Its local row must be retired once the
  * account twin lands (`mergePersistedRows`), which needs the account id back
- * — so this deliberately DOES `.select().single()`, and deliberately does
- * NOT send `status`: an upsert that re-asserted `status: "new"` on every retry
- * could resurrect a capture the user had already triaged past `new` in the
- * gap between the account taking the row and this device's journal entry
- * being cleared. Omitting the column from the upsert body means Postgrest's
- * `ON CONFLICT DO UPDATE` never touches it — only a genuine INSERT sees the
- * table's own `default 'new'`.
+ * — so this returns the inserted id, or reads the existing id after a
+ * duplicate. A duplicate never updates the saved capture: after response
+ * loss, area recovery must not clear a historical area link or reset a
+ * capture the user already triaged. Only a genuine insert sees the table's
+ * own `default 'new'` status.
  *
  * Idempotent on the same `(user_id, client_capture_id)` index `syncQueuedCapture`
  * already relies on (`capture_items_user_client_capture_id_key`) — a replay
@@ -169,6 +172,7 @@ export interface SyncJournaledCaptureResult {
 export async function syncJournaledCapture(
   client: MinimalSupabaseClient | null,
   input: SyncJournaledCaptureInput,
+  account?: CaptureReplayAccount,
 ): Promise<SyncJournaledCaptureResult> {
   const clientCaptureId = input.client_capture_id?.trim();
   if (!clientCaptureId) {
@@ -182,13 +186,18 @@ export async function syncJournaledCapture(
     "Sign in before saving captures to Supabase.",
   );
 
+  account?.assertCurrentAccount();
+  if (account && user.id !== account.expectedUserId) {
+    throw new Error("Your account changed. Try again.");
+  }
+
   const query = client.from("capture_items") as {
     upsert: (
       row: Record<string, unknown>,
-      options: { onConflict: string },
+      options: { onConflict: string; ignoreDuplicates: boolean },
     ) => {
       select: (columns: string) => {
-        single: () => Promise<{ data: unknown; error: unknown }>;
+        maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
       };
     };
   };
@@ -203,13 +212,46 @@ export async function syncJournaledCapture(
         client_capture_id: clientCaptureId,
         capture_mode: "text",
       },
-      { onConflict: "user_id,client_capture_id" },
+      { onConflict: "user_id,client_capture_id", ignoreDuplicates: true },
     )
     .select(captureColumns)
-    .single();
+    .maybeSingle();
 
+  account?.assertCurrentAccount();
   if (error) throw toPersistenceWriteError(error);
-  return { provider: "supabase", captureId: parseCapture(data).id };
+  let captureData = data;
+  if (!captureData) {
+    // ON CONFLICT DO NOTHING returns no row for a duplicate. Recover the
+    // alias through the same account/key, without rewriting any saved data.
+    const read = client.from("capture_items") as {
+      select: (columns: string) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            single: () => Promise<{ data: unknown; error: unknown }>;
+          };
+        };
+      };
+    };
+    const existing = await read
+      .select(captureColumns)
+      .eq("user_id", user.id)
+      .eq("client_capture_id", clientCaptureId)
+      .single();
+    account?.assertCurrentAccount();
+    if (existing.error) throw toPersistenceWriteError(existing.error);
+    captureData = existing.data;
+  }
+  const capture = parseCapture(captureData);
+  if (capture.user_id !== user.id) {
+    throw new Error("Cannot confirm this capture in your account. Try again.");
+  }
+  return { provider: "supabase", captureId: capture.id };
 }
 
 export async function listCaptureItems(

@@ -52,7 +52,10 @@ const {
   auth: {
     userId: "22222222-2222-4222-8222-222222222222",
     notify: undefined as
-      | ((event: "SIGNED_IN", session: { user: { id: string } }) => void)
+      | ((
+          event: "INITIAL_SESSION" | "SIGNED_IN",
+          session: { user: { id: string } },
+        ) => void)
       | undefined,
   },
 }));
@@ -62,7 +65,21 @@ vi.mock("@/lib/supabase/browser", () => {
     auth: {
       onAuthStateChange: (callback: NonNullable<typeof auth.notify>) => {
         auth.notify = callback;
-        return { data: { subscription: { unsubscribe: vi.fn() } } };
+        // The SDK emits the initial session independently of area hydration.
+        queueMicrotask(() => {
+          if (auth.notify === callback) {
+            callback("INITIAL_SESSION", { user: { id: auth.userId } });
+          }
+        });
+        return {
+          data: {
+            subscription: {
+              unsubscribe: () => {
+                if (auth.notify === callback) auth.notify = undefined;
+              },
+            },
+          },
+        };
       },
       getUser: async () => ({
         data: { user: { id: auth.userId } },
@@ -200,7 +217,7 @@ beforeEach(async () => {
   // transport/readback are synthetic; failed sends cannot clear the journal.
   upsert.mockImplementation((input: Record<string, unknown>) => ({
     select: () => ({
-      single: async () => {
+      maybeSingle: async () => {
         if (!account.available)
           return {
             data: null,

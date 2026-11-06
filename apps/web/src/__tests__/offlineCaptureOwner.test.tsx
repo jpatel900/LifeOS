@@ -254,13 +254,18 @@ describe("W3-16 #1 sibling: the offline queue holds a capture for its own accoun
       expect(mockSyncJournaledCapture).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ raw_text: "Journal signal" }),
+        {
+          expectedUserId: ACCOUNT_B,
+          assertCurrentAccount: expect.any(Function),
+        },
       ),
     );
     await waitFor(() => expect(sentTexts()).toContain("Signal capture"));
-    expect(mockSyncJournaledCapture).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ raw_text: "A journal capture" }),
-    );
+    expect(
+      (mockSyncJournaledCapture.mock.calls as unknown[][]).map(
+        (call) => (call[1] as { raw_text?: string })?.raw_text,
+      ),
+    ).not.toContain("A journal capture");
     expect(sentTexts()).not.toContain("Account A offline thought");
     expect(getDeviceAccount()).toBe(ACCOUNT_B);
     expect(areaReadOwners).not.toContain(ACCOUNT_A);
