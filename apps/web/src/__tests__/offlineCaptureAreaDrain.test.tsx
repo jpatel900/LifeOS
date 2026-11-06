@@ -462,8 +462,18 @@ describe("W7-8: offline area readiness belongs to the active account", () => {
       </WorkflowProvider>,
     );
     await waitFor(() => expect(workflow.syncStatus.account).toBe("synced"));
-    mockListAreas.mockImplementation(() => new Promise(() => undefined));
+    let bReadStarted = false;
+    mockListAreas.mockImplementation(() => {
+      bReadStarted = true;
+      return new Promise(() => undefined);
+    });
     await switchAccount(accountB);
+    // The outer boundary finishes its durable claim before mounting B.
+    // Exercise B's untagged update, never the retired A hook or pending scope.
+    await waitFor(() => {
+      expect(workflow.state.snapshotOwnership?.userId).toBe(accountB);
+      expect(bReadStarted).toBe(true);
+    });
     await act(async () => {
       workflow.syncPersistedAreas([]);
     });
