@@ -6,7 +6,7 @@ The success-side twin of `docs/FAILURES.md`. Moves that worked and why. An entry
 
 ## Distilled plays (one line + pointer)
 
-- **Patch-paste delivery recovery** — When the work exists but the transport failed, ship the patch over the one channel that works and apply it with `git am`. The issue-comment version (#347-#349) is dead. Protocol v2 (patch in the final summary) lived in the relay's kick text, deleted with the relay on 2026-10-17; see `docs/FAILURES.md`.
+- **Patch-paste delivery recovery** — Patches recovered the stranded changes in #347–#349 and #402/#404–#406. The relay was retired in October 2026. [Check that the recovered commit reached the intended branch](../.agents/skills/lifeos-testing/SKILL.md#a-green-signal-counts-only-from-the-layer-the-claim-is-about).
 - **Guard test born with the invariant** — PR #369 shipped the NS-INV-1 guard with the invariant. Promoted 2026-10-17 → `docs/ENGINEERING_INVARIANTS.md` preamble (guard in the same PR, proven by a planted violation).
 - **Generate + flag, don't rely on remembering (manual prod-apply gate)** — Keep the human gate and stop relying on memory: generate the artifact and surface the reminder (`pnpm drift:assemble`, PR #453). For migrations this was later replaced by the gated `migration-apply.yml`; the move still applies to any easy-to-forget manual step.
 
