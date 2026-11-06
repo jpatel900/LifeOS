@@ -5038,10 +5038,7 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
         new TypeError("Failed to fetch"),
       );
       let releaseSnapshot!: () => void;
-      let snapshotStarted!: () => void;
-      const snapshotReached = new Promise<void>((resolve) => {
-        snapshotStarted = resolve;
-      });
+      let snapshotStarted = false;
       if (switchPoint === "before replay") {
         const hold = new Promise<void>((resolve) => {
           releaseSnapshot = resolve;
@@ -5051,7 +5048,7 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
           const pending = await listPendingWritesActual(entity);
           if (entity === "review" && !held) {
             held = true;
-            snapshotStarted();
+            snapshotStarted = true;
             await hold;
           }
           return pending;
@@ -5063,9 +5060,7 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
         </WorkflowProvider>,
       );
       if (switchPoint === "before replay") {
-        await act(async () => {
-          await snapshotReached;
-        });
+        await waitFor(() => expect(snapshotStarted).toBe(true));
         expect(mockSyncJournaledReviewEntry).not.toHaveBeenCalled();
       } else {
         await waitFor(() =>

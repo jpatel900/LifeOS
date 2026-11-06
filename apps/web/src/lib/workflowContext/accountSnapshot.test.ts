@@ -47,6 +47,94 @@ function captured(rawText: string) {
 }
 
 describe("account snapshots", () => {
+  it.each(["missing", "empty"])(
+    "qualifies a legacy scoped snapshot with %s metadata without losing aliases or inventing debt",
+    async (metadata) => {
+      const saved = captured(
+        "A's delivered capture before ownership bookkeeping",
+      );
+      const capture = saved.captureItems[0];
+      saved.accountIdByLocalId.captures[capture.id] =
+        "11111111-1111-4111-8111-111111111111";
+      if (metadata === "empty")
+        saved.snapshotOwnership = {
+          version: 1,
+          epoch: 7,
+          revision: 11,
+          rows: {},
+        };
+      sessionStorage.setItem(
+        accountSnapshotKey("account:A"),
+        JSON.stringify(saved),
+      );
+      const decoded = loadStoredStateFromSession(
+        accountSnapshotKey("account:A"),
+      ).state!;
+      const claimed = await claimAnonymousSnapshots("account:A");
+      expect(claimed.state.snapshotOwnership).toEqual({
+        ...decoded.snapshotOwnership,
+        userId: "A",
+      });
+      const bound = workflowReducer(claimed.state, {
+        type: "bindSnapshotAccount",
+        userId: "A",
+      });
+      expect(bound.captureItems).toEqual(saved.captureItems);
+      expect(bound.accountIdByLocalId).toEqual(saved.accountIdByLocalId);
+      expect(hasSnapshotWork(bound)).toBe(false);
+      const switched = workflowReducer(bound, {
+        type: "bindSnapshotAccount",
+        userId: "B",
+      });
+      expect(switched.captureItems).toEqual([]);
+      expect(switched.accountIdByLocalId.captures).toEqual({});
+      expect(
+        (await claimAnonymousSnapshots("account:B")).state.captureItems,
+      ).toEqual([]);
+    },
+  );
+
+  it.each(["metadata", "row"])(
+    "refuses a scoped legacy destination with contradictory %s ownership",
+    async (evidence) => {
+      const saved = captured("Foreign account capture");
+      const foreign =
+        evidence === "metadata"
+          ? {
+              ...saved,
+              snapshotOwnership: {
+                version: 1,
+                epoch: 0,
+                revision: 0,
+                rows: {},
+                userId: "B",
+              },
+            }
+          : {
+              ...saved,
+              captureItems: [{ ...saved.captureItems[0], user_id: "B" }],
+            };
+      const key = accountSnapshotKey("account:A");
+      const bytes = JSON.stringify(foreign);
+      sessionStorage.setItem(key, bytes);
+      await expect(claimAnonymousSnapshots("account:A")).rejects.toThrow(
+        "conflicting ownership",
+      );
+      expect(sessionStorage.getItem(key)).toBe(bytes);
+    },
+  );
+
+  it("does not qualify or import an unscoped legacy snapshot", async () => {
+    const saved = captured("Unscoped ownership is unknown");
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    const claimed = await claimAnonymousSnapshots("account:A");
+    expect(claimed.state.captureItems).toEqual([]);
+    expect(
+      loadStoredStateFromSession().state?.snapshotOwnership?.userId,
+    ).toBeUndefined();
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBe(JSON.stringify(saved));
+  });
+
   it("imports anonymous delivery debt without replacing account bookkeeping", async () => {
     const accountScope = "account:A";
     const bound = workflowReducer(createEmptyWorkflowState(), {

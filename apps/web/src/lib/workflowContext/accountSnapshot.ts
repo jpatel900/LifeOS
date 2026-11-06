@@ -1,6 +1,10 @@
 import { STORAGE_KEY, type WorkflowState } from "../workflow/shared";
 import { isUnownedWorkflowScope } from "../durability/deviceAccount";
-import { trackSnapshotChanges } from "./snapshotOwnership";
+import {
+  trackSnapshotChanges,
+  restoreSnapshotOwnership,
+} from "./snapshotOwnership";
+import { MOCK_USER_ID } from "../mockData";
 import {
   readSnapshotCaptureOwner,
   reserveSnapshotCaptureOwner,
@@ -189,6 +193,40 @@ export async function claimAnonymousSnapshots(
     heldTarget ??
     loadStoredStateFromSession(accountSnapshotKey(accountScope)).state;
   if (!destination) throw new Error("The account snapshot needs recovery.");
+  const userId = accountScope.startsWith("account:")
+    ? accountScope.slice("account:".length)
+    : undefined;
+  if (!userId) throw new Error("An account snapshot needs an account scope.");
+  const previousOwner = destination.snapshotOwnership?.userId;
+  const conflictingRow = Object.values(destination).some(
+    (value) =>
+      Array.isArray(value) &&
+      value.some(
+        (row) =>
+          row &&
+          typeof row === "object" &&
+          typeof row.user_id === "string" &&
+          row.user_id !== MOCK_USER_ID &&
+          row.user_id !== userId,
+      ),
+  );
+  if (
+    (previousOwner !== undefined && previousOwner !== userId) ||
+    conflictingRow
+  )
+    throw new Error("The stored account snapshot has conflicting ownership.");
+  if (previousOwner === undefined) {
+    // Pre-bookkeeping account snapshots already belonged to their scoped key.
+    // Qualify that destination before importing anonymous rows. Keep receipts,
+    // aliases and delivery status intact; never infer this for unscoped data.
+    const ownership =
+      destination.snapshotOwnership ??
+      restoreSnapshotOwnership(destination).snapshotOwnership!;
+    destination = {
+      ...destination,
+      snapshotOwnership: { ...ownership, userId },
+    };
+  }
   const recoveries = await listSnapshotRecoveries();
   const blockedRecoveries = new Set<string>();
   const draftOwners: Record<string, string | null> = {};

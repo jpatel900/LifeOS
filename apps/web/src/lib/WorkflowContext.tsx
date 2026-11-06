@@ -298,6 +298,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     stateRef: { current: WorkflowState };
   } | null>(null);
   const heldSnapshots = useRef(new Map<string, { current: WorkflowState }>());
+  const deviceIdentityGenerationRef = useRef(0);
   // Delivery receipts outlive the keyed account view that sent them.
   // Keep confirmation obligations partitioned by their authenticated owner.
   const unconfirmedClosedDaysRef = useRef(new Map<string, Set<string>>());
@@ -375,7 +376,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // interrupting its local edits. A pending selection still queues.
       if (
         scope === selectedScope.current &&
-        snapshot.current?.scope === scope
+        (snapshot.current?.scope === scope ||
+          (typeof userId === "string" && getDeviceAccount() === userId))
       ) {
         setDeviceAccount(userId);
         if (notifySameAccount)
@@ -473,9 +475,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       if (!active) return;
       if (session?.user?.id) {
         authRevision += 1;
+        deviceIdentityGenerationRef.current += 1;
         selectAccount(session.user.id);
       } else if (event === "SIGNED_OUT" || event === "INITIAL_SESSION") {
         authRevision += 1;
+        deviceIdentityGenerationRef.current += 1;
         selectAccount(null);
       }
     });
@@ -515,6 +519,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       active = false;
       window.removeEventListener("online", online);
       subscription?.data?.subscription?.unsubscribe();
+      deviceIdentityGenerationRef.current += 1;
       setDeviceAccount(undefined);
     };
   }, []);
@@ -550,6 +555,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           heldState={heldSnapshots.current.get(account.scope)?.current}
           clearHeldSnapshots={clearHeldSnapshots}
           unconfirmedClosedDaysRef={unconfirmedClosedDaysRef}
+          deviceIdentityGenerationRef={deviceIdentityGenerationRef}
         >
           {children}
         </AccountWorkflowProvider>
@@ -571,6 +577,7 @@ function AccountWorkflowProvider({
   heldState,
   clearHeldSnapshots,
   unconfirmedClosedDaysRef,
+  deviceIdentityGenerationRef,
 }: {
   children: ReactNode;
   scope: string;
@@ -587,6 +594,7 @@ function AccountWorkflowProvider({
   heldState?: WorkflowState;
   clearHeldSnapshots: () => void;
   unconfirmedClosedDaysRef: { current: Map<string, Set<string>> };
+  deviceIdentityGenerationRef: { current: number };
 }) {
   const storageKey = accountSnapshotKey(scope);
   const draftScope = scope === "demo" ? undefined : scope;
@@ -736,7 +744,9 @@ function AccountWorkflowProvider({
   const accountSyncRequestedRef = useRef(false);
   // Reconnect can discover an account before its auth event. Only an applied
   // area and workflow read for that owner releases its queued writes.
-  const reconnectHydrationOwnerRef = useRef<string | null>(null);
+  const reconnectHydrationOwnerRef = useRef<string | null>(
+    scope.startsWith("account:") ? scope.slice("account:".length) : null,
+  );
   const observeAreaAccount = useCallback((account: DeviceAccount) => {
     if (areaAccountRef.current.account === account) return false;
     areaAccountRef.current = { account };
@@ -762,7 +772,6 @@ function AccountWorkflowProvider({
   // vitest had already deleted `window` between test files, throwing
   // `ReferenceError: window is not defined` (main red at 79996dba, PR #894's
   // CI). Checked before every one of those setters below.
-  const deviceIdentityGenerationRef = useRef(0);
   const deviceVisibilityRefreshRef = useRef<Promise<void>>(Promise.resolve());
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -770,12 +779,8 @@ function AccountWorkflowProvider({
     return () => {
       mountedRef.current = false;
       activeParseCaptureIdRef.current = null;
-      deviceIdentityGenerationRef.current += 1;
     };
   }, []);
-  useLayoutEffect(() => {
-    deviceIdentityGenerationRef.current += 1;
-  }, [authRevision]);
   // #960 defect 1: guards `runAccountSync` against running twice at once —
   // the mount-effect call and a `SIGNED_IN` event fired by the auth listener
   // in quick succession (e.g. a session already present at first paint).
@@ -1001,7 +1006,14 @@ function AccountWorkflowProvider({
         generation: snapshotIdentityRef.current.generation,
       };
     },
-    [dispatch, markSignedOutLocal, scope, isScopeActive, onIdentityMismatch],
+    [
+      dispatch,
+      markSignedOutLocal,
+      scope,
+      isScopeActive,
+      onIdentityMismatch,
+      deviceIdentityGenerationRef,
+    ],
   );
 
   const accountSnapshotReadIsCurrent = useCallback(
@@ -2691,7 +2703,7 @@ function AccountWorkflowProvider({
         return false;
       }
     },
-    [unconfirmedClosedDaysRef],
+    [unconfirmedClosedDaysRef, deviceIdentityGenerationRef],
   );
 
   // Owner changes must reveal retained device evidence even while offline.
@@ -2932,6 +2944,7 @@ function AccountWorkflowProvider({
       refreshPendingSaveFailed,
       readbackAccountReviewClosedDays,
       unconfirmedClosedDaysRef,
+      deviceIdentityGenerationRef,
     ],
   );
 
@@ -3367,6 +3380,7 @@ function AccountWorkflowProvider({
     scope,
     isScopeActive,
     markPersistedLoadFailure,
+    deviceIdentityGenerationRef,
     refreshUnsyncedCount,
     syncPersistedWorkflowRows,
     persistedAreaIdForWorkflowId,
