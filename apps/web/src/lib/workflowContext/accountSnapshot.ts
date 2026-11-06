@@ -1,5 +1,6 @@
 import { STORAGE_KEY, type WorkflowState } from "../workflow/shared";
 import { isUnownedWorkflowScope } from "../durability/deviceAccount";
+import { trackSnapshotChanges } from "./snapshotOwnership";
 import {
   readSnapshotCaptureOwner,
   reserveSnapshotCaptureOwner,
@@ -164,7 +165,9 @@ export function mergeAnonymousSnapshot(
       });
     }
   }
-  return merged;
+  // Imported rows are new work in the destination lifetime. Source epochs and
+  // revisions cannot be compared with the destination's existing receipts.
+  return trackSnapshotChanges(target, merged);
 }
 
 /** Reserve the source, then commit the destination before consuming it.

@@ -65,7 +65,7 @@ import type { WorkflowState } from "../workflow";
 // surface, and this #844 type is consumed only by the state layer.
 import type { AccountIdAliasFamily } from "../workflow/shared";
 import {
-  persistedAreaIdForWorkflowId,
+  persistedAreaIdForWorkflowId as findPersistedAreaIdForWorkflowId,
   persistedIdForLocalId,
 } from "./reducerCore";
 
@@ -83,6 +83,7 @@ export interface PersistenceSyncDeps {
   persistedBlockIdByLocalIdRef: MutableRefObject<Map<string, string>>;
   persistedSessionIdByLocalIdRef: MutableRefObject<Map<string, string>>;
   selectedAreaId: string | null;
+  resolveWorkflowAreaId?: (areaId: string | null) => string | null;
   /**
    * #844 — the ONE record point for "this local row became this account row".
    * Writes the per-mount ref AND the reducer's durable alias map, so the
@@ -93,6 +94,11 @@ export interface PersistenceSyncDeps {
     family: AccountIdAliasFamily,
     localId: string,
     accountId: string,
+  ) => void;
+  registerDraftTransfer?: (
+    draftId: string,
+    taskId: string,
+    proposalId: string | null,
   ) => void;
   markLocalOnly: (message: string) => void;
   /** The device journal refused the write; account delivery is separate. */
@@ -151,6 +157,14 @@ function recordableOutcomeForStatus(
 }
 
 export function createPersistenceSync(deps: PersistenceSyncDeps) {
+  const persistedAreaIdForWorkflowId = (areaId: string, areas: Area[]) => {
+    const resolved = deps.resolveWorkflowAreaId
+      ? deps.resolveWorkflowAreaId(areaId)
+      : areaId;
+    return resolved === null
+      ? null
+      : findPersistedAreaIdForWorkflowId(resolved, areas);
+  };
   const {
     persistedAreasRef,
     persistedCaptureIdByLocalIdRef,
@@ -201,6 +215,9 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         )
       : null;
 
+    // Both device replay and direct fallback identify the same capture.
+    const clientCaptureId =
+      localCapture.client_capture_id ?? generateClientWriteId();
     let journalled;
     try {
       journalled = await journalCaptureWrite({
@@ -216,8 +233,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         // that counter, and reusing it here overwrote an earlier capture's
         // raw text in the account (bug hunt #1). `persistCapture` runs once
         // per capture; journal replays reuse the key stored in the journal.
-        clientCaptureId:
-          localCapture.client_capture_id ?? generateClientWriteId(),
+        clientCaptureId,
       });
     } catch (error) {
       // An ownership refusal is not a storage failure. A direct POST would
@@ -232,19 +248,26 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       // resolved or none) POSTed directly with no device tier at all; that
       // path is kept alive here as a fallback so a storage-blocked device
       // still reaches the account instead of regressing behind the new
-      // durable one. A failure from THIS call is not caught here — it
-      // propagates to the caller's `markPersistedSaveFailure`, the same
-      // classification a direct `createCaptureItem` failure has always had.
+      // durable one. A failed account call still reaches the caller's
+      // `markPersistedSaveFailure`, without losing the separate fact that
+      // the device refused to keep a recovery copy.
       if (deps.canWriteAccount?.() === false) {
         markDeviceStorageBlocked();
         return;
       }
       if (!localCapture.area_id || persistedAreaId) {
-        const result = await createCaptureItem(client, {
-          raw_text: localCapture.raw_text,
-          return_hook: localCapture.return_hook ?? null,
-          area_id: persistedAreaId,
-        });
+        let result;
+        try {
+          result = await createCaptureItem(client, {
+            raw_text: localCapture.raw_text,
+            return_hook: localCapture.return_hook ?? null,
+            area_id: persistedAreaId,
+            client_capture_id: clientCaptureId,
+          });
+        } catch (error) {
+          markDeviceStorageBlocked({ preservePendingLocalChanges: true });
+          throw error;
+        }
         if (result.provider === "supabase") {
           recordAccountAlias("captures", localCapture.id, result.capture.id);
           // #967: account acknowledgement cannot repair the failed device
@@ -310,6 +333,11 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     localProposal: Phase2TimeBlockProposal | null,
     status: "active" | "backlog",
   ) {
+    deps.registerDraftTransfer?.(
+      draft.id,
+      localTask.id,
+      localProposal?.id ?? null,
+    );
     const persistedAreaId = persistedAreaIdForWorkflowId(
       draft.area_id,
       persistedAreasRef.current,

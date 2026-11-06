@@ -12,6 +12,7 @@ import type {
   Task,
 } from "@lifeos/schemas";
 import type { WorkflowState } from "../workflow";
+import type { SnapshotCursor, SnapshotReceipt } from "./snapshotOwnership";
 // Issue #984: a direct submodule import, not an addition to the frozen
 // `workflow.ts` barrel — see that file's own comment.
 import type {
@@ -111,7 +112,7 @@ export interface WorkflowContextValue {
   selectedAreaId: string | null;
   setSelectedAreaId: (areaId: string | null) => void;
   syncStatus: WorkflowSyncStatus;
-  syncPersistedAreas: (areas: Area[]) => void;
+  syncPersistedAreas: (areas: Area[], cursor?: SnapshotCursor) => boolean;
   refreshPersistedWorkflow: () => Promise<void>;
   // #967 manual retry: a thin, public wrapper around the EXISTING
   // `runAccountSync({ replayAfter: true })` pass — the same ordered
@@ -127,8 +128,13 @@ export interface WorkflowContextValue {
   // `syncStatus` afterward, never treat promise settlement as proof of
   // delivery.
   retryPendingAccountWrites: () => Promise<void>;
-  addArea: (name: string, color: string) => void;
-  updateAreaColor: (areaId: string, color: string) => void;
+  addArea: (name: string, color: string) => SnapshotReceipt | undefined;
+  updateAreaColor: (areaId: string, color: string) => SnapshotReceipt;
+  acknowledgeAreaSave: (receipt: SnapshotReceipt, area: Area) => boolean;
+  runAreaWrite: (
+    receipt: SnapshotReceipt,
+    write: () => Promise<void>,
+  ) => Promise<void>;
   // #703: the one capture path. Persists the thought verbatim and never
   // parses — sorting is the separate `sortCaptureIntoDrafts` step below.
   // (Absorbed the former `submitCaptureRaw`, which did exactly this.)
@@ -508,13 +514,15 @@ export interface WorkflowSyncStatus {
   // `refreshPendingSaveFailed`/`refreshJournalledDurableState` in
   // `WorkflowContext.tsx`, under the exact same generation/identity/
   // read-failure guards as `pendingSaveFailed`, and updated atomically with
-  // it. `"server-capability-missing"` iff at least one row is failed AND
+  // it. `"server-capability-missing"` or `"invalid-write"` iff a row failed AND
   // every failed row's own `last_attempt_failure_kind` is that exact
   // value. Any mix of kinds, any `"unknown"` row, any legacy/invalid
   // stored value, or no failed rows at all yields `"unknown"` (or this
   // field stays absent when nothing is failed — both read the same way to
-  // every consumer). Never widen this into a permanence/transience claim:
-  // it is a snapshot of the LATEST attempt per row, nothing more.
+  // every consumer). `"invalid-write"` is limited to adapter-proven input
+  // rejection before account mutation. It does not classify HTTP or SQL
+  // status, missing mappings, auth, or readback failures. This is not a full
+  // permanence/transience split: only the LATEST attempt per row is known.
   pendingSaveFailureKind?: PersistenceFailureKind;
 }
 

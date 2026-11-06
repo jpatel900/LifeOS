@@ -28,8 +28,8 @@ const isoDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected ISO date YYYY-MM-DD");
 
 export const AreaSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
+  id: z.guid(),
+  user_id: z.guid(),
   name: z.string().min(1),
   slug: z.string().min(1),
   description: z.string().nullable(),
@@ -51,9 +51,9 @@ export const AreaSchema = z.object({
 export type Area = z.infer<typeof AreaSchema>;
 
 export const CaptureItemSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid().nullable(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid().nullable(),
   raw_text: z.string().min(1),
   raw_audio_ref: z.string().nullable(),
   return_hook: z.string().nullable().optional(),
@@ -67,10 +67,10 @@ export const CaptureItemSchema = z.object({
 export type CaptureItem = z.infer<typeof CaptureItemSchema>;
 
 export const AmbiguityAssessmentSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid().nullable(),
-  source_capture_item_id: z.string().uuid(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid().nullable(),
+  source_capture_item_id: z.guid(),
   likely_objective: z.string(),
   problem_type: z.string(),
   complexity_level: z.string(),
@@ -90,9 +90,9 @@ export const AmbiguityAssessmentSchema = z.object({
 export type AmbiguityAssessment = z.infer<typeof AmbiguityAssessmentSchema>;
 
 export const ProjectSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid(),
   title: z.string().min(1),
   description: z.string().nullable(),
   status: z.enum(PROJECT_STATUSES),
@@ -103,11 +103,11 @@ export const ProjectSchema = z.object({
 export type Project = z.infer<typeof ProjectSchema>;
 
 export const TaskSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid(),
-  project_id: z.string().uuid().nullable(),
-  source_capture_item_id: z.string().uuid().nullable(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid(),
+  project_id: z.guid().nullable(),
+  source_capture_item_id: z.guid().nullable(),
   title: z.string().min(1),
   description: z.string().nullable(),
   status: z.enum(TASK_STATUSES),
@@ -126,10 +126,10 @@ export const TaskSchema = z.object({
   // continue to parse and type-check unchanged (schema-only slice, zero
   // user-visible change). The DB remains the source of truth: the migration
   // enforces nullable FKs/timestamps and `is_commitment not null default false`.
-  waiting_on_person_id: z.string().uuid().nullable().optional(),
+  waiting_on_person_id: z.guid().nullable().optional(),
   waiting_on_since: offsetDatetime().nullable().optional(),
   is_commitment: z.boolean().optional(),
-  committed_to_person_id: z.string().uuid().nullable().optional(),
+  committed_to_person_id: z.guid().nullable().optional(),
   // FR-031 slice 3 (task-map v1 persistence, 20260711120000) additive
   // columns. Nullable — null for tasks with no approved map. `progression_map`
   // is validated as `TaskMapGraphDraftSchema` + `validateGraph` before write
@@ -146,8 +146,8 @@ export const TaskSchema = z.object({
 export type Task = z.infer<typeof TaskSchema>;
 
 export const PersonSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
+  id: z.guid(),
+  user_id: z.guid(),
   display_name: z.string().min(1),
   normalized_name: z.string().min(1),
   notes: z.string().nullable(),
@@ -173,8 +173,8 @@ export type CompensationRule = z.infer<typeof CompensationRuleSchema>;
 // NS-INV-1 context-assembly module. Both text fields are nullable in the DB;
 // `compensation_rules` is null when unset, otherwise a validated rule array.
 export const OperatorProfileSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
+  id: z.guid(),
+  user_id: z.guid(),
   profile_text: z.string().nullable(),
   compensation_rules: z.array(CompensationRuleSchema).nullable(),
   created_at: offsetDatetime(),
@@ -184,10 +184,10 @@ export const OperatorProfileSchema = z.object({
 export type OperatorProfile = z.infer<typeof OperatorProfileSchema>;
 
 export const TimeBlockProposalSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid(),
-  task_id: z.string().uuid().nullable(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid(),
+  task_id: z.guid().nullable(),
   proposed_start: offsetDatetime(),
   proposed_end: offsetDatetime(),
   rationale_json: JsonValueSchema,
@@ -200,11 +200,11 @@ export const TimeBlockProposalSchema = z.object({
 export type TimeBlockProposal = z.infer<typeof TimeBlockProposalSchema>;
 
 export const CalendarBlockSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid(),
-  proposal_id: z.string().uuid().nullable(),
-  task_id: z.string().uuid().nullable(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid(),
+  proposal_id: z.guid().nullable(),
+  task_id: z.guid().nullable(),
   google_event_id: z.string().nullable(),
   start_at: offsetDatetime(),
   end_at: offsetDatetime(),
@@ -216,11 +216,11 @@ export const CalendarBlockSchema = z.object({
 export type CalendarBlock = z.infer<typeof CalendarBlockSchema>;
 
 export const ExecutionSessionSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid(),
-  task_id: z.string().uuid().nullable(),
-  calendar_block_id: z.string().uuid().nullable(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid(),
+  task_id: z.guid().nullable(),
+  calendar_block_id: z.guid().nullable(),
   planned_minutes: z.number().int().nullable(),
   actual_minutes: z.number().int().nullable(),
   paused_minutes: z.number().int().nullable(),
@@ -240,9 +240,9 @@ export const ExecutionSessionSchema = z.object({
 export type ExecutionSession = z.infer<typeof ExecutionSessionSchema>;
 
 export const ReviewEntrySchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid().nullable(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid().nullable(),
   review_type: z.enum(REVIEW_TYPES),
   period_start: isoDate,
   period_end: isoDate,
@@ -253,15 +253,15 @@ export const ReviewEntrySchema = z.object({
 export type ReviewEntry = z.infer<typeof ReviewEntrySchema>;
 
 export const WinRecordSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid(),
-  source_task_id: z.string().uuid().nullable(),
-  source_project_id: z.string().uuid().nullable(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid(),
+  source_task_id: z.guid().nullable(),
+  source_project_id: z.guid().nullable(),
   title: z.string().min(1),
   detail: z.string().nullable(),
   occurred_at: isoDate,
-  review_entry_id: z.string().uuid().nullable(),
+  review_entry_id: z.guid().nullable(),
   created_at: offsetDatetime(),
 });
 
@@ -279,9 +279,9 @@ export const RollupSummaryContentSchema = z.object({
 export type RollupSummaryContent = z.infer<typeof RollupSummaryContentSchema>;
 
 export const RollupSummarySchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid(),
   period_type: z.enum(ROLLUP_PERIOD_TYPES),
   period_start: isoDate,
   period_end: isoDate,
@@ -292,9 +292,9 @@ export const RollupSummarySchema = z.object({
 export type RollupSummary = z.infer<typeof RollupSummarySchema>;
 
 export const HealthCheckSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid().nullable(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid().nullable(),
   subsystem: z.string().min(1),
   status: z.enum(HEALTH_CHECK_STATUSES),
   score: z.number().int(),
@@ -320,8 +320,8 @@ export type GoogleCalendarConnectionError = z.infer<
 >;
 
 export const GoogleCalendarConnectionSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
+  id: z.guid(),
+  user_id: z.guid(),
   provider: z.literal("google_calendar"),
   calendar_id: z.string().min(1),
   granted_scopes_json: JsonValueSchema,
@@ -341,9 +341,9 @@ export type GoogleCalendarConnection = z.infer<
 >;
 
 export const ExternalWriteEventSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid().nullable(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid().nullable(),
   provider: z.string().min(1),
   operation: z.string().min(1),
   target_type: z.string().min(1),

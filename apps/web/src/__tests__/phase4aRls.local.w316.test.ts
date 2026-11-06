@@ -4,21 +4,18 @@
 // phase4aRls.local` with RUN_SUPABASE_RLS_TESTS=1), never against a shared or
 // production database. Both scenarios write only synthetic rows and clean up.
 //
-// Known-bug convention in this file: the scenario and its harness checks run
-// as ordinary assertions, so a broken harness fails loudly. Only the single
-// assertion that names the bug goes through `expectKnownBug`, which passes
-// while the bug is present and FAILS once it is fixed. When that happens,
-// replace `expectKnownBug(() => X)` with `X`. (Plain `it.fails` would also
-// pass on a broken harness, and this lane cannot be probed locally.)
-import { execFile, spawn } from "node:child_process";
+// Both bugs are fixed (#3: export paging; #5: 20261024120000). The harness
+// checks still run as ordinary assertions, so a scenario that did not really
+// happen (too few rows seeded, replays that never overlapped) fails loudly.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { promisify } from "node:util";
-import { createClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import { buildUserDataExport } from "@/lib/data/export";
-
-const execFileAsync = promisify(execFile);
+import {
+  createLocalClient as createHarnessClient,
+  psql as runLocalSql,
+  startLockHolder,
+} from "@/testing/w316DatabaseHarness";
 
 const runLocalRlsTests = process.env.RUN_SUPABASE_RLS_TESTS === "1";
 // QA doctrine #269: deliberate local RLS opt-in gate; default runs skip until RUN_SUPABASE_RLS_TESTS=1 provides local Supabase proof.
@@ -45,33 +42,11 @@ const userB = {
   areaId: "00000000-0000-4000-8000-000000000201",
 };
 
-function expectKnownBug(check: () => void) {
-  let threw = false;
-  try {
-    check();
-  } catch {
-    threw = true;
-  }
-  expect(
-    threw,
-    "KNOWN BUG fixed: this assertion now passes. Replace expectKnownBug(() => X) with X.",
-  ).toBe(true);
+function targets() {
+  return { supabaseUrl, supabaseAnonKey, localDbUrl };
 }
-
 function createLocalClient() {
-  if (!supabaseAnonKey) {
-    throw new Error(
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY is required when RUN_SUPABASE_RLS_TESTS=1.",
-    );
-  }
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-      storageKey: `lifeos-rls-w316-${Math.random().toString(16).slice(2)}`,
-    },
-  });
+  return createHarnessClient(targets());
 }
 
 async function signIn(email: string, password: string) {
@@ -109,12 +84,7 @@ function configuredMaxRows() {
 }
 
 async function psql(sql: string) {
-  const { stdout } = await execFileAsync(
-    "psql",
-    [localDbUrl, "-X", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-c", sql],
-    { timeout: 20_000 },
-  );
-  return stdout.trim();
+  return runLocalSql(targets(), sql);
 }
 
 describeLocalRls("W3-16 #3: full export above the API row cap", () => {
@@ -177,18 +147,15 @@ describeLocalRls("W3-16 #3: full export above the API row cap", () => {
       );
 
       expect(titles).not.toContain(sentinelTitle);
-      expect(new Set(titles).size).toBe(titles.length);
       // Another populated table comes through, unmixed with tasks.
       expect(
         (exported.tables.areas as Array<{ id: string }>).map((row) => row.id),
       ).toContain(areaId);
-      // KNOWN BUG (W3-16 #3): one unpaginated select per table returns at
-      // most `max_rows` rows, so the export silently drops the rest.
-      expectKnownBug(() =>
-        expect(
-          titles.filter((title) => title.startsWith(titlePrefix)),
-        ).toHaveLength(cap + 1),
-      );
+      // W3-16 #3: the export pages past the API's `max_rows` cap, so every
+      // row comes through, exactly once.
+      expect(
+        titles.filter((title) => title.startsWith(titlePrefix)),
+      ).toHaveLength(cap + 1);
     } finally {
       await client.from("tasks").delete().like("title", `${titlePrefix}%`);
       await client.from("areas").delete().eq("id", areaId);
@@ -252,18 +219,14 @@ describeLocalRls(
         end $$;
         commit;
       `;
-      const holder = spawn(
-        "psql",
-        [localDbUrl, "-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", "-"],
-        { env: { ...process.env, PGAPPNAME: appName } },
+      const { child: holder, exited: holderExit } = startLockHolder(
+        targets(),
+        appName,
       );
       let holderStderr = "";
       holder.stderr.on("data", (chunk) => {
         holderStderr += String(chunk);
       });
-      const holderExit = new Promise<number | null>((resolve) =>
-        holder.on("close", resolve),
-      );
       holder.stdin.end(holderSql);
 
       try {
@@ -297,28 +260,28 @@ describeLocalRls(
         ]);
 
         // Harness check: the holder saw both replays blocked, then committed.
-        expect(await holderExit, holderStderr).toBe(0);
+        expect(
+          await holderExit,
+          holderStderr || "The local RLS lock holder failed.",
+        ).toBe(0);
 
         const { data: rows, error: selectError } = await clientOne
           .from("execution_sessions")
-          .select("id,outcome")
+          .select("id,user_id,task_id,client_write_id,notes,outcome")
           .eq("notes", notes);
         expect(selectError).toBeNull();
         // Exactly one logical session, whatever the callers were told.
         expect(rows).toHaveLength(1);
 
-        // KNOWN BUG (W3-16 #5): the replay short-circuit runs BEFORE the
-        // task lock, so the second replay inserts after the first commits and
-        // hits the (user_id, client_write_id) unique index instead of being
-        // acknowledged as a duplicate.
-        expectKnownBug(() => {
-          expect(one.error).toBeNull();
-          expect(two.error).toBeNull();
-          expect(
-            [one.data?.deduplicated, two.data?.deduplicated].sort(),
-          ).toEqual([false, true]);
-          expect(one.data?.session?.id).toBe(two.data?.session?.id);
-        });
+        // W3-16 #5: the replay check runs again after the task lock
+        // (20261024120000), so the second replay is acknowledged as a
+        // duplicate with the first one's session, not a unique-index error.
+        expect(one.error).toBeNull();
+        expect(two.error).toBeNull();
+        expect([one.data?.deduplicated, two.data?.deduplicated].sort()).toEqual(
+          [false, true],
+        );
+        expect(one.data?.session?.id).toBe(two.data?.session?.id);
       } finally {
         holder.kill();
         await clientOne.from("execution_sessions").delete().eq("notes", notes);

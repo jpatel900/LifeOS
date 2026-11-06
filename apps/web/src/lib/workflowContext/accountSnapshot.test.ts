@@ -25,7 +25,8 @@ import {
   unverifiedWorkflowScope,
   mergeAnonymousSnapshot,
 } from "./accountSnapshot";
-import { loadStoredStateFromSession } from "./reducerCore";
+import { loadStoredStateFromSession, workflowReducer } from "./reducerCore";
+import { trackSnapshotChanges, hasSnapshotWork } from "./snapshotOwnership";
 
 beforeEach(async () => {
   await clearSnapshotRecoveriesForTests();
@@ -46,6 +47,69 @@ function captured(rawText: string) {
 }
 
 describe("account snapshots", () => {
+  it("imports anonymous delivery debt without replacing account bookkeeping", async () => {
+    const accountScope = "account:A";
+    const bound = workflowReducer(createEmptyWorkflowState(), {
+      type: "bindSnapshotAccount",
+      userId: "A",
+    });
+    const accountCapture = createRawCaptureItem({
+      rawText: "A's held capture",
+    });
+    const account = trackSnapshotChanges(bound, {
+      ...bound,
+      captureItems: [accountCapture],
+    });
+    const edited = trackSnapshotChanges(account, {
+      ...account,
+      captureItems: [{ ...accountCapture, raw_text: "A's newer local edit" }],
+    });
+    const anonymous = trackSnapshotChanges(
+      createEmptyWorkflowState(),
+      captured("New signed-out capture"),
+    );
+    const incoming = anonymous.captureItems[0];
+    storeAccountSnapshot(accountScope, edited);
+    storeAccountSnapshot("anonymous", anonymous);
+    const before = loadStoredStateFromSession(
+      accountSnapshotKey(accountScope),
+    ).state!;
+    const priorOwner =
+      before.snapshotOwnership?.rows.captureItems?.[accountCapture.id];
+    const claimed = await claimAnonymousSnapshots(accountScope);
+    expect(claimed.state.captureItems).toEqual([
+      ...edited.captureItems,
+      incoming,
+    ]);
+    expect(
+      claimed.state.snapshotOwnership?.rows.captureItems?.[accountCapture.id],
+    ).toEqual(priorOwner);
+    expect(
+      claimed.state.snapshotOwnership?.rows.captureItems?.[incoming.id]
+        ?.creation?.pending,
+    ).toBe(true);
+    expect(claimed.state.snapshotOwnership?.userId).toBe("A");
+    const restored = loadStoredStateFromSession(
+      accountSnapshotKey(accountScope),
+    ).state!;
+    const rebound = workflowReducer(restored, {
+      type: "bindSnapshotAccount",
+      userId: "A",
+    });
+    expect(rebound.captureItems).toEqual(claimed.state.captureItems);
+    expect(
+      rebound.snapshotOwnership?.rows.captureItems?.[incoming.id]?.creation
+        ?.pending,
+    ).toBe(true);
+    expect(hasSnapshotWork(rebound)).toBe(true);
+    const again = await claimAnonymousSnapshots(accountScope);
+    expect(
+      again.state.captureItems.filter((row) => row.id === incoming.id),
+    ).toHaveLength(1);
+    const other = await claimAnonymousSnapshots("account:B");
+    expect(other.state.captureItems).toEqual([]);
+  });
+
   it("quarantines a copied normal claim before anonymous hydration", async () => {
     const original = captured("Already reserved in a different tab");
     storeAccountSnapshot("anonymous", original);

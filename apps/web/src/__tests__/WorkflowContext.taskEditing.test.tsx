@@ -1,4 +1,7 @@
+import "fake-indexeddb/auto";
 import { useEffect, useRef, useState } from "react";
+import { clearStoredTaskDrafts } from "@/lib/durability/draftStore";
+import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
@@ -102,7 +105,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function seedBacklogTask() {
+function seedBacklogTask(delivered = false) {
   let state = workflowSeed();
   state = captureWorkflow(state, "Reorganize the garage shelving.");
   state = backlogLatestDraft(state);
@@ -110,11 +113,13 @@ function seedBacklogTask() {
   if (!task) {
     throw new Error("Seed produced no backlog task.");
   }
+  if (delivered)
+    state.snapshotOwnership = { version: 1, epoch: 0, revision: 0, rows: {} };
   window.sessionStorage.setItem(fixtureStorageKey, JSON.stringify(state));
   return task;
 }
 
-function seedTwoBacklogTasks() {
+function seedTwoBacklogTasks(delivered = false) {
   let state = workflowSeed();
   state = captureWorkflow(state, "Reorganize the garage shelving.");
   state = backlogLatestDraft(state);
@@ -124,6 +129,8 @@ function seedTwoBacklogTasks() {
   if (tasks.length !== 2) {
     throw new Error("Seed did not produce two backlog tasks.");
   }
+  if (delivered)
+    state.snapshotOwnership = { version: 1, epoch: 0, revision: 0, rows: {} };
   window.sessionStorage.setItem(fixtureStorageKey, JSON.stringify(state));
   return { target: tasks[0], unrelated: tasks[1] };
 }
@@ -181,7 +188,8 @@ function EditProbe({
    * this file leaves untouched. */
   syncAreas?: Area[];
 }) {
-  const { state, editBacklogTask, syncPersistedAreas } = useWorkflow();
+  const { state, editBacklogTask, syncPersistedAreas, syncStatus } =
+    useWorkflow();
   const [result, setResult] = useState<TaskEditResult | null>(null);
   const [pending, setPending] = useState(false);
   const task = state.tasks.find((item) => item.id === taskId);
@@ -197,6 +205,9 @@ function EditProbe({
   return (
     <div>
       <span data-testid="task-title">{task?.title ?? ""}</span>
+      <span data-testid="sync-pending">
+        {String(syncStatus.pendingLocalChanges)}
+      </span>
       <span data-testid="task-description">{task?.description ?? ""}</span>
       <span data-testid="task-area">{task?.area_id ?? ""}</span>
       <span data-testid="task-updated-at">{task?.updated_at ?? ""}</span>
@@ -248,7 +259,9 @@ async function renderProbe(
   return rendered;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await clearStoredTaskDrafts();
+  await clearPendingWrites();
   fixtureStorageKey = STORAGE_KEY;
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
@@ -384,7 +397,8 @@ function ConcurrencyProbe({
   targetId: string;
   unrelatedId: string;
 }) {
-  const { state, editBacklogTask, updateTaskFirstTinyStep } = useWorkflow();
+  const { state, editBacklogTask, updateTaskFirstTinyStep, syncStatus } =
+    useWorkflow();
   const [result, setResult] = useState<TaskEditResult | null>(null);
   const target = state.tasks.find((item) => item.id === targetId);
   const unrelated = state.tasks.find((item) => item.id === unrelatedId);
@@ -392,6 +406,9 @@ function ConcurrencyProbe({
   return (
     <div>
       <span data-testid="target-title">{target?.title ?? ""}</span>
+      <span data-testid="sync-pending">
+        {String(syncStatus.pendingLocalChanges)}
+      </span>
       <span data-testid="target-first-step">
         {target?.first_tiny_step ?? ""}
       </span>
@@ -458,7 +475,7 @@ describe("editBacklogTask — configured account", () => {
   });
 
   it("reports success with the server-confirmed task and reflects it locally when the session is unchanged", async () => {
-    const task = seedBacklogTask();
+    const task = seedBacklogTask(true);
     const confirmedTask: Task = { ...task, title: "New title" };
     persistBacklogTaskEditOverride.current = () =>
       Promise.resolve({
@@ -479,6 +496,9 @@ describe("editBacklogTask — configured account", () => {
     expect(parsed.task.title).toBe("New title");
     expect(parsed.refreshPending).toBe(false);
     expect(screen.getByTestId("task-title")).toHaveTextContent("New title");
+    await waitFor(() =>
+      expect(screen.getByTestId("sync-pending")).toHaveTextContent("false"),
+    );
   });
 
   it("reports success with deliveryTier 'account' and savedAreaId resolved from the SERVER's own returned row, not the request", async () => {
@@ -670,7 +690,7 @@ describe("editBacklogTask — configured account", () => {
   });
 
   it("scenario 2 — an UNRELATED task changes locally while the save awaits: the unrelated task's change survives untouched, and the target still reflects normally", async () => {
-    const { target, unrelated } = seedTwoBacklogTasks();
+    const { target, unrelated } = seedTwoBacklogTasks(true);
     const confirmedTask: Task = { ...target, title: "New title" };
     const write = deferred<{
       status: "persisted";
@@ -726,6 +746,13 @@ describe("editBacklogTask — configured account", () => {
     expect(screen.getByTestId("unrelated-title")).toHaveTextContent(
       unrelated.title,
     );
+    // #1106 review finding 2: the first move is kept on this device by
+    // design (its own "saved on this device" banner says so). It is still
+    // protected above, but it is not account work, so once the delivered
+    // edit settles nothing is left owed to the account.
+    await waitFor(() => {
+      expect(screen.getByTestId("sync-pending")).toHaveTextContent("false");
+    });
   });
 
   it("reports conflict and leaves the canonical task unchanged", async () => {

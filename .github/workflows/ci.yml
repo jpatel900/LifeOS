@@ -288,7 +288,7 @@ jobs:
     name: Playwright E2E
     needs: changes
     if: needs.changes.outputs.heavy == 'true'
-    # Playwright 1.60 does not support Ubuntu 26.04 browser dependencies.
+    # Playwright 1.60 lacks ffmpeg support on the Ubuntu 26.04 runner image.
     runs-on: ubuntu-24.04
 
     steps:
@@ -361,7 +361,7 @@ jobs:
     name: Playwright E2E (signed-in tier)
     needs: changes
     if: needs.changes.outputs.heavy == 'true'
-    # Keep both browser tiers on Playwright's supported runner image.
+    # Match the device tier's supported Playwright/ffmpeg runner image.
     runs-on: ubuntu-24.04
 
     steps:
