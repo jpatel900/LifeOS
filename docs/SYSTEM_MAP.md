@@ -41,19 +41,21 @@ overplanning, missed-block collapse) is a design input everywhere.
 
 ## Where truth lives
 
-| Kind of truth              | Location                                                                                                   |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Agent governance           | `AGENTS.md` (authority), `CLAUDE.md` (Claude entry)                                                        |
-| Requirements / scope       | `docs/REQUIREMENTS.md` (FR-001..; non-goals are binding)                                                   |
-| Architecture decisions     | `docs/adr/` — see its README index (0002 north star; 0005 staged evolution; 0007 automation control-plane) |
-| Data shapes                | `docs/DATA_MODEL.md` (target shapes = frozen contracts)                                                    |
-| Invariants + enforcement   | `docs/ENGINEERING_INVARIANTS.md` (+ guard tests in CI)                                                     |
-| UX contract                | `docs/UX_FLOWS.md`, ADR 0003, design tokens in `globals.css`                                               |
-| Current status handoff     | `docs/PROJECT_STATE.md` (<=120 lines, replaced in place)                                                   |
-| Failure / success patterns | `docs/FAILURES.md` / `docs/PLAYS.md`                                                                       |
-| Rituals and procedures     | `.agents/skills/` (drift response, lane contracts…)                                                        |
-| Roadmap + vision placement | Curated `docs/vision/`; tracker #293; stage cards and epics                                                |
-| Work in flight             | Open PRs/issues + epic decision logs (comments)                                                            |
+| Kind of truth              | Location                                                                                                    |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Agent governance           | `AGENTS.md` (authority), `CLAUDE.md` (Claude entry)                                                         |
+| Requirements / scope       | `docs/REQUIREMENTS.md` (FR-001..; non-goals are binding)                                                    |
+| Architecture decisions     | `docs/adr/` — see its README index (0002 north star; 0005 staged evolution; 0007 automation control-plane)  |
+| Data shapes                | `docs/DATA_MODEL.md` (target shapes = frozen contracts)                                                     |
+| Invariants + enforcement   | `docs/ENGINEERING_INVARIANTS.md` (+ guard tests in CI)                                                      |
+| UX contract                | `docs/UX_FLOWS.md`, ADR 0003, design tokens in `globals.css`                                                |
+| Current status handoff     | `docs/PROJECT_STATE.md` (<=120 lines, replaced in place)                                                    |
+| Current program + priority | [Final UX Loop](program/final-ux-loop.md) — current rules, resume conditions and owner gates                |
+| Campaign + slice state     | [Campaign registry](program/campaigns.json) — machine-readable states and merged references                 |
+| Failure / success patterns | `docs/FAILURES.md` / `docs/PLAYS.md`                                                                        |
+| Rituals and procedures     | `.agents/skills/` (drift response, lane contracts…)                                                         |
+| Roadmap + vision placement | Curated `docs/vision/`; tracker #293; stage cards and epics — historical placement, not the execution queue |
+| Work in flight             | Open PRs/issues, checked against current program priority; epic comments retain decision history            |
 
 ## How to change things safely
 
@@ -64,9 +66,12 @@ overplanning, missed-block collapse) is a design input everywhere.
 1. This file, then `AGENTS.md` (the budgeted entry file; `CLAUDE.md` imports it).
 2. `docs/PROJECT_STATE.md` (current status), then a reality sweep:
    `git log --oneline -15`, `pnpm status`, open PRs/issues.
-3. ADR 0002 and ADR 0003 (the two load-bearing decisions).
-4. The epic/issue you are working (body = contract; comments = decision log).
-5. On demand: `pnpm agent:context <area>`, the relevant skill in
+3. [Current program](program/final-ux-loop.md) and [campaign states](program/campaigns.json).
+   Check priority, resume conditions and owner gates before choosing work.
+4. ADR 0002 and ADR 0003 (the two load-bearing decisions).
+5. The epic/issue you are working (body = contract; comments = decision log).
+   Reconcile older instructions with the current program; surface conflicts under `AGENTS.md`.
+6. On demand: `pnpm agent:context <area>`, the relevant skill in
    `.agents/skills/`, `FAILURES.md`/`PLAYS.md` before repeating history.
 
 ## Named principles (cite these; they are decided)
