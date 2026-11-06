@@ -11,7 +11,7 @@ import {
 } from "./oauth";
 import {
   type GoogleCalendarStoredConnection,
-  upsertGoogleCalendarConnectionForAccessToken,
+  updateGoogleCalendarRefreshForAccessToken,
 } from "./server";
 
 const GOOGLE_CALENDAR_FREEBUSY_URL =
@@ -96,17 +96,13 @@ async function persistGoogleCalendarRefreshFailure(
       };
 
   try {
-    await upsertGoogleCalendarConnectionForAccessToken(supabaseAccessToken, {
-      calendar_id: connection.calendar_id,
-      connected_at: connection.connected_at,
-      disconnected_at: connection.disconnected_at,
-      granted_scopes_json: Array.isArray(connection.granted_scopes_json)
-        ? connection.granted_scopes_json
-        : [],
-      last_error_json: { ...details, at: new Date().toISOString() },
-      status: connection.status,
-      user_id: connection.user_id,
-    });
+    await updateGoogleCalendarRefreshForAccessToken(
+      supabaseAccessToken,
+      connection,
+      {
+        last_error_json: { ...details, at: new Date().toISOString() },
+      },
+    );
   } catch {
     // Best effort: surfacing the original refresh error to the caller
     // matters more than persisting the diagnostic write succeeding.
@@ -153,23 +149,18 @@ export async function resolveGoogleCalendarAccessToken(params: {
     ? encryptGoogleCalendarToken(refreshed.refreshToken)
     : connection.encrypted_refresh_token;
 
-  await upsertGoogleCalendarConnectionForAccessToken(supabaseAccessToken, {
-    calendar_id: connection.calendar_id,
-    connected_at: connection.connected_at,
-    disconnected_at: null,
-    encrypted_access_token: encryptedAccessToken,
-    encrypted_refresh_token: encryptedRefreshToken,
-    granted_scopes_json:
-      refreshed.scope ??
-      (Array.isArray(connection.granted_scopes_json)
-        ? connection.granted_scopes_json
-        : []),
-    last_error_json: null,
-    status: "connected",
-    token_expires_at: buildGoogleAccessTokenExpiresAt(refreshed.expiresIn),
-    token_type: refreshed.tokenType,
-    user_id: connection.user_id,
-  });
+  await updateGoogleCalendarRefreshForAccessToken(
+    supabaseAccessToken,
+    connection,
+    {
+      encrypted_access_token: encryptedAccessToken,
+      encrypted_refresh_token: encryptedRefreshToken,
+      ...(refreshed.scope ? { granted_scopes_json: refreshed.scope } : {}),
+      last_error_json: null,
+      token_expires_at: buildGoogleAccessTokenExpiresAt(refreshed.expiresIn),
+      token_type: refreshed.tokenType,
+    },
+  );
 
   return refreshed.accessToken;
 }

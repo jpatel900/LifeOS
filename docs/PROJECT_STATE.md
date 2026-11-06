@@ -41,6 +41,8 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 ## Open questions
 
+- Interrupted Google Calendar approvals: a replacement for draft #1132 is under review on current main. The proposed database migration coordinates dispatch, recovery and legacy placement. Human review of calendar writes, database privileges and rollout is required before merge.
+
 - Consumer wiring for the FR-032/034/037 policy kernels is unscoped — each needs its own owner-ratified issue before becoming user-visible.
 
 ## Next action
