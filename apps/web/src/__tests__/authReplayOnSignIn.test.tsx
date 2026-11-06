@@ -5258,12 +5258,14 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
           error: null,
         });
         let releaseVisibility!: () => void;
+        let visibilityReadStarted = false;
         if (repeatEvent) {
           const hold = new Promise<void>((resolve) => {
             releaseVisibility = resolve;
           });
           mockListPendingWrites.mockImplementationOnce(async (entity) => {
             const pending = await listPendingWritesActual(entity);
+            visibilityReadStarted = true;
             await hold;
             return pending;
           });
@@ -5272,6 +5274,13 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
           // A changed owner remounts its account view and refreshes visibility.
           authListener.callback?.("USER_UPDATED", { user: { id: userId } });
         });
+        // Mount hydration and its readback are separate from device visibility.
+        // Repeat only after hydration, while the intended device read is held.
+        await waitFor(() => {
+          expect(observedWorkflow.state.snapshotOwnership?.userId).toBe(userId);
+          expect(observedWorkflow.syncStatus.account).toBe("synced");
+          if (repeatEvent) expect(visibilityReadStarted).toBe(true);
+        });
         if (repeatEvent) {
           await act(async () => {
             authListener.callback?.("USER_UPDATED", { user: { id: userId } });
@@ -5279,7 +5288,7 @@ describe("W3-16 #4: reconnect keeps a closed day closed until the account confir
           });
         }
         await waitFor(() =>
-          expect(observedWorkflow.state.snapshotOwnership?.userId).toBe(userId),
+          expect(observedWorkflow.areasReadbackSettled).toBe(true),
         );
         await settleJournalReads(readsBefore);
       }
