@@ -1,11 +1,9 @@
 // W3-16 finding 2: retry after "Google said yes, LifeOS failed to save".
 //
-// The route tells the person to approve again, promising no second event:
-// the event id is derived from the proposal, so Google answers 409 for the
-// same id. The adapter used to treat that 409 as success WITHOUT reading the
-// event, and the route then recorded the placement at the proposal's original
-// time, even if the event was moved or cancelled on Google in between. It now
-// reads the event first and refuses plainly when it no longer matches.
+// Ported from #1117 onto W11-3's reservation/dispatch/atomic-finish protocol.
+// Retry reads the original identity first, so a partial account save needs
+// exactly one provider POST across both approvals. A mismatch stays pending
+// and returns a recoverable conflict without recording unverified details.
 //
 // This file keeps the REAL route and the REAL event adapter. Only the token
 // lookup, the account helpers and the network are fake: an in-memory Google
@@ -16,13 +14,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   acknowledgeGoogleCalendarFirstWriteWarningForAccessToken: vi.fn(),
   claimGoogleCalendarApprovalForAccessToken: vi.fn(),
-  findGoogleBackedScheduledBlockForTaskForAccessToken: vi.fn(),
+  dispatchGoogleCalendarApprovalForAccessToken: vi.fn(),
+  acknowledgeGoogleCalendarDispatchForAccessToken: vi.fn(),
+  finishGoogleCalendarApprovalForAccessToken: vi.fn(),
   getCalendarBlockForProposalForAccessToken: vi.fn(),
   getGoogleCalendarConfig: vi.fn(),
   getGoogleCalendarStoredConnectionForAccessToken: vi.fn(),
   getTaskForAccessToken: vi.fn(),
   getTimeBlockProposalForAccessToken: vi.fn(),
-  recordGoogleCalendarPlacementForAccessToken: vi.fn(),
   requireSupabaseServerUser: vi.fn(),
   resolveGoogleCalendarAccessToken: vi.fn(),
   updateExternalWriteEventResultForAccessToken: vi.fn(),
@@ -46,19 +45,21 @@ vi.mock("@/lib/googleCalendar/server", () => ({
 vi.mock("@/lib/externalWrites/server", () => ({
   claimGoogleCalendarApprovalForAccessToken:
     mocks.claimGoogleCalendarApprovalForAccessToken,
+  dispatchGoogleCalendarApprovalForAccessToken:
+    mocks.dispatchGoogleCalendarApprovalForAccessToken,
+  acknowledgeGoogleCalendarDispatchForAccessToken:
+    mocks.acknowledgeGoogleCalendarDispatchForAccessToken,
+  finishGoogleCalendarApprovalForAccessToken:
+    mocks.finishGoogleCalendarApprovalForAccessToken,
   updateExternalWriteEventResultForAccessToken:
     mocks.updateExternalWriteEventResultForAccessToken,
 }));
 
 vi.mock("@/lib/planning/server", () => ({
-  findGoogleBackedScheduledBlockForTaskForAccessToken:
-    mocks.findGoogleBackedScheduledBlockForTaskForAccessToken,
   getCalendarBlockForProposalForAccessToken:
     mocks.getCalendarBlockForProposalForAccessToken,
   getTaskForAccessToken: mocks.getTaskForAccessToken,
   getTimeBlockProposalForAccessToken: mocks.getTimeBlockProposalForAccessToken,
-  recordGoogleCalendarPlacementForAccessToken:
-    mocks.recordGoogleCalendarPlacementForAccessToken,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -86,6 +87,8 @@ const proposal = {
   created_at: "2026-05-10T15:00:00.000Z",
 };
 const EVENT_ID = `lifeos${proposal.id.replace(/-/g, "")}`;
+const FIRST_AUDIT = "550e8400-e29b-41d4-a716-446655440701";
+const RETRY_AUDIT = "550e8400-e29b-41d4-a716-446655440702";
 const connection = {
   id: "550e8400-e29b-41d4-a716-446655440901",
   user_id: user.id,
@@ -224,13 +227,19 @@ function placementAt(start: string, end: string) {
 
 /** First approval: Google creates the event, the account save fails. */
 async function firstApprovalWithAccountSaveFailure() {
-  mocks.recordGoogleCalendarPlacementForAccessToken.mockRejectedValueOnce(
+  mocks.finishGoogleCalendarApprovalForAccessToken.mockRejectedValueOnce(
     new Error("account write timed out"),
   );
   const response = await POST(approveRequest());
   const body = await response.json();
   expect(response.status).toBe(502);
   expect(body.google_event_created).toBe(true);
+  expect(
+    mocks.dispatchGoogleCalendarApprovalForAccessToken,
+  ).toHaveBeenCalledExactlyOnceWith("supabase-access-token", FIRST_AUDIT);
+  expect(
+    mocks.updateExternalWriteEventResultForAccessToken,
+  ).not.toHaveBeenCalled();
   return body;
 }
 
@@ -238,7 +247,7 @@ describe("create-event retry after a partial success (W3-16 #2)", () => {
   let google: ReturnType<typeof fakeGoogleCalendar>;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     google = fakeGoogleCalendar();
     vi.stubGlobal("fetch", google.fetchImpl);
     mocks.getGoogleCalendarConfig.mockReturnValue({
@@ -256,26 +265,31 @@ describe("create-event retry after a partial success (W3-16 #2)", () => {
     });
     mocks.getTimeBlockProposalForAccessToken.mockResolvedValue(proposal);
     mocks.getCalendarBlockForProposalForAccessToken.mockResolvedValue(null);
-    mocks.findGoogleBackedScheduledBlockForTaskForAccessToken.mockResolvedValue(
-      null,
-    );
     mocks.getTaskForAccessToken.mockResolvedValue({
       id: proposal.task_id,
       title: "Synthetic task",
     });
-    mocks.claimGoogleCalendarApprovalForAccessToken.mockResolvedValue({
-      id: "550e8400-e29b-41d4-a716-446655440701",
-    });
+    mocks.claimGoogleCalendarApprovalForAccessToken
+      .mockResolvedValueOnce({ id: FIRST_AUDIT })
+      .mockResolvedValue({ id: RETRY_AUDIT });
+    mocks.dispatchGoogleCalendarApprovalForAccessToken.mockResolvedValue(
+      undefined,
+    );
     mocks.updateExternalWriteEventResultForAccessToken.mockResolvedValue({
       id: "550e8400-e29b-41d4-a716-446655440701",
     });
-    mocks.recordGoogleCalendarPlacementForAccessToken.mockResolvedValue(
+    mocks.finishGoogleCalendarApprovalForAccessToken.mockResolvedValue(
       placementAt(T1_START, T1_END),
     );
   });
 
   it("control: retrying an unchanged event finishes the save with one Google event", async () => {
     await firstApprovalWithAccountSaveFailure();
+    expect(google.requests.map(({ method }) => method)).toEqual([
+      "GET",
+      "POST",
+      "GET",
+    ]);
 
     const response = await POST(approveRequest());
     const body = await response.json();
@@ -286,51 +300,156 @@ describe("create-event retry after a partial success (W3-16 #2)", () => {
     expect(google.events.size).toBe(1);
     expect(
       google.requests.filter((request) => request.method === "POST"),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
+    expect(google.requests.map(({ method }) => method)).toEqual([
+      "GET",
+      "POST",
+      "GET",
+      "GET",
+    ]);
     expect(
-      mocks.recordGoogleCalendarPlacementForAccessToken,
-    ).toHaveBeenLastCalledWith("supabase-access-token", proposal.id, EVENT_ID);
+      mocks.dispatchGoogleCalendarApprovalForAccessToken,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(
+      mocks.finishGoogleCalendarApprovalForAccessToken,
+    ).toHaveBeenLastCalledWith("supabase-access-token", {
+      auditId: RETRY_AUDIT,
+      proposalId: proposal.id,
+      connectionId: connection.id,
+      connectedAt: connection.connected_at,
+      calendarId: connection.calendar_id,
+      googleEventId: EVENT_ID,
+      googleEventEtag: google.events.get(EVENT_ID)!.etag,
+      proposedStart: T1_START,
+      proposedEnd: T1_END,
+    });
   });
 
-  // W3-16 #2: on 409 the adapter reads the existing event and refuses
-  // plainly when it no longer holds the approved time.
-  it("a retry does not confirm the original time after the event moved on Google", async () => {
-    await firstApprovalWithAccountSaveFailure();
-    google.moveTo(T2_START, T2_END);
-    mocks.recordGoogleCalendarPlacementForAccessToken.mockClear();
-
-    const response = await POST(approveRequest());
-    const body = await response.json();
-
-    // Still one remote event: no duplicate was created.
-    expect(google.events.size).toBe(1);
-    // The event's current state was read before anything was recorded ...
+  it("returns the committed block to both requests when the retry finishes first", async () => {
+    let entered!: () => void;
+    let release!: () => void;
+    const firstAtFinish = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const resumeFirst = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let committed = false;
+    mocks.finishGoogleCalendarApprovalForAccessToken.mockImplementation(
+      async (_token, { auditId }) => {
+        if (auditId === FIRST_AUDIT) {
+          entered();
+          await resumeFirst;
+          expect(committed).toBe(true);
+        } else {
+          committed = true;
+        }
+        return {
+          ...placementAt(T1_START, T1_END),
+          audit: { id: auditId, result_status: "succeeded" },
+        };
+      },
+    );
+    const first = POST(approveRequest());
+    await firstAtFinish;
+    let retry: Response;
+    try {
+      retry = await POST(approveRequest());
+    } finally {
+      release();
+    }
+    const original = await first;
+    expect([original.status, retry.status]).toEqual([200, 200]);
+    const [a, b] = await Promise.all([original.json(), retry.json()]);
+    expect(a.block.id).toBe(b.block.id);
+    expect([a.audit.id, b.audit.id]).toEqual([FIRST_AUDIT, RETRY_AUDIT]);
     expect(
-      google.requests.some(
-        (request) =>
-          request.method === "GET" && request.url.endsWith(`/${EVENT_ID}`),
+      mocks.acknowledgeGoogleCalendarDispatchForAccessToken,
+    ).toHaveBeenCalledExactlyOnceWith("supabase-access-token", FIRST_AUDIT);
+    expect(google.requests.map(({ method }) => method)).toEqual([
+      "GET",
+      "POST",
+      "GET",
+      "GET",
+    ]);
+  });
+
+  it.each(["moved", "cancelled", "wrong provenance", "missing etag"])(
+    "a %s event stays unresolved with one provider write",
+    async (scenario) => {
+      await firstApprovalWithAccountSaveFailure();
+      if (scenario === "moved") google.moveTo(T2_START, T2_END);
+      if (scenario === "cancelled") google.cancel();
+      if (scenario === "wrong provenance")
+        google.events.get(
+          EVENT_ID,
+        )!.extendedProperties.private.lifeos_proposal_id = "unrelated";
+      if (scenario === "missing etag") google.events.get(EVENT_ID)!.etag = "";
+      mocks.finishGoogleCalendarApprovalForAccessToken.mockClear();
+
+      const response = await POST(approveRequest());
+      const body = await response.json();
+
+      // Still one remote event: no duplicate was created.
+      expect(google.events.size).toBe(1);
+      // The event's current state was read before anything was recorded ...
+      expect(
+        google.requests.some(
+          (request) =>
+            request.method === "GET" && request.url.endsWith(`/${EVENT_ID}`),
+        ),
+      ).toBe(true);
+      // ... and the original time was not confirmed.
+      expect(
+        mocks.finishGoogleCalendarApprovalForAccessToken,
+      ).not.toHaveBeenCalled();
+      expect(body.ok).toBe(false);
+      expect(response.status).toBe(409);
+      expect(body.error).toBe(
+        "LifeOS could not confirm that this Google Calendar event still matches your approval. Check the event in its original Google Calendar before approving another time. Local planning remains available.",
+      );
+      expect(
+        google.requests.filter(({ method }) => method === "POST"),
+      ).toHaveLength(1);
+      expect(
+        mocks.dispatchGoogleCalendarApprovalForAccessToken,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        mocks.updateExternalWriteEventResultForAccessToken,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps a provider read failure pending without leaking its response", async () => {
+    await firstApprovalWithAccountSaveFailure();
+    google.fetchImpl.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ error: "synthetic private provider diagnostic" }),
+        { status: 503 },
       ),
-    ).toBe(true);
-    // ... and the original time was not confirmed.
-    expect(
-      mocks.recordGoogleCalendarPlacementForAccessToken,
-    ).not.toHaveBeenCalled();
-    expect(body.ok).toBe(false);
-  });
-
-  it("a retry does not record a placement for an event cancelled on Google", async () => {
-    await firstApprovalWithAccountSaveFailure();
-    google.cancel();
-    mocks.recordGoogleCalendarPlacementForAccessToken.mockClear();
+    );
+    mocks.finishGoogleCalendarApprovalForAccessToken.mockClear();
 
     const response = await POST(approveRequest());
     const body = await response.json();
 
-    expect(google.events.size).toBe(1);
-    expect(
-      mocks.recordGoogleCalendarPlacementForAccessToken,
-    ).not.toHaveBeenCalled();
+    expect(response.status).toBe(502);
     expect(body.ok).toBe(false);
-    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(body.error).not.toContain("synthetic private provider diagnostic");
+    expect(
+      google.requests.filter(({ method }) => method === "POST"),
+    ).toHaveLength(1);
+    expect(
+      mocks.dispatchGoogleCalendarApprovalForAccessToken,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      mocks.finishGoogleCalendarApprovalForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).not.toHaveBeenCalled();
   });
 });

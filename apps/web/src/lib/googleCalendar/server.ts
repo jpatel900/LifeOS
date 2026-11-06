@@ -286,6 +286,38 @@ export async function upsertGoogleCalendarConnectionForAccessToken(
   return parseGoogleCalendarConnection(data);
 }
 
+/** A refresh can update credentials or diagnostics only on the generation it read. */
+export async function updateGoogleCalendarRefreshForAccessToken(
+  accessToken: string,
+  connection: GoogleCalendarStoredConnection,
+  values: Pick<
+    GoogleCalendarConnectionRow,
+    | "encrypted_access_token"
+    | "encrypted_refresh_token"
+    | "last_error_json"
+    | "token_expires_at"
+    | "token_type"
+  > & { granted_scopes_json?: string[] },
+) {
+  assertServerRuntime();
+  const { user } = await requireSupabaseServerUser(accessToken);
+  if (user.id !== connection.user_id || !connection.connected_at) {
+    throw new Error("Google Calendar connection changed during refresh.");
+  }
+  const { data, error } = await requireSupabaseServiceRoleClient()
+    .from("google_calendar_connections")
+    .update(values)
+    .eq("user_id", user.id)
+    .eq("id", connection.id)
+    .eq("status", "connected")
+    .eq("connected_at", connection.connected_at)
+    .eq("calendar_id", connection.calendar_id)
+    .select("id")
+    .maybeSingle();
+  if (error || !data)
+    throw new Error("Google Calendar connection changed during refresh.");
+}
+
 export async function acknowledgeGoogleCalendarFirstWriteWarningForAccessToken(
   accessToken: string,
   userId: string,
