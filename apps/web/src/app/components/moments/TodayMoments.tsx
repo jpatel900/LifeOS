@@ -1173,13 +1173,15 @@ function TodayMomentsContent({
     briefViewRecorderRef.current = createBriefViewRecorder();
   }
   const startMomentShowing = showingMastheadAndMoments && moment === "start";
+  const visitorId = ritual.visitorId;
   useEffect(() => {
     if (!startMomentShowing) return;
     briefViewRecorderRef.current?.recordIfNeeded(
       createSupabaseBrowserClient(),
       now,
+      visitorId,
     );
-  }, [startMomentShowing, now]);
+  }, [startMomentShowing, now, visitorId]);
 
   // FR-047 slice 2 / FR-033 (#686): the optional Close purpose-gauge check-in.
   // Read the last-checked local day once (localStorage, mount-only) so an
