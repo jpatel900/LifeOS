@@ -55,14 +55,14 @@ describe("localDayStamp", () => {
 describe("recordBriefViewFireAndForget", () => {
   it("skips silently in demo mode (client is null)", () => {
     expect(() =>
-      recordBriefViewFireAndForget(null, "2026-07-18"),
+      recordBriefViewFireAndForget(null, "2026-07-18", null),
     ).not.toThrow();
   });
 
   it("upserts the user-scoped row idempotently on conflict", async () => {
     const { client, upsert } = makeClient({ userId: "user-42" });
 
-    recordBriefViewFireAndForget(client, "2026-07-18");
+    recordBriefViewFireAndForget(client, "2026-07-18", "user-42");
 
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
     expect(upsert).toHaveBeenCalledWith(
@@ -79,7 +79,7 @@ describe("recordBriefViewFireAndForget", () => {
     });
 
     expect(() =>
-      recordBriefViewFireAndForget(client, "2026-07-18"),
+      recordBriefViewFireAndForget(client, "2026-07-18", "user-1"),
     ).not.toThrow();
 
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
@@ -89,7 +89,7 @@ describe("recordBriefViewFireAndForget", () => {
     const { client, upsert } = makeClient({ userId: null });
 
     expect(() =>
-      recordBriefViewFireAndForget(client, "2026-07-18"),
+      recordBriefViewFireAndForget(client, "2026-07-18", "user-1"),
     ).not.toThrow();
 
     // Give the fire-and-forget promise a tick to resolve.
@@ -100,14 +100,142 @@ describe("recordBriefViewFireAndForget", () => {
 });
 
 describe("createBriefViewRecorder", () => {
+  const today = new Date(2026, 6, 18, 9, 0);
+
+  it("requires a known visitor and retries a later visit after verification fails", async () => {
+    const { client, upsert } = makeClient({ userId: "A" });
+    const getUser = vi.mocked(client.auth!.getUser);
+    const recorder = createBriefViewRecorder();
+    recorder.recordIfNeeded(client, today, null);
+    expect(getUser).not.toHaveBeenCalled();
+
+    getUser.mockRejectedValueOnce(new Error("offline"));
+    recorder.recordIfNeeded(client, today, "A");
+    await Promise.resolve();
+    expect(upsert).not.toHaveBeenCalled();
+    recorder.recordIfNeeded(client, today, "A");
+    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+    expect(upsert).toHaveBeenCalledWith(
+      { user_id: "A", viewed_on: "2026-07-18" },
+      { onConflict: "user_id,viewed_on", ignoreDuplicates: true },
+    );
+  });
+
+  it("uses a repeat visit during a failed write for one bounded retry", async () => {
+    let failFirst!: (result: { error: unknown }) => void;
+    const first = new Promise<{ error: unknown }>((resolve) => {
+      failFirst = resolve;
+    });
+    const write = vi
+      .fn(async () => ({ error: "offline" as unknown }))
+      .mockReturnValueOnce(first);
+    const { client } = makeClient({ upsertImpl: write });
+    const recorder = createBriefViewRecorder();
+    recorder.recordIfNeeded(client, today, "user-1");
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    recorder.recordIfNeeded(client, today, "user-1");
+    recorder.recordIfNeeded(client, today, "user-1");
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    failFirst({ error: "offline" });
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(write).toHaveBeenCalledTimes(2);
+  });
+
+  it("records the latest account's visit if the previous account is still writing", async () => {
+    let finishFirst!: (result: { error: null }) => void;
+    const firstWrite = new Promise<{ error: null }>((resolve) => {
+      finishFirst = resolve;
+    });
+    const auth = {
+      userId: "first",
+      upsertImpl: vi
+        .fn(async () => ({ error: null }))
+        .mockReturnValueOnce(firstWrite),
+    };
+    const { client, upsert } = makeClient(auth);
+    const recorder = createBriefViewRecorder();
+    recorder.recordIfNeeded(client, today, auth.userId);
+    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+    auth.userId = "second";
+    recorder.recordIfNeeded(client, today, auth.userId);
+    recorder.recordIfNeeded(client, today, auth.userId);
+    finishFirst({ error: null });
+    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
+    expect(upsert).toHaveBeenLastCalledWith(
+      { user_id: "second", viewed_on: "2026-07-18" },
+      { onConflict: "user_id,viewed_on", ignoreDuplicates: true },
+    );
+  });
+
+  it.each(["returned error", "rejection"])(
+    "retries after a %s on the next visit and deduplicates success",
+    async (failure) => {
+      const write = vi.fn(async () => ({ error: null as unknown }));
+      if (failure === "rejection")
+        write.mockRejectedValueOnce(new Error("offline"));
+      else write.mockResolvedValueOnce({ error: { message: "offline" } });
+      const { client } = makeClient({ upsertImpl: write });
+      const recorder = createBriefViewRecorder();
+      recorder.recordIfNeeded(client, today, "user-1");
+      await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+      recorder.recordIfNeeded(client, today, "user-1");
+      recorder.recordIfNeeded(client, today, "user-1");
+      await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+      recorder.recordIfNeeded(client, today, "user-1");
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(write).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("records after a demo or signed-out visit on the same day", async () => {
+    const auth = { userId: null as string | null };
+    const { client, upsert } = makeClient(auth);
+    const recorder = createBriefViewRecorder();
+    recorder.recordIfNeeded(null, today, null);
+    recorder.recordIfNeeded(client, today, auth.userId);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(upsert).not.toHaveBeenCalled();
+    auth.userId = "signed-in";
+    recorder.recordIfNeeded(client, today, auth.userId);
+    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+    expect(upsert).toHaveBeenCalledWith(
+      { user_id: "signed-in", viewed_on: "2026-07-18" },
+      { onConflict: "user_id,viewed_on", ignoreDuplicates: true },
+    );
+  });
+
+  it("records each signed-in account's visit when the client survives an account switch", async () => {
+    const auth = { userId: "first" };
+    const { client, upsert } = makeClient(auth);
+    const getUser = client.auth!.getUser;
+    client.auth!.getSession = vi.fn(async () => ({
+      data: { session: { user: { id: auth.userId }, access_token: "fixture" } },
+      error: null,
+    }));
+    const recorder = createBriefViewRecorder();
+    recorder.recordIfNeeded(client, today, auth.userId);
+    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+    recorder.recordIfNeeded(client, today, auth.userId);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(getUser).toHaveBeenCalledTimes(1); // Re-rendering Start needs no new auth request.
+    auth.userId = "second";
+    recorder.recordIfNeeded(client, today, auth.userId);
+    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
+    expect(upsert).toHaveBeenLastCalledWith(
+      { user_id: "second", viewed_on: "2026-07-18" },
+      { onConflict: "user_id,viewed_on", ignoreDuplicates: true },
+    );
+  });
+
   it("records exactly once per local render-day even across repeated calls", async () => {
     const { client, upsert } = makeClient({ userId: "user-1" });
     const recorder = createBriefViewRecorder();
     const day1 = new Date(2026, 6, 18, 9, 0);
 
-    recorder.recordIfNeeded(client, day1);
-    recorder.recordIfNeeded(client, new Date(2026, 6, 18, 22, 0));
-    recorder.recordIfNeeded(client, day1);
+    recorder.recordIfNeeded(client, day1, "user-1");
+    recorder.recordIfNeeded(client, new Date(2026, 6, 18, 22, 0), "user-1");
+    recorder.recordIfNeeded(client, day1, "user-1");
 
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
   });
@@ -116,8 +244,8 @@ describe("createBriefViewRecorder", () => {
     const { client, upsert } = makeClient({ userId: "user-1" });
     const recorder = createBriefViewRecorder();
 
-    recorder.recordIfNeeded(client, new Date(2026, 6, 18, 9, 0));
-    recorder.recordIfNeeded(client, new Date(2026, 6, 19, 9, 0));
+    recorder.recordIfNeeded(client, new Date(2026, 6, 18, 9, 0), "user-1");
+    recorder.recordIfNeeded(client, new Date(2026, 6, 19, 9, 0), "user-1");
 
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
   });
@@ -126,8 +254,8 @@ describe("createBriefViewRecorder", () => {
     const recorder = createBriefViewRecorder();
 
     expect(() => {
-      recorder.recordIfNeeded(null, new Date(2026, 6, 18, 9, 0));
-      recorder.recordIfNeeded(null, new Date(2026, 6, 18, 22, 0));
+      recorder.recordIfNeeded(null, new Date(2026, 6, 18, 9, 0), null);
+      recorder.recordIfNeeded(null, new Date(2026, 6, 18, 22, 0), null);
     }).not.toThrow();
   });
 });
