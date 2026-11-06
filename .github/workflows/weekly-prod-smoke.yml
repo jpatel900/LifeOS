@@ -16,7 +16,7 @@
 # Browser channel: apps/web/playwright.smoke.config.ts hardcodes the `msedge`
 # Playwright channel (chosen to avoid a possibly-unavailable Chromium
 # download). ci.yml's own Playwright E2E job already proves the right way to
-# get msedge onto an ubuntu-latest runner: `playwright install --with-deps
+# get msedge onto an ubuntu-24.04 runner: `playwright install --with-deps
 # msedge`. This workflow reuses that exact step rather than overriding the
 # channel, so the smoke config that runs in CI-adjacent contexts and the one
 # that runs against prod stay identical -- the only difference is the target
@@ -74,7 +74,7 @@ permissions:
 jobs:
   smoke:
     name: Production smoke (green by design — read the run summary for the real result)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -22,6 +22,7 @@ import {
   GoogleCalendarConnectionSchema,
   HealthCheckSchema,
   OperatorProfileSchema,
+  offsetDatetime,
   ParseCaptureResponseSchema,
   PersonSchema,
   ProjectSchema,
@@ -35,6 +36,20 @@ import {
 
 const uid = "550e8400-e29b-41d4-a716-446655440000";
 const uid2 = "550e8400-e29b-41d4-a716-446655440001";
+
+describe("offsetDatetime", () => {
+  it("preserves accepted ISO offset spellings and rejects malformed input", () => {
+    for (const offset of ["Z", "+00:00", "-0500", "+0530"]) {
+      const value = "2026-11-05T12:00:00" + offset;
+      expect(offsetDatetime().parse(value)).toBe(value);
+    }
+    for (const offset of ["", "-05x0", "+2460"]) {
+      expect(
+        offsetDatetime().safeParse("2026-11-05T12:00:00" + offset).success,
+      ).toBe(false);
+    }
+  });
+});
 
 describe("CaptureItemSchema", () => {
   it("accepts a valid capture_item row shape", () => {
@@ -170,6 +185,13 @@ describe("CreateAreaInputSchema", () => {
 });
 
 describe("SoftDeleteAreaInputSchema", () => {
+  it("accepts stored PostgreSQL UUIDs regardless of their variant bits", () => {
+    const area_id = ["aaaaaaaa", "0000", "1000", "0000", "aaaaaaaaaaaa"].join(
+      "-",
+    );
+    expect(SoftDeleteAreaInputSchema.parse({ area_id })).toEqual({ area_id });
+  });
+
   it("requires a UUID area id", () => {
     expect(
       SoftDeleteAreaInputSchema.safeParse({

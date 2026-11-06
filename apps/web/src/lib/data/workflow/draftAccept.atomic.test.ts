@@ -128,6 +128,17 @@ describe("draft acceptance transaction boundary", () => {
       deduplicated: true,
     });
   });
+  it("returns no proposal when an older RPC response omits the key", async () => {
+    const { db, rpc } = client();
+    rpc.mockResolvedValueOnce({
+      data: { task, deduplicated: false, accepted_links: [] },
+      error: null,
+    });
+    expect(await syncJournaledTaskDraftAccept(db, input)).toMatchObject({
+      task: { id: task.id },
+      proposal: null,
+    });
+  });
   it("accepts a numeric-offset accepted_at, as PostgREST and older journals write it", async () => {
     const { db, rpc } = client();
     const accepted_at = "2026-10-23T00:00:00+00:00";

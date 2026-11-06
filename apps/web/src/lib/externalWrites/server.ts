@@ -1,5 +1,6 @@
 import {
   ExternalWriteEventSchema,
+  offsetDatetime,
   type ExternalWriteEvent,
 } from "@lifeos/schemas";
 import { z } from "zod";
@@ -17,10 +18,10 @@ export const EXTERNAL_WRITE_FAILURE_INCIDENT_THRESHOLD = 3;
 export const CalendarAbsenceAttemptsSchema = z.array(
   z
     .object({
-      auditId: z.string().uuid(),
-      proposalId: z.string().uuid(),
-      connectionId: z.string().uuid(),
-      connectedAt: z.string().datetime({ offset: true }),
+      auditId: z.guid(),
+      proposalId: z.guid(),
+      connectionId: z.guid(),
+      connectedAt: offsetDatetime(),
       calendarId: z.string().min(1),
     })
     .strict(),

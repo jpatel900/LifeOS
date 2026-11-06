@@ -14,4 +14,12 @@ import { z } from "zod";
 // schemas package (entities.ts, meta-learning.ts, parse-capture.ts) that were
 // still using bare `z.string().datetime()`. This helper is the single shared
 // source of truth so no call site can drift back to the Z-only variant.
-export const offsetDatetime = () => z.string().datetime({ offset: true });
+const isoDatetime = z.string().datetime({ offset: true });
+const timestampWithOffset = z.string().refine((value) => {
+  // Existing clients also send compact offsets such as -0500. Validate the
+  // equivalent -05:00 spelling while preserving the original wire value.
+  return isoDatetime.safeParse(value.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"))
+    .success;
+}, "Invalid datetime");
+
+export const offsetDatetime = () => timestampWithOffset;
