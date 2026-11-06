@@ -1244,6 +1244,35 @@ test("campaigns.json uses only the states it declares", () => {
 // other would have found nothing.
 // ---------------------------------------------------------------------------
 
+test("historical C2 plan sends builders to current authority without reopening delivered lanes", () => {
+  const plan = readFileSync(
+    new URL("../../docs/program/campaign-c2-structure.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    plan,
+    /historical/i,
+    "the old plan must identify itself as history",
+  );
+  for (const target of ["campaigns.json", "final-ux-loop.md"]) {
+    assert.ok(
+      plan.includes(`](${target})`),
+      `missing current authority link: ${target}`,
+    );
+    assert.ok(
+      readFileSync(
+        new URL(`../../docs/program/${target}`, import.meta.url),
+        "utf8",
+      ).length > 0,
+    );
+  }
+  assert.doesNotMatch(
+    plan,
+    /\*\*STATUS: IN FLIGHT|re-score closes the campaign|waits behind the S2 re-land|re-lands with the fix|IN FLIGHT \(PR #880|rounds until targets/i,
+  );
+  assert.match(plan, /owner.*glance/i, "retain the owner acceptance boundary");
+});
+
 test("extractCampaignSliceRefs: pulls every Final UX Loop campaign-slice mention from raw git log text", () => {
   const fixture = [
     "Final UX Loop C2-S4 — Health surface ported to moments language (#846)",
@@ -1273,9 +1302,9 @@ test("extractCampaignSliceRefs: empty or non-string input yields no refs, never 
 });
 
 test("campaigns.json: a campaign's slices are sequential -- a later slice can't be merged/done while an earlier one still isn't", () => {
-  // Sequential lanes are the documented design (campaign-c2-structure.md:
-  // "Slices (sequential lanes; re-score closes the campaign)"), so this reads
-  // it back as an invariant instead of trusting prose. Planted-violation
+  // Sequential port lanes are the historical design in campaign-c2-structure.md.
+  // The program still retains dependency order when trial findings justify work.
+  // Check that invariant without reinstating the retired re-score queue. Planted-violation
   // proof (see PR description): setting S9 back to "queued" while S11-S13
   // stay "merged" makes this fail; reverting makes it pass again.
   const TERMINAL = new Set(["done", "merged"]);
