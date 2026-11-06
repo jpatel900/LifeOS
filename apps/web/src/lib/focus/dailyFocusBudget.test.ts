@@ -170,6 +170,19 @@ describe("deriveFreeHoursFromBlocks — fixture days", () => {
     expect(deriveFreeHoursFromBlocks(blocks, NOW)).toBe(WORKING_WINDOW_HOURS);
   });
 
+  it("counts the working hours covered by a block that began yesterday", () => {
+    const previousNight = new Date(NOW);
+    previousNight.setDate(previousNight.getDate() - 1);
+    previousNight.setHours(22, 0, 0, 0);
+    const blocks = [
+      block({ start_at: previousNight.toISOString(), end_at: atTodayHour(14) }),
+      block({ start_at: atTodayHour(13), end_at: atTodayHour(15) }),
+    ];
+    const freeHours = deriveFreeHoursFromBlocks(blocks, NOW);
+    expect(freeHours).toBe(3); // Busy from 08:00 to 15:00, including the overlap once.
+    expect(computeDailyFocusBudget({ freeHours })).toBe(2);
+  });
+
   it("blocks are clamped to the working window (early/late spillover)", () => {
     const blocks = [
       // Starts before window open, ends after window close: fully busy day.
