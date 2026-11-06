@@ -27,7 +27,7 @@ describe("TaskMapRevisionOfferCard (FR-031 slice F5, #679)", () => {
     );
 
     expect(screen.getByTestId("taskmap-revision-offer")).toHaveTextContent(
-      "This map may be out of date.",
+      "Request an updated map to review.",
     );
     expect(
       screen.getByTestId("taskmap-revision-offer-reason"),
@@ -50,7 +50,7 @@ describe("TaskMapRevisionOfferCard (FR-031 slice F5, #679)", () => {
       />,
     );
     expect(screen.getByTestId("taskmap-revision-offer")).toHaveTextContent(
-      "The map for “Ship the report” may be out of date.",
+      "Request an updated map for “Ship the report”.",
     );
   });
 });
