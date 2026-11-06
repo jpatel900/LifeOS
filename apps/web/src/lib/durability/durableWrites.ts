@@ -47,6 +47,7 @@
  */
 
 import type { RollupSummaryContent } from "@lifeos/schemas";
+import { guardDeviceAccount } from "./deviceAccount";
 import { isDailyCloseConflict } from "@/lib/review/dayClose";
 import {
   enqueuePendingWrite,
@@ -1094,6 +1095,11 @@ export interface DurableWriteServerOps {
   ): string | null | Promise<string | null>;
   /** #960 defect 3: send one journalled raw capture, idempotently. */
   syncCapture?(args: SyncCaptureArgs): Promise<SyncCaptureResult>;
+  /** Account-bound capture replay, including fresh selected-area resolution. */
+  syncCaptureWrite?(
+    payload: CaptureWritePayload,
+    clientCaptureId: string,
+  ): Promise<SyncCaptureResult>;
   /**
    * Late resolution of a capture journalled before its area had an account
    * id. A null answer is only legitimate when the capture genuinely has no
@@ -1706,6 +1712,14 @@ function taskReviewHandler(ops: DurableWriteServerOps) {
 function captureHandler(ops: DurableWriteServerOps) {
   return async (write: PendingWrite): Promise<void> => {
     const payload = write.payload as CaptureWritePayload;
+    if (ops.syncCaptureWrite) {
+      const account = guardDeviceAccount();
+      const result = await ops.syncCaptureWrite(payload, write.client_write_id);
+      account.assertCurrent();
+      requireAccountWrite(result);
+      ops.recordCaptureId?.(payload, result);
+      return;
+    }
     const sync = ops.syncCapture;
     if (!sync) {
       throw new Error(
