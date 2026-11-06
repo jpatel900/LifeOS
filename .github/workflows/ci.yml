@@ -68,6 +68,9 @@ jobs:
       - name: selfmerge-window self-test
         run: node scripts/agent/selfmerge-window.mjs --self-test
 
+      - name: Single auto-merge writer regressions
+        run: node --test scripts/agent/selfmerge-reconcile.test.mjs scripts/agent/red-guard-diagnose.test.mjs
+
       - name: safe-automerge-demotion self-test
         run: node scripts/agent/safe-automerge-demotion.mjs --self-test
 

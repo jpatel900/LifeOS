@@ -1,22 +1,15 @@
 #!/usr/bin/env node
 
-// ADR 0008 move 2 (owner-ratified 2026-08-04): 30-minute notified
-// self-merge window for risk:low, non-T2+ agent PRs.
-//
-// Two runtime modes plus a self-test:
-//   --notify  (pull_request event): post/refresh the owner-notification
-//             marker comment that starts the clock. A new head SHA resets
-//             the clock with a fresh notification.
-//   --scan    (cron): for every open PR carrying the opt-in label, arm
-//             GitHub auto-merge iff the evaluation below passes.
-//
-// The evaluation is a pure function so the self-test can pin every rule.
-// The clock starts at the NOTIFICATION comment (the owner-visible event),
-// never at PR open.
+// Sole PR auto-merge writer. Safe Auto-merge supplies a head-bound verdict.
+// CI completion re-evaluates fresh state. Callers serialize on pr-automerge-<head>.
+// Existing ADR 0008 route policies and notification gates remain independent.
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+import { classifyCombinedEligibility } from "./check-safe-automerge.mjs";
+import { evaluateConfirmArm } from "./red-guard-diagnose.mjs";
 import process from "node:process";
 
 import {
@@ -219,56 +212,149 @@ Merges when tests pass. Stop it: add needs:human-decision or close ${pr.url}`;
   }
 }
 
-// Instant mode: try to arm in the same run that notified.
-function armIfEligible(number) {
-  const health = mainHealth();
-  const context = collectPr(number);
-  const result = evaluateSelfmergeCandidate({
+// Sole mutation boundary. Preserve the previously CLI-owned routes' behavior:
+// --auto also completes already-green PRs, still subject to GitHub's checks.
+export function writeAutoMerge(
+  {
+    id,
+    enabled,
+    headSha,
+    mergeWhenReady = false,
+    number,
+    repo = process.env.GH_REPO,
+  },
+  { graphql = graphqlRequest, execute = gh } = {},
+) {
+  if (typeof id !== "string" || !id) throw new Error("Missing PR node id.");
+  if (typeof enabled !== "boolean")
+    throw new Error("Missing auto-merge decision.");
+  if (enabled && (typeof headSha !== "string" || !headSha))
+    throw new Error("Missing approved head SHA.");
+  if (enabled && mergeWhenReady) {
+    if (
+      !Number.isSafeInteger(number) ||
+      number < 1 ||
+      !/^[\w.-]+\/[\w.-]+$/.test(repo ?? "")
+    )
+      throw new Error("Missing PR identity for the confirmed CLI route.");
+    execute([
+      "pr",
+      "merge",
+      String(number),
+      "--repo",
+      repo,
+      "--squash",
+      "--auto",
+      "--match-head-commit",
+      headSha,
+    ]);
+    return { action: "armed-or-merged" };
+  }
+  const mutation = enabled
+    ? "mutation($id:ID!,$head:GitObjectID!){enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:SQUASH,expectedHeadOid:$head}){pullRequest{number}}}"
+    : "mutation($id:ID!){disablePullRequestAutoMerge(input:{pullRequestId:$id}){pullRequest{number}}}";
+  try {
+    graphql(mutation, id, enabled ? headSha : undefined);
+    return { action: enabled ? "enabled" : "disabled" };
+  } catch (error) {
+    const message = String(error?.stderr ?? error?.message ?? error);
+    if (enabled) {
+      if (/already enabled/i.test(message))
+        return { action: "already-enabled" };
+      throw error;
+    }
+    if (
+      /auto-merge is disabled|auto-merge is not enabled|already disabled|not currently enabled/i.test(
+        message,
+      )
+    )
+      return { action: "not-enabled" };
+    // A permission error is not proof of disabled state. Read back once.
+    let node;
+    try {
+      ({ node } = graphql(
+        "query($id:ID!){node(id:$id){__typename ... on PullRequest{autoMergeRequest{enabledAt}}}}",
+        id,
+      ));
+    } catch {
+      /* Unknown remains a failure. */
+    }
+    if (
+      node?.__typename === "PullRequest" &&
+      Object.hasOwn(node, "autoMergeRequest") &&
+      node.autoMergeRequest === null
+    )
+      return { action: "not-enabled" };
+    throw new Error("Could not confirm auto-merge is disabled.");
+  }
+}
+
+function graphqlRequest(query, id, headSha) {
+  const response = ghJson([
+    "api",
+    "graphql",
+    "-f",
+    "query=" + query,
+    "-f",
+    "id=" + id,
+    ...(headSha ? ["-f", "head=" + headSha] : []),
+  ]);
+  if (response.errors?.length)
+    throw new Error("Auto-merge GraphQL request failed.");
+  return response.data;
+}
+
+// A negative safe verdict does not veto an independently eligible self-merge
+// route. Failed or stale handoffs cannot arm any route.
+export function evaluateAutoMerge(context, health, safeVerdict = undefined) {
+  const deny = (reason) => ({
+    enabled: false,
+    renotify: false,
+    reasons: [reason],
+  });
+  if (context.state !== "OPEN" || context.draft !== false)
+    return deny("PR is closed, draft, or unreadable.");
+  const ownerGate = evaluateOwnerGateBlock(context);
+  if (ownerGate.blocked) return deny(ownerGate.reasons.join(" "));
+  if (
+    safeVerdict !== undefined &&
+    (!safeVerdict ||
+      typeof safeVerdict.eligible !== "boolean" ||
+      safeVerdict.number !== context.number ||
+      safeVerdict.headSha !== context.headSha ||
+      safeVerdict.baseSha !== context.baseSha)
+  )
+    return deny("Failed or stale safe eligibility handoff.");
+  // A held recovery or stand-down must never be bypassed by ordinary labels.
+  if (context.headRef?.startsWith("guard/revert-main-")) {
+    const recovery = evaluateConfirmArm(context);
+    return {
+      enabled: recovery.arm,
+      mergeWhenReady: recovery.arm,
+      renotify: false,
+      reasons: [recovery.reason],
+    };
+  }
+  const safe = classifyCombinedEligibility(context);
+  const self = evaluateSelfmergeCandidate({
     enabled: SELFMERGE_WINDOW.enabled,
     ...context,
     ...health,
     nowIso: new Date().toISOString(),
     windowMinutes: SELFMERGE_WINDOW.windowMinutes,
   });
-  if (result.armable) {
-    gh(["pr", "merge", String(number), "--squash", "--auto"]);
-    console.log(`ARMED auto-merge for PR #${number} (instant mode).`);
-  } else {
-    const lines = result.reasons.map((r) => `  - ${r}`).join("\n");
-    console.log(`PR #${number} not armed:\n${lines}`);
-    disarmIfNeeded(number);
-  }
-}
-
-// Owner decision 2026-08-30: a PR that lost eligibility (owner-gate applied
-// after arming, a label flipped, etc.) must be disarmed, not just skipped —
-// the earlier arm() call already scheduled a merge that would otherwise
-// still land the moment CI turns green. Deliberately unconditional: it does
-// NOT gate on `context.autoMergeArmed` first, because that flag comes from
-// a `gh pr view` snapshot that can be stale (another process armed it a
-// moment ago) the same way `safe-automerge.yml`'s payload-derived
-// `auto_merge` flag can be stale. Always attempt the disable; treat "it
-// wasn't armed anyway" as a normal, silent no-op rather than an error.
-function disarmIfNeeded(number) {
-  try {
-    gh(["pr", "merge", String(number), "--disable-auto"]);
-    console.log(`DISARMED auto-merge for PR #${number} (no longer eligible).`);
-  } catch (error) {
-    const message = String(error?.message ?? error);
-    // Same message set safe-automerge.yml's disable branch treats as a
-    // normal no-op, kept in sync deliberately (one policy, two call sites).
-    if (
-      /auto-merge is disabled|auto-merge is not enabled|already disabled|not currently enabled/i.test(
-        message,
-      )
-    ) {
-      // Nothing to disarm — expected on every PR that was never armed.
-      return;
-    }
-    console.log(
-      `PR #${number}: failed to disarm auto-merge: ${message.slice(0, 200)}`,
-    );
-  }
+  const safeEligible =
+    safe.eligible && (safeVerdict === undefined || safeVerdict.eligible);
+  return {
+    enabled: safeEligible || self.armable,
+    mergeWhenReady: self.armable,
+    renotify:
+      !safeEligible &&
+      self.renotify &&
+      SELFMERGE_WINDOW.enabled &&
+      SELFMERGE_WINDOW.labels.some((label) => context.labels.includes(label)),
+    reasons: safeEligible ? [] : self.reasons,
+  };
 }
 
 function mainHealth() {
@@ -301,129 +387,138 @@ function mainHealth() {
   return { mainHealthy, guardRevertOpen: reverts.length > 0 };
 }
 
-function collectPr(prNumber) {
-  const pr = ghJson([
+export function collectPr(
+  prNumber,
+  { repo = process.env.GH_REPO, read = ghJson } = {},
+) {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo ?? ""))
+    throw new Error("GH_REPO must identify the repository.");
+  const args = [
     "pr",
     "view",
     String(prNumber),
+    "--repo",
+    repo,
     "--json",
-    "number,labels,isDraft,mergeStateStatus,reviewDecision,headRefOid,files,comments,title,body,autoMergeRequest",
+    "id,number,state,labels,isDraft,mergeStateStatus,reviewDecision,headRefName,headRefOid,baseRefOid,changedFiles,comments,title,body,autoMergeRequest",
+  ];
+  const pr = read(args);
+  const pages = read([
+    "api",
+    "--paginate",
+    "--slurp",
+    "repos/" + repo + "/pulls/" + prNumber + "/files?per_page=100",
   ]);
+  const files = pages.flat();
+  if (
+    !Number.isInteger(pr.changedFiles) ||
+    files.length !== pr.changedFiles ||
+    files.some((file) => typeof file.filename !== "string")
+  )
+    throw new Error("Incomplete PR file list.");
+  const latest = read(args);
+  const identity = (value) =>
+    JSON.stringify([
+      value.id,
+      value.number,
+      value.state,
+      value.headRefOid,
+      value.baseRefOid,
+      value.labels,
+      value.isDraft,
+      value.title,
+      value.body,
+      value.reviewDecision,
+      value.changedFiles,
+    ]);
+  if (identity(pr) !== identity(latest))
+    throw new Error("PR changed during collection; retry on the next event.");
+  if (
+    !pr.id ||
+    pr.number !== Number(prNumber) ||
+    !pr.headRefOid ||
+    !pr.baseRefOid ||
+    !Array.isArray(pr.labels)
+  )
+    throw new Error("Unreadable PR identity.");
   const marker = parseMarker(pr.comments ?? []);
-  // gh reports body as "" (not null) when the description is empty; a
-  // failed/malformed API response would have thrown in ghJson() already,
-  // so reaching here means the body was read (fail-closed lives in
-  // evaluateOwnerGateBlock's typeof check for the genuinely-unreachable
-  // case).
+  const statuses = {
+    added: "A",
+    modified: "M",
+    removed: "D",
+    renamed: "R",
+    copied: "C",
+  };
   return {
+    id: pr.id,
     number: pr.number,
-    labels: (pr.labels ?? []).map((label) => label.name),
-    draft: Boolean(pr.isDraft),
-    title: typeof pr.title === "string" ? pr.title : "",
-    body: typeof pr.body === "string" ? pr.body : "",
+    state: pr.state,
+    headRef: pr.headRefName,
+    labels: pr.labels.map((label) => label.name),
+    draft: pr.isDraft,
+    title: pr.title,
+    body: pr.body,
     mergeStateStatus: pr.mergeStateStatus,
     reviewDecision: pr.reviewDecision ?? "",
-    changedPaths: (pr.files ?? []).map((file) => file.path),
+    changedPaths: files.map((file) => file.filename),
+    diffStats: files.map((file) => ({
+      path: file.filename,
+      status: statuses[file.status] ?? "?",
+      added: typeof file.patch === "string" ? file.additions : null,
+      deleted: typeof file.patch === "string" ? file.deletions : null,
+    })),
     headSha: pr.headRefOid,
+    baseSha: pr.baseRefOid,
     notifiedHeadSha: marker?.headSha ?? null,
     notifiedAtIso: marker?.notifiedAt ?? null,
-    autoMergeArmed: Boolean(pr.autoMergeRequest),
   };
 }
 
-function runNotify() {
-  const eventPath = process.env.GITHUB_EVENT_PATH;
-  if (!eventPath || !existsSync(eventPath)) {
-    throw new Error("--notify requires GITHUB_EVENT_PATH.");
-  }
-  const event = JSON.parse(readFileSync(eventPath, "utf8"));
-  const pullRequest = event.pull_request;
-  if (!pullRequest) {
-    console.log("No pull_request in payload; nothing to notify.");
-    return;
-  }
-  const labels = (pullRequest.labels ?? []).map((label) => label?.name);
-  if (
-    !SELFMERGE_WINDOW.labels.some((l) => labels.includes(l)) ||
-    pullRequest.draft
-  ) {
-    console.log("PR not opted in (or draft); nothing to notify.");
-    return;
-  }
-  const ownerGate = evaluateOwnerGateBlock({
-    title: pullRequest.title,
-    body: typeof pullRequest.body === "string" ? pullRequest.body : "",
-    labels,
-  });
-  if (ownerGate.blocked) {
-    console.log(
-      `PR is owner-gated; skipping notify (never arms this lane either):\n${ownerGate.reasons.map((r) => `  - ${r}`).join("\n")}`,
-    );
-    disarmIfNeeded(pullRequest.number);
-    return;
-  }
-  const context = collectPr(pullRequest.number);
-  if (context.notifiedHeadSha !== context.headSha) {
-    postNotification(pullRequest.number, context.headSha);
-  } else {
-    console.log("Notification for this head already exists.");
-  }
-  armIfEligible(pullRequest.number);
-}
-
-function runScan() {
-  if (!SELFMERGE_WINDOW.enabled) {
-    console.log("Self-merge window class is disabled; scan skipped.");
-    return;
-  }
-  const health = mainHealth();
-  const candidates = ghJson([
-    "pr",
-    "list",
-    "--state",
-    "open",
-    "--label",
-    SELFMERGE_WINDOW.labels.join(","),
-    "--json",
-    "number",
-  ]);
-  if (candidates.length === 0) {
-    console.log("No opted-in PRs.");
-    return;
-  }
-  for (const { number } of candidates) {
-    // Owner decision 2026-08-30 (verifier finding #4): isolate each PR. A
-    // single `gh` hiccup (rate limit, transient API error) on one PR must
-    // not abort the whole sweep — every later PR in this tick would then
-    // be neither armed nor disarmed, which is exactly the fail-open shape
-    // this whole PR exists to close. Log and move on; the next workflow_run
-    // (any CI completion) or a manual dispatch retries this PR.
-    try {
-      const context = collectPr(number);
-      const result = evaluateSelfmergeCandidate({
-        enabled: SELFMERGE_WINDOW.enabled,
-        ...context,
-        ...health,
-        nowIso: new Date().toISOString(),
-        windowMinutes: SELFMERGE_WINDOW.windowMinutes,
-      });
-      if (result.armable) {
-        gh(["pr", "merge", String(number), "--squash", "--auto"]);
-        console.log(`ARMED auto-merge for PR #${number}.`);
-        continue;
+function runReconcile() {
+  const number = Number(process.env.PR_NUMBER);
+  if (!Number.isSafeInteger(number) || number < 1)
+    throw new Error("PR_NUMBER is required.");
+  let context;
+  try {
+    let verdict;
+    if (Object.hasOwn(process.env, "SAFE_VERDICT")) {
+      try {
+        verdict = JSON.parse(process.env.SAFE_VERDICT);
+      } catch {
+        verdict = null;
       }
-      disarmIfNeeded(number);
-      if (result.renotify) {
-        postNotification(number, context.headSha);
-      }
-      console.log(
-        `PR #${number} not armed:\n${result.reasons.map((reason) => `  - ${reason}`).join("\n")}`,
-      );
-    } catch (error) {
-      console.log(
-        `PR #${number}: scan failed, skipping this tick: ${String(error?.message ?? error).slice(0, 200)}`,
-      );
     }
+    context = collectPr(number);
+    if (context.state !== "OPEN") return;
+    const health = mainHealth();
+    let decision = evaluateAutoMerge(context, health, verdict);
+    if (decision.renotify) {
+      postNotification(number, context.headSha);
+      context = collectPr(number);
+      decision = evaluateAutoMerge(context, health, verdict);
+    }
+    const result = writeAutoMerge({
+      id: context.id,
+      number,
+      headSha: context.headSha,
+      enabled: decision.enabled,
+      mergeWhenReady: decision.mergeWhenReady,
+    });
+    console.log(
+      JSON.stringify({ number, ...result, reasons: decision.reasons }),
+    );
+    if (process.env.GITHUB_STEP_SUMMARY)
+      appendFileSync(
+        process.env.GITHUB_STEP_SUMMARY,
+        "PR #" + number + ": " + result.action + "\n",
+      );
+  } catch (error) {
+    // A failed evaluator cannot leave an old approval armed. Resolve only the
+    // identity when the richer read failed; mutation failure stays visible.
+    const id =
+      context?.id ?? ghJson(["pr", "view", String(number), "--json", "id"]).id;
+    writeAutoMerge({ id, enabled: false });
+    throw error;
   }
 }
 
@@ -682,21 +777,11 @@ function runSelfTest() {
 }
 
 function main() {
-  if (process.argv.includes("--self-test")) {
-    runSelfTest();
-    return;
-  }
-  if (process.argv.includes("--notify")) {
-    runNotify();
-    return;
-  }
-  if (process.argv.includes("--scan")) {
-    runScan();
-    return;
-  }
-  throw new Error(
-    "Usage: selfmerge-window.mjs --notify | --scan | --self-test",
-  );
+  if (process.argv.includes("--self-test")) return runSelfTest();
+  if (process.argv.includes("--reconcile") || process.argv.includes("--notify"))
+    return runReconcile();
+  throw new Error("Usage: selfmerge-window.mjs --reconcile | --self-test");
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  main();

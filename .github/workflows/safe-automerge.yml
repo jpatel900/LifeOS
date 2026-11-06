@@ -1,69 +1,49 @@
-# Owner decision 2026-08-30 (post-#935 incident): this sync must never arm
-# auto-merge — and must disarm it if already armed — on a PR that carries
-# an unchecked OWNER-GATE task-list line (any GFM bullet: -, *, or +;
-# blockquoted or not), has "OWNER RATIFICATION REQUIRED" in its body, has
-# an "OWNER-GATE" heading in its body, or carries the `owner-gate` label.
-# That check (evaluateOwnerGateBlock in scripts/agent/automation-policy.mjs)
-# runs before either eligibility route in check-safe-automerge.mjs, so it
-# applies no matter what labels or paths the PR otherwise satisfies, and
-# fails closed (treats it as blocked) if the PR body cannot be read. Draft
-# is a separate, pre-existing rule enforced inside each route in
-# check-safe-automerge.mjs — not part of evaluateOwnerGateBlock, but
-# nothing bypasses it either. `types: edited` is included so an edit to
-# the title or body (adding/removing a ratification marker) re-runs this
-# check immediately instead of waiting for the next label/push event, and
-# `if: always()` on the sync step below means the disarm branch still
-# runs even when the eligibility step itself throws.
 name: Safe Auto-merge
 
 on:
   pull_request:
     types:
-      - opened
-      - reopened
-      - synchronize
-      - labeled
-      - unlabeled
-      - ready_for_review
-      - converted_to_draft
-      - edited
+      [
+        opened,
+        reopened,
+        synchronize,
+        labeled,
+        unlabeled,
+        ready_for_review,
+        converted_to_draft,
+        edited,
+      ]
 
+# Shared by every writer caller. Queue pending revocations instead of replacing
+# them, and never cancel an active write. Fork branch names get separate groups.
 concurrency:
-  group: safe-automerge-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: pr-automerge-${{ github.event.pull_request.head.repo.full_name }}-${{ github.event.pull_request.head.ref }}
+  queue: max
+  cancel-in-progress: false
 
 permissions:
-  # contents: write is required by the enablePullRequestAutoMerge GraphQL
-  # mutation (auto-merge schedules a merge, which writes contents). Fork PRs
-  # receive a read-only token regardless, so external PRs cannot use this.
   contents: write
   pull-requests: write
+  actions: read
 
 jobs:
   sync-safe-automerge:
     name: Sync safe auto-merge state
     runs-on: ubuntu-latest
-    # Bug #991: a body edit delivered after merge/close still fires this
-    # workflow, but refs/pull/<n>/merge no longer exists then, so checkout
-    # fails. Skip the whole job once the PR is no longer open.
     if: github.event.pull_request.state == 'open'
-
     steps:
-      - name: Checkout repository
+      - name: Checkout trusted policy and writer
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          ref: main
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Pre-fetch base and head refs for the PR
+      - name: Fetch PR commits for read-only diff evaluation
         env:
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          git fetch --no-tags origin \
-            "$PR_BASE_REF" \
-            "+refs/pull/$PR_NUMBER/head"
+        run: git fetch --no-tags origin "$PR_BASE_REF" "+refs/pull/$PR_NUMBER/head"
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -78,218 +58,65 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/agent/check-safe-automerge.mjs
 
-      # Owner decision 2026-08-30 (verifier finding #3): `if: always()` is
-      # load-bearing. Without it, GitHub Actions skips this step whenever
-      # the eligibility step above throws — which means a PR that was
-      # already armed, then edited to add a ratification marker in a way
-      # that makes the evaluator throw (or any other eligibility-script
-      # failure), would stay armed forever with no later event to retry
-      # it (unlike selfmerge-window.mjs, this lane has no cron re-scan).
-      # A failed/skipped eligibility step leaves `steps.eligibility.outputs
-      # .eligible` empty, so `ELIGIBLE` below is `''`, and
-      # `'' === 'true'` is `false` — the script already takes the disable
-      # branch for that case (verified: `node scripts/agent/
-      # check-safe-automerge.mjs` with PR_BASE_SHA/PR_HEAD_SHA unset
-      # throws and writes no GITHUB_OUTPUT, so `eligible` is always `''`,
-      # never `'true'`, on a thrown eligibility check).
-      - name: Sync GitHub auto-merge setting
-        id: sync
+      # Always hand over failures too, so old approval cannot survive a crash.
+      - name: Hand verdict to the sole auto-merge writer
+        id: writer
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SAFE_VERDICT: ${{ steps.eligibility.outcome == 'success' && steps.eligibility.outputs.verdict || '' }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        # Keep the existing entry point across cutover: before this owner-merged
+        # change reaches main, its trusted writer still has the old --notify CLI.
+        run: node scripts/agent/selfmerge-window.mjs --notify
+
+      # Checkout can fail before the writer exists. Recover trusted main code
+      # through the API, without adding a second owner of merge mutations.
+      - name: Revoke after a failed writer handoff
+        if: always() && steps.writer.outcome != 'success'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          ELIGIBLE: ${{ steps.eligibility.outputs.eligible }}
-          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         with:
-          github-token: ${{ github.token }}
           script: |
-            const eligible = process.env.ELIGIBLE === 'true';
-            let pullRequestId = process.env.PR_NODE_ID;
-
-            if (!pullRequestId) {
-              // Some event deliveries omit node_id from the payload; fetch it
-              // from the API instead of failing the arming step.
-              const prNumber = context.payload.pull_request?.number;
-              if (prNumber) {
-                const { data: pr } = await github.rest.pulls.get({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: prNumber,
-                });
-                pullRequestId = pr.node_id;
-              }
+            const { mkdtemp, writeFile, rm } = require('node:fs/promises');
+            const { join } = require('node:path');
+            const { pathToFileURL } = require('node:url');
+            const { data: ref } = await github.rest.git.getRef({
+              ...context.repo, ref: 'heads/main',
+            });
+            if (ref.object?.type !== 'commit' || !/^[a-f0-9]{40}$/i.test(ref.object.sha)) {
+              throw new Error('Could not resolve the trusted main writer revision.');
             }
-
-            if (!pullRequestId) {
-              core.setFailed('pull_request.node_id is required to sync auto-merge.');
-              return;
-            }
-
-            const setOutputs = (action, detail) => {
-              core.setOutput('action', action);
-              core.setOutput('detail', detail);
-            };
-
-            if (eligible) {
-              try {
-                const result = await github.graphql(
-                  `
-                    mutation EnableAutoMerge($pullRequestId: ID!) {
-                      enablePullRequestAutoMerge(
-                        input: {
-                          pullRequestId: $pullRequestId
-                          mergeMethod: SQUASH
-                        }
-                      ) {
-                        pullRequest {
-                          number
-                        }
-                      }
-                    }
-                  `,
-                  { pullRequestId },
-                );
-
-                setOutputs(
-                  'enabled',
-                  `Enabled GitHub auto-merge with squash for PR #${result.enablePullRequestAutoMerge.pullRequest.number}.`,
-                );
-                return;
-              } catch (error) {
-                const message = String(error?.message ?? error);
-
-                if (/already enabled/i.test(message)) {
-                  setOutputs(
-                    'already-enabled',
-                    'GitHub auto-merge was already enabled for this pull request.',
-                  );
-                  return;
-                }
-
-                core.setFailed(`Eligible PR, but enabling auto-merge failed: ${message}`);
-                return;
-              }
-            }
-
-            // Owner decision 2026-08-30: always attempt the disable when
-            // ineligible, even if the payload's `auto_merge` field says
-            // disabled — that field can be absent from some event
-            // deliveries (see the node_id fallback above), and trusting an
-            // absent/stale field here is exactly how a PR stays armed
-            // after it becomes owner-gated. The catch block below already
-            // treats "wasn't enabled anyway" as a normal, non-failing
-            // outcome, so this costs nothing when autoMergeEnabled was
-            // already accurate.
+            const directory = await mkdtemp(join(process.env.RUNNER_TEMP, 'automerge-revoke-'));
             try {
-              const result = await github.graphql(
-                `
-                  mutation DisableAutoMerge($pullRequestId: ID!) {
-                    disablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId }) {
-                      pullRequest {
-                        number
-                      }
-                    }
-                  }
-                `,
-                { pullRequestId },
-              );
-
-              setOutputs(
-                'disabled',
-                `Disabled GitHub auto-merge for PR #${result.disablePullRequestAutoMerge.pullRequest.number} because it is not currently safe.`,
-              );
-            } catch (error) {
-              const message = String(error?.message ?? error);
-
-              if (
-                /auto-merge is disabled|auto-merge is not enabled|already disabled|not currently enabled/i.test(
-                  message,
-                )
-              ) {
-                setOutputs(
-                  'not-enabled',
-                  'Pull request is ineligible, and GitHub auto-merge was not enabled.',
-                );
-                return;
-              }
-
-              if (/Resource not accessible by integration/i.test(message)) {
-                core.warning(
-                  `Pull request is ineligible, but the workflow token could not disable GitHub auto-merge: ${message}`,
-                );
-                setOutputs(
-                  'disable-unavailable',
-                  'Pull request is ineligible, but the workflow token could not disable GitHub auto-merge.',
-                );
-                return;
-              }
-
-              // Bug #988: some GraphQL error text here (e.g. "Can't disable
-              // auto-merge for this pull request.") does not say whether
-              // auto-merge was already off or genuinely failed to disarm.
-              // Do not guess from the message. Do one bounded fresh read of
-              // the same node instead: only a positively established
-              // PullRequest (`__typename === 'PullRequest'`) with
-              // `autoMergeRequest` strictly null counts as already-safe.
-              // Still-enabled, a non-PullRequest/unknown node, or a failed
-              // read all fall through to the existing failure below.
-              try {
-                const freshRead = await github.graphql(
-                  `
-                    query ConfirmAutoMergeDisabled($pullRequestId: ID!) {
-                      node(id: $pullRequestId) {
-                        __typename
-                        ... on PullRequest {
-                          autoMergeRequest {
-                            enabledAt
-                          }
-                        }
-                      }
-                    }
-                  `,
-                  { pullRequestId },
-                );
-
-                const node = freshRead?.node;
-                const isConfirmedPullRequest = node && node.__typename === 'PullRequest';
-                const hasAutoMergeField =
-                  isConfirmedPullRequest &&
-                  Object.prototype.hasOwnProperty.call(node, 'autoMergeRequest');
-
-                if (hasAutoMergeField && node.autoMergeRequest === null) {
-                  setOutputs(
-                    'not-enabled',
-                    `Pull request is ineligible. Disabling auto-merge returned an ambiguous error (${message}), but a fresh read confirmed GitHub auto-merge was not enabled.`,
-                  );
-                  return;
+              for (const file of [
+                'selfmerge-window.mjs', 'check-safe-automerge.mjs',
+                'red-guard-diagnose.mjs', 'automation-policy.mjs',
+              ]) {
+                const { data } = await github.rest.repos.getContent({
+                  ...context.repo, path: 'scripts/agent/' + file, ref: ref.object.sha,
+                });
+                if (data.type !== 'file' || data.encoding !== 'base64' || typeof data.content !== 'string') {
+                  throw new Error('Could not load trusted writer dependency: ' + file);
                 }
-              } catch (readError) {
-                // Swallow: a failed confirmation read must not be treated
-                // as success. Fall through to setFailed below.
+                const source = Buffer.from(data.content, 'base64').toString('utf8');
+                // Before owner merge, main still has the legacy unconditional CLI.
+                // Refuse to import it: its --notify/--scan paths may arm a PR.
+                if (file === 'selfmerge-window.mjs' && !/export function writeAutoMerge\(/.test(source)) {
+                  throw new Error('Trusted main does not yet expose the sole auto-merge writer.');
+                }
+                await writeFile(join(directory, file), source);
               }
-
-              core.setFailed(`Ineligible PR, but disabling auto-merge failed: ${message}`);
+              const { writeAutoMerge } = await import(pathToFileURL(join(directory, 'selfmerge-window.mjs')).href);
+              const result = writeAutoMerge({
+                id: context.payload.pull_request.node_id, enabled: false,
+              });
+              core.info('Checkout-independent revocation: ' + result.action);
+            } finally {
+              await rm(directory, { recursive: true, force: true });
             }
-
-      - name: Write workflow summary
-        if: always()
-        env:
-          ELIGIBLE: ${{ steps.eligibility.outputs.eligible }}
-          REASONS_MARKDOWN: ${{ steps.eligibility.outputs.reasons_markdown }}
-          CHANGED_FILES_MARKDOWN: ${{ steps.eligibility.outputs.changed_files_markdown }}
-          SYNC_ACTION: ${{ steps.sync.outputs.action }}
-          SYNC_DETAIL: ${{ steps.sync.outputs.detail }}
-        shell: bash
-        run: |
-          {
-            echo "## Safe Auto-merge Guard"
-            echo
-            echo "- Eligibility: \`${ELIGIBLE}\`"
-            echo "- Sync action: \`${SYNC_ACTION}\`"
-            echo "- Detail: ${SYNC_DETAIL}"
-            echo
-            echo "### Reasons"
-            echo "${REASONS_MARKDOWN}"
-            echo
-            echo "### Changed files"
-            echo "${CHANGED_FILES_MARKDOWN}"
-          } >> "$GITHUB_STEP_SUMMARY"
