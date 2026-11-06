@@ -17,7 +17,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 import { deferTask } from "@/lib/workflow";
-import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
 import {
   acceptLatestDraft,
   backlogLatestDraft,
@@ -26,6 +26,7 @@ import {
 } from "@/__tests__/helpers/workflowReachability";
 
 const ACCOUNT_TASK_ID = "77777777-7777-4777-8777-777777777777";
+const ACCOUNT_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 const {
   mockListAreas,
@@ -48,7 +49,15 @@ const {
   mockListDurationProfiles: vi.fn(),
   mockListSuggestionRecords: vi.fn(),
   mockApplyTaskReviewTransition: vi.fn(async () => undefined),
-  mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
+  mockCreateSupabaseBrowserClient: vi.fn(() => ({
+    mocked: true,
+    auth: {
+      getUser: async () => ({
+        data: { user: { id: "00000000-0000-0000-0000-000000000001" } },
+        error: null,
+      }),
+    },
+  })),
 }));
 
 vi.mock("@/lib/data/workflow", async () => {
@@ -160,7 +169,10 @@ afterEach(() => {
 describe("bug hunt #2: an old 'today is full' refusal does not block later saves", () => {
   it("sends 'Move to today' to the account after an earlier refusal", async () => {
     const { state, backlogTaskId } = seedStaleRefusal();
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.sessionStorage.setItem(
+      accountSnapshotKey(`account:${ACCOUNT_USER_ID}`),
+      JSON.stringify(state),
+    );
 
     render(
       <WorkflowProvider>
@@ -168,8 +180,8 @@ describe("bug hunt #2: an old 'today is full' refusal does not block later saves
       </WorkflowProvider>,
     );
 
-    expect(await screen.findByTestId("task-status")).toHaveTextContent(
-      "backlog",
+    await waitFor(() =>
+      expect(screen.getByTestId("task-status")).toHaveTextContent("backlog"),
     );
     await act(async () => {
       fireEvent.click(screen.getByTestId("promote"));

@@ -360,6 +360,7 @@ beforeEach(async () => {
   // mocked. Left uncleared, an earlier test's write is read back by the next
   // test's `WorkflowProvider` mount effect. Same clear
   // `durableWinsReviewsGuard.test.tsx` has always done.
+  await clearStoredTaskDrafts();
   await clearPendingWrites();
   // Draft decisions live independently of the pending-write journal.
   await clearStoredTaskDrafts();
@@ -368,6 +369,7 @@ beforeEach(async () => {
 afterEach(async () => {
   cleanup();
   vi.clearAllMocks();
+  await clearStoredTaskDrafts();
   await clearPendingWrites();
   await clearStoredTaskDrafts();
 });

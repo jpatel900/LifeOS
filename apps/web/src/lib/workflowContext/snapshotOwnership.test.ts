@@ -8,6 +8,7 @@ import {
   workflowSeed,
 } from "@/__tests__/helpers/workflowReachability";
 import { startExecutionSession, swapWipSlot } from "../workflow";
+import { setAccountScopedWorkflowIds } from "../workflow/shared";
 import { workflowReducer, type PersistedWorkflowPayload } from "./reducerCore";
 import {
   acknowledgeSnapshot,
@@ -89,6 +90,67 @@ function readTasks(
 }
 
 describe("snapshot state ownership (#967)", () => {
+  it.each([false, true])(
+    "retains scoped UUID creations through reload and binding (legacy: %s)",
+    (legacy) => {
+      setAccountScopedWorkflowIds(true);
+      try {
+        const initial = workflowSeed();
+        const local = trackSnapshotChanges(
+          initial,
+          acceptLatestDraft(captureWorkflow(initial, "Synthetic scoped task")),
+        );
+        const withArea = workflowReducer(local, {
+          type: "addArea",
+          name: "Scoped local area",
+          color: "#112233",
+        });
+        const capture = withArea.captureItems[0];
+        const task = withArea.tasks[0];
+        const area = withArea.areas.find(
+          (row) => row.name === "Scoped local area",
+        )!;
+        expect(capture.id).toMatch(/^capture-[0-9a-f-]{36}$/i);
+        expect(task.id).toMatch(/^task-[0-9a-f-]{36}$/i);
+        expect(area.id).toMatch(/^area-[0-9a-f-]{36}$/i);
+        const restored = reloadWorkflowState(
+          legacy ? { ...withArea, snapshotOwnership: undefined } : withArea,
+        );
+        const userId = "99999999-9999-4999-8999-999999999999";
+        const bound = workflowReducer(restored, {
+          type: "bindSnapshotAccount",
+          userId,
+        });
+        for (const [collection, row] of [
+          ["captureItems", capture],
+          ["tasks", task],
+          ["areas", area],
+        ] as const) {
+          expect(bound[collection]).toContainEqual(row);
+          expect(
+            bound.snapshotOwnership?.rows[collection]?.[row.id]?.creation
+              ?.pending,
+          ).toBe(true);
+        }
+        expect(hasSnapshotWork(bound)).toBe(true);
+        const delivered = workflowReducer(restored, {
+          type: "recordAccountId",
+          family: "tasks",
+          localId: task.id,
+          accountId: TASK_ID,
+        });
+        const switched = workflowReducer(delivered, {
+          type: "bindSnapshotAccount",
+          userId,
+        });
+        expect(switched.tasks).toEqual([]);
+        expect(switched.accountIdByLocalId.tasks).toEqual({});
+      } finally {
+        setAccountScopedWorkflowIds(false);
+      }
+    },
+  );
+
   it("keeps the newest account version through an old read, reload and unchanged read", () => {
     const initial = accountTask();
     const v1 = { ...initial.tasks[0], updated_at: "2026-10-01T00:00:00.000Z" };

@@ -1,4 +1,5 @@
 "use client";
+import { clearSnapshotRecoveryPayloads } from "./workflowContext/snapshotRecovery";
 
 import {
   createContext,
@@ -46,6 +47,7 @@ import {
 } from "./workflow";
 import { taskHasGoogleBackedOpenBlock } from "./workflow/shared";
 import type { SessionSaveResult } from "./workflowContext/persistenceSync";
+import { WorkflowNavigationBoundary } from "./workflowContext/navigationBoundary";
 import {
   ACCOUNT_UNREACHABLE_NOW,
   DEVICE_STORAGE_BLOCKED,
@@ -112,6 +114,7 @@ import {
 } from "./capture/offlineQueue";
 import {
   clearStoredTaskDrafts,
+  claimAnonymousTaskDrafts,
   listStoredTaskDrafts,
   reconcileStoredTaskDrafts,
 } from "./durability/draftStore";
@@ -149,9 +152,19 @@ import {
 // the state layer.
 import {
   raiseWorkflowIdCounterFromState,
+  setAccountScopedWorkflowIds,
   type AccountIdAliasFamily,
 } from "./workflow/shared";
 import { createApplyWorkflowState } from "./workflowContext/applyWorkflowState";
+import {
+  accountSnapshotKey,
+  claimAnonymousSnapshots,
+  safeUnownedWorkflowScope,
+  storeAccountSnapshot,
+  anonymousSnapshotOwners,
+  anonymousWorkflowScope,
+  unverifiedWorkflowScope,
+} from "./workflowContext/accountSnapshot";
 import {
   hasSnapshotWork,
   acceptsSnapshotRead,
@@ -214,6 +227,9 @@ import {
 import {
   getDeviceAccount,
   maySendAs,
+  isAnonymousWorkflowScope,
+  isUnownedWorkflowScope,
+  isUnverifiedWorkflowScope,
   setDeviceAccount,
   visibleToAccount,
   type DeviceAccount,
@@ -270,10 +286,327 @@ function derivePendingSaveFailureAggregate(pending: PendingWrite[]): {
 const WorkflowContext = createContext<WorkflowContextValue | null>(null);
 
 export function WorkflowProvider({ children }: { children: ReactNode }) {
+  const [account, setAccount] = useState(() => ({
+    // Demo has no identity to resolve. Keep its empty server/client first
+    // render intact, then let the existing hydration effect restore its seed.
+    scope: createSupabaseBrowserClient() ? "pending" : "demo",
+    revision: 0,
+    storageBlocked: false,
+  }));
+  const snapshot = useRef<{
+    scope: string;
+    stateRef: { current: WorkflowState };
+  } | null>(null);
+  const heldSnapshots = useRef(new Map<string, { current: WorkflowState }>());
+  const deviceIdentityGenerationRef = useRef(0);
+  // Delivery receipts outlive the keyed account view that sent them.
+  // Keep confirmation obligations partitioned by their authenticated owner.
+  const unconfirmedClosedDaysRef = useRef(new Map<string, Set<string>>());
+  const memorySourceOwners = useRef<Record<string, string | null>>({});
+  const selectedScope = useRef(account.scope);
+  const isScopeActive = useCallback(
+    (scope: string) => selectedScope.current === scope,
+    [],
+  );
+  const draftClaimReady = useRef<Promise<boolean>>(Promise.resolve(true));
+  const pendingSnapshotClaim = useRef<{
+    owner: string;
+    live: { scope: string; state: WorkflowState };
+  } | null>(null);
+  const [ownershipBlocked, setOwnershipBlocked] = useState(false);
+  const refreshIdentityRef = useRef<(previousScope?: string) => Promise<void>>(
+    async () => {},
+  );
+  const refreshIdentity = useCallback(() => refreshIdentityRef.current(), []);
+  const onIdentityMismatch = useCallback((scope: string) => {
+    if (selectedScope.current !== scope) return;
+    // Fence writes synchronously, before React unmounts the retired view.
+    setDeviceAccount(undefined);
+    selectedScope.current = "pending";
+    setAccount((previous) => ({ ...previous, scope: "pending" }));
+    void refreshIdentityRef.current(scope);
+  }, []);
+  const publishSnapshot = useCallback(
+    (scope: string, stateRef: { current: WorkflowState }) => {
+      if (selectedScope.current !== scope) return;
+      snapshot.current = { scope, stateRef };
+      heldSnapshots.current.set(scope, stateRef);
+    },
+    [],
+  );
+  const clearHeldSnapshots = useCallback(() => {
+    pendingSnapshotClaim.current = null;
+    heldSnapshots.current.clear();
+    memorySourceOwners.current = {};
+    snapshot.current = null;
+  }, []);
+
+  useEffect(() => {
+    const client = createSupabaseBrowserClient();
+    let active = true;
+    let authRevision = 0;
+    setDeviceAccount(undefined);
+    let selectionRevision = 0;
+    let selectionTail = Promise.resolve();
+    const selectAccount = (
+      userId: string | null | undefined,
+      previousScope = selectedScope.current,
+      notifySameAccount = true,
+    ) => {
+      let scope =
+        userId === undefined
+          ? unverifiedWorkflowScope(previousScope)
+          : userId === null
+            ? anonymousWorkflowScope(selectedScope.current)
+            : `account:${userId}`;
+      if (!userId && scope === pendingSnapshotClaim.current?.live.scope) {
+        scope =
+          userId === undefined
+            ? unverifiedWorkflowScope(pendingSnapshotClaim.current.owner)
+            : anonymousWorkflowScope(pendingSnapshotClaim.current.owner);
+      }
+      const live =
+        snapshot.current?.scope === selectedScope.current
+          ? {
+              scope: snapshot.current.scope,
+              state: snapshot.current.stateRef.current,
+            }
+          : undefined;
+      // Same-account notifications refresh the mounted provider without
+      // interrupting its local edits. A pending selection still queues.
+      if (
+        scope === selectedScope.current &&
+        (snapshot.current?.scope === scope ||
+          (typeof userId === "string" && getDeviceAccount() === userId))
+      ) {
+        setDeviceAccount(userId);
+        if (notifySameAccount)
+          setAccount((previous) => ({
+            ...previous,
+            revision: previous.revision + 1,
+          }));
+        return selectionTail;
+      }
+      const revision = ++selectionRevision;
+      selectedScope.current = scope;
+      snapshot.current = null;
+      setDeviceAccount(undefined);
+      setOwnershipBlocked(false);
+      setAccount((previous) => ({ ...previous, scope: "pending" }));
+      // Serialize reservations even when A and B arrive in one render.
+      // Retired selections may finish durable ownership, but never publish.
+      selectionTail = selectionTail.then(async () => {
+        let storageBlocked = false;
+        try {
+          if (userId) {
+            const pending = pendingSnapshotClaim.current;
+            if (pending) {
+              const recovered = await claimAnonymousSnapshots(
+                pending.owner,
+                pending.live,
+                heldSnapshots.current.get(pending.owner)?.current,
+                memorySourceOwners.current,
+                [pending.live.scope],
+              );
+              heldSnapshots.current.set(pending.owner, {
+                current: recovered.state,
+              });
+              pendingSnapshotClaim.current = null;
+            }
+            if (live && isUnownedWorkflowScope(live.scope))
+              pendingSnapshotClaim.current = { owner: scope, live };
+            const claimed = await claimAnonymousSnapshots(
+              scope,
+              live,
+              heldSnapshots.current.get(scope)?.current,
+              memorySourceOwners.current,
+            );
+            storageBlocked = claimed.storageBlocked;
+            heldSnapshots.current.set(scope, { current: claimed.state });
+            pendingSnapshotClaim.current = null;
+            for (const [sourceScope, owner] of Object.entries(
+              memorySourceOwners.current,
+            )) {
+              if (owner === scope) heldSnapshots.current.delete(sourceScope);
+            }
+            await claimAnonymousTaskDrafts(scope, {
+              ...anonymousSnapshotOwners(),
+              ...memorySourceOwners.current,
+              ...claimed.draftOwners,
+            });
+          } else {
+            scope = await safeUnownedWorkflowScope(scope);
+            if (live && isUnverifiedWorkflowScope(live.scope)) {
+              heldSnapshots.current.set(scope, { current: live.state });
+            }
+          }
+        } catch {
+          if (!active || selectionRevision !== revision) return;
+          // No reducer mount and no replay until ownership is durable.
+          // Keep the original bytes and held state for a later retry.
+          draftClaimReady.current = Promise.resolve(false);
+          selectedScope.current = "pending";
+          setOwnershipBlocked(true);
+          return;
+        }
+        if (!active || selectionRevision !== revision) return;
+        draftClaimReady.current = Promise.resolve(true);
+        selectedScope.current = scope;
+        setDeviceAccount(userId);
+        setAccount((previous) => ({
+          scope,
+          revision: previous.revision + 1,
+          storageBlocked,
+        }));
+      });
+      return selectionTail;
+    };
+    if (!client) {
+      selectedScope.current = "demo";
+      setAccount({ scope: "demo", revision: 0, storageBlocked: false });
+      return () => {
+        setDeviceAccount(undefined);
+      };
+    }
+
+    // Auth events and startup reads share a generation guard. Retired
+    // listeners and stale reads cannot stamp the new account's work.
+    const subscription = client.auth?.onAuthStateChange?.((event, session) => {
+      if (!active) return;
+      if (session?.user?.id) {
+        authRevision += 1;
+        deviceIdentityGenerationRef.current += 1;
+        selectAccount(session.user.id);
+      } else if (event === "SIGNED_OUT" || event === "INITIAL_SESSION") {
+        authRevision += 1;
+        deviceIdentityGenerationRef.current += 1;
+        selectAccount(null);
+      }
+    });
+    const refresh = async (previousScope = selectedScope.current) => {
+      const startedAt = ++authRevision;
+      try {
+        const result = await client.auth?.getUser();
+        if (!active || authRevision !== startedAt) return;
+        if (result && !result.error)
+          // A confirming reconnect read must not cancel the inner replay
+          // already running for this same owner. Auth events still notify it.
+          await selectAccount(
+            result.data.user?.id ?? null,
+            previousScope,
+            false,
+          );
+        else if (selectedScope.current === "pending") {
+          await selectAccount(undefined, previousScope);
+        }
+      } catch {
+        if (
+          active &&
+          authRevision === startedAt &&
+          selectedScope.current === "pending"
+        ) {
+          await selectAccount(undefined, previousScope);
+        }
+      }
+    };
+    refreshIdentityRef.current = refresh;
+    const online = () => {
+      void refresh();
+    };
+    window.addEventListener("online", online);
+    void refresh();
+    return () => {
+      active = false;
+      window.removeEventListener("online", online);
+      subscription?.data?.subscription?.unsubscribe();
+      deviceIdentityGenerationRef.current += 1;
+      setDeviceAccount(undefined);
+    };
+  }, []);
+
+  // A new identity retires every reducer, alias, promise and transient view
+  // from the old provider. Its asynchronous continuations cannot update the
+  // new instance, and its persistence key never changes underneath it.
+  return (
+    <WorkflowNavigationBoundary>
+      {ownershipBlocked ? (
+        <div role="alert">
+          {DEVICE_STORAGE_BLOCKED}{" "}
+          <button
+            type="button"
+            onClick={() => {
+              void refreshIdentityRef.current();
+            }}
+          >
+            Retry device recovery
+          </button>
+        </div>
+      ) : account.scope === "pending" ? null : (
+        <AccountWorkflowProvider
+          key={account.scope}
+          scope={account.scope}
+          authRevision={account.revision}
+          snapshotClaimBlocked={account.storageBlocked}
+          draftClaimReady={draftClaimReady.current}
+          publishSnapshot={publishSnapshot}
+          refreshIdentity={refreshIdentity}
+          onIdentityMismatch={onIdentityMismatch}
+          isScopeActive={isScopeActive}
+          heldState={heldSnapshots.current.get(account.scope)?.current}
+          clearHeldSnapshots={clearHeldSnapshots}
+          unconfirmedClosedDaysRef={unconfirmedClosedDaysRef}
+          deviceIdentityGenerationRef={deviceIdentityGenerationRef}
+        >
+          {children}
+        </AccountWorkflowProvider>
+      )}
+    </WorkflowNavigationBoundary>
+  );
+}
+
+function AccountWorkflowProvider({
+  children,
+  scope,
+  authRevision,
+  snapshotClaimBlocked,
+  draftClaimReady,
+  publishSnapshot,
+  refreshIdentity,
+  onIdentityMismatch,
+  isScopeActive,
+  heldState,
+  clearHeldSnapshots,
+  unconfirmedClosedDaysRef,
+  deviceIdentityGenerationRef,
+}: {
+  children: ReactNode;
+  scope: string;
+  authRevision: number;
+  snapshotClaimBlocked: boolean;
+  draftClaimReady: Promise<boolean>;
+  publishSnapshot: (
+    scope: string,
+    stateRef: { current: WorkflowState },
+  ) => void;
+  refreshIdentity: () => Promise<void>;
+  onIdentityMismatch: (scope: string) => void;
+  isScopeActive: (scope: string) => boolean;
+  heldState?: WorkflowState;
+  clearHeldSnapshots: () => void;
+  unconfirmedClosedDaysRef: { current: Map<string, Set<string>> };
+  deviceIdentityGenerationRef: { current: number };
+}) {
+  const storageKey = accountSnapshotKey(scope);
+  const draftScope = scope === "demo" ? undefined : scope;
+  const claimBlocked = useRef(snapshotClaimBlocked).current;
+  const heldStateAtMount = useRef(heldState).current;
   const [state, dispatchReducer] = useReducer(
     workflowReducer,
     undefined,
-    createSyncedInitialState,
+    () => {
+      setAccountScopedWorkflowIds(scope !== "demo");
+      return createSyncedInitialState();
+    },
   );
   // C2-S8 (#687 finding 1): deliberately NOT reading `?area=` here — this
   // initializer also runs during SSR, where `window` does not exist, and
@@ -329,10 +662,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [journalledClosedDays, setJournalledClosedDays] = useState<string[]>(
     [],
   );
-  // Delivery removes the journal row before account readback can confirm
-  // it. Retain that obligation across reconnects for this provider's life,
-  // partitioned by owner so an account change only changes visibility.
-  const unconfirmedClosedDaysRef = useRef(new Map<string, Set<string>>());
   const reviewReadbackGenerationRef = useRef(0);
   // #737 C1 re-score GAP 1 — the same two tiers, for the same reason, one
   // question over: "has this win already been logged?". Before these, the
@@ -415,7 +744,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const accountSyncRequestedRef = useRef(false);
   // Reconnect can discover an account before its auth event. Only an applied
   // area and workflow read for that owner releases its queued writes.
-  const reconnectHydrationOwnerRef = useRef<string | null>(null);
+  const reconnectHydrationOwnerRef = useRef<string | null>(
+    scope.startsWith("account:") ? scope.slice("account:".length) : null,
+  );
   const observeAreaAccount = useCallback((account: DeviceAccount) => {
     if (areaAccountRef.current.account === account) return false;
     areaAccountRef.current = { account };
@@ -441,25 +772,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // vitest had already deleted `window` between test files, throwing
   // `ReferenceError: window is not defined` (main red at 79996dba, PR #894's
   // CI). Checked before every one of those setters below.
+  const deviceVisibilityRefreshRef = useRef<Promise<void>>(Promise.resolve());
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-    };
-  }, []);
-  // W3-16 #1: the account that owns device-held work is not known until this
-  // provider reads the session, so a fresh mount starts at "not known", never
-  // at whatever an earlier provider in this document last saw. See
-  // `durability/deviceAccount.ts`.
-  const deviceIdentityGenerationRef = useRef(0);
-  const deviceVisibilityRefreshRef = useRef<Promise<void>>(Promise.resolve());
-  useEffect(() => {
-    deviceIdentityGenerationRef.current += 1;
-    setDeviceAccount(undefined);
-    return () => {
-      deviceIdentityGenerationRef.current += 1;
-      setDeviceAccount(undefined);
+      activeParseCaptureIdRef.current = null;
     };
   }, []);
   // #960 defect 1: guards `runAccountSync` against running twice at once —
@@ -614,7 +933,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // Layout, not passive: a tap between the screen update and a passive effect read stale state (#853).
   useLayoutEffect(() => {
     stateRef.current = state;
-  }, [state]);
+    // The initial empty reducer must not replace the retained account copy
+    // if identity changes before passive storage hydration commits.
+    if (hasHydratedFromStorage) publishSnapshot(scope, stateRef);
+  }, [state, scope, publishSnapshot, hasHydratedFromStorage]);
 
   const beginAccountSnapshotRead = useCallback(
     async (
@@ -632,11 +954,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
       if (
         !mountedRef.current ||
+        !isScopeActive(scope) ||
         generation !== snapshotIdentityRef.current.generation
       )
         return null;
       if (identity?.error) throw new Error(identity.error.message);
       const userId = identity?.data.user?.id;
+      if (scope !== `account:${userId}`) {
+        onIdentityMismatch(scope);
+        return null;
+      }
       if (client.auth) onIdentity?.(userId ?? null);
       if (client.auth && !userId) {
         markSignedOutLocal();
@@ -679,15 +1006,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         generation: snapshotIdentityRef.current.generation,
       };
     },
-    [dispatch, markSignedOutLocal],
+    [
+      dispatch,
+      markSignedOutLocal,
+      scope,
+      isScopeActive,
+      onIdentityMismatch,
+      deviceIdentityGenerationRef,
+    ],
   );
 
   const accountSnapshotReadIsCurrent = useCallback(
     (read: { cursor: ReturnType<typeof snapshotCursor>; generation: number }) =>
       mountedRef.current &&
+      isScopeActive(scope) &&
       read.generation === snapshotIdentityRef.current.generation &&
       read.cursor.epoch === snapshotCursor(stateRef.current).epoch,
-    [],
+    [scope, isScopeActive],
   );
 
   const applyPersistedAreas = useCallback(
@@ -872,6 +1207,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // does not, so it keeps promoting to `synced` unconditionally.
       options?: { preserveLocalOnlyWhilePending?: boolean },
     ) => {
+      if (isUnownedWorkflowScope(scope) || !mountedRef.current) return;
       if (!client) {
         markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
         return;
@@ -1071,6 +1407,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     [
       buildIdAliasSnapshot,
+      scope,
+      isScopeActive,
       beginAccountSnapshotRead,
       accountSnapshotReadIsCurrent,
       dispatch,
@@ -1092,6 +1430,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // is the failure this program exists to end.
   const replayJournaledWrites =
     useCallback(async (): Promise<ReplaySummary> => {
+      if (
+        isUnownedWorkflowScope(scope) ||
+        !mountedRef.current ||
+        !isScopeActive(scope)
+      ) {
+        return { synced: 0, failed: 0, skipped: 0 };
+      }
       // #737 C1 S5: preserve the existing unconfigured/demo cancellation
       // path. An account-capable replay keeps the pair durable and replays it
       // in FIFO order because response loss makes its delivery ambiguous.
@@ -1111,6 +1456,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       const recordReplayAlias: typeof recordAccountAlias = (...args) => {
         if (
           mountedRef.current &&
+          isScopeActive(scope) &&
           snapshotCursor(stateRef.current).epoch === replayEpoch
         )
           recordAccountAlias(...args);
@@ -1123,11 +1469,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           // An unowned row is visible to any account until delivery. Only
           // the server write's authenticated owner can inherit its retained
           // confirmation obligation, including a success after switching away.
-          if (
-            mountedRef.current &&
-            receipt.provider === "supabase" &&
-            args.review_type === "daily"
-          ) {
+          if (receipt.provider === "supabase" && args.review_type === "daily") {
             const unconfirmed =
               unconfirmedClosedDaysRef.current.get(receipt.userId) ??
               new Set<string>();
@@ -1378,15 +1720,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           }
         },
       });
-    }, [recordAccountAlias, persistedAreaIdForWorkflowId]);
+    }, [
+      recordAccountAlias,
+      persistedAreaIdForWorkflowId,
+      scope,
+      isScopeActive,
+      unconfirmedClosedDaysRef,
+    ]);
 
   const applyWorkflowState = createApplyWorkflowState(stateRef, dispatch);
 
   const persistenceEpoch = snapshotCursor(stateRef.current).epoch;
   const persistenceStillCurrent = () =>
     mountedRef.current &&
+    isScopeActive(scope) &&
     snapshotCursor(stateRef.current).epoch === persistenceEpoch;
   const persistenceOps: PersistenceSyncOps = createPersistenceSync({
+    canWriteAccount: () =>
+      mountedRef.current &&
+      isScopeActive(scope) &&
+      scope === `account:${getDeviceAccount()}`,
     persistedAreasRef,
     persistedCaptureIdByLocalIdRef,
     persistedTaskIdByLocalIdRef,
@@ -1826,9 +2179,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    const restored = loadStoredStateFromSession();
-    const restoredState = restored.state;
-    if (restored.storageBlocked) {
+    const restored = loadStoredStateFromSession(storageKey);
+    const restoredState = heldStateAtMount ?? restored.state;
+    if (restored.storageBlocked || claimBlocked) {
       setSyncStatus((current) => ({
         ...current,
         storage: "blocked",
@@ -1933,7 +2286,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     }
     setHasHydratedFromStorage(true);
-  }, [dispatch]);
+  }, [scope, storageKey, claimBlocked, heldStateAtMount, dispatch]);
 
   /**
    * Audit P0#4 — read the DEVICE tier of "which days are closed" back out of
@@ -2153,7 +2506,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     } catch {
       // best-effort signal; a journal read failure must not break the shell
     }
-  }, []);
+  }, [unconfirmedClosedDaysRef]);
 
   /**
    * #967 follow-up review, finding 1 and 2: a NARROWER sibling of
@@ -2350,7 +2703,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         return false;
       }
     },
-    [],
+    [unconfirmedClosedDaysRef, deviceIdentityGenerationRef],
   );
 
   // Owner changes must reveal retained device evidence even while offline.
@@ -2409,17 +2762,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           !currentUser.error &&
           identityGeneration === deviceIdentityGenerationRef.current
         ) {
-          if (read.userId && read.userId !== expectedUserId) {
-            // The session changed without an auth event. Invalidate A before
-            // scheduling the new account area/workflow read; never replay on the stale pass.
-            reconnectHydrationOwnerRef.current = expectedUserId;
-            observeAreaAccount(expectedUserId);
-            adoptDeviceAccount(expectedUserId);
-            snapshotIdentityRef.current = {
-              userId: expectedUserId,
-              generation: read.generation + 1,
-            };
-            return "resync";
+          if (scope !== `account:${expectedUserId}`) {
+            // Only the outer owner may retire this view and select another.
+            onIdentityMismatch(scope);
+            return;
           }
           adoptDeviceAccount(expectedUserId);
         } else if (hydrationRead?.userId) return;
@@ -2445,6 +2791,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       const account = getDeviceAccount();
       if (
         typeof account !== "string" ||
+        scope !== `account:${account}` ||
         (read.userId && read.userId !== account)
       )
         return;
@@ -2588,13 +2935,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     [
       accountSnapshotReadIsCurrent,
-      observeAreaAccount,
+      scope,
+      onIdentityMismatch,
       adoptDeviceAccount,
       replayJournaledWrites,
       refreshPendingLocalChanges,
       refreshJournalledDurableState,
       refreshPendingSaveFailed,
       readbackAccountReviewClosedDays,
+      unconfirmedClosedDaysRef,
+      deviceIdentityGenerationRef,
     ],
   );
 
@@ -2616,10 +2966,30 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // mount replay has been removed (see its effect's own comment): this is
   // now the ONE mechanism that owns "replay the journal on mount", ordered
   // strictly after the refs populate, on every mount, signed in or not.
+  // Each keyed account mount reveals retained evidence even offline.
+  // Record this before mount replay can remove rows. Same-owner auth events
+  // must not refresh a drained close before account readback confirms it.
+  useEffect(() => {
+    deviceVisibilityRefreshRef.current = Promise.all([
+      refreshUnsyncedCount(),
+      refreshJournalledDurableState(),
+    ]).then(() => undefined);
+  }, [refreshUnsyncedCount, refreshJournalledDurableState]);
+
   const runAccountSync = useCallback(
     async function syncAccount(options?: {
       replayAfter?: boolean;
     }): Promise<void> {
+      if (isUnverifiedWorkflowScope(scope)) {
+        markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
+        setAreasReadbackSettled(true);
+        return;
+      }
+      if (isAnonymousWorkflowScope(scope)) {
+        markSignedOutLocal();
+        setAreasReadbackSettled(true);
+        return;
+      }
       // #960 defect 1: the mount effect and a `SIGNED_IN` event can land in
       // the same tick (a session already present at first paint) — without
       // this guard the second call could read `persistedAreasRef` mid-write
@@ -2725,6 +3095,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       observeAreaAccount,
       syncPersistedWorkflowRows,
       replayAndReleaseJournal,
+      scope,
     ],
   );
 
@@ -2732,115 +3103,27 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // `runAccountSync`'s own comment for why an ordinary signed-in fresh load
   // must not be left to the old un-awaited mount replay (removed below).
   useEffect(() => {
+    if (scope !== "pending") void runAccountSync({ replayAfter: true });
+  }, [runAccountSync, scope]);
+
+  // #960: a renewed session for the SAME account retries failed hydration
+  // before replay. The outer boundary remounts for a different account.
+  // Normal token refreshes do not need another successful account read.
+  useEffect(() => {
+    if (!scope.startsWith("account:")) return;
+    const posture = syncStatusRef.current;
+    if (posture.account !== "local-only" && !posture.signedOut) return;
     void runAccountSync({ replayAfter: true });
-  }, [runAccountSync]);
+  }, [authRevision, runAccountSync, scope]);
 
-  // #960 defect 1: the SECOND chance. `runAccountSync`'s mount effect above
-  // runs EXACTLY ONCE per document. If that one run lands signed-out — the
-  // ordinary case for `/login` — `markSignedOutLocal` latches the posture
-  // and `persistedAreasRef` stays `[]` forever: sign-in afterwards is a
-  // client-side `router.push` (`login/page.tsx`), which never remounts this
-  // provider. A session becoming available while the provider is STILL in
-  // that posture is the one signal telling us to re-run the sync body — and,
-  // this time, strictly after it succeeds, drain whatever
-  // wins/reviews/plans/captures got journalled instead of sent while the
-  // account looked unreachable.
-  //
-  // Deliberately does NOT key off `markAccountSynced` firing — in the
-  // failing path it never does (there is nothing to become synced FROM), so
-  // wiring the replay to it would never trigger for the bug this exists to
-  // fix.
-  useEffect(() => {
-    const client = createSupabaseBrowserClient();
-    // The `typeof` guard (beyond the plain `!client` check every other call
-    // site here uses) is deliberate: several existing test suites stand in a
-    // minimal fake client shaped only for the surfaces they exercise (e.g.
-    // `auth.getUser` alone), predating this listener. A real Supabase client
-    // always has `onAuthStateChange`; this only protects against a
-    // test-only client that does not model it, never against production.
-    if (!client || typeof client.auth?.onAuthStateChange !== "function") {
-      return;
-    }
-
-    let active = true;
-    const { data: subscription } = client.auth.onAuthStateChange(
-      (event, session) => {
-        if (!active) return;
-        deviceIdentityGenerationRef.current += 1;
-        let accountChanged = false;
-        // W3-16 #1: keep the owner of device-held work current on EVERY auth
-        // event, before the early returns below. A sign-out means no account
-        // may receive the last account's queued work.
-        if (event === "SIGNED_OUT") {
-          accountChanged = observeAreaAccount(null);
-          adoptDeviceAccount(null);
-        } else if (session?.user?.id) {
-          accountChanged = observeAreaAccount(session.user.id);
-          adoptDeviceAccount(session.user.id);
-        } else if (event === "INITIAL_SESSION") {
-          accountChanged = observeAreaAccount(null);
-          adoptDeviceAccount(null);
-        }
-        const userId = session?.user.id ?? null;
-        const snapshotChanged = snapshotIdentityRef.current.userId !== userId;
-        if (snapshotChanged) {
-          snapshotIdentityRef.current = {
-            userId,
-            generation: snapshotIdentityRef.current.generation + 1,
-          };
-        }
-        if (!session) {
-          if (event === "SIGNED_OUT" || event === "INITIAL_SESSION")
-            markSignedOutLocal();
-          return;
-        }
-        if (
-          event !== "SIGNED_IN" &&
-          event !== "INITIAL_SESSION" &&
-          event !== "TOKEN_REFRESHED"
-        ) {
-          return;
-        }
-        const posture = syncStatusRef.current;
-        if (
-          !accountChanged &&
-          !snapshotChanged &&
-          posture.account !== "local-only" &&
-          !posture.signedOut
-        )
-          return;
-        if (accountSyncInFlightRef.current) {
-          if (accountChanged || snapshotChanged)
-            accountSyncRequestedRef.current = true;
-          return;
-        }
-        // Leave the auth callback before another getUser call enters its lock.
-        queueMicrotask(() => {
-          if (active && mountedRef.current)
-            void runAccountSync({ replayAfter: true });
-        });
-      },
-    );
-
-    return () => {
-      active = false;
-      subscription?.subscription?.unsubscribe();
-    };
-  }, [
-    adoptDeviceAccount,
-    markSignedOutLocal,
-    observeAreaAccount,
-    runAccountSync,
-  ]);
-
-  useEffect(() => {
-    if (!hasHydratedFromStorage) {
+  useLayoutEffect(() => {
+    if (!hasHydratedFromStorage || !isScopeActive(scope)) {
       return;
     }
 
     syncWorkflowIdCounterFromState(state);
     try {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      storeAccountSnapshot(scope, state);
     } catch {
       setSyncStatus((current) => ({
         ...current,
@@ -2850,7 +3133,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           current.pendingLocalChanges || hasSnapshotWork(state),
       }));
     }
-  }, [hasHydratedFromStorage, state]);
+  }, [hasHydratedFromStorage, state, storageKey, scope, isScopeActive]);
 
   /**
    * #737 C1 re-score GAP 3, read half — put back the pending triage drafts
@@ -2872,7 +3155,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void (async () => {
       try {
-        const drafts = await listStoredTaskDrafts();
+        if (scope.startsWith("account:") && !claimBlocked) {
+          if (!(await draftClaimReady))
+            throw new Error("Anonymous draft handoff failed");
+        }
+        const drafts = await listStoredTaskDrafts(draftScope);
         if (!cancelled && drafts.length > 0) {
           // Drafts minted in other tabs share this device's id space; keep
           // the next local id clear of them (bug hunt #12).
@@ -2883,9 +3170,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           dispatch({ type: "restoreDeviceDrafts", drafts });
         }
       } catch {
-        // A read failure loses nothing that was not already lost. The write
-        // half reports a device that cannot hold work, which is the state the
-        // user actually needs to know about.
+        if (!cancelled) markDeviceStorageBlocked();
       } finally {
         if (!cancelled) {
           setHasRestoredDeviceDrafts(true);
@@ -2896,7 +3181,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [hasHydratedFromStorage, dispatch]);
+  }, [
+    hasHydratedFromStorage,
+    draftScope,
+    scope,
+    claimBlocked,
+    draftClaimReady,
+    markDeviceStorageBlocked,
+    dispatch,
+  ]);
 
   /**
    * #737 C1 re-score GAP 3, write half — mirror the triage drafts to the
@@ -2930,10 +3223,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // decision). A reject has no account write, so dropping it from the
     // device made a new tab offer the thought again as "not sorted yet",
     // while the banner said the drop was saved on this device.
-    void reconcileStoredTaskDrafts(state.taskDrafts).catch(() => {
+    void reconcileStoredTaskDrafts(state.taskDrafts, draftScope).catch(() => {
       markDeviceStorageBlocked();
     });
-  }, [hasRestoredDeviceDrafts, state.taskDrafts, markDeviceStorageBlocked]);
+  }, [
+    hasRestoredDeviceDrafts,
+    state.taskDrafts,
+    markDeviceStorageBlocked,
+    draftScope,
+  ]);
 
   // #691: persist the area selection whenever it changes, gated on hydration
   // (like the state save above) so the pre-restore default never overwrites
@@ -2981,6 +3279,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // stays queued for the next reconnect. Refreshes local rows after any sync so
   // the newly-synced captures reach triage.
   const syncOfflineQueue = useCallback(async () => {
+    if (!mountedRef.current || !isScopeActive(scope)) return;
     if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     const client = createSupabaseBrowserClient();
     if (!client) return;
@@ -2995,6 +3294,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     let syncedAny = false;
     for (const queued of pending) {
+      if (!mountedRef.current || !isScopeActive(scope)) return;
       // W3-16 #1: a capture queued while another account was signed in waits
       // on this device for that account. It is never sent through this one.
       // Checked per item, so an account switch mid-drain holds the rest back.
@@ -3077,7 +3377,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [
+    scope,
+    isScopeActive,
     markPersistedLoadFailure,
+    deviceIdentityGenerationRef,
     refreshUnsyncedCount,
     syncPersistedWorkflowRows,
     persistedAreaIdForWorkflowId,
@@ -3122,11 +3425,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // `runAccountSync`'s OWN post-replay refresh (added for finding 1) never
   // runs on the branches that return before reaching the replay at all.
   useEffect(() => {
-    void refreshUnsyncedCount();
-    void refreshJournalledDurableState();
     void refreshPendingLocalChanges();
     if (typeof window === "undefined") return;
     const onOnline = () => {
+      if (!scope.startsWith("account:") && scope !== "demo") return;
       void syncOfflineQueue();
       const client = createSupabaseBrowserClient();
       if (!client) {
@@ -3153,13 +3455,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
   }, [
-    refreshUnsyncedCount,
     refreshJournalledDurableState,
     refreshPendingLocalChanges,
     replayJournaledWrites,
     replayAndReleaseJournal,
     runAccountSync,
     syncOfflineQueue,
+    scope,
   ]);
 
   // Bug hunt #5: the mount drain of the offline capture queue waits until
@@ -3169,8 +3471,17 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // later account read (e.g. signing in) brings the areas in.
   useEffect(() => {
     if (!areasReadbackSettled) return;
-    void syncOfflineQueue();
-  }, [areasReadbackSettled, workflowAreaIdByPersistedId, syncOfflineQueue]);
+    if (!scope.startsWith("account:")) return;
+    void deviceVisibilityRefreshRef.current.then(() => {
+      if (mountedRef.current && isScopeActive(scope)) return syncOfflineQueue();
+    });
+  }, [
+    areasReadbackSettled,
+    workflowAreaIdByPersistedId,
+    syncOfflineQueue,
+    scope,
+    isScopeActive,
+  ]);
 
   // Extracted to workflowContext/captureParse.ts (issue #590 slice 4) — plain
   // functions (no hooks), so this factory call is positioned after
@@ -3481,7 +3792,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     if (!client) {
       try {
-        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        window.sessionStorage.setItem(storageKey, JSON.stringify(next));
       } catch {
         markDeviceStorageBlocked();
         return { status: "failure" };
@@ -3701,6 +4012,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     syncStatus,
     syncPersistedAreas,
     refreshPersistedWorkflow: async () => {
+      if (isUnownedWorkflowScope(scope)) {
+        await refreshIdentity();
+        return;
+      }
       await syncPersistedWorkflowRows(createSupabaseBrowserClient());
     },
     // #967 manual retry: reuses `runAccountSync` end to end — the same
@@ -3714,12 +4029,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // capture while the mount pass still awaits readback. Join that pass,
     // then run one fresh attempt. Repeated clicks share the same retry.
     retryPendingAccountWrites: async () => {
+      if (isUnownedWorkflowScope(scope)) {
+        await refreshIdentity();
+        return;
+      }
       if (manualAccountRetryRef.current) return manualAccountRetryRef.current;
       const retry = (async () => {
         while (accountSyncInFlightRef.current) {
           await accountSyncCompletionRef.current;
         }
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || !isScopeActive(scope)) return;
         await runAccountSync({ replayAfter: true });
       })();
       manualAccountRetryRef.current = retry;
@@ -3750,6 +4069,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     acknowledgeAreaSave: (receipt, area) => {
       if (
         !mountedRef.current ||
+        !isScopeActive(scope) ||
         snapshotCursor(stateRef.current).epoch !== receipt.epoch
       )
         return false;
@@ -3770,14 +4090,35 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       areaWrites(snapshotAreaId(stateRef.current, receipt.id), async () => {
         if (
           mountedRef.current &&
+          isScopeActive(scope) &&
           snapshotCursor(stateRef.current).epoch === receipt.epoch
         )
           await write();
       }),
     submitCaptureText: captureParseOps.submitCaptureText,
-    sortCaptureIntoDrafts: captureParseOps.sortCaptureIntoDrafts,
+    sortCaptureIntoDrafts: (captureId, parserMode) => {
+      if (!isScopeActive(scope)) return;
+      if (isUnownedWorkflowScope(scope)) {
+        setCaptureParse({
+          phase: "failed",
+          captureId,
+          status: "unknown",
+          message:
+            "Reconnect or sign in before sorting this capture. Your capture is still here.",
+          canRetryWithMock: false,
+        });
+        return;
+      }
+      captureParseOps.sortCaptureIntoDrafts(captureId, parserMode);
+    },
     captureParse,
-    retryCaptureParseWithMock: captureParseOps.retryCaptureParseWithMock,
+    retryCaptureParseWithMock: () => {
+      if (
+        isScopeActive(scope) &&
+        (scope === "demo" || scope.startsWith("account:"))
+      )
+        captureParseOps.retryCaptureParseWithMock();
+    },
     taskMapDraft,
     requestTaskMapDraft: requestTaskMapDraftAction,
     dismissTaskMapDraft: dismissTaskMapDraftAction,
@@ -4169,7 +4510,19 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         clearQueue(),
         clearStoredTaskDrafts(),
         clearPendingWrites(),
+        clearSnapshotRecoveryPayloads(),
       ]);
+      for (
+        let index = window.sessionStorage.length - 1;
+        index >= 0;
+        index -= 1
+      ) {
+        const key = window.sessionStorage.key(index);
+        if (key === STORAGE_KEY || key?.startsWith(`${STORAGE_KEY}:`)) {
+          window.sessionStorage.removeItem(key);
+        }
+      }
+      clearHeldSnapshots();
       dispatch({ type: "reset" });
       await refreshUnsyncedCount();
     },

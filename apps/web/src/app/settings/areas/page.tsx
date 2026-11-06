@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { WorkflowLoadingState } from "../../components/WorkflowLoadingState";
 import { saveModeLabel } from "../../../lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import { useWorkflowNavigationLatch } from "@/lib/workflowContext/navigationBoundary";
 import { AreaCharterPanel } from "./AreaCharterPanel";
 import { DataExportPanel } from "./DataExportPanel";
 import { GoogleCalendarConnectionPanel } from "./GoogleCalendarConnectionPanel";
@@ -25,6 +26,7 @@ export default function AreasSettingsPage() {
   const { state, replaceReadyAreas } = useAreasLoadState();
   const pathname = usePathname();
   const router = useRouter();
+  const navigation = useWorkflowNavigationLatch(pathname ?? "/settings/areas");
 
   // #742 OWNER-GATE resolved (2026-07-26 Target Cards ratification, re-
   // confirmed on the issue): signed-out visitors to this page are sent to
@@ -50,7 +52,7 @@ export default function AreasSettingsPage() {
   // `router.replace` again. A ref (not a dependency-array tweak) is the fix
   // because the actual invariant is "navigate once, ever" — not "only when
   // these particular values happen to be referentially stable."
-  const hasRedirectedRef = useRef(false);
+  // The latch lives above account remounts and resets on route departure.
 
   // Part of #960 (defect 3): `useAreasLoadState.ts`'s `loadAreas` effect
   // runs exactly once on mount and NEVER re-checks — if that one call fails
@@ -94,9 +96,6 @@ export default function AreasSettingsPage() {
   // a client-side sentinel here should paper over — and a counter cheap
   // enough to add without its own edge cases (when does it reset? what
   // resets it after a real, wanted reload?) would still not catch that.
-  const sessionConfirmedRef = useRef<"unconfirmed" | "signed-in">(
-    "unconfirmed",
-  );
   useEffect(() => {
     if (state.status !== "signed-out") {
       return;
@@ -108,8 +107,8 @@ export default function AreasSettingsPage() {
       // No auth client at all (Supabase not configured): nothing can ever
       // confirm a session, so there is nothing to wait for — same behavior
       // as before this fix.
-      if (hasRedirectedRef.current) return;
-      hasRedirectedRef.current = true;
+      if (navigation.redirected) return;
+      navigation.redirected = true;
       router.replace(`/login?next=${encodeURIComponent(areasPathname)}`);
       return;
     }
@@ -141,8 +140,8 @@ export default function AreasSettingsPage() {
           // branch below, is also what stops a LATER `null`-session event
           // (e.g. a cross-tab sign-out) from redirecting after a session was
           // already confirmed here — not anything about the reload itself.
-          if (sessionConfirmedRef.current === "signed-in") return;
-          sessionConfirmedRef.current = "signed-in";
+          if (navigation.sessionConfirmed) return;
+          navigation.sessionConfirmed = true;
           if (
             typeof window !== "undefined" &&
             window.location.pathname === areasPathname
@@ -151,13 +150,10 @@ export default function AreasSettingsPage() {
           }
           return;
         }
-        if (
-          hasRedirectedRef.current ||
-          sessionConfirmedRef.current === "signed-in"
-        ) {
+        if (navigation.redirected || navigation.sessionConfirmed) {
           return;
         }
-        hasRedirectedRef.current = true;
+        navigation.redirected = true;
         router.replace(`/login?next=${encodeURIComponent(areasPathname)}`);
       },
     );
@@ -166,7 +162,7 @@ export default function AreasSettingsPage() {
       active = false;
       subscription?.subscription?.unsubscribe();
     };
-  }, [state.status, pathname, router]);
+  }, [state.status, pathname, router, navigation]);
 
   // #691: resolve the badge from the SAME context area list every other
   // screen reads (not this page's separately-loaded rows), and give null the

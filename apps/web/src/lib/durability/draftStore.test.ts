@@ -1,8 +1,20 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Phase2TaskDraft } from "@lifeos/schemas";
+import { createEmptyWorkflowState } from "../workflow/shared";
+import { createRawCaptureItem } from "../workflow/capture";
+import { reserveCaptureWriteOwners } from "./pendingWriteJournal";
+import {
+  claimAnonymousSnapshots,
+  mergeAnonymousSnapshot,
+} from "../workflowContext/accountSnapshot";
+import {
+  clearSnapshotRecoveriesForTests,
+  reserveSnapshotRecovery,
+} from "../workflowContext/snapshotRecovery";
 import {
   clearStoredTaskDrafts,
+  claimAnonymousTaskDrafts,
   listStoredTaskDrafts,
   reconcileStoredTaskDrafts,
   storedTaskDraftCount,
@@ -40,6 +52,8 @@ function makeDraft(
 
 beforeEach(async () => {
   await clearStoredTaskDrafts();
+  await clearSnapshotRecoveriesForTests();
+  sessionStorage.clear();
 });
 
 afterEach(async () => {
@@ -47,6 +61,100 @@ afterEach(async () => {
 });
 
 describe("draftStore", () => {
+  it.each([false, true])(
+    "uses durable fallback ownership for drafts without a session source (mixed=%s)",
+    async (mixed) => {
+      const first = createRawCaptureItem({ rawText: "A's recovery" });
+      const second = createRawCaptureItem({ rawText: "B's recovery" });
+      await reserveCaptureWriteOwners("A", [first.id]);
+      if (mixed) await reserveCaptureWriteOwners("B", [second.id]);
+      await reserveSnapshotRecovery(
+        {
+          id: crypto.randomUUID(),
+          scope: "anonymous",
+          owner: "account:B",
+          unanchored: true,
+          state: {
+            ...createEmptyWorkflowState(),
+            captureItems: mixed ? [first, second] : [first],
+          },
+        },
+        mergeAnonymousSnapshot,
+      );
+      const draft = makeDraft({
+        id: "fallback-draft",
+        capture_item_id: first.id,
+      });
+      await reconcileStoredTaskDrafts([draft], "anonymous");
+      const owners = {};
+      const claimed = await claimAnonymousSnapshots(
+        "account:C",
+        undefined,
+        undefined,
+        owners,
+      );
+      await claimAnonymousTaskDrafts("account:C", {
+        ...owners,
+        ...claimed.draftOwners,
+      });
+      expect(await listStoredTaskDrafts("account:C")).toEqual([]);
+      expect(
+        await listStoredTaskDrafts(mixed ? "anonymous" : "account:A"),
+      ).toEqual([draft]);
+    },
+  );
+
+  it("leaves quarantined source drafts untouched across account claims", async () => {
+    const draft = makeDraft({ id: "quarantined-draft" });
+    await reconcileStoredTaskDrafts([draft], "anonymous");
+    for (const account of ["account:A", "account:B"]) {
+      await claimAnonymousTaskDrafts(account, { anonymous: null });
+      expect(await listStoredTaskDrafts(account)).toEqual([]);
+      expect(await listStoredTaskDrafts("anonymous")).toEqual([draft]);
+    }
+  });
+  it("honors a reserved snapshot owner when another account finishes recovery", async () => {
+    const draft = makeDraft({ id: "reserved-draft" });
+    await reconcileStoredTaskDrafts([draft], "anonymous");
+    await claimAnonymousTaskDrafts("account:B", { anonymous: "account:A" });
+    expect(await listStoredTaskDrafts("account:A")).toEqual([draft]);
+    expect(await listStoredTaskDrafts("account:B")).toEqual([]);
+  });
+  it("claims explicitly anonymous drafts once and blocks a retired scope's late mirror", async () => {
+    const draft = makeDraft({ id: "anonymous-unique-draft" });
+    await reconcileStoredTaskDrafts([draft], "anonymous");
+    await Promise.all([
+      claimAnonymousTaskDrafts("account:A"),
+      claimAnonymousTaskDrafts("account:B"),
+    ]);
+    await reconcileStoredTaskDrafts([draft], "anonymous");
+    await claimAnonymousTaskDrafts("account:B");
+    expect(await listStoredTaskDrafts("account:A")).toEqual([draft]);
+    expect(await listStoredTaskDrafts("account:B")).toEqual([]);
+    expect(await listStoredTaskDrafts("anonymous")).toEqual([]);
+    expect(await storedTaskDraftCount()).toBe(1);
+  });
+  it("isolates same-id drafts and decisions by account and retains legacy drafts", async () => {
+    const legacy = makeDraft({ id: "d-1", title: "Unattributed old draft" });
+    const accountA = makeDraft({ id: "d-1", title: "Private to A" });
+    const accountB = makeDraft({ id: "d-1", title: "Private to B" });
+    await reconcileStoredTaskDrafts([legacy]);
+    await reconcileStoredTaskDrafts([accountA], "account:A");
+    await reconcileStoredTaskDrafts([accountB], "account:B");
+    await reconcileStoredTaskDrafts(
+      [{ ...accountA, status: "rejected" }],
+      "account:A",
+    );
+    await reconcileStoredTaskDrafts([accountA], "account:A");
+
+    expect(await listStoredTaskDrafts("account:A")).toEqual([
+      { ...accountA, status: "rejected" },
+    ]);
+    expect(await listStoredTaskDrafts("account:B")).toEqual([accountB]);
+    expect(await listStoredTaskDrafts("anonymous")).toEqual([]);
+    expect(await listStoredTaskDrafts()).toEqual([legacy]);
+    expect(await storedTaskDraftCount()).toBe(3);
+  });
   it("holds a draft and reads it back whole", async () => {
     const draft = makeDraft({ id: "d-1", title: "Renew the certificate" });
     await reconcileStoredTaskDrafts([draft]);

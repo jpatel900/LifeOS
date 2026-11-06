@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 import * as WorkflowContext from "@/lib/WorkflowContext";
-import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
 import type { HealthDashboardCheck } from "@/lib/data/health";
 import type { WorkflowSyncStatus } from "@/lib/workflowContext/types";
 import * as pendingWriteJournal from "@/lib/durability/pendingWriteJournal";
@@ -59,6 +59,7 @@ vi.mock("@/lib/data/purposeGaugeSamples", () => ({
 const { HealthSheet } = await import("./HealthSheet");
 
 const AREA = GOLDEN_AREA_ID;
+const ACCOUNT_USER_ID = "00000000-0000-0000-0000-000000000001";
 const NOW = new Date("2026-08-06T18:00:00");
 
 function check(over: Partial<HealthDashboardCheck>): HealthDashboardCheck {
@@ -101,27 +102,30 @@ function spySyncStatus(
   } as unknown as ReturnType<typeof WorkflowContext.useWorkflow>);
 }
 
-function renderSheet(
+async function renderSheet(
   options: {
     open?: boolean;
     state?: ReturnType<typeof workflowSeed>;
   } = {},
-): ReturnType<typeof render> & { onClose: ReturnType<typeof vi.fn> } {
+): Promise<ReturnType<typeof render> & { onClose: ReturnType<typeof vi.fn> }> {
   const onClose = vi.fn();
   window.sessionStorage.setItem(
-    STORAGE_KEY,
+    accountSnapshotKey(`account:${ACCOUNT_USER_ID}`),
     JSON.stringify(options.state ?? seedState()),
   );
-  const rendered = render(
-    <WorkflowProvider>
-      <HealthSheet
-        open={options.open ?? true}
-        onClose={onClose}
-        selectedAreaId={AREA}
-        now={NOW}
-      />
-    </WorkflowProvider>,
-  );
+  let rendered!: ReturnType<typeof render>;
+  await act(async () => {
+    rendered = render(
+      <WorkflowProvider>
+        <HealthSheet
+          open={options.open ?? true}
+          onClose={onClose}
+          selectedAreaId={AREA}
+          now={NOW}
+        />
+      </WorkflowProvider>,
+    );
+  });
   return { ...rendered, onClose };
 }
 
@@ -129,7 +133,7 @@ function renderSheetWithSyncStatus(
   syncStatus: WorkflowSyncStatus,
   checksOverride?: HealthDashboardCheck[],
   open = true,
-): ReturnType<typeof render> & { onClose: ReturnType<typeof vi.fn> } {
+): ReturnType<typeof renderSheet> {
   spySyncStatus(syncStatus);
   if (checksOverride) {
     mocks.getHealthDashboard.mockResolvedValue({
@@ -194,7 +198,15 @@ beforeEach(() => {
     persistenceMessage: null,
   });
   // A real client, so the component takes the account branch.
-  mocks.createSupabaseBrowserClient.mockReturnValue({ from: vi.fn() });
+  mocks.createSupabaseBrowserClient.mockReturnValue({
+    from: vi.fn(),
+    auth: {
+      getUser: async () => ({
+        data: { user: { id: ACCOUNT_USER_ID } },
+        error: null,
+      }),
+    },
+  });
 });
 
 afterEach(() => {
@@ -204,7 +216,7 @@ afterEach(() => {
 
 describe("HealthSheet — the ported Health surface", () => {
   it("adds retained failed-save concern to the user-facing glance and keeps developer raw metrics check-only", async () => {
-    renderSheetWithSyncStatus(
+    await renderSheetWithSyncStatus(
       {
         storage: "available",
         account: "local-only",
@@ -248,7 +260,7 @@ describe("HealthSheet — the ported Health surface", () => {
   });
 
   it("acknowledges a retained failed save while all server checks are healthy", async () => {
-    renderSheetWithSyncStatus(
+    await renderSheetWithSyncStatus(
       {
         storage: "available",
         account: "synced",
@@ -302,7 +314,7 @@ describe("HealthSheet — the ported Health surface", () => {
   });
 
   it("does not add local concern without pendingSaveFailed even when sync status stays local-only", async () => {
-    renderSheetWithSyncStatus({
+    await renderSheetWithSyncStatus({
       storage: "available",
       account: "local-only",
       message: "LifeOS can't reach your account RIGHT NOW.",
@@ -322,7 +334,7 @@ describe("HealthSheet — the ported Health surface", () => {
   });
 
   it("switches cleanly from concern to baseline when pendingSaveFailed clears", async () => {
-    const flagged = renderSheetWithSyncStatus(
+    const flagged = await renderSheetWithSyncStatus(
       {
         storage: "available",
         account: "local-only",
@@ -347,7 +359,7 @@ describe("HealthSheet — the ported Health surface", () => {
       ),
     );
     flagged.unmount();
-    renderSheetWithSyncStatus(
+    await renderSheetWithSyncStatus(
       {
         storage: "available",
         account: "local-only",
@@ -399,7 +411,7 @@ describe("HealthSheet — the ported Health surface", () => {
   ])(
     "uses resolver-priority output for %s without forcing account-save wording",
     async (_label, status, message) => {
-      renderSheetWithSyncStatus(status, []);
+      await renderSheetWithSyncStatus(status, []);
       await waitFor(() =>
         expect(screen.getByTestId("health-sheet-headline")).toHaveTextContent(
           "1 thing needs a look",
@@ -424,7 +436,7 @@ describe("HealthSheet — the ported Health surface", () => {
   );
 
   it("keeps the work group visible for a retained save concern even with no work checks", async () => {
-    renderSheetWithSyncStatus(
+    await renderSheetWithSyncStatus(
       {
         storage: "available",
         account: "local-only",
@@ -451,8 +463,8 @@ describe("HealthSheet — the ported Health surface", () => {
     expect(screen.getByTestId("health-sheet-group-work")).toBeInTheDocument();
   });
 
-  it("renders nothing when closed", () => {
-    renderSheet({ open: false });
+  it("renders nothing when closed", async () => {
+    await renderSheet({ open: false });
     expect(screen.queryByTestId("health-sheet")).not.toBeInTheDocument();
   });
 
@@ -468,7 +480,7 @@ describe("HealthSheet — the ported Health surface", () => {
    * suite trip the account-failure guard.
    */
   it("does not run the system check while it is closed — the probes and the health_checks write are asked-only", async () => {
-    renderSheet({ open: false });
+    await renderSheet({ open: false });
     await waitFor(() =>
       expect(screen.queryByTestId("health-sheet")).toBeNull(),
     );
@@ -477,14 +489,14 @@ describe("HealthSheet — the ported Health surface", () => {
   });
 
   it("runs the system check once when it is opened", async () => {
-    renderSheet();
+    await renderSheet();
     await waitFor(() =>
       expect(mocks.getHealthDashboard).toHaveBeenCalledTimes(1),
     );
   });
 
   it("says everything is working, and that nothing needs the person, when every check is healthy", async () => {
-    renderSheet();
+    await renderSheet();
     await waitFor(() =>
       expect(screen.getByTestId("health-sheet-headline")).toHaveTextContent(
         "Everything is working",
@@ -517,7 +529,7 @@ describe("HealthSheet — the ported Health surface", () => {
       persistence: "persisted",
       persistenceMessage: null,
     });
-    renderSheet();
+    await renderSheet();
 
     await waitFor(() =>
       expect(screen.getByTestId("health-sheet-headline")).toHaveTextContent(
@@ -531,10 +543,8 @@ describe("HealthSheet — the ported Health surface", () => {
   });
 
   it("groups every check under its plain-language group, and shows each check's own plain name", async () => {
-    renderSheet();
-    await waitFor(() =>
-      expect(screen.getByTestId("health-sheet-group-work")).toBeInTheDocument(),
-    );
+    await renderSheet();
+    await screen.findByTestId("health-sheet-group-privacy");
     expect(
       screen.getByTestId("health-sheet-group-connections"),
     ).toHaveTextContent("Connected apps");
@@ -572,7 +582,7 @@ describe("HealthSheet — the ported Health surface", () => {
       persistence: "skipped",
       persistenceMessage: "Checked. No record of this check was saved.",
     });
-    renderSheet();
+    await renderSheet();
 
     const link = await screen.findByTestId(
       "health-sheet-signin-link-health-auth-session",
@@ -583,7 +593,7 @@ describe("HealthSheet — the ported Health surface", () => {
   });
 
   it("keeps the People & commitments signal", async () => {
-    renderSheet();
+    await renderSheet();
     await waitFor(() =>
       expect(
         screen.getByTestId("health-sheet-aging-signals"),
@@ -592,7 +602,7 @@ describe("HealthSheet — the ported Health surface", () => {
   });
 
   it("re-runs the check on Check again, and says truthfully where the record went", async () => {
-    renderSheet();
+    await renderSheet();
     await waitFor(() =>
       expect(mocks.getHealthDashboard).toHaveBeenCalledTimes(1),
     );
@@ -620,7 +630,7 @@ describe("HealthSheet — the ported Health surface", () => {
       persistence: "unavailable",
       persistenceMessage: "Checked. No record of this check was saved.",
     });
-    renderSheet();
+    await renderSheet();
     await waitFor(() =>
       expect(screen.getByTestId("health-sheet-message")).toHaveTextContent(
         "Checked. No record of this check was saved.",
@@ -629,7 +639,7 @@ describe("HealthSheet — the ported Health surface", () => {
   });
 
   it("keeps the five FR-047 Mirror gauges, imported rather than re-implemented", async () => {
-    renderSheet();
+    await renderSheet();
     await waitFor(() =>
       expect(screen.getByTestId("health-sheet")).toBeInTheDocument(),
     );
@@ -645,16 +655,18 @@ describe("HealthSheet — the ported Health surface", () => {
    * same shape `src/__tests__/healthPage.test.tsx` uses on the legacy screen.
    */
   it("keeps implementation vocabulary inside the developer disclosure and out of the user-facing layer", async () => {
-    renderSheet();
+    await renderSheet();
     await waitFor(() =>
       expect(
         screen.getByTestId("health-sheet-developer-details"),
       ).toBeInTheDocument(),
     );
     // The raw subsystem name is present — in the developer layer.
-    expect(
-      screen.getByTestId("health-sheet-developer-details"),
-    ).toHaveTextContent("google_calendar");
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("health-sheet-developer-details"),
+      ).toHaveTextContent("google_calendar"),
+    );
 
     const surface = screen
       .getByTestId("health-sheet")
@@ -692,7 +704,7 @@ describe("HealthSheet — manual retry action (#967)", () => {
   it("calls the provider action exactly once per click", async () => {
     const retry = vi.fn().mockResolvedValue(undefined);
     spySyncStatus(FAILED_SYNCED, retry);
-    renderSheet();
+    await renderSheet();
 
     const button = await screen.findByTestId("health-sheet-retry-save");
     button.click();
@@ -709,7 +721,7 @@ describe("HealthSheet — manual retry action (#967)", () => {
       { ...FAILED_SYNCED, pendingSaveFailureKind: "unknown" },
       retry,
     );
-    renderSheet();
+    await renderSheet();
 
     const button = await screen.findByTestId("health-sheet-retry-save");
     expect(
@@ -729,7 +741,7 @@ describe("HealthSheet — manual retry action (#967)", () => {
         }),
     );
     spySyncStatus(FAILED_SYNCED, retry);
-    renderSheet();
+    await renderSheet();
 
     const button = await screen.findByTestId("health-sheet-retry-save");
     button.click();
@@ -758,7 +770,7 @@ describe("HealthSheet — manual retry action (#967)", () => {
   it("keeps the truthful concern and a re-usable button after a rejected retry, with no unhandled rejection", async () => {
     const retry = vi.fn().mockRejectedValue(new Error("still failing"));
     spySyncStatus(FAILED_SYNCED, retry);
-    renderSheet();
+    await renderSheet();
 
     const button = await screen.findByTestId("health-sheet-retry-save");
     button.click();
@@ -797,7 +809,7 @@ describe("HealthSheet — manual retry action (#967)", () => {
           retryPendingAccountWrites: retry,
         }) as unknown as ReturnType<typeof WorkflowContext.useWorkflow>,
     );
-    renderSheet();
+    await renderSheet();
 
     const button = await screen.findByTestId("health-sheet-retry-save");
     button.click();
@@ -1093,7 +1105,7 @@ describe("HealthSheet — the pulse timer never outlives the sheet", () => {
   }
 
   it("still stops the pulse 1400ms after a check finishes while the sheet is open", async () => {
-    renderSheet();
+    await renderSheet();
     await flushCheck();
     expect(screen.getByTestId("health-sheet-message")).toHaveTextContent(
       "Checked. A record of this check was saved to your account.",
@@ -1118,7 +1130,7 @@ describe("HealthSheet — the pulse timer never outlives the sheet", () => {
   });
 
   it("leaves no timer behind when the sheet closes after a check finished", async () => {
-    const { unmount } = renderSheet();
+    const { unmount } = await renderSheet();
     await flushCheck();
     expect(screen.getByTestId("health-sheet-message")).toHaveTextContent(
       "Checked. A record of this check was saved to your account.",
@@ -1138,7 +1150,7 @@ describe("HealthSheet — the pulse timer never outlives the sheet", () => {
         finishCheck = resolve;
       }),
     );
-    const { unmount } = renderSheet();
+    const { unmount } = await renderSheet();
     await flushCheck();
     expect(mocks.getHealthDashboard).toHaveBeenCalledTimes(1);
     expect(laterTimerCount()).toBe(0);
@@ -1157,7 +1169,7 @@ describe("HealthSheet — the pulse timer never outlives the sheet", () => {
   });
 
   it("keeps one pulse timer, not two, when Check again runs before the last one fired", async () => {
-    const { unmount } = renderSheet();
+    const { unmount } = await renderSheet();
     await flushCheck();
     expect(laterTimerCount()).toBe(1);
 
@@ -1172,3 +1184,4 @@ describe("HealthSheet — the pulse timer never outlives the sheet", () => {
     expect(laterTimerCount()).toBe(0);
   });
 });
+import "fake-indexeddb/auto";

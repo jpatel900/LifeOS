@@ -17,7 +17,7 @@ import {
 import * as durableWrites from "@/lib/durability/durableWrites";
 import { listPendingCaptures } from "@/lib/capture/offlineQueue";
 import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
-import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
 import { snapshotCursor } from "@/lib/workflowContext/snapshotOwnership";
 import {
   acceptLatestDraft,
@@ -234,7 +234,10 @@ function makeSessionStorageSnapshotWriteFail(): () => void {
   const spy = vi
     .spyOn(Storage.prototype, "setItem")
     .mockImplementation(function (this: Storage, key: string, value: string) {
-      if (this === window.sessionStorage && key === STORAGE_KEY) {
+      if (
+        this === window.sessionStorage &&
+        key === accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`)
+      ) {
         throw new DOMException(
           "Quota exceeded (synthetic).",
           "QuotaExceededError",
@@ -326,7 +329,9 @@ function expectMemoryAndSnapshot(savedInSession: boolean) {
   expect(screen.getByTestId("capture-text").textContent).toBe(
     "Call the landlord back",
   );
-  const raw = window.sessionStorage.getItem(STORAGE_KEY);
+  const raw = window.sessionStorage.getItem(
+    accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`),
+  );
   const snapshot = raw
     ? (JSON.parse(raw) as { captureItems: Array<{ raw_text: string }> })
     : null;
@@ -390,7 +395,11 @@ describe("capture storage and account notice truth (#967)", () => {
       "99999999-9999-4999-8999-999999999999",
     );
     expect(
-      JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!).tasks,
+      JSON.parse(
+        window.sessionStorage.getItem(
+          accountSnapshotKey("account:99999999-9999-4999-8999-999999999999"),
+        )!,
+      ).tasks,
     ).toEqual([]);
   });
 
@@ -591,9 +600,11 @@ describe("capture storage and account notice truth (#967)", () => {
       );
       restoreSession();
       fireEvent.click(screen.getByText("Add local area"));
-      expect(window.sessionStorage.getItem(STORAGE_KEY)).toContain(
-        "Local area",
-      );
+      expect(
+        window.sessionStorage.getItem(
+          accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`),
+        ),
+      ).toContain("Local area");
       expect(screen.getByTestId("sync-pending").textContent).toBe("true");
     } finally {
       restoreSession();
@@ -609,7 +620,11 @@ describe("capture storage and account notice truth (#967)", () => {
     ).toHaveLength(1);
     expect(screen.getByTestId("area-colors").textContent).toContain("#222222");
     expect(screen.getByTestId("sync-pending").textContent).toBe("true");
-    const saved = JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!);
+    const saved = JSON.parse(
+      window.sessionStorage.getItem(
+        accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`),
+      )!,
+    );
     const owner = Object.values(saved.snapshotOwnership.rows.areas).find(
       (entry) =>
         (entry as { accountId?: string }).accountId ===
@@ -756,9 +771,11 @@ describe("capture storage and account notice truth (#967)", () => {
         ),
       );
       expect(screen.getByTestId("sync-storage").textContent).toBe("blocked");
-      expect(window.sessionStorage.getItem(STORAGE_KEY)).not.toContain(
-        "Local area",
-      );
+      expect(
+        window.sessionStorage.getItem(
+          accountSnapshotKey(`account:${PERSISTED_AREA.user_id}`),
+        ),
+      ).not.toContain("Local area");
       expect(screen.getByTestId("sync-pending").textContent).toBe("true");
       expect(screen.getByTestId("notice-message").textContent).toBe(
         DEVICE_STORAGE_BLOCKED,

@@ -1,5 +1,6 @@
+import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import HealthPage from "../app/health/page";
 import { AppShell } from "../app/components/AppShell";
 import { HEALTH_CHECK_PRESENTATION } from "../app/components/cockpit/HealthView";
@@ -169,7 +170,11 @@ describe("Health cockpit", () => {
     });
 
     await renderHealth();
-    await screen.findByTestId("health-developer-details");
+    await waitFor(() =>
+      expect(screen.getByTestId("health-developer-details")).toHaveTextContent(
+        "supabase config",
+      ),
+    );
 
     const visible = userFacingText();
     for (const banned of BANNED_ON_USER_SURFACE) {

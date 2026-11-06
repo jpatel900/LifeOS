@@ -51,12 +51,18 @@ const {
   routeReplace: vi.fn(),
   auth: {
     userId: "22222222-2222-4222-8222-222222222222",
-    notify: undefined as
-      | ((
-          event: "INITIAL_SESSION" | "SIGNED_IN",
-          session: { user: { id: string } },
-        ) => void)
-      | undefined,
+    listeners: new Set<
+      (
+        event: "INITIAL_SESSION" | "SIGNED_IN",
+        session: { user: { id: string } },
+      ) => void
+    >(),
+    notify(
+      event: "INITIAL_SESSION" | "SIGNED_IN",
+      session: { user: { id: string } },
+    ) {
+      for (const callback of this.listeners) callback(event, session);
+    },
   },
 }));
 
@@ -64,10 +70,10 @@ vi.mock("@/lib/supabase/browser", () => {
   const client = {
     auth: {
       onAuthStateChange: (callback: NonNullable<typeof auth.notify>) => {
-        auth.notify = callback;
+        auth.listeners.add(callback);
         // The SDK emits the initial session independently of area hydration.
         queueMicrotask(() => {
-          if (auth.notify === callback) {
+          if (auth.listeners.has(callback)) {
             callback("INITIAL_SESSION", { user: { id: auth.userId } });
           }
         });
@@ -75,7 +81,7 @@ vi.mock("@/lib/supabase/browser", () => {
           data: {
             subscription: {
               unsubscribe: () => {
-                if (auth.notify === callback) auth.notify = undefined;
+                auth.listeners.delete(callback);
               },
             },
           },
@@ -197,7 +203,7 @@ beforeEach(async () => {
   await clearPendingWrites();
   vi.clearAllMocks();
   auth.userId = customArea.user_id;
-  auth.notify = undefined;
+  auth.listeners.clear();
   listExecution.mockReset();
   listExecution.mockResolvedValue({
     provider: "supabase",
@@ -400,6 +406,7 @@ describe("Today capture before account area hydration", () => {
       }),
     );
     mountToday();
+    await waitFor(() => expect(listAreas).toHaveBeenCalled());
     pressCaptureShortcut();
     // Before inventory there is no real picker choice. After inventory, choosing
     // no area must remain explicit through a subsequent account read.

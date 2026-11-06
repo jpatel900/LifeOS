@@ -23,7 +23,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { WorkflowState } from "@/lib/workflow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
-import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
 import {
   acceptLatestDraft,
   captureWorkflow,
@@ -61,9 +61,15 @@ const {
   mockListOverrideRecords: vi.fn(),
   mockListDurationProfiles: vi.fn(),
   mockListSuggestionRecords: vi.fn(),
-  // These reads are only ever called with the mocked functions above (never
-  // real supabase-js methods), so the "client" only needs to be truthy.
-  mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
+  mockCreateSupabaseBrowserClient: vi.fn(() => ({
+    mocked: true,
+    auth: {
+      getUser: async () => ({
+        data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+        error: null,
+      }),
+    },
+  })),
 }));
 
 vi.mock("@/lib/data/workflow", async () => {
@@ -200,7 +206,10 @@ function RefreshHarness() {
 }
 
 function renderPlan(seed: object, toasts: string[] = []) {
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+  window.sessionStorage.setItem(
+    accountSnapshotKey(`account:${persistedArea.user_id}`),
+    JSON.stringify(seed),
+  );
   render(
     <WorkflowProvider>
       <RefreshHarness />
@@ -346,6 +355,15 @@ describe("#853 guard: a tap right after a sync's commit acts on what is on scree
   ])("Accept a drafted block, tapped %s", (_label, inWindow) => {
     it("puts the block on the rail", async () => {
       const seed = seedLocalProposal();
+      // This task already belongs to the account. Keep it in the initial
+      // account read while the local proposal is waiting for its own twin.
+      mockListExecutionReviewItems.mockResolvedValue({
+        provider: "supabase",
+        tasks: [accountTask(seed.tasks[0])],
+        blocks: [],
+        sessions: [],
+        reviewEntries: [],
+      });
       renderPlan(seed);
       await waitFor(() =>
         expect(
