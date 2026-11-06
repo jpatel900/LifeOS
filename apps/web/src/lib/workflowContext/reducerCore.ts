@@ -695,6 +695,8 @@ const EXECUTION_SESSION_STATUSES = new Set([
   "running",
   "paused",
   "completed",
+  "partial",
+  "skipped",
   "missed",
   "distracted",
   "stuck",

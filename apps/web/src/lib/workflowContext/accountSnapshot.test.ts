@@ -16,6 +16,7 @@ import {
   STORAGE_KEY,
 } from "../workflow/shared";
 import { createRawCaptureItem } from "../workflow/capture";
+import { tasks as mockTasks } from "../mockData";
 import {
   accountSnapshotKey,
   anonymousWorkflowScope,
@@ -46,7 +47,78 @@ function captured(rawText: string) {
   };
 }
 
+function endedSessionSnapshot(status: "partial" | "skipped") {
+  const task = {
+    ...mockTasks[0]!,
+    id: nextId("task"),
+    user_id: "A",
+    project_id: null,
+  };
+  const owned = workflowReducer(
+    { ...createEmptyWorkflowState(), tasks: [task] },
+    { type: "bindSnapshotAccount", userId: "A" },
+  );
+  const started = workflowReducer(owned, {
+    type: "startSession",
+    taskId: task.id,
+  });
+  return workflowReducer(started, {
+    type: "markSession",
+    status,
+    actualMinutes: 18,
+    notes: "Got through section one",
+  });
+}
+
 describe("account snapshots", () => {
+  it.each(["partial", "skipped"] as const)(
+    "reloads a %s session into its owning account without losing the chosen outcome",
+    async (status) => {
+      const saved = endedSessionSnapshot(status);
+      expect(saved.executionSessions).toHaveLength(1);
+      expect(saved.executionSessions[0]).toMatchObject({
+        user_id: "A",
+        status,
+        outcome: status,
+        actual_minutes: 18,
+        notes: "Got through section one",
+      });
+      storeAccountSnapshot("account:A", saved);
+      const key = accountSnapshotKey("account:A");
+      const loaded = loadStoredStateFromSession(key).state;
+      expect(loaded).not.toBeNull();
+      expect(loaded?.executionSessions).toEqual(saved.executionSessions);
+      const claimed = await claimAnonymousSnapshots("account:A");
+      const rebound = workflowReducer(claimed.state, {
+        type: "bindSnapshotAccount",
+        userId: "A",
+      });
+      expect(rebound.executionSessions).toEqual(saved.executionSessions);
+      expect(rebound.snapshotOwnership).toEqual(loaded?.snapshotOwnership);
+      expect(
+        (await claimAnonymousSnapshots("account:B")).state.executionSessions,
+      ).toEqual([]);
+    },
+  );
+
+  it("still rejects an unknown stored session status without changing its recovery copy", async () => {
+    const saved = endedSessionSnapshot("partial");
+    const invalid = {
+      ...saved,
+      executionSessions: [
+        { ...saved.executionSessions[0], status: "unknown-status" },
+      ],
+    };
+    const key = accountSnapshotKey("account:A");
+    const bytes = JSON.stringify(invalid);
+    sessionStorage.setItem(key, bytes);
+    expect(loadStoredStateFromSession(key).state).toBeNull();
+    await expect(claimAnonymousSnapshots("account:A")).rejects.toThrow(
+      "snapshot needs recovery",
+    );
+    expect(sessionStorage.getItem(key)).toBe(bytes);
+  });
+
   it.each(["missing", "empty"])(
     "qualifies a legacy scoped snapshot with %s metadata without losing aliases or inventing debt",
     async (metadata) => {
