@@ -27,17 +27,18 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 - Per ADR 0005 (staged evolution): stage labels order dependencies and risk; data-independent foundations may proceed when owner-ratified; evidence-dependent behavior stays gated on usage evidence. The FR-032/034/037 policy kernels are merged and mutation-tested but remain 1/4 overall — "kernel merged" and "feature shipped" are distinct claims.
 - The stage-epic slice relay is **retired** and its workflows (`pipeline-advance.yml`, `pipeline-watchdog.yml`) were deleted on 2026-10-17, along with the unused `claude.yml` and the Codex issue-plan and low-risk issue-to-PR lanes. `scripts/agent/pipeline-manifest.json` stays as historical state that `pnpm status` reads.
 - Persistence is intentionally mixed: authenticated Supabase paths where implemented; local/session fallback remains the recovery path when sync or env is unavailable.
-- `design_handoff_lifeos/README.md` is a historical design reference; current UI authority lives in requirements, UX flows, ADRs, and shipped behavior.
+- `design_handoff_lifeos/` is a historical design reference; current UI authority lives in requirements, UX flows, ADRs, and shipped behavior.
 - Governance docs are budgeted: `AGENTS.md` stays small and `CLAUDE.md` imports it; LifeOS-specific skills live in `.agents/skills`; `docs/agent/` keeps `CODEX_PROMPT_TEMPLATE.md`, `LANES.md` (the Claude/Codex cross-lane rules), and `MODEL_LANES.md`.
 - Production Supabase migrations are applied via the gated `migration-apply.yml` workflow or manually — never by deploys; the `Migration Drift` workflow red-flags unapplied migrations, and the response procedure is `.agents/skills/lifeos-migration-drift-response/SKILL.md`.
 
 ## Constraints
 
-- Before any work, check `docs/program/final-ux-loop.md` §6 for the live campaign and slice; concurrent lanes allowed with disjoint declared manifests (program R7 as amended 2026-08-05; rules in `docs/agent/LANES.md`).
+- Before campaign work, check `docs/program/final-ux-loop.md` §6 for the live campaign and slice; concurrent lanes allowed with disjoint declared manifests (program R7 as amended 2026-08-05; rules in `docs/agent/LANES.md`).
 - Before feature work, map the task to `docs/REQUIREMENTS.md`, define acceptance criteria, identify tests, and flag risky surfaces.
 - New user-owned tables require RLS policies, export coverage, and multi-user tests in the same change.
 - Calendar/OAuth/RLS/schema/security/privacy/data-deletion changes require human review (the full ten-surface list lives in AGENTS.md "Owner gates" — that list governs).
 - Docs may not grow by creating session-note files; durable decisions go to ADRs, status goes here, program state goes to `docs/program/`.
+- How to check: the commands in AGENTS.md "Repo facts" (`pnpm lint`, `pnpm type-check`, `pnpm test`, `pnpm build`).
 
 ## Open questions
 
