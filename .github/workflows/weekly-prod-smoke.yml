@@ -59,7 +59,7 @@ on:
     # Sunday 13:00 UTC -- a quiet time for both traffic and on-call attention
     # (weekend afternoon UTC, which is early morning in the Americas and
     # evening in Europe/most of Asia), well clear of ci.yml's per-push load
-    # and provider-canary's 30-minute cadence.
+    # and provider-canary's scheduled run.
     - cron: "0 13 * * 0"
   workflow_dispatch:
 
