@@ -91,6 +91,53 @@ export function selectUnsortedCaptures(
   );
 }
 
+/**
+ * #1026: does this capture belong on a surface scoped to `areaId`?
+ *
+ * A thought saved without an area (or whose area no longer exists) has not
+ * been given a home yet, so it belongs to every scope until it is sorted.
+ * Filtering it out by area hid it completely: Start said "5 thoughts waiting
+ * for a decision" and the triage sheet it opened said "Nothing waiting in
+ * triage" (production smoke, 2026-10-25 onward). `null` or an unknown
+ * `areaId` means "everything", matching `scopeAreaId` in `pipelineCounts`.
+ */
+export function captureIsInAreaScope(
+  state: Pick<WorkflowState, "areas">,
+  capture: Pick<Phase2CaptureItem, "area_id">,
+  areaId: string | null,
+): boolean {
+  if (!areaId || !state.areas.some((area) => area.id === areaId)) return true;
+  if (capture.area_id === areaId) return true;
+  return (
+    !capture.area_id || !state.areas.some((area) => area.id === capture.area_id)
+  );
+}
+
+/**
+ * The unsorted captures a surface scoped to `areaId` must show and count:
+ * that area's own, plus every thought with no live area (see
+ * {@link captureIsInAreaScope}). Use this for anything the user can open and
+ * act on (Start's count, the pipeline badge, the triage sheet rows). Use the
+ * strict {@link selectUnsortedCaptures} only for per-area tallies, where an
+ * unassigned thought must not be counted once per area.
+ */
+export function selectUnsortedCapturesInScope(
+  state: WorkflowState,
+  areaId: string | null = null,
+): Phase2CaptureItem[] {
+  return selectUnsortedCaptures(state, null).filter((item) =>
+    captureIsInAreaScope(state, item, areaId),
+  );
+}
+
+/** Count form of {@link selectUnsortedCapturesInScope}. */
+export function countUnsortedCapturesInScope(
+  state: WorkflowState,
+  areaId: string | null = null,
+): number {
+  return selectUnsortedCapturesInScope(state, areaId).length;
+}
+
 /** Count form of {@link selectUnsortedCaptures}, for badges and hero copy. */
 export function countUnsortedCaptures(
   state: WorkflowState,

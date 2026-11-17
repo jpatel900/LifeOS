@@ -169,9 +169,13 @@ describe("buildPipelineCounts", () => {
     expect(buildPipelineCounts(state, "area-1", { now: NOW }).capture).toBe(2);
   });
 
+  // #1026: a thought saved without an area belongs to every scope until it
+  // is sorted, so a scoped badge counts its own area's two plus the two
+  // unassigned ones. It was 2 while the sheet filtered those out, which is
+  // how Start came to say "5 waiting" over an empty triage sheet.
   it.each([
-    ["area-1", 2],
-    ["area-2", 2],
+    ["area-1", 4],
+    ["area-2", 4],
     [null, 6],
     ["area-deleted", 6],
   ] as const)(
