@@ -11,7 +11,8 @@ import { TaskMapDraftReview } from "./TaskMapDraftReview";
 import { UnsortedCaptures } from "./UnsortedCaptures";
 import { HIT_TARGET_MIN } from "./hitTarget";
 import {
-  countUnsortedCaptures,
+  captureIsInAreaScope,
+  countUnsortedCapturesInScope,
   currentCaptureId,
 } from "@/lib/workflow/captureStatus";
 import {
@@ -166,7 +167,10 @@ export function TriageSheet({
   // shared definition (lib/workflow/captureStatus), so the count and the rows
   // cannot disagree, and neither can offer back a thought an accepted task
   // already came from.
-  const unsortedCaptureCount = countUnsortedCaptures(state, resolvedAreaId);
+  const unsortedCaptureCount = countUnsortedCapturesInScope(
+    state,
+    resolvedAreaId,
+  );
 
   // Bug hunt #10: say when basic sorting stood in for AI sorting, so its
   // placeholder drafts never pass for a real sort. Basic sorting cannot
@@ -177,7 +181,7 @@ export function TriageSheet({
       state.captureItems.some(
         (capture) =>
           capture.id === currentCaptureId(state, captureParse.captureId) &&
-          capture.area_id === resolvedAreaId,
+          captureIsInAreaScope(state, capture, resolvedAreaId),
       ));
   const sortNotice =
     sortNoticeInScope && captureParse.phase === "parsed"
