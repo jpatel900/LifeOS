@@ -21,7 +21,7 @@ Distilled 2026-10-17 (#289) from `docs/FAILURES.md`. A pass proves only what act
 - Green at one layer is silent about the next: CI-green proves a migration correct, not applied (C3/C4, 2026-07-07); a drift check that looks one way cannot see the other (2026-08-21); a tool saying "PR created" proves nothing until the branch exists (Codex strandings, 2026-07-04/05).
 - A probe is evidence only if its server-side log line shows it reached the layer under test (#361's first probe hit validation, not the provider).
 - A PR's CI proves it against main as of that run. A PR that adds a repo-wide check (guard, formatter, lint rule) lands only with or after every known offender's fix, re-run against current main right before merge. Evidence: #331/#337 (2026-07-04), #471/#472 (2026-07-09).
-- Enforcement points: required CI lanes; `scripts/agent/check-turbo-test-inputs.mjs`; the `program-state-self-test` job's vacuity floor; `scripts/agent/check-migration-drift.mjs` (both directions); `format-selfheal.yml` and `main-red-guard.yml` after a race. New guards follow the planted-violation rule in `docs/ENGINEERING_INVARIANTS.md`.
+- Enforcement points: required CI lanes; `scripts/agent/check-turbo-test-inputs.mjs`; the `program-state-self-test` job's vacuity floor; `scripts/agent/check-migration-drift.mjs` (both directions); `main-red-guard.yml` after a race. New guards follow the planted-violation rule in `docs/ENGINEERING_INVARIANTS.md`.
 
 ## Time and readiness in tests
 

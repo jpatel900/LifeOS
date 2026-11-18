@@ -50,7 +50,7 @@
 // @supabase/supabase-js: the workflow runs `node scripts/agent/provider-canary.mjs`
 // directly with no `pnpm install` step (near-free by construction, NFR-001),
 // and adding the dependency would mean adding an install step to every
-// 30-minute tick just to make one HTTP call this file can already make with
+// scheduled tick just to make one HTTP call this file can already make with
 // its existing `fetch`-only style (see runSyntheticProbe below). Same
 // mechanism, no new dependency.
 //
@@ -85,7 +85,7 @@ export const CANARY_SURFACE = "parse";
 
 // A recent-signal window short enough to catch an hours-long outage quickly,
 // long enough that a quiet overnight period doesn't force a synthetic probe
-// on every tick (cron interval is 30 min; see workflow comment).
+// on every tick (sized for the 30-minute cron; the workflow comment records the current cadence).
 export const RECENT_SIGNAL_WINDOW_MINUTES = 45;
 
 // A single failed real-parse outcome does not prove an outage (could be one
@@ -574,7 +574,7 @@ async function main() {
     // probe still got a 401/403 from /api/parse-capture's auth gate even
     // with a freshly minted token (e.g. a revoked/disabled smoke account).
     // Warn (not error/exit 1) either way so this doesn't page anyone or
-    // open a false incident issue every 30 minutes; it's a canary setup
+    // open a false incident issue on every tick; it's a canary setup
     // gap for the owner to fix on their own time.
     console.log(
       "::warning::Provider canary's probe did not reach the AI provider " +

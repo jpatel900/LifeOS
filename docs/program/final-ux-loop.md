@@ -87,7 +87,7 @@ Implementation is parked; trial findings are the only resume trigger. C2 remains
 
 ## 7. The 10-day real-use trial (owner decision 2026-09-29)
 
-**Before day 1:** FR-049 must be merged and deployed. Trial start remains **UNSET** until Claude confirms that the first real production capture appears on Start and sorts into a next step. If this fails, fix that trial blocker first. Do not record a start or end date before this confirmation.
+**Before day 1:** FR-049 must be merged and deployed. Restore the provider canary to its 30-minute schedule (it runs once a day until then, owner 2026-11-17). Trial start remains **UNSET** until Claude confirms that the first real production capture appears on Start and sorts into a next step. If this fails, fix that trial blocker first. Do not record a start or end date before this confirmation.
 
 **Day 1 (about 10 minutes):** enter three real commitments: one delayed admin task, one meaningful deliverable, and one piece of work needing several sessions. Give the delayed task a return day. Write each finish line in one sentence.
 
