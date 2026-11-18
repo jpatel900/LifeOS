@@ -241,13 +241,16 @@ export function StartMoment({
       <section
         aria-label="Pipeline"
         data-testid="start-moment-pipeline-rail"
-        className="grid gap-2"
+        className="grid gap-2 lg:flex lg:flex-wrap lg:items-center lg:gap-x-5"
       >
         <h2 className="sr-only">Pipeline</h2>
         <PipelineOverview counts={pipelineCounts} onDrill={onDrillPipeline} />
         {/* #1160: the pipeline shows what is moving now; this opens the whole
             record, closed items included. A quiet text door, so the rail
-            above stays the one loud thing in this section. */}
+            beside it stays the one loud thing in this section.
+            At desktop width it sits BESIDE the rail, not under it: a row of
+            its own pushed the side rail's Areas card down under the fixed
+            capture pill at 1366x768 (moments-home-parity, #974). */}
         <button
           type="button"
           onClick={onOpenEverything}
