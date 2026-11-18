@@ -74,6 +74,7 @@ import { PlanSheet } from "./PlanSheet";
 import { ReviewSheet } from "./ReviewSheet";
 import { HealthSheet } from "./HealthSheet";
 import { AreasSheet } from "./AreasSheet";
+import { EverythingSheet } from "./EverythingSheet";
 import { CaptureOverlayOpenContext } from "./MomentSheet";
 import { useSheetUrlState } from "./useSheetUrlState";
 import { useOverlayUrlState, parseOverlayParam } from "./useOverlayUrlState";
@@ -1937,6 +1938,9 @@ function TodayMomentsContent({
       // below 1024px, so the palette is the entry that is the same distance
       // away at 390px as at 1440px.
       { id: "open-areas", label: "Open all areas" },
+      // #1160: the same reasoning again. Start's own door sits under the
+      // pipeline rail; the palette reaches the sheet from every moment.
+      { id: "open-everything", label: "Open everything" },
       // C2-S12A (#687 round-6 judge, palette gaps): "Settings is the only
       // core surface with no palette command" — the masthead/BottomNavigator
       // link is the only way in otherwise. Same target both already use.
@@ -2039,6 +2043,9 @@ function TodayMomentsContent({
           break;
         case "open-areas":
           openSheet("areas");
+          break;
+        case "open-everything":
+          openSheet("everything");
           break;
         case "open-settings":
           // A real navigation, not `router.push`: CommandPalette's own click
@@ -2310,6 +2317,7 @@ function TodayMomentsContent({
                  redirect. SideRail's Areas card is where areas already live,
                  which makes it one interaction from the home. */
                 onOpenAreas={() => openSheet("areas")}
+                onOpenEverything={() => openSheet("everything")}
                 pipelineCounts={pipelineCounts}
                 onDrillPipeline={handleDrillPipeline}
                 onOpenRecovery={() => setMoment("close")}
@@ -2509,6 +2517,14 @@ function TodayMomentsContent({
             onClose={() => closeSheet()}
             selectedAreaId={selectedAreaId}
             onSelectArea={handleAreasSheetSelectArea}
+          />
+
+          {/* #1160: read-only list of every thought, draft and task. Mounted
+            like every other sheet; hook-free while closed. */}
+          <EverythingSheet
+            open={activeSheet === "everything" && showingMastheadAndMoments}
+            onClose={() => closeSheet()}
+            now={now}
           />
 
           {/* #687 C2 F2: inside this Provider and before `<CaptureOverlay>`,

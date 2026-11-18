@@ -1147,9 +1147,41 @@ Non-goals (binding):
 
 ---
 
+### FR-050 — Everything: one list of every thought, draft and task
+
+**Priority:** SHOULD
+
+**Stage:** Owner-ratified 2026-11-18 (issue #1160) as a narrow exception to `docs/program/final-ux-loop.md` R8, and as the explicit amendment the Constraint Layer below requires for this one view. It does not open the feature freeze, and it does not approve any other Notion-parity view.
+
+Rationale: the owner could not see, in one place, what had been given to LifeOS and where each item now stands. Start shows the next step and the pipeline shows what is moving, but nothing showed the whole record. That gap made the system hard to trust, and trust is what gets it opened each day.
+
+Acceptance criteria:
+
+- A sheet named "Everything" opens from Start and from the command palette. Its open state lives in the URL (`?sheet=everything`) like every other sheet. It adds no top-level page or navigation item.
+- Every task and every pending draft is one row, the same drafts Sort offers. A thought is its own row only while no task and no pending draft speaks for it.
+- "Is this thought still waiting to be sorted" is answered by the same shared rule Start and Sort use, so the three never disagree.
+- Each row shows title, area, stage, due day and the day it was entered. It shows no priority: no hand-set priority exists yet.
+- Stages use plain words: Thought, Draft, Ready, Scheduled, Waiting, Done, Sorted, Let go. "Sorted" is a thought that was dealt with and has no task to show for it (it became a project, for example). Stage never depends on colour alone.
+- The list groups four ways: by due day, by area, by stage, and by day entered. "By day entered" also shows how far each item got (thought, draft, task, closed).
+- Done, Sorted and Let go items are hidden until the person asks for them. The header always states the total and the open count.
+- The person can search by title and narrow by area, including "No area" when any item has none. When a thought's text ends with `(via <name>)` and the name is one of the owner's agents (Hermes, Claude, Codex, Kal), that name shows as who entered it and can be used to narrow the list. Any other name stays in the title as the owner's own words. The agent adds the mark itself; nothing in LifeOS writes it. The mark is display data only (INV-8).
+- Empty states say what is true and what to do next. A due day that has passed is grouped as "Earlier", with no overdue or guilt framing; the group after "Today" is "Next 7 days".
+- The grouping and filter rules take the current time as a caller-supplied parameter and live in one rules module, not in display code.
+- Covered at 390px and at desktop width, and reachable in two taps on mobile.
+
+Non-goals (binding):
+
+- Editing, completing, deleting or reordering anything from this sheet. Decisions stay in Sort, Plan and Flow.
+- Any new table, column, migration, RLS change or API endpoint.
+- Boards, calendars, timelines, charts, saved views or user-defined properties.
+- A person column or a hand-set priority field. Each needs its own requirement and review.
+- Importing tasks from another tool.
+
+---
+
 ### Constraint Layer — Explicitly Unapproved Capabilities
 
-The following feel productive to build but remain unapproved (owner-ratified 2026-07-05): people pages / CRM views, relationship radar, health-score dashboards beyond the existing dot rendering, template libraries, and Notion-parity database views. The predecessor system already provided these; they are capability, not constraint, and did not move the bottleneck. Building any of them requires an explicit requirements amendment; ADR 0005 does not silently authorize them.
+The following feel productive to build but remain unapproved (owner-ratified 2026-07-05): people pages / CRM views, relationship radar, health-score dashboards beyond the existing dot rendering, template libraries, and Notion-parity database views. The predecessor system already provided these; they are capability, not constraint, and did not move the bottleneck. Building any of them requires an explicit requirements amendment; ADR 0005 does not silently authorize them. One amendment exists: FR-050 (owner 2026-11-18) approves a single read-only list and nothing else on this line.
 
 ---
 

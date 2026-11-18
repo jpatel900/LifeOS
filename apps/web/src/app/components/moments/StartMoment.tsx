@@ -163,6 +163,8 @@ export interface StartMomentProps {
   onOpenHealth(): void;
   /** C2-S5 (#687): opens the ported All-areas surface at `?sheet=areas`. */
   onOpenAreas(): void;
+  /** #1160: opens the Everything sheet at `?sheet=everything`. */
+  onOpenEverything(): void;
   pipelineCounts: Record<string, number>;
   onDrillPipeline(stage: string): void;
   onOpenRecovery(taskId: string): void;
@@ -184,6 +186,7 @@ export function StartMoment({
   onSwap,
   onOpenHealth,
   onOpenAreas,
+  onOpenEverything,
   pipelineCounts,
   onDrillPipeline,
   onOpenRecovery,
@@ -242,6 +245,17 @@ export function StartMoment({
       >
         <h2 className="sr-only">Pipeline</h2>
         <PipelineOverview counts={pipelineCounts} onDrill={onDrillPipeline} />
+        {/* #1160: the pipeline shows what is moving now; this opens the whole
+            record, closed items included. A quiet text door, so the rail
+            above stays the one loud thing in this section. */}
+        <button
+          type="button"
+          onClick={onOpenEverything}
+          className="min-h-[44px] w-fit touch-manipulation text-left text-sm font-medium text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          data-testid="start-open-everything"
+        >
+          See everything you entered →
+        </button>
       </section>
 
       <div
