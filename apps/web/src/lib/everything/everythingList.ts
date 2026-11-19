@@ -79,10 +79,10 @@ export const EVERYTHING_GROUPINGS = [
 export type EverythingGrouping = (typeof EVERYTHING_GROUPINGS)[number];
 
 export const EVERYTHING_GROUPING_LABEL: Record<EverythingGrouping, string> = {
-  due: "By due date",
-  area: "By area",
-  stage: "By stage",
-  entered: "By date entered",
+  due: "Due date",
+  area: "Area",
+  stage: "Stage",
+  entered: "Date entered",
 };
 
 export interface EverythingItem {

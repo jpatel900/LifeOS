@@ -1160,7 +1160,7 @@ Acceptance criteria:
 - A sheet named "Everything" opens from Start and from the command palette. Its open state lives in the URL (`?sheet=everything`) like every other sheet. It adds no top-level page or navigation item.
 - Every task and every pending draft is one row, the same drafts Sort offers. A thought is its own row only while no task and no pending draft speaks for it.
 - "Is this thought still waiting to be sorted" is answered by the same shared rule Start and Sort use, so the three never disagree.
-- Each row shows title, area, stage, due day and the day it was entered. It shows no priority: no hand-set priority exists yet.
+- Each row has one shape at every width, designed for the phone first (#1162): the title on top; then stage, area, who entered it and the day it was entered underneath; the due day beside the title. It shows no priority: no hand-set priority exists yet. Each group folds from its heading, and narrowing the list opens every group again.
 - Stages use plain words: Thought, Draft, Ready, Scheduled, Waiting, Done, Sorted, Let go. "Sorted" is a thought that was dealt with and has no task to show for it (it became a project, for example). Stage never depends on colour alone.
 - The list groups four ways: by due day, by area, by stage, and by day entered. "By day entered" also shows how far each item got (thought, draft, task, closed).
 - Done, Sorted and Let go items are hidden until the person asks for them. The header always states the total and the open count.
