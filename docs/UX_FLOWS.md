@@ -297,7 +297,9 @@ palette, opens a read-only sheet listing every task, every pending draft, and
 every thought that neither speaks for.
 It groups by due day, area, stage or day entered, hides closed items until
 asked, and changes nothing: decisions stay in Sort, Plan and Flow. It follows
-the containment rule above: a sheet, not a new page.
+the containment rule above: a sheet, not a new page. Rows have one shape at
+every width, built for the phone first: title on top, details underneath.
+Each group folds from its heading.
 
 ### Put off for later: return day (FR-049)
 

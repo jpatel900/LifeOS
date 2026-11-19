@@ -44,28 +44,51 @@ export function EverythingSheet({ open, ...rest }: EverythingSheetProps) {
 }
 
 // Stage is always written out as a word. The mark beside it is a second,
-// redundant read (shape and fill differ, not only colour).
+// redundant read (shape and fill differ, not only colour), and the soft
+// surface behind the word is a third.
 // Set as inline styles: the sheet shell's own border rule outranks a colour
 // utility class here, which left every ring the same faint grey.
-const STAGE_MARK: Record<
+const NEUTRAL_SURFACE =
+  "color-mix(in srgb, var(--foreground) 11%, transparent)";
+
+const STAGE_TONE: Record<
   EverythingStage,
-  { color: string; filled: boolean; dashed?: boolean }
+  { color: string; surface: string; filled: boolean; dashed?: boolean }
 > = {
-  thought: { color: "var(--muted-foreground)", filled: false },
-  draft: { color: "var(--foreground)", filled: false, dashed: true },
-  ready: { color: "var(--blu-fg)", filled: false },
-  scheduled: { color: "var(--blu-fg)", filled: true },
-  waiting: { color: "var(--state-watch)", filled: false },
-  done: { color: "var(--state-ok)", filled: true },
-  sorted: { color: "var(--muted-foreground)", filled: true },
-  letgo: { color: "var(--muted-foreground)", filled: false, dashed: true },
+  thought: {
+    color: "var(--muted-foreground)",
+    surface: NEUTRAL_SURFACE,
+    filled: false,
+  },
+  draft: {
+    color: "var(--foreground)",
+    surface: NEUTRAL_SURFACE,
+    filled: false,
+    dashed: true,
+  },
+  ready: { color: "var(--blu-fg)", surface: "var(--blu-sf)", filled: false },
+  scheduled: { color: "var(--blu-fg)", surface: "var(--blu-sf)", filled: true },
+  waiting: {
+    color: "var(--state-watch)",
+    surface: "var(--amb-sf)",
+    filled: false,
+  },
+  done: { color: "var(--state-ok)", surface: "var(--grn-sf)", filled: true },
+  sorted: {
+    color: "var(--muted-foreground)",
+    surface: NEUTRAL_SURFACE,
+    filled: true,
+  },
+  letgo: {
+    color: "var(--muted-foreground)",
+    surface: NEUTRAL_SURFACE,
+    filled: false,
+    dashed: true,
+  },
 };
 
 const CONTROL =
   "h-11 rounded-[var(--surface-radius-sm)] border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-
-const ROW_COLUMNS =
-  "sm:grid sm:grid-cols-[minmax(0,1fr)_7.5rem_6.5rem_5.5rem_5.5rem] sm:items-center sm:gap-x-3";
 
 function Trail({ item }: { item: EverythingItem }) {
   return (
@@ -100,6 +123,9 @@ function Trail({ item }: { item: EverythingItem }) {
   );
 }
 
+// One row shape at every width (#1162): the phone is the first screen this
+// is read on, so the title leads and the details sit underneath it. Desktop
+// gets the same shape with more air, not a different table.
 function Row({
   item,
   showTrail,
@@ -107,75 +133,92 @@ function Row({
   item: EverythingItem;
   showTrail: boolean;
 }) {
+  const tone = STAGE_TONE[item.stage];
   return (
     <li
-      className={cn(
-        "flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border py-3 text-sm",
-        ROW_COLUMNS,
-      )}
+      className="grid grid-cols-[4px_minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border py-3"
       data-testid={`everything-item-${item.id}`}
       data-stage={item.stage}
     >
-      <span className="flex min-w-0 basis-full flex-wrap items-center gap-x-2 gap-y-1 sm:basis-auto">
-        <span
+      <span
+        aria-hidden="true"
+        className="self-stretch rounded-full"
+        style={{
+          background:
+            item.closed || item.stage === "draft"
+              ? "var(--muted-foreground)"
+              : tone.color,
+          opacity: item.closed ? 0.4 : 1,
+        }}
+      />
+      <div className="min-w-0">
+        <p
           className={cn(
-            "min-w-0 font-medium [overflow-wrap:anywhere]",
-            item.closed && "text-muted-foreground line-through",
+            "text-[15px] font-semibold leading-snug [overflow-wrap:anywhere]",
+            item.closed && "font-medium text-muted-foreground line-through",
           )}
         >
           {item.title}
-        </span>
-        {item.source ? (
+        </p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
           <span
-            className="shrink-0 rounded-[5px] border px-1.5 text-[11px] leading-5 text-[var(--blu-fg)]"
-            style={{ borderColor: "var(--blu-fg)" }}
-            data-testid="everything-source"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full py-0.5 pl-2 pr-2.5 text-foreground"
+            style={{ background: tone.surface }}
+            data-testid="everything-stage"
           >
-            via {item.source}
+            <span
+              aria-hidden="true"
+              className="size-2.5 shrink-0 rounded-full border-2"
+              style={{
+                borderColor: tone.color,
+                borderStyle: tone.dashed ? "dashed" : "solid",
+                background: tone.filled ? tone.color : "transparent",
+              }}
+              data-testid="everything-stage-mark"
+            />
+            {item.stageLabel}
           </span>
-        ) : null}
-        {showTrail ? <Trail item={item} /> : null}
-      </span>
-      <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-        <span
-          aria-hidden="true"
-          className="size-2 shrink-0 rounded-[3px] border border-border"
-          style={item.areaColor ? { background: item.areaColor } : undefined}
-        />
-        <span className="truncate">{item.areaName}</span>
-      </span>
-      <span className="flex items-center gap-1.5 text-xs">
-        <span
-          aria-hidden="true"
-          className="size-2.5 shrink-0 rounded-full border-2"
-          style={{
-            borderColor: STAGE_MARK[item.stage].color,
-            borderStyle: STAGE_MARK[item.stage].dashed ? "dashed" : "solid",
-            background: STAGE_MARK[item.stage].filled
-              ? STAGE_MARK[item.stage].color
-              : "transparent",
-          }}
-          data-testid="everything-stage-mark"
-        />
-        {item.stageLabel}
-      </span>
-      <span className="text-xs tabular-nums">
-        {item.dueLabel ? (
-          <>
-            <span className="text-muted-foreground sm:sr-only">Due </span>
-            {item.dueLabel}
-          </>
-        ) : (
-          <span className="hidden text-muted-foreground sm:inline">
-            <span aria-hidden="true">—</span>
-            <span className="sr-only">No due date</span>
+          <span
+            className="inline-block max-w-[11rem] truncate rounded-[5px] px-2 py-0.5 text-foreground"
+            style={{
+              background: item.areaColor
+                ? `color-mix(in srgb, ${item.areaColor} 22%, transparent)`
+                : NEUTRAL_SURFACE,
+            }}
+            data-testid="everything-area-tag"
+          >
+            {item.areaName}
           </span>
-        )}
-      </span>
-      <span className="text-xs tabular-nums text-muted-foreground">
-        <span className="sm:sr-only">Entered </span>
-        {item.enteredLabel}
-      </span>
+          {item.source ? (
+            <span
+              className="shrink-0 rounded-[5px] border px-1.5 text-[11px] leading-5 text-[var(--blu-fg)]"
+              style={{ borderColor: "var(--blu-fg)" }}
+              data-testid="everything-source"
+            >
+              via {item.source}
+            </span>
+          ) : null}
+          <span className="tabular-nums">Entered {item.enteredLabel}</span>
+          {showTrail ? <Trail item={item} /> : null}
+        </div>
+      </div>
+      {item.dueLabel ? (
+        <p
+          className="self-start pt-0.5 text-right text-[13px] tabular-nums leading-tight"
+          data-testid="everything-due"
+        >
+          <span className="sr-only">Due </span>
+          {item.dueLabel}
+          <span
+            aria-hidden="true"
+            className="block text-[11px] text-muted-foreground"
+          >
+            due
+          </span>
+        </p>
+      ) : (
+        <span className="sr-only">No due date</span>
+      )}
     </li>
   );
 }
@@ -190,6 +233,10 @@ function OpenEverythingSheet({
   const [search, setSearch] = useState("");
   const [areaId, setAreaId] = useState<string | null>(null);
   const [source, setSource] = useState<string | null>(null);
+  // Which groups are folded, keyed by grouping so "Today" under one grouping
+  // never folds a group of another. Display state only.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
+  const groupsId = useId();
   const searchId = useId();
   const areaSelectId = useId();
   const sourceSelectId = useId();
@@ -207,7 +254,23 @@ function OpenEverythingSheet({
   const closedCount = list.closed;
   const narrowed = list.narrowed;
 
+  function toggleFold(key: string) {
+    setFolded((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  // Narrowing the list opens every group again: a folded group must never
+  // hide the thing a search or filter just found.
+  function unfoldAll() {
+    setFolded((current) => (current.size === 0 ? current : new Set()));
+  }
+
   function clearFilters() {
+    unfoldAll();
     setSearch("");
     setAreaId(null);
     setSource(null);
@@ -233,8 +296,8 @@ function OpenEverythingSheet({
           <div className="grid gap-3">
             <div
               role="group"
-              aria-label="Group the list"
-              className="flex flex-wrap gap-1.5"
+              aria-label="Group the list by"
+              className="flex overflow-x-auto shadow-[inset_0_-1px_0_var(--border)] [scrollbar-width:none]"
               data-testid="everything-groupings"
             >
               {EVERYTHING_GROUPINGS.map((option) => (
@@ -245,11 +308,15 @@ function OpenEverythingSheet({
                   onClick={() => setGrouping(option)}
                   className={cn(
                     HIT_TARGET_ROW,
-                    "rounded-[var(--surface-radius-sm)] border px-3 text-sm outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none",
+                    "shrink-0 touch-manipulation whitespace-nowrap border-b-2 px-2.5 text-sm outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none",
                     grouping === option
-                      ? "border-foreground bg-muted font-semibold"
-                      : "border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                      ? "font-semibold text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
+                  style={{
+                    borderBottomColor:
+                      grouping === option ? "var(--foreground)" : "transparent",
+                  }}
                   data-testid={`everything-grouping-${option}`}
                 >
                   {EVERYTHING_GROUPING_LABEL[option]}
@@ -269,7 +336,10 @@ function OpenEverythingSheet({
                   id={searchId}
                   type="search"
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) => {
+                    unfoldAll();
+                    setSearch(event.target.value);
+                  }}
                   placeholder="Search everything"
                   autoComplete="off"
                   className={cn(CONTROL, "w-full")}
@@ -286,7 +356,10 @@ function OpenEverythingSheet({
                 <select
                   id={areaSelectId}
                   value={areaId ?? ""}
-                  onChange={(event) => setAreaId(event.target.value || null)}
+                  onChange={(event) => {
+                    unfoldAll();
+                    setAreaId(event.target.value || null);
+                  }}
                   className={cn(CONTROL, "max-w-[11rem]")}
                   data-testid="everything-area"
                 >
@@ -312,7 +385,10 @@ function OpenEverythingSheet({
                   <select
                     id={sourceSelectId}
                     value={source ?? ""}
-                    onChange={(event) => setSource(event.target.value || null)}
+                    onChange={(event) => {
+                      unfoldAll();
+                      setSource(event.target.value || null);
+                    }}
                     className={cn(CONTROL, "max-w-[11rem]")}
                     data-testid="everything-source-filter"
                   >
@@ -383,43 +459,67 @@ function OpenEverythingSheet({
             </div>
           </div>
         ) : (
-          <div className="grid gap-5" data-testid="everything-groups">
-            <div
-              aria-hidden="true"
-              className={cn(
-                "hidden border-b border-border pb-2 text-xs text-muted-foreground",
-                ROW_COLUMNS,
-              )}
-            >
-              <span>Task</span>
-              <span>Area</span>
-              <span>Stage</span>
-              <span>Due</span>
-              <span>Entered</span>
-            </div>
-            {list.groups.map((group) => (
-              <section
-                key={group.id}
-                aria-label={group.label}
-                data-testid={`everything-group-${group.id}`}
-              >
-                <h3 className="flex items-baseline gap-2 border-b border-border pb-1.5 text-sm font-semibold">
-                  {group.label}
-                  <span className="text-xs font-normal tabular-nums text-muted-foreground">
-                    {group.items.length}
-                  </span>
-                </h3>
-                <ul>
-                  {group.items.map((item) => (
-                    <Row
-                      key={item.id}
-                      item={item}
-                      showTrail={grouping === "entered"}
-                    />
-                  ))}
-                </ul>
-              </section>
-            ))}
+          <div className="grid gap-4" data-testid="everything-groups">
+            {list.groups.map((group, index) => {
+              const foldKey = `${grouping}:${group.id}`;
+              const isFolded = folded.has(foldKey);
+              const listId = `${groupsId}-${index}`;
+              return (
+                <section
+                  key={group.id}
+                  aria-label={group.label}
+                  data-testid={`everything-group-${group.id}`}
+                >
+                  <h3 className="border-b border-border">
+                    <button
+                      type="button"
+                      aria-expanded={!isFolded}
+                      aria-controls={listId}
+                      onClick={() => toggleFold(foldKey)}
+                      className={cn(
+                        HIT_TARGET_ROW,
+                        "flex w-full touch-manipulation items-center gap-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                      )}
+                      data-testid={`everything-fold-${group.id}`}
+                    >
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 10 10"
+                        className={cn(
+                          "size-2.5 shrink-0 fill-current transition-transform duration-[var(--motion-base)] ease-[var(--motion-ease)] motion-reduce:transition-none",
+                          isFolded ? "" : "rotate-90",
+                        )}
+                      >
+                        <path d="M3 1.5 7.5 5 3 8.5z" />
+                      </svg>
+                      <span className="min-w-0 [overflow-wrap:anywhere]">
+                        {group.label}
+                      </span>
+                      <span
+                        className="font-normal tabular-nums"
+                        data-testid={`everything-count-${group.id}`}
+                      >
+                        {group.items.length}
+                        <span className="sr-only">
+                          {group.items.length === 1 ? " item" : " items"}
+                        </span>
+                      </span>
+                    </button>
+                  </h3>
+                  <ul id={listId} hidden={isFolded}>
+                    {isFolded
+                      ? null
+                      : group.items.map((item) => (
+                          <Row
+                            key={item.id}
+                            item={item}
+                            showTrail={grouping === "entered"}
+                          />
+                        ))}
+                  </ul>
+                </section>
+              );
+            })}
           </div>
         )}
       </div>

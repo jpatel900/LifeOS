@@ -143,6 +143,60 @@ describe("EverythingSheet", () => {
     expect(row.textContent).toContain("Due Today");
   });
 
+  it("gives every row one shape: title, then stage, area and day entered", () => {
+    renderSheet();
+    const row = screen.getByTestId("everything-item-task:t-home");
+    expect(within(row).getByTestId("everything-stage").textContent).toBe(
+      "Ready",
+    );
+    expect(within(row).getByTestId("everything-area-tag").textContent).toBe(
+      "Home",
+    );
+    expect(row.textContent).toContain("Entered Nov 14");
+    // No due day: nothing is drawn for it, and a reader still hears why.
+    expect(within(row).queryByTestId("everything-due")).toBeNull();
+    expect(row.textContent).toContain("No due date");
+  });
+
+  it("folds and unfolds a group from its heading, and says which it is", () => {
+    renderSheet();
+    const fold = screen.getByTestId("everything-fold-today");
+    expect(fold.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(fold);
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("Renew the insurance")).toBeNull();
+    // The other groups stay open, and the heading still gives the count.
+    expect(screen.getByText("Fix the tap")).toBeTruthy();
+    expect(fold.textContent).toContain("Today");
+    expect(screen.getByTestId("everything-count-today").textContent).toBe(
+      "1 item",
+    );
+    fireEvent.click(fold);
+    expect(screen.getByText("Renew the insurance")).toBeTruthy();
+  });
+
+  it("opens a folded group again when a search narrows the list", () => {
+    renderSheet();
+    const fold = screen.getByTestId("everything-fold-today");
+    fireEvent.click(fold);
+    expect(screen.queryByText("Renew the insurance")).toBeNull();
+    fireEvent.change(screen.getByTestId("everything-search"), {
+      target: { value: "insurance" },
+    });
+    // What the search found is on screen, not hidden behind a fold.
+    expect(screen.getByText("Renew the insurance")).toBeTruthy();
+    expect(
+      screen.getByTestId("everything-fold-today").getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
+  it("has no column header row: the row itself carries the labels", () => {
+    renderSheet();
+    const sheet = screen.getByTestId("everything-sheet");
+    expect(within(sheet).queryByText("Task")).toBeNull();
+    expect(within(sheet).queryByText("Stage", { selector: "span" })).toBeNull();
+  });
+
   it("shows who entered an item and strips the mark from its title", () => {
     renderSheet();
     const row = screen.getByTestId("everything-item-thought:c-hermes");
