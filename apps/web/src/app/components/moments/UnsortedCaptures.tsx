@@ -13,7 +13,7 @@ import {
 import { useAuthPresence } from "./useAuthPresence";
 import {
   currentCaptureId,
-  selectUnsortedCaptures,
+  selectUnsortedCapturesInScope,
 } from "@/lib/workflow/captureStatus";
 
 /**
@@ -57,7 +57,7 @@ export function UnsortedCaptures({
   // It excludes both a capture a draft already points at (a successful Sort
   // visibly moves the row out of this list) and a capture an accepted task
   // points at (audit P0#3 — the item must never be offered back as undone).
-  const unsortedCaptures = selectUnsortedCaptures(state, areaId);
+  const unsortedCaptures = selectUnsortedCapturesInScope(state, areaId);
 
   // Progress/failure read straight off the shared `captureParse` state the
   // parse path already maintains — no second source of truth, and keyed by

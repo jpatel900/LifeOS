@@ -32,6 +32,7 @@ const NOOP_HANDLERS = {
   onSwap: vi.fn(),
   onOpenHealth: vi.fn(),
   onOpenAreas: vi.fn(),
+  onOpenEverything: vi.fn(),
   onDrillPipeline: vi.fn(),
   onOpenRecovery: vi.fn(),
   onOpenTriage: vi.fn(),
