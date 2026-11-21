@@ -1,5 +1,5 @@
 import type { WorkflowState } from "@/lib/workflow";
-import { selectUnsortedCaptures } from "@/lib/workflow/captureStatus";
+import { selectUnsortedCapturesInScope } from "@/lib/workflow/captureStatus";
 import {
   isSameCalendarDay,
   selectTasksToPlace,
@@ -57,7 +57,7 @@ export function buildPipelineCounts(
   const areaId = scopeAreaId(state, selectedAreaId);
   if (state.areas.length === 0) {
     return {
-      capture: selectUnsortedCaptures(state, areaId).length,
+      capture: selectUnsortedCapturesInScope(state, areaId).length,
       triage: 0,
       plan: 0,
       execute: 0,
@@ -72,7 +72,7 @@ export function buildPipelineCounts(
   // Count the same unsorted rows that Triage lists: new and triage_required.
   // The shared selector excludes captures already represented by a draft or
   // accepted task, so the badge never counts that same decision twice.
-  const actionableCapture = selectUnsortedCaptures(state, areaId);
+  const actionableCapture = selectUnsortedCapturesInScope(state, areaId);
   const pendingDrafts = state.taskDrafts.filter(
     (draft) => inScope(draft.area_id) && draft.status === "pending",
   );
