@@ -75,6 +75,7 @@ export type TaskReviewPersistenceResult =
   | { status: "failed" | "persisted-refresh-failed"; error: unknown };
 
 export interface PersistenceSyncDeps {
+  canWriteAccount?: () => boolean;
   persistedAreasRef: MutableRefObject<Area[]>;
   persistedCaptureIdByLocalIdRef: MutableRefObject<Map<string, string>>;
   persistedTaskIdByLocalIdRef: MutableRefObject<Map<string, string>>;
@@ -250,6 +251,10 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       // durable one. A failed account call still reaches the caller's
       // `markPersistedSaveFailure`, without losing the separate fact that
       // the device refused to keep a recovery copy.
+      if (deps.canWriteAccount?.() === false) {
+        markDeviceStorageBlocked();
+        return;
+      }
       if (!localCapture.area_id || persistedAreaId) {
         let result;
         try {

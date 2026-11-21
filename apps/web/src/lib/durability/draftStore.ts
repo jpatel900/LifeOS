@@ -70,6 +70,7 @@
  */
 
 import type { Phase2TaskDraft } from "@lifeos/schemas";
+import { isUnownedWorkflowScope } from "./deviceAccount";
 
 const DB_NAME = "lifeos-triage-drafts";
 const DB_VERSION = 1;
@@ -81,7 +82,9 @@ const STORE_NAME = "drafts";
  */
 export interface StoredTaskDraft {
   id: string;
-  draft: Phase2TaskDraft;
+  scope?: string;
+  claimedTo?: string;
+  draft?: Phase2TaskDraft;
   saved_at: string;
 }
 
@@ -127,11 +130,14 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 }
 
 /**
- * Every draft this device is holding. Order is unspecified and no caller may
+ * Every draft in this ownership scope. Omitting scope reads legacy/demo rows.
+ * Order is unspecified and no caller may
  * depend on it: the reducer keys drafts by id, and there is no replay to
  * sequence.
  */
-export async function listStoredTaskDrafts(): Promise<Phase2TaskDraft[]> {
+export async function listStoredTaskDrafts(
+  scope?: string,
+): Promise<Phase2TaskDraft[]> {
   if (!hasIndexedDb()) {
     return [];
   }
@@ -145,9 +151,11 @@ export async function listStoredTaskDrafts(): Promise<Phase2TaskDraft[]> {
       >,
     );
     await transactionDone(transaction);
-    return records
-      .filter((record) => record?.draft && typeof record.id === "string")
-      .map((record) => record.draft);
+    return records.flatMap((record) =>
+      record?.draft && typeof record.id === "string" && record.scope === scope
+        ? [record.draft]
+        : [],
+    );
   } finally {
     db.close();
   }
@@ -161,11 +169,13 @@ export async function storedTaskDraftCount(): Promise<number> {
   const db = await openDatabase();
   try {
     const transaction = db.transaction(STORE_NAME, "readonly");
-    const count = await requestToPromise(
-      transaction.objectStore(STORE_NAME).count(),
+    const records = await requestToPromise(
+      transaction.objectStore(STORE_NAME).getAll() as IDBRequest<
+        StoredTaskDraft[]
+      >,
     );
     await transactionDone(transaction);
-    return count;
+    return records.filter((record) => record.draft).length;
   } finally {
     db.close();
   }
@@ -197,6 +207,7 @@ export async function storedTaskDraftCount(): Promise<number> {
  */
 export async function reconcileStoredTaskDrafts(
   drafts: readonly Phase2TaskDraft[],
+  scope?: string,
 ): Promise<void> {
   if (!hasIndexedDb()) {
     throw new Error(
@@ -223,12 +234,68 @@ export async function reconcileStoredTaskDrafts(
         .filter((record) => record?.draft && record.draft.status !== "pending")
         .map((record) => record.id),
     );
+    const claimed = new Set(
+      existing.filter((record) => record.claimedTo).map((record) => record.id),
+    );
 
     for (const draft of drafts) {
-      if (draft.status === "pending" && decided.has(draft.id)) continue;
-      store.put({ id: draft.id, draft, saved_at: savedAt } as StoredTaskDraft);
+      const id =
+        scope === undefined ? draft.id : JSON.stringify([scope, draft.id]);
+      if (claimed.has(id)) continue;
+      if (draft.status === "pending" && decided.has(id)) continue;
+      store.put({ id, scope, draft, saved_at: savedAt } as StoredTaskDraft);
     }
 
+    await transactionDone(transaction);
+  } finally {
+    db.close();
+  }
+}
+
+/** Claim only explicitly scoped new anonymous work; legacy rows stay held.
+ * Tombstones prevent a retiring tab's late mirror from resurrecting it.
+ */
+let anonymousClaimTail: Promise<void> = Promise.resolve();
+
+export function claimAnonymousTaskDrafts(
+  accountScope: string,
+  reservedOwners: Readonly<Record<string, string | null>> = {},
+): Promise<void> {
+  const claim = anonymousClaimTail.then(() =>
+    claimAnonymousTaskDraftsOnce(accountScope, reservedOwners),
+  );
+  anonymousClaimTail = claim.catch(() => {});
+  return claim;
+}
+
+async function claimAnonymousTaskDraftsOnce(
+  accountScope: string,
+  reservedOwners: Readonly<Record<string, string | null>>,
+): Promise<void> {
+  if (!hasIndexedDb()) return;
+  const db = await openDatabase();
+  try {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const records = await requestToPromise(
+      store.getAll() as IDBRequest<StoredTaskDraft[]>,
+    );
+    const byId = new Map(records.map((record) => [record.id, record]));
+    for (const record of records) {
+      if (
+        !record.draft ||
+        !record.scope ||
+        !isUnownedWorkflowScope(record.scope)
+      )
+        continue;
+      // null is an explicit ownership conflict, never anonymous work to
+      // assign to whichever account happens to finish initialization.
+      if (reservedOwners[record.scope] === null) continue;
+      const owner = reservedOwners[record.scope] ?? accountScope;
+      const id = JSON.stringify([owner, record.draft.id]);
+      if (!byId.has(id)) store.put({ ...record, id, scope: owner });
+      store.put({ id: record.id, scope: record.scope, claimedTo: owner });
+    }
     await transactionDone(transaction);
   } finally {
     db.close();

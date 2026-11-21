@@ -172,7 +172,7 @@ describe("signed-out /settings/areas boundary + door (#742, Final UX Loop C2-S0)
       </WorkflowProvider>,
     );
 
-    fireEvent.change(screen.getByLabelText("Area name"), {
+    fireEvent.change(await screen.findByLabelText("Area name"), {
       target: { value: "Side Project" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create area" }));
@@ -211,3 +211,4 @@ describe("signed-out /settings/areas boundary + door (#742, Final UX Loop C2-S0)
     expect(screen.getByText(/local workflow remains usable/i)).toBeDefined();
   });
 });
+import "fake-indexeddb/auto";

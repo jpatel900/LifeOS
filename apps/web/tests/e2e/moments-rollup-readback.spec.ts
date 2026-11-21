@@ -108,12 +108,23 @@ function buildSeedState(nowMs: number = Date.now()) {
   };
 }
 
-async function openCloseMoment(page: Page, nowMs?: number) {
+async function openCloseMoment(page: Page, nowMs?: number, realClient = false) {
   await page.addInitScript(
-    ({ key, value }) => {
-      window.sessionStorage.setItem(key, JSON.stringify(value));
+    ({ keys, value }) => {
+      for (const key of keys)
+        window.sessionStorage.setItem(key, JSON.stringify(value));
     },
-    { key: STORAGE_KEY, value: buildSeedState(nowMs) },
+    {
+      // The isolated real-client fixture stays signed out. Identity startup
+      // can select anonymous or unverified before INITIAL_SESSION settles.
+      keys: realClient
+        ? [
+            `${STORAGE_KEY}:scoped-v1:anonymous`,
+            `${STORAGE_KEY}:scoped-v1:unverified`,
+          ]
+        : [STORAGE_KEY],
+      value: buildSeedState(nowMs),
+    },
   );
   await page.goto("/");
   await expect(page.getByTestId("today-moments")).toBeVisible();
@@ -352,7 +363,7 @@ for (const viewport of [
         });
       });
 
-      await openCloseMoment(page, FIXED_NOW_MS);
+      await openCloseMoment(page, FIXED_NOW_MS, true);
       const draft = page.getByTestId(`close-moment-rollup-${AREA_ID}`);
       // Assert the enhanced state is really on screen before measuring — a
       // two-button row would pass vacuously.

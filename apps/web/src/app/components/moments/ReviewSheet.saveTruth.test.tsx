@@ -11,6 +11,7 @@ import type { Area, CalendarBlock, Task } from "@lifeos/schemas";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
 import {
   GOOGLE_BACKED_BLOCK_CHANGE_REFUSED,
   SAVED_ON_THIS_DEVICE_SHORT,
@@ -740,7 +741,10 @@ describe("ReviewSheet account save truth", () => {
   it("a stale triage refusal does not block a confirmed carry-forward account write", async () => {
     storedTask = accountTask("backlog");
     const state = afterEarlierTriageRefusal();
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.sessionStorage.setItem(
+      accountSnapshotKey(`account:${USER_ID}`),
+      JSON.stringify(state),
+    );
     const view = mountReview();
     await waitFor(() =>
       expect(screen.getByTestId("account-read-settled")).toHaveTextContent(

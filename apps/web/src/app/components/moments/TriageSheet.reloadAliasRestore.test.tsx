@@ -21,7 +21,7 @@ import "fake-indexeddb/auto";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
-import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { accountSnapshotKey } from "@/lib/workflowContext/accountSnapshot";
 import {
   captureWorkflow,
   GOLDEN_AREA_ID,
@@ -59,9 +59,15 @@ const {
   mockListOverrideRecords: vi.fn(),
   mockListDurationProfiles: vi.fn(),
   mockListSuggestionRecords: vi.fn(),
-  // These reads are only ever called with the mocked functions above (never
-  // real supabase-js methods), so the "client" only needs to be truthy.
-  mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
+  mockCreateSupabaseBrowserClient: vi.fn(() => ({
+    mocked: true,
+    auth: {
+      getUser: async () => ({
+        data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+        error: null,
+      }),
+    },
+  })),
 }));
 
 vi.mock("@/lib/data/workflow", async () => {
@@ -162,7 +168,10 @@ describe("#853 guard: the restored capture alias reaches the triage accept", () 
     const draft = seed.taskDrafts.find((item) => item.status === "pending")!;
     expect(capture.id).not.toBe(ACCOUNT_CAPTURE_ID);
     expect(draft.capture_item_id).toBe(capture.id);
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+    window.sessionStorage.setItem(
+      accountSnapshotKey(`account:${persistedArea.user_id}`),
+      JSON.stringify(seed),
+    );
 
     render(
       <WorkflowProvider>

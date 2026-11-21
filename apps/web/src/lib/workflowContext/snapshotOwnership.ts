@@ -148,6 +148,9 @@ export function acceptsSnapshotRead(
 /** Authenticated identity is evidence even when the account has no rows.
  * Keep the existing device-only policy, but never carry delivered account rows
  * or their optimistic aliases into another account's snapshot lifetime. */
+const localWorkflowId =
+  /^(area|capture|task-draft|project-draft|proposal-draft|project|task|proposal|block|session)-(?:\d+|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
+
 export function bindSnapshotAccount(
   state: WorkflowState,
   userId: string,
@@ -191,7 +194,7 @@ export function bindSnapshotAccount(
       const owner = group[key];
       const undelivered =
         owner?.creation?.pending &&
-        /^(area|capture|task|proposal|block|session)-\d+$/.test(key) &&
+        localWorkflowId.test(key) &&
         accountId(state, collection, key) === key;
       // Older snapshots may have valid edits but no account marker. Their
       // row identity can prove a same-account first binding, never empty B.
@@ -851,16 +854,14 @@ export function restoreSnapshotOwnership(state: WorkflowState): WorkflowState {
       if (hasDemoSeedId(row.id)) continue;
       if (
         collection === "areas" &&
-        !/^area-\d+$/.test(row.id) &&
+        !localWorkflowId.test(row.id) &&
         !/^[0-9a-f]{8}-/i.test(row.id)
       )
         continue;
       // Only a row that never reached the account carries delivery debt.
       // Account-held rows get no stamps, so the next read is authoritative.
       if (
-        /^(area|capture|task-draft|project-draft|proposal-draft|project|task|proposal|block|session)-\d+$/.test(
-          row.id,
-        ) &&
+        localWorkflowId.test(row.id) &&
         accountId(recovered, collection, row.id) === row.id
       ) {
         (metadata.rows[collection] ??= {})[row.id] = {
