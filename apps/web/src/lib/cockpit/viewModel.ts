@@ -16,7 +16,7 @@ import {
 } from "@/lib/agingRules";
 import { cardBg } from "./accent";
 import { resolveSelectedArea } from "@/lib/areaAccent";
-import { selectUnsortedCaptures } from "@/lib/workflow/captureStatus";
+import { selectUnsortedCapturesInScope } from "@/lib/workflow/captureStatus";
 import { selectTasksToPlace } from "@/lib/workflow/planStatus";
 import {
   selectNeedsDecision,
@@ -314,7 +314,7 @@ export function buildCockpitViewModel(
       // thought is sorted it is counted by Triage instead, never twice. Pinned
       // by `lib/workflow/captureStatus.test.ts`'s UNSORTED_SURFACES table, so
       // this chip can never drift away from the other five surfaces again.
-      capture: selectUnsortedCaptures(state, areaId).filter(
+      capture: selectUnsortedCapturesInScope(state, areaId).filter(
         (item) => item.status === "new",
       ).length,
       triage: inbox.length,

@@ -854,6 +854,8 @@ const SHEET_REACH_TESTID: Record<(typeof SHEET_VALUES)[number], string> = {
   // below for why, and the custom `reach` branch in matrixTargets.
   health: "side-rail-open-health",
   areas: "side-rail-open-areas",
+  // #1160: reaches through the palette on mobile, like health and areas.
+  everything: "start-open-everything",
 };
 
 const SHEET_TESTID: Record<(typeof SHEET_VALUES)[number], string> = {
@@ -862,6 +864,7 @@ const SHEET_TESTID: Record<(typeof SHEET_VALUES)[number], string> = {
   review: "review-sheet",
   health: "health-sheet",
   areas: "areas-sheet",
+  everything: "everything-sheet",
 };
 
 // C2-S6 mutation-proven gap (adversarial verifier, 2026-08-20): this matrix
@@ -883,6 +886,7 @@ const SHEET_TESTID: Record<(typeof SHEET_VALUES)[number], string> = {
 const PALETTE_REACH_SHEETS = new Set<(typeof SHEET_VALUES)[number]>([
   "health",
   "areas",
+  "everything",
 ]);
 
 const matrixTargets: MatrixTarget[] = [

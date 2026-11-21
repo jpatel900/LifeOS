@@ -115,6 +115,9 @@ jobs:
       - name: status.test.mjs (campaigns.json / final-ux-loop.md / git-history truth)
         run: node scripts/agent/status.test.mjs
 
+      - name: Builder orientation authority
+        run: node --test scripts/agent/builder-orientation.test.mjs
+
   migration-timestamp-collision:
     name: Migration timestamp collision precheck
     if: github.event_name == 'pull_request'
@@ -170,6 +173,9 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: CLI smoke stdout privacy regression
+        run: node --test scripts/agent/cli-smoke-output.test.mjs
 
       - name: Type-check
         run: pnpm type-check

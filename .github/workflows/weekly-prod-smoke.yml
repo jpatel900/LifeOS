@@ -59,7 +59,7 @@ on:
     # Sunday 13:00 UTC -- a quiet time for both traffic and on-call attention
     # (weekend afternoon UTC, which is early morning in the Americas and
     # evening in Europe/most of Asia), well clear of ci.yml's per-push load
-    # and provider-canary's 30-minute cadence.
+    # and provider-canary's scheduled run.
     - cron: "0 13 * * 0"
   workflow_dispatch:
 
@@ -194,8 +194,9 @@ jobs:
                 let body;
                 try {
                   body = JSON.parse(raw);
-                } catch (error) {
-                  console.error("stdout was not valid JSON: " + error.message);
+                } catch {
+                  // JSON.parse diagnostics can quote private response content.
+                  console.error("stdout was not valid JSON");
                   process.exitCode = 1;
                   return;
                 }

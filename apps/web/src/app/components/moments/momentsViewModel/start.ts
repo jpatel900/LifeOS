@@ -10,8 +10,9 @@ import {
   splitByFocusBudget,
 } from "@/lib/focus/dailyFocusBudget";
 import {
-  countUnsortedCaptures,
+  countUnsortedCapturesInScope,
   selectUnsortedCaptures,
+  selectUnsortedCapturesInScope,
 } from "@/lib/workflow/captureStatus";
 import { selectBackTodayTasks } from "@/lib/workflow/backToday";
 import { hasLaunchSequenceStep } from "@/lib/workflow/shared";
@@ -551,8 +552,9 @@ function summarizeRawText(rawText: string): string {
  */
 function deriveTopPendingTriageItem(
   state: WorkflowState,
+  selectedAreaId: string | null,
 ): PendingTriageItemVM | null {
-  const pending = selectUnsortedCaptures(state);
+  const pending = selectUnsortedCapturesInScope(state, selectedAreaId);
   if (pending.length === 0) return null;
 
   const sorted = [...pending].sort((a, b) => {
@@ -728,7 +730,9 @@ export function buildStartVM(
   const areas = buildAreaHealth(state, now, waitingOn);
   const firstMove = deriveFirstMove(state, blocks, selectedAreaId);
 
-  const pendingTriage = countUnsortedCaptures(state);
+  // #1026: scoped like the triage sheet this count opens, so "N thoughts
+  // waiting" and the rows behind "Decide now" can never disagree.
+  const pendingTriage = countUnsortedCapturesInScope(state, selectedAreaId);
   const activeTasks = state.tasks.filter(
     (task) => task.status === "active",
   ).length;
@@ -756,7 +760,10 @@ export function buildStartVM(
   // D-8 (#483): only meaningful when there is no firstMove — computed
   // unconditionally anyway since it's a cheap pure derivation and callers
   // besides StartMoment may want to know what's next regardless.
-  const topPendingTriageItem = deriveTopPendingTriageItem(state);
+  const topPendingTriageItem = deriveTopPendingTriageItem(
+    state,
+    selectedAreaId,
+  );
 
   // FR-049 (#1025): "Back today" — pure over state.tasks and now, scoped to
   // the same selectedAreaId every other area-scoped derivation here uses.
