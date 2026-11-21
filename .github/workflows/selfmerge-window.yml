@@ -1,67 +1,58 @@
-# ADR 0008 move 2 (owner-ratified 2026-08-04): 30-minute notified
-# self-merge window for risk:low, non-T2+ agent PRs.
-#
-# notify: when a PR gains the opt-in label (or pushes new commits while
-#   opted in), post the owner-notification comment that starts the clock.
-# scan: whenever a CI run completes (PR or main) or on manual dispatch,
-#   re-evaluate every opted-in PR: arm the ones whose guards all pass,
-#   disarm the ones that lost eligibility (see selfmerge-window.mjs). The
-#   lane pauses itself whenever main is red or a guard revert PR is open.
-#   The 10-minute cron was removed 2026-10-17: with windowMinutes 0 there is
-#   no timer to wait out, notify arms at once, and CI completion covers the
-#   re-check (pinned by the "live policy arms at the notify instant"
-#   --self-test case).
-# Demotion: flip SELFMERGE_WINDOW.enabled to false in
-#   scripts/agent/automation-policy.mjs (one-line PR).
-#
-# Owner decision 2026-08-30 (post-#935 incident): same as the Safe
-# Auto-merge workflow — this lane must never arm, and must disarm if
-# already armed, on an owner-gated/ratification PR (checked via
-# evaluateOwnerGateBlock in scripts/agent/automation-policy.mjs, fail-closed
-# if the body can't be read); draft stays the pre-existing separate check
-# it always was. The scan job disarms on every run where a previously-armed
-# PR no longer passes, isolating each PR in its own try/catch so one `gh`
-# hiccup can't skip the rest of the sweep; `types: edited` on the notify
-# job reacts to a title/body edit immediately instead of waiting for the
-# next scan.
+name: Self-merge window
 
-name: Self-merge Window
-
+# PR changes enter through Safe Auto-merge. CI and manual sweeps use the same
+# owner, including PRs whose opt-in labels were removed after approval.
 on:
-  pull_request:
-    types:
-      - opened
-      - reopened
-      - labeled
-      - synchronize
-      - ready_for_review
-      - edited
-  # The live test 2026-08-05 showed GitHub's cron never fired for 2+ hours
-  # on this workflow. workflow_run makes the scan event-driven: it fires
-  # whenever a CI run completes, which is the only moment arming state can
-  # usefully change in instant mode.
   workflow_run:
     workflows: [CI]
     types: [completed]
   workflow_dispatch:
 
-concurrency:
-  group: selfmerge-window-${{ github.event.pull_request.number || 'scan' }}
-  cancel-in-progress: false
-
 permissions:
   contents: write
   pull-requests: write
+  actions: read
 
 jobs:
-  notify:
-    name: Notify owner (start the clock)
-    if: github.event_name == 'pull_request'
+  candidates:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      prs: ${{ steps.list.outputs.prs }}
     steps:
-      - name: Checkout repository
+      - name: List open PRs
+        id: list
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const prs = await github.paginate(github.rest.pulls.list, {
+              ...context.repo, state: 'open', per_page: 100,
+            });
+            const candidates = prs.filter(pr => pr.auto_merge || pr.labels.some(label =>
+              /^(automerge:|selfmerge:)/.test(label.name) || label.name === 'revert:confirm'));
+            if (candidates.length > 256) throw new Error('Too many candidate PRs for one matrix; refusing a partial scan.');
+            core.setOutput('prs', JSON.stringify(candidates.map(pr => ({ number: pr.number, head: pr.head.ref, repo: pr.head.repo?.full_name ?? context.repo.owner + '/' + context.repo.repo }))));
+
+  reconcile:
+    needs: candidates
+    if: needs.candidates.outputs.prs != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        pr: ${{ fromJSON(needs.candidates.outputs.prs) }}
+    concurrency:
+      group: pr-automerge-${{ matrix.pr.repo }}-${{ matrix.pr.head }}
+      queue: max
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted policy and writer
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: main
           persist-credentials: false
 
       - name: Set up Node.js
@@ -70,35 +61,11 @@ jobs:
           node-version: 22.13.0
           package-manager-cache: false
 
-      - name: Notify (Telegram + marker comment) and arm instantly
+      - name: Reconcile current eligibility and notification
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ matrix.pr.number }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: node scripts/agent/selfmerge-window.mjs --notify
-
-  scan:
-    name: Arm eligible PRs past their window
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22.13.0
-          package-manager-cache: false
-
-      - name: Self-test the evaluator before acting
-        run: node scripts/agent/selfmerge-window.mjs --self-test
-
-      - name: Scan and arm
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: node scripts/agent/selfmerge-window.mjs --scan
+        run: node scripts/agent/selfmerge-window.mjs --reconcile
