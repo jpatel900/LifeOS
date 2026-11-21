@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { posix, relative, resolve, sep, win32 } from "node:path";
 import { describe, expect, it } from "vitest";
 import { assertWalkFoundFiles, readDirCached } from "./helpers/repoWalk";
 
@@ -102,8 +102,16 @@ function countBlindWaits(source: string): number {
   );
 }
 
-function normalizeScriptPath(path: string): string {
-  return path.replace(/\\/g, "/");
+function recordScriptWaits(
+  counts: Map<string, number>,
+  relativePath: string,
+  source: string,
+  separator = sep,
+): void {
+  const count = countBlindWaits(source);
+  if (count === 0) return;
+  // A backslash in a POSIX filename belongs to the name.
+  counts.set(relativePath.split(separator).join("/"), count);
 }
 
 function scanBlindWaits(): Map<string, number> {
@@ -112,21 +120,50 @@ function scanBlindWaits(): Map<string, number> {
   assertWalkFoundFiles(files, "apps/web/tests scripts", 20);
   const counts = new Map<string, number>();
   for (const file of files) {
-    const count = countBlindWaits(readFileSync(file, "utf8"));
-    if (count > 0)
-      counts.set(normalizeScriptPath(relative(testsRoot, file)), count);
+    recordScriptWaits(
+      counts,
+      relative(testsRoot, file),
+      readFileSync(file, "utf8"),
+    );
   }
   return counts;
 }
 
 describe("blind-wait guard for browser tests", () => {
   it.each([
-    "e2e/helpers/signedInAccount.ts",
-    "e2e\\helpers\\signedInAccount.ts",
-  ])("matches the same allowlist entry for %s", (path) => {
-    const key = normalizeScriptPath(path);
-    expect(key).toBe("e2e/helpers/signedInAccount.ts");
-    expect(BLIND_WAIT_ALLOWLIST[key]?.count).toBe(3);
+    [posix.sep, "e2e/helpers/signedInAccount.ts"],
+    [win32.sep, "e2e\\helpers\\signedInAccount.ts"],
+  ] as const)(
+    "matches the allowlist with %s separators in %s",
+    (separator, path) => {
+      const counts = new Map<string, number>();
+      recordScriptWaits(
+        counts,
+        path,
+        "page.waitForTimeout(500);\n".repeat(3),
+        separator,
+      );
+      const key = "e2e/helpers/signedInAccount.ts";
+      expect(counts.get(key)).toBe(3);
+      expect(BLIND_WAIT_ALLOWLIST[key]?.count).toBe(3);
+    },
+  );
+
+  it("keeps a POSIX filename with a literal backslash outside the nested file's allowance", () => {
+    const nested = "e2e/helpers/signedInAccount.ts";
+    const literal = "e2e/helpers\\signedInAccount.ts";
+    const source = "page.waitForTimeout(500);\n".repeat(3);
+    const counts = new Map<string, number>();
+    recordScriptWaits(counts, nested, source, posix.sep);
+    recordScriptWaits(counts, literal, source, posix.sep);
+
+    expect(counts).toEqual(
+      new Map([
+        [nested, 3],
+        [literal, 3],
+      ]),
+    );
+    expect(BLIND_WAIT_ALLOWLIST[literal]).toBeUndefined();
   });
 
   it("adds no new fixed-time waits under apps/web/tests", () => {

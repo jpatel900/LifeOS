@@ -46,10 +46,13 @@ name: Provider Canary
 
 on:
   schedule:
-    # Every 30 minutes. Cheap trace read on every tick; a synthetic POST
-    # (the only paid-provider-adjacent call) fires only when there is no
-    # recent real signal or a failure is suspected (see decideProbeAction).
-    - cron: "*/30 * * * *"
+    # Once a day (owner 2026-11-17) until the 10-day trial starts: with no
+    # real use there is no real signal, so half-hourly ticks only probed an
+    # idle app. Restore "*/30 * * * *" on trial day 1 (program §7). Cheap
+    # trace read on every tick; a synthetic POST (the only
+    # paid-provider-adjacent call) fires only when there is no recent real
+    # signal or a failure is suspected (see decideProbeAction).
+    - cron: "17 11 * * *"
   workflow_dispatch:
 
 concurrency:

@@ -41,11 +41,10 @@ export function TaskMapRevisionOfferCard({
       <p className="m-0 text-xs text-muted-foreground">
         <span className="font-medium text-foreground">
           {taskTitle
-            ? `The map for “${taskTitle}” may be out of date.`
-            : "This map may be out of date."}
+            ? `Request an updated map for “${taskTitle}”.`
+            : "Request an updated map to review."}
         </span>{" "}
-        <span data-testid="taskmap-revision-offer-reason">{reason}</span> Want
-        an updated map to review?
+        <span data-testid="taskmap-revision-offer-reason">{reason}</span>
       </p>
       <span className="flex items-center gap-2">
         <Button
