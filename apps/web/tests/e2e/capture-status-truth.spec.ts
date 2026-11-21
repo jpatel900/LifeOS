@@ -238,3 +238,75 @@ test.describe("C1 cards 1+4 — capture status truth", () => {
     expect(await pipelineCaptureCounts(page)).not.toContain("1");
   });
 });
+
+/**
+ * #1026 — the weekly production smoke's finding from 2026-10-25 onward. With
+ * one area selected, Start read "5 thoughts waiting for a decision" and the
+ * sheet behind "Decide now" read "Nothing waiting in triage": the thoughts
+ * had been saved without an area, Start counted every area, and the sheet
+ * filtered by the selected one. Unit tier: `captureStatus.test.ts`.
+ */
+test.describe("#1026 — a thought saved without an area stays reachable", () => {
+  const UNASSIGNED_TEXT = "Thought saved without an area";
+
+  test("Start's count and the sheet behind it agree while one area is selected", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await stubParseCaptureRoute(page);
+    const state = buildResurrectedState();
+    await page.addInitScript(
+      ({ key, value }) => {
+        window.sessionStorage.setItem(key, JSON.stringify(value));
+      },
+      {
+        key: STORAGE_KEY,
+        value: {
+          ...state,
+          tasks: [],
+          captureItems: [
+            {
+              ...state.captureItems[0],
+              id: "e2e-capture-unassigned",
+              area_id: null,
+              raw_text: UNASSIGNED_TEXT,
+            },
+          ],
+        },
+      },
+    );
+
+    try {
+      await openStart(page);
+      await page.getByTestId("today-moments-area-switcher").click();
+      await expect(page.getByTestId("area-selector-listbox")).toBeVisible({
+        timeout: 10_000,
+      });
+      await page.getByTestId(`area-selector-option-${AREA_ID}`).click();
+      await expect(page.getByTestId("area-selector-listbox")).toHaveCount(0, {
+        timeout: 10_000,
+      });
+
+      // Start still says a decision is waiting…
+      await expect(
+        page
+          .getByTestId("start-pending-triage-card")
+          .or(page.getByTestId("start-pending-triage")),
+      ).toBeVisible();
+
+      // …and following it lists that same thought, not an empty sheet.
+      await page
+        .getByTestId("start-pending-triage-action")
+        .or(page.getByTestId("start-pending-triage"))
+        .click();
+      const sheet = page.getByTestId("moment-sheet");
+      await expect(
+        sheet.getByTestId("triage-sheet-capture-e2e-capture-unassigned"),
+      ).toContainText(UNASSIGNED_TEXT);
+      await expect(sheet.getByTestId("triage-sheet-empty")).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+});

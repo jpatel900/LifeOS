@@ -16,7 +16,7 @@
  * plumbed anywhere in the moments home.
  *
  * So this module derives free hours from `WorkflowState.calendarBlocks`:
- * today's non-cancelled blocks, clamped to a documented working window,
+ * non-cancelled blocks that intersect today's working window, clamped to it,
  * with overlapping/adjacent busy intervals unioned before summing (so a
  * double-booked hour is not double-counted as busy). Free hours = window
  * hours - unioned busy hours. If a real free/busy read is ever plumbed
@@ -132,15 +132,6 @@ export interface CalendarBlockLike {
   end_at: string;
 }
 
-function isSameCalendarDay(isoValue: string, reference: Date): boolean {
-  const value = new Date(isoValue);
-  return (
-    value.getFullYear() === reference.getFullYear() &&
-    value.getMonth() === reference.getMonth() &&
-    value.getDate() === reference.getDate()
-  );
-}
-
 function workingWindowForDay(reference: Date): {
   startMs: number;
   endMs: number;
@@ -165,10 +156,7 @@ export function deriveFreeHoursFromBlocks(
   const { startMs: windowStart, endMs: windowEnd } = workingWindowForDay(now);
 
   const busyIntervals: BusyInterval[] = blocks
-    .filter(
-      (block) =>
-        block.status !== "cancelled" && isSameCalendarDay(block.start_at, now),
-    )
+    .filter((block) => block.status !== "cancelled")
     .map((block) => {
       const blockStart = new Date(block.start_at).getTime();
       const blockEnd = new Date(block.end_at).getTime();

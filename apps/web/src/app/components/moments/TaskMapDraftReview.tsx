@@ -116,7 +116,9 @@ export function TaskMapDraftReview({
       data-testid="taskmap-draft-review"
     >
       <p className="m-0 text-sm font-semibold">
-        {isRevision ? "Revised map draft" : "Task map draft"}
+        {isRevision
+          ? "Review the changes before replacing your map."
+          : "Review this map before starting."}
       </p>
       <p className="text-sm text-muted-foreground">
         {isRevision
