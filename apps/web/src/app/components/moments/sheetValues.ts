@@ -18,6 +18,7 @@ export const SHEET_VALUES = [
   "review",
   "health",
   "areas",
+  "everything",
 ] as const;
 
 export type SheetValue = (typeof SHEET_VALUES)[number];

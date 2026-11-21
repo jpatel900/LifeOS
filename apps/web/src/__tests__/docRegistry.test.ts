@@ -36,7 +36,6 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "README.md",
   "SECURITY.md",
   "PRODUCT.md",
-  "EXTRA_INFO_AND_RULES.md",
   "docs/REQUIREMENTS.md",
   "docs/ARCHITECTURE.md",
   "docs/DATA_MODEL.md",

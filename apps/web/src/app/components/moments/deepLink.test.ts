@@ -42,6 +42,13 @@ describe("deepLinkTargetFromParams", () => {
     });
   });
 
+  // FR-050 (#1160): the Everything sheet is on the same contract.
+  it("maps ?sheet=everything to the everything sheet", () => {
+    expect(deepLinkTargetFromParams({ sheet: "everything" })).toEqual({
+      sheet: "everything",
+    });
+  });
+
   // C2-S6 (#687): the four legacy shells' sheets join the same contract.
   it("maps ?sheet=health and ?sheet=areas to their sheets", () => {
     expect(deepLinkTargetFromParams({ sheet: "health" })).toEqual({
