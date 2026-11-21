@@ -298,9 +298,8 @@ test.describe("FR-050 — Everything sheet", () => {
     }
   });
 
-  // The sheet's own claim only. With this area name the Start page BEHIND
-  // the sheet scrolls sideways at 390px (#1163, not caused by the sheet), so
-  // this test measures the sheet and leaves the page to that issue.
+  // The sheet's own claim: its dialog holds. The page behind it is pinned
+  // by the tests below (#1163), which measure Start with no sheet open.
   test("holds at 390px when grouped by a long, unbroken area name", async ({
     page,
   }) => {
@@ -324,4 +323,44 @@ test.describe("FR-050 — Everything sheet", () => {
       (dialogBox?.x ?? 0) + (dialogBox?.width ?? 0),
     );
   });
+
+  // #1163: one area with a long, unbroken name must not push Start sideways.
+  // The page, the masthead, the Start hero and the pipeline rail all have to
+  // end inside the phone's width, at the usual phone size and at the narrowest.
+  for (const width of [390, 320]) {
+    test(`Start holds at ${width}px with a long, unbroken area name`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await seed(page, LONG_AREA_NAME);
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await expect(page.getByTestId("pipeline-overview")).toBeVisible();
+
+      const measured = await page.evaluate(() => {
+        const rightEdge = (testId: string) =>
+          document
+            .querySelector(`[data-testid="${testId}"]`)
+            ?.getBoundingClientRect().right ?? null;
+        return {
+          sideways:
+            document.documentElement.scrollWidth -
+            document.documentElement.clientWidth,
+          viewport: document.documentElement.clientWidth,
+          rightEdges: {
+            masthead: rightEdge("today-moments-area-switcher"),
+            hero: rightEdge("start-moment"),
+            rail: rightEdge("pipeline-overview"),
+          },
+        };
+      });
+      expect(measured.sideways).toBeLessThanOrEqual(0);
+      for (const edge of Object.values(measured.rightEdges)) {
+        expect(edge).not.toBeNull();
+        expect(edge ?? 0).toBeLessThanOrEqual(measured.viewport);
+      }
+    });
+  }
 });
