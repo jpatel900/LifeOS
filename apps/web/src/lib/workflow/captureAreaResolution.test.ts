@@ -61,7 +61,7 @@ describe("raw capture area resolution", () => {
     let storedRow: Record<string, unknown> | null = null;
     const upsert = vi.fn((row: Record<string, unknown>) => ({
       select: () => ({
-        single: async () => {
+        maybeSingle: async () => {
           storedRow = {
             ...row,
             id: "550e8400-e29b-41d4-a716-446655440010",

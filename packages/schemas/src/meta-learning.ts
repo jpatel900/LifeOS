@@ -65,14 +65,14 @@ export const PolicyIdentifierSchema = z
   );
 
 export const SuggestionRecordSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid().nullable(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid().nullable(),
   policy_identifier: PolicyIdentifierSchema,
   schema_version: MetaLearningEventSchemaVersionSchema,
   suggestion_type: SuggestionRecordTypeSchema,
   subject_type: z.string().min(1),
-  subject_id: z.string().uuid().nullable(),
+  subject_id: z.guid().nullable(),
   suggestion_json: JsonValueSchema,
   confidence: z.number().min(0).max(1).nullable(),
   status: SuggestionRecordStatusSchema,
@@ -85,11 +85,11 @@ export const SuggestionRecordSchema = z.object({
 export type SuggestionRecord = z.infer<typeof SuggestionRecordSchema>;
 
 export const CreateSuggestionRecordInputSchema = z.object({
-  area_id: z.string().uuid().nullable(),
+  area_id: z.guid().nullable(),
   policy_identifier: PolicyIdentifierSchema,
   suggestion_type: SuggestionRecordTypeSchema,
   subject_type: z.string().trim().min(1),
-  subject_id: z.string().uuid().nullable().optional(),
+  subject_id: z.guid().nullable().optional(),
   suggestion_json: JsonValueSchema.default({}),
   confidence: z.number().min(0).max(1).nullable().optional(),
   status: SuggestionRecordStatusSchema.optional().default("pending"),
@@ -110,9 +110,9 @@ export const DurationEstimateStatsSchema = z.object({
 export type DurationEstimateStats = z.infer<typeof DurationEstimateStatsSchema>;
 
 export const DurationProfileSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid(),
   task_type: z.string().min(1),
   estimate_stats_json: DurationEstimateStatsSchema,
   sample_count: z.number().int().min(1),
@@ -122,7 +122,7 @@ export const DurationProfileSchema = z.object({
 export type DurationProfile = z.infer<typeof DurationProfileSchema>;
 
 export const CreateDurationProfileInputSchema = z.object({
-  area_id: z.string().uuid(),
+  area_id: z.guid(),
   task_type: z.string().min(1),
   estimate_stats: DurationEstimateStatsSchema,
   sample_count: z.number().int().min(1),
@@ -133,14 +133,14 @@ export type CreateDurationProfileInput = z.infer<
 >;
 
 export const OverrideRecordSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  area_id: z.string().uuid().nullable(),
+  id: z.guid(),
+  user_id: z.guid(),
+  area_id: z.guid().nullable(),
   policy_identifier: PolicyIdentifierSchema,
   schema_version: MetaLearningEventSchemaVersionSchema,
-  suggestion_id: z.string().uuid().nullable(),
+  suggestion_id: z.guid().nullable(),
   subject_type: z.string().min(1),
-  subject_id: z.string().uuid(),
+  subject_id: z.guid(),
   override_type: OverrideRecordTypeSchema,
   old_value_json: JsonValueSchema,
   new_value_json: JsonValueSchema,
@@ -151,11 +151,11 @@ export const OverrideRecordSchema = z.object({
 export type OverrideRecord = z.infer<typeof OverrideRecordSchema>;
 
 export const CreateOverrideRecordInputSchema = z.object({
-  area_id: z.string().uuid().nullable(),
+  area_id: z.guid().nullable(),
   policy_identifier: PolicyIdentifierSchema,
-  suggestion_id: z.string().uuid().nullable().optional(),
+  suggestion_id: z.guid().nullable().optional(),
   subject_type: z.string().trim().min(1),
-  subject_id: z.string().uuid(),
+  subject_id: z.guid(),
   override_type: OverrideRecordTypeSchema,
   old_value_json: JsonValueSchema.default({}),
   new_value_json: JsonValueSchema.default({}),

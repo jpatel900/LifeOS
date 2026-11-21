@@ -16,7 +16,7 @@
 # Browser channel: apps/web/playwright.smoke.config.ts hardcodes the `msedge`
 # Playwright channel (chosen to avoid a possibly-unavailable Chromium
 # download). ci.yml's own Playwright E2E job already proves the right way to
-# get msedge onto an ubuntu-latest runner: `playwright install --with-deps
+# get msedge onto an ubuntu-24.04 runner: `playwright install --with-deps
 # msedge`. This workflow reuses that exact step rather than overriding the
 # channel, so the smoke config that runs in CI-adjacent contexts and the one
 # that runs against prod stay identical -- the only difference is the target
@@ -59,7 +59,7 @@ on:
     # Sunday 13:00 UTC -- a quiet time for both traffic and on-call attention
     # (weekend afternoon UTC, which is early morning in the Americas and
     # evening in Europe/most of Asia), well clear of ci.yml's per-push load
-    # and provider-canary's 30-minute cadence.
+    # and provider-canary's scheduled run.
     - cron: "0 13 * * 0"
   workflow_dispatch:
 
@@ -74,7 +74,7 @@ permissions:
 jobs:
   smoke:
     name: Production smoke (green by design — read the run summary for the real result)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -194,8 +194,9 @@ jobs:
                 let body;
                 try {
                   body = JSON.parse(raw);
-                } catch (error) {
-                  console.error("stdout was not valid JSON: " + error.message);
+                } catch {
+                  // JSON.parse diagnostics can quote private response content.
+                  console.error("stdout was not valid JSON");
                   process.exitCode = 1;
                   return;
                 }

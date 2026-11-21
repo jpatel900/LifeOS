@@ -139,6 +139,7 @@ export type {
   SyncQueuedCaptureInput,
   SyncJournaledCaptureInput,
   SyncJournaledCaptureResult,
+  CaptureReplayAccount,
 } from "./workflow/capture";
 
 // --- planning ---

@@ -163,6 +163,8 @@ export interface StartMomentProps {
   onOpenHealth(): void;
   /** C2-S5 (#687): opens the ported All-areas surface at `?sheet=areas`. */
   onOpenAreas(): void;
+  /** #1160: opens the Everything sheet at `?sheet=everything`. */
+  onOpenEverything(): void;
   pipelineCounts: Record<string, number>;
   onDrillPipeline(stage: string): void;
   onOpenRecovery(taskId: string): void;
@@ -184,6 +186,7 @@ export function StartMoment({
   onSwap,
   onOpenHealth,
   onOpenAreas,
+  onOpenEverything,
   pipelineCounts,
   onDrillPipeline,
   onOpenRecovery,
@@ -238,10 +241,24 @@ export function StartMoment({
       <section
         aria-label="Pipeline"
         data-testid="start-moment-pipeline-rail"
-        className="grid gap-2"
+        className="grid gap-2 lg:flex lg:flex-wrap lg:items-center lg:gap-x-5"
       >
         <h2 className="sr-only">Pipeline</h2>
         <PipelineOverview counts={pipelineCounts} onDrill={onDrillPipeline} />
+        {/* #1160: the pipeline shows what is moving now; this opens the whole
+            record, closed items included. A quiet text door, so the rail
+            beside it stays the one loud thing in this section.
+            At desktop width it sits BESIDE the rail, not under it: a row of
+            its own pushed the side rail's Areas card down under the fixed
+            capture pill at 1366x768 (moments-home-parity, #974). */}
+        <button
+          type="button"
+          onClick={onOpenEverything}
+          className="min-h-[44px] w-fit touch-manipulation text-left text-sm font-medium text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          data-testid="start-open-everything"
+        >
+          See everything you entered →
+        </button>
       </section>
 
       <div

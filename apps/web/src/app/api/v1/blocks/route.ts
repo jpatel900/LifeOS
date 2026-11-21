@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { offsetDatetime } from "@lifeos/schemas";
 import { listExecutionReviewItems } from "@/lib/data/workflow";
 import {
   isGoogleCalendarRouteAuthFailure as isRouteAuthFailure,
@@ -32,8 +33,8 @@ function readBearerToken(request: Request) {
 
 const WindowSchema = z
   .object({
-    start: z.string().datetime({ offset: true }),
-    end: z.string().datetime({ offset: true }),
+    start: offsetDatetime(),
+    end: offsetDatetime(),
   })
   .refine((window) => Date.parse(window.start) < Date.parse(window.end), {
     message: "start must be before end.",

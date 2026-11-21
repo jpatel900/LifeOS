@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WorkflowState } from "@/lib/workflow";
 import type { useWorkflow } from "@/lib/WorkflowContext";
 import type {
@@ -14,15 +14,13 @@ import {
   buildMonthlyRollupDrafts,
   deriveMonthOverMonthReadback,
 } from "./momentsViewModel";
-import type { RollupSummaryContent } from "@lifeos/schemas";
 import {
   resolveDurablyApprovedRollupKeys,
   resolvedRollupAreaId,
   rollupKey,
   type ApprovedRollupSummary,
 } from "@/lib/review/approvedRollups";
-import { requestRollupProse } from "@/lib/ai/rollupProseClient";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { useRollupProseSummaries } from "./useRollupProseSummaries";
 import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import type { CloseWinVM } from "./CloseMoment";
 import type { ToastAction } from "./toast";
@@ -280,66 +278,10 @@ export function useCloseMomentRollups({
       areasReadbackSettled,
     ],
   );
-  const [enhancedRollupSummaries, setEnhancedRollupSummaries] = useState<
-    Record<string, RollupSummaryContent>
-  >({});
-  // Areas already requested this session — a ref (not the state) so it can't be
-  // in the effect deps. Marking BEFORE the await dedupes across effect re-runs
-  // and prevents a second in-flight request per area (no duplicate AI calls /
-  // ai_call_traces rows).
-  const requestedRollupAreaIdsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const client = createSupabaseBrowserClient();
-    if (!client) {
-      return;
-    }
-    const toRequest = pendingRollups.filter(
-      (draft) => !requestedRollupAreaIdsRef.current.has(draft.areaId),
-    );
-    if (toRequest.length === 0) {
-      return;
-    }
-    for (const draft of toRequest) {
-      requestedRollupAreaIdsRef.current.add(draft.areaId);
-    }
-    let cancelled = false;
-    void (async () => {
-      const accessToken =
-        (await client.auth.getSession()).data.session?.access_token ?? null;
-      for (const draft of toRequest) {
-        if (cancelled) {
-          return;
-        }
-        const result = await requestRollupProse(
-          {
-            areaLabel: draft.areaLabel,
-            periodType: "week",
-            periodLabel: draft.periodLabel,
-            draft: draft.summary,
-          },
-          { accessToken },
-        );
-        if (cancelled) {
-          return;
-        }
-        // Only record — and badge as "AI-polished" — a genuinely AI-generated
-        // summary. On any deterministic fallback the card stays as-is with no
-        // provenance flag (the area is still marked requested, so we don't
-        // re-hit a degraded endpoint every render).
-        if (!result.enhanced) {
-          continue;
-        }
-        setEnhancedRollupSummaries((prev) =>
-          prev[draft.areaId]
-            ? prev
-            : { ...prev, [draft.areaId]: result.summary },
-        );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pendingRollups]);
+  const enhancedRollupSummaries = useRollupProseSummaries(
+    pendingRollups,
+    "week",
+  );
   // E3 provenance: areas where the user chose to keep the deterministic wording
   // over the AI-polished version this session. Approve persists exactly what is
   // displayed, so toggling here also decides which version is recorded.
@@ -506,57 +448,10 @@ export function useCloseMomentRollups({
   // E3 parity: AI-prose enhancement for pending monthly rollup drafts, routed
   // through the SAME choke point as weekly (`requestRollupProse`) with
   // `periodType: "month"` — no new AI plumbing.
-  const [enhancedMonthlyRollupSummaries, setEnhancedMonthlyRollupSummaries] =
-    useState<Record<string, RollupSummaryContent>>({});
-  const requestedMonthlyRollupAreaIdsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const client = createSupabaseBrowserClient();
-    if (!client) {
-      return;
-    }
-    const toRequest = pendingMonthlyRollups.filter(
-      (draft) => !requestedMonthlyRollupAreaIdsRef.current.has(draft.areaId),
-    );
-    if (toRequest.length === 0) {
-      return;
-    }
-    for (const draft of toRequest) {
-      requestedMonthlyRollupAreaIdsRef.current.add(draft.areaId);
-    }
-    let cancelled = false;
-    void (async () => {
-      const accessToken =
-        (await client.auth.getSession()).data.session?.access_token ?? null;
-      for (const draft of toRequest) {
-        if (cancelled) {
-          return;
-        }
-        const result = await requestRollupProse(
-          {
-            areaLabel: draft.areaLabel,
-            periodType: "month",
-            periodLabel: draft.periodLabel,
-            draft: draft.summary,
-          },
-          { accessToken },
-        );
-        if (cancelled) {
-          return;
-        }
-        if (!result.enhanced) {
-          continue;
-        }
-        setEnhancedMonthlyRollupSummaries((prev) =>
-          prev[draft.areaId]
-            ? prev
-            : { ...prev, [draft.areaId]: result.summary },
-        );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pendingMonthlyRollups]);
+  const enhancedMonthlyRollupSummaries = useRollupProseSummaries(
+    pendingMonthlyRollups,
+    "month",
+  );
   const [
     keptOriginalMonthlyRollupAreaIds,
     setKeptOriginalMonthlyRollupAreaIds,

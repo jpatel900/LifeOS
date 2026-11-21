@@ -8,8 +8,10 @@ import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import { buildWhileYouWereOutSummary } from "@/lib/reEntry/summary";
 import {
   captureHasTriageDecision,
-  countUnsortedCaptures,
+  captureIsInAreaScope,
+  countUnsortedCapturesInScope,
   selectUnsortedCaptures,
+  selectUnsortedCapturesInScope,
 } from "./captureStatus";
 
 /**
@@ -174,11 +176,11 @@ const UNSORTED_SURFACES: ReadonlyArray<{
 }> = [
   {
     name: "UnsortedCaptures rows (moments TriageSheet + cockpit TriageView)",
-    count: (state) => selectUnsortedCaptures(state, null).length,
+    count: (state) => selectUnsortedCapturesInScope(state, null).length,
   },
   {
     name: "TriageSheet empty-state count",
-    count: (state) => countUnsortedCaptures(state, "area-1"),
+    count: (state) => countUnsortedCapturesInScope(state, "area-1"),
   },
   {
     name: "Pipeline Capture badge",
@@ -312,5 +314,117 @@ describe("one item = one truth (C1 Target Card 4)", () => {
       (candidate) => candidate.id === "area-1",
     );
     expect(area?.status).toBe("ok");
+  });
+});
+
+/**
+ * #1026 — the production smoke's finding, 2026-10-25 onward: with one area
+ * selected, Start said "5 thoughts waiting for a decision" and the triage
+ * sheet behind "Decide now" said "Nothing waiting in triage". The thoughts
+ * had been saved without an area, Start counted every area, and the sheet
+ * filtered by the selected one. A thought with no area has no home yet, so
+ * every scope must show it, and Start must count what the sheet lists.
+ */
+describe("a thought saved without an area is reachable in every area scope (#1026)", () => {
+  const SCOPED_STATE = stateWith({
+    areas: [makeArea({ id: "area-1" }), makeArea({ id: "area-2" })],
+    captureItems: [
+      makeCapture({ id: "capture-none", area_id: null }),
+      makeCapture({ id: "capture-gone", area_id: "area-deleted" }),
+      makeCapture({ id: "capture-one", area_id: "area-1" }),
+      makeCapture({ id: "capture-two", area_id: "area-2" }),
+    ],
+  });
+
+  /** Every surface the user can open from, or count against, one scope. */
+  const SCOPED_SURFACES: ReadonlyArray<{
+    name: string;
+    count: (areaId: string | null) => number;
+  }> = [
+    {
+      name: "Start hero count",
+      count: (areaId) =>
+        buildStartVM(SCOPED_STATE, { now: NOW, selectedAreaId: areaId }).counts
+          .pendingTriage,
+    },
+    {
+      name: "TriageSheet rows (UnsortedCaptures)",
+      count: (areaId) =>
+        selectUnsortedCapturesInScope(SCOPED_STATE, areaId).length,
+    },
+    {
+      name: "TriageSheet empty-state count",
+      count: (areaId) => countUnsortedCapturesInScope(SCOPED_STATE, areaId),
+    },
+    {
+      name: "Pipeline Capture badge",
+      count: (areaId) =>
+        buildPipelineCounts(SCOPED_STATE, areaId, { now: NOW }).capture,
+    },
+    {
+      name: "Cockpit masthead Capture chip",
+      count: (areaId) =>
+        buildCockpitViewModel(SCOPED_STATE, areaId ?? "", true, { now: NOW })
+          .counts.capture,
+    },
+  ];
+
+  it.each(SCOPED_SURFACES.map((surface) => [surface.name, surface] as const))(
+    "%s shows the area's own thoughts plus the ones with no live area",
+    (_name, surface) => {
+      expect(surface.count("area-1")).toBe(3);
+      expect(surface.count("area-2")).toBe(3);
+    },
+  );
+
+  // The legacy cockpit resolves an unknown scope to an area of its own (the
+  // #590 rollback surface has no "All areas" masthead), so it is pinned only
+  // by the scoped case above.
+  it.each(
+    SCOPED_SURFACES.filter(
+      (surface) => surface.name !== "Cockpit masthead Capture chip",
+    ).map((surface) => [surface.name, surface] as const),
+  )(
+    "%s shows everything when no area, or an unknown one, is selected",
+    (_name, surface) => {
+      expect(surface.count(null)).toBe(4);
+      expect(surface.count("area-unknown")).toBe(4);
+    },
+  );
+
+  it("lists exactly the rows Start counted, so 'Decide now' never opens an empty sheet", () => {
+    const vm = buildStartVM(SCOPED_STATE, {
+      now: NOW,
+      selectedAreaId: "area-1",
+    });
+    const rows = selectUnsortedCapturesInScope(SCOPED_STATE, "area-1");
+    expect(rows.map((row) => row.id)).toEqual([
+      "capture-none",
+      "capture-gone",
+      "capture-one",
+    ]);
+    expect(vm.counts.pendingTriage).toBe(rows.length);
+    expect(rows.map((row) => row.id)).toContain(vm.topPendingTriageItem?.id);
+  });
+
+  it("never names another area's thought on Start", () => {
+    const vm = buildStartVM(
+      stateWith({
+        areas: [makeArea({ id: "area-1" }), makeArea({ id: "area-2" })],
+        captureItems: [makeCapture({ id: "capture-two", area_id: "area-2" })],
+      }),
+      { now: NOW, selectedAreaId: "area-1" },
+    );
+    expect(vm.counts.pendingTriage).toBe(0);
+    expect(vm.topPendingTriageItem).toBeNull();
+  });
+
+  it("keeps per-area tallies strict: an unassigned thought is not counted once per area", () => {
+    expect(
+      selectUnsortedCaptures(SCOPED_STATE, "area-1").map((c) => c.id),
+    ).toEqual(["capture-one"]);
+    expect(
+      captureIsInAreaScope(SCOPED_STATE, { area_id: "area-2" }, "area-1"),
+    ).toBe(false);
   });
 });

@@ -12,9 +12,10 @@ import {
 
 const googleCalendarConnectionColumns =
   "id,user_id,provider,calendar_id,granted_scopes_json,status,first_write_warning_acknowledged_at,connected_at,disconnected_at,last_error_json,created_at,updated_at";
-const googleCalendarStoredConnectionColumns = `${googleCalendarConnectionColumns},encrypted_access_token,encrypted_refresh_token,token_expires_at,token_type`;
+const googleCalendarStoredConnectionColumns = `${googleCalendarConnectionColumns},encrypted_access_token,encrypted_refresh_token,token_expires_at,token_type,credential_verified_at`;
 
 type GoogleCalendarConnectionRow = {
+  credential_verified_at?: string | null;
   calendar_id: string;
   connected_at: string | null;
   disconnected_at: string | null;
@@ -32,6 +33,7 @@ type GoogleCalendarConnectionRow = {
 };
 
 export interface GoogleCalendarStoredConnection extends GoogleCalendarConnection {
+  credential_verified_at?: string | null;
   encrypted_access_token: string | null;
   encrypted_refresh_token: string | null;
   token_expires_at: string | null;
@@ -113,6 +115,10 @@ function parseGoogleCalendarStoredConnection(row: unknown) {
 
   return {
     ...base,
+    credential_verified_at: parseNullableDatetime(
+      record,
+      "credential_verified_at",
+    ),
     encrypted_access_token: parseNullableText(record, "encrypted_access_token"),
     encrypted_refresh_token: parseNullableText(
       record,
@@ -238,6 +244,10 @@ export async function upsertGoogleCalendarConnectionForAccessToken(
     connected_at: row.connected_at,
     disconnected_at: row.disconnected_at,
   };
+
+  if ("credential_verified_at" in row) {
+    values.credential_verified_at = row.credential_verified_at ?? null;
+  }
 
   if ("encrypted_access_token" in row) {
     values.encrypted_access_token = row.encrypted_access_token ?? null;

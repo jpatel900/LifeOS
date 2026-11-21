@@ -9,9 +9,9 @@ stale — check docs/program/final-ux-loop.md §6 and recent merged PRs before t
 
 ## Current objective
 
-**Real use first owns priority** (owner decision 2026-09-29, Option A). Prepare the 10-day trial, then use LifeOS before more campaign work. The [Final UX Loop](program/final-ux-loop.md) keeps its rules and history but gives up the serial queue. Campaign implementation C2–C6 is parked and resumes only from trial findings. New feature work stays frozen except FR-049 and FR-028 ([program rule R8](program/final-ux-loop.md)). Bug and truth repairs continue, trial blockers first.
+**Real use first owns priority** (owner decision 2026-09-29, Option A). Prepare the 10-day trial, then use LifeOS before more campaign work. The [Final UX Loop](program/final-ux-loop.md) keeps its rules and history but gives up the serial queue. Campaign implementation C2–C6 is parked and resumes only from trial findings. New feature work stays frozen except FR-049, FR-028 and FR-050 ([program rule R8](program/final-ux-loop.md)). Bug and truth repairs continue, trial blockers first.
 
-State as of 2026-10-17: **The trial has not started**; its start stays UNSET until production proves capture and Sort (program §7). That proof is still missing and UNVERIFIED: the weekly production smoke (#1026) still fails, and the latest repairs, deployed 2026-10-13, have not been checked by it yet. Live readiness and evidence are recorded in the program's §6. **C1** remains closed at 10/10. **C2** has its implementation slices merged and awaits only the owner's five-minute glance (§5.2); no implementation or re-score is active, and C2 is not closed. **C3** has technical onboarding proof in PR #999; the owner's experience and adoption gate remains unverified.
+State as of 2026-11-18: **The trial has not started**; its start stays UNSET until production proves capture and Sort (program §7). That proof is still missing and UNVERIFIED. Weekly smoke attempts (#1026) failed before Sort, at capture visibility, through 2026-11-15. A fix (PR #1157) merged and deployed on 2026-11-18; no smoke has run against it yet. The dated attempts and their actual smoke outcomes are recorded in [program §6](program/final-ux-loop.md#6-program-state-live--update-at-every-checkpoint-newest-first). **C1** remains closed at 10/10. **C2** has its implementation slices merged and awaits only the owner's five-minute glance (§5.2); no implementation or re-score is active, and C2 is not closed. **C3** has technical onboarding proof in PR #999; the owner's experience and adoption gate remains unverified.
 
 The shipped product baseline: areas, capture, optional AI/mock parse, triage, local-first planning, explicit approval-gated Google Calendar event creation, execution tracking, review logging, deterministic health checks, audit-oriented persistence, and a versioned headless client surface (`/api/v1` + `@lifeos/cli`) alongside the web app.
 
@@ -27,17 +27,18 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 - Per ADR 0005 (staged evolution): stage labels order dependencies and risk; data-independent foundations may proceed when owner-ratified; evidence-dependent behavior stays gated on usage evidence. The FR-032/034/037 policy kernels are merged and mutation-tested but remain 1/4 overall — "kernel merged" and "feature shipped" are distinct claims.
 - The stage-epic slice relay is **retired** and its workflows (`pipeline-advance.yml`, `pipeline-watchdog.yml`) were deleted on 2026-10-17, along with the unused `claude.yml` and the Codex issue-plan and low-risk issue-to-PR lanes. `scripts/agent/pipeline-manifest.json` stays as historical state that `pnpm status` reads.
 - Persistence is intentionally mixed: authenticated Supabase paths where implemented; local/session fallback remains the recovery path when sync or env is unavailable.
-- `design_handoff_lifeos/README.md` is a historical design reference; current UI authority lives in requirements, UX flows, ADRs, and shipped behavior.
+- `design_handoff_lifeos/` is a historical design reference; current UI authority lives in requirements, UX flows, ADRs, and shipped behavior.
 - Governance docs are budgeted: `AGENTS.md` stays small and `CLAUDE.md` imports it; LifeOS-specific skills live in `.agents/skills`; `docs/agent/` keeps `CODEX_PROMPT_TEMPLATE.md`, `LANES.md` (the Claude/Codex cross-lane rules), and `MODEL_LANES.md`.
 - Production Supabase migrations are applied via the gated `migration-apply.yml` workflow or manually — never by deploys; the `Migration Drift` workflow red-flags unapplied migrations, and the response procedure is `.agents/skills/lifeos-migration-drift-response/SKILL.md`.
 
 ## Constraints
 
-- Before any work, check `docs/program/final-ux-loop.md` §6 for the live campaign and slice; concurrent lanes allowed with disjoint declared manifests (program R7 as amended 2026-08-05; rules in `docs/agent/LANES.md`).
+- Before campaign work, check `docs/program/final-ux-loop.md` §6 for the live campaign and slice; concurrent lanes allowed with disjoint declared manifests (program R7 as amended 2026-08-05; rules in `docs/agent/LANES.md`).
 - Before feature work, map the task to `docs/REQUIREMENTS.md`, define acceptance criteria, identify tests, and flag risky surfaces.
 - New user-owned tables require RLS policies, export coverage, and multi-user tests in the same change.
 - Calendar/OAuth/RLS/schema/security/privacy/data-deletion changes require human review (the full ten-surface list lives in AGENTS.md "Owner gates" — that list governs).
 - Docs may not grow by creating session-note files; durable decisions go to ADRs, status goes here, program state goes to `docs/program/`.
+- How to check: the commands in AGENTS.md "Repo facts" (`pnpm lint`, `pnpm type-check`, `pnpm test`, `pnpm build`).
 
 ## Open questions
 
@@ -45,7 +46,7 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 ## Next action
 
-Prove that a real production capture appears on Start and Sort makes a next step on the build deployed 2026-10-13. The next weekly smoke run (#1026) is the check; if Sort still times out, fix that first as the trial blocker. The account-save warning from 2026-09-27 is still unexplained. Then begin the trial in program §7. C2's five-minute owner glance remains pending alongside preparation; do not start another re-score round. Cross-lane work follows `docs/agent/LANES.md`.
+Run the existing production readiness check against the deployed capture visibility fix for #1026 (PR #1157) to prove that a real capture appears on Start and Sort makes a next step. If it fails again, diagnose from that run's snapshot before any other work. Establish the served build from production evidence; a workflow's head SHA alone does not prove it. The account-save warning from 2026-09-27 is still unexplained. Begin the trial only after the confirmation required by program §7. C2's five-minute owner glance remains pending alongside preparation; do not start another re-score round. Cross-lane work follows `docs/agent/LANES.md`.
 
 ## Do-not-repeat
 

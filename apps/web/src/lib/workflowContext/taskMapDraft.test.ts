@@ -10,9 +10,13 @@ import type { TaskMapDraftRequestResult } from "../ai/taskMapDraftClient";
 import { workflowReducer, type WorkflowAction } from "./reducerCore";
 import type { TaskMapDraftState } from "./types";
 import { useTaskMapDraftActions } from "./taskMapDraft";
+import { hasSnapshotWork, snapshotCursor } from "./snapshotOwnership";
+import { toggleNodeCompletion } from "../taskmap/collapse";
+import type { TaskMapGraph } from "../taskmap/graph";
 
 const requestTaskMapDraftMock = vi.hoisted(() => vi.fn());
 const approveTaskMapMock = vi.hoisted(() => vi.fn());
+const setTaskMapNodeCompletionMock = vi.hoisted(() => vi.fn());
 const createSupabaseBrowserClientMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../ai/taskMapDraftClient", () => ({
@@ -22,7 +26,7 @@ vi.mock("../ai/taskMapDraftClient", () => ({
 vi.mock("../data/workflow", () => ({
   approveTaskMap: approveTaskMapMock,
   rejectTaskMapSuggestionFireAndForget: vi.fn(),
-  setTaskMapNodeCompletion: vi.fn(),
+  setTaskMapNodeCompletion: setTaskMapNodeCompletionMock,
 }));
 
 vi.mock("../supabase/browser", () => ({
@@ -90,8 +94,202 @@ describe("useTaskMapDraftActions (#687)", () => {
   beforeEach(() => {
     requestTaskMapDraftMock.mockReset();
     approveTaskMapMock.mockReset();
+    setTaskMapNodeCompletionMock.mockReset();
     createSupabaseBrowserClientMock.mockReset();
     createSupabaseBrowserClientMock.mockReturnValue(null);
+  });
+
+  it("an earlier approval receipt keeps a later unsaved completion", async () => {
+    const retired = retiredLocalTaskState();
+    const stateRef = { current: retired.state };
+    const dispatch = (action: WorkflowAction) => {
+      stateRef.current = workflowReducer(stateRef.current, action);
+    };
+    let deliver!: (value: unknown) => void;
+    approveTaskMapMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        deliver = resolve;
+      }),
+    );
+    setTaskMapNodeCompletionMock.mockRejectedValueOnce(
+      new Error("Completion offline"),
+    );
+    createSupabaseBrowserClientMock.mockReturnValue({});
+    const { result } = renderHook(() =>
+      useTaskMapDraftActions({
+        dispatch,
+        taskMapDraftRef: { current: { phase: "idle" } },
+        setTaskMapDraft: vi.fn(),
+        stateRef,
+        persistedAreasRef: { current: [] },
+        persistedTaskIdByLocalIdRef: taskAliasRef(retired.state),
+        markLocalOnly: vi.fn(),
+        syncPersistedWorkflowRows: vi.fn().mockResolvedValue(undefined),
+      }),
+    );
+    let approval!: Promise<void>;
+    act(() => {
+      approval = result.current.approveTaskMapDraftAction(
+        PERSISTED_TASK_ID,
+        DRAFT,
+      );
+    });
+    let completion!: Promise<void>;
+    act(() => {
+      completion = result.current.toggleTaskMapNodeCompletionAction(
+        PERSISTED_TASK_ID,
+        "first",
+      );
+    });
+    const completed = stateRef.current.tasks[0].progression_map;
+    await act(async () => {
+      deliver({ provider: "supabase" });
+      await Promise.all([approval, completion]);
+    });
+    expect(stateRef.current.tasks[0].progression_map).toEqual(completed);
+    expect(hasSnapshotWork(stateRef.current)).toBe(true);
+    expect(approveTaskMapMock).toHaveBeenCalledTimes(1);
+    expect(setTaskMapNodeCompletionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("serializes successful map writes so a slower earlier toggle cannot overwrite newer intent", async () => {
+    const retired = retiredLocalTaskState();
+    const prepared = workflowReducer(retired.state, {
+      type: "approveTaskMapLocal",
+      taskId: PERSISTED_TASK_ID,
+      graph: DRAFT,
+    });
+    // This fixture represents a previously delivered task and approved map.
+    prepared.snapshotOwnership = {
+      version: 1,
+      epoch: 0,
+      revision: 0,
+      rows: {},
+    };
+    const stateRef = { current: prepared };
+    const dispatch = (action: WorkflowAction) => {
+      stateRef.current = workflowReducer(stateRef.current, action);
+    };
+    let storedGraph = prepared.tasks[0].progression_map as TaskMapGraph;
+    const deliveries: Array<() => void> = [];
+    setTaskMapNodeCompletionMock.mockImplementation(async (_client, input) => {
+      await new Promise<void>((resolve) => deliveries.push(resolve));
+      storedGraph = toggleNodeCompletion(input.graph, input.node_id, input.now);
+      return { provider: "supabase" };
+    });
+    createSupabaseBrowserClientMock.mockReturnValue({});
+    const sync = vi.fn(async () => {
+      const cursor = snapshotCursor(stateRef.current);
+      dispatch({
+        type: "syncPersistedWorkflow",
+        cursor,
+        payload: {
+          captures: [],
+          tasks: [{ ...prepared.tasks[0], progression_map: storedGraph }],
+          proposals: [],
+          blocks: [],
+          sessions: [],
+          reviewLog: [],
+          idAliases: {
+            captures: new Map(),
+            tasks: new Map(),
+            proposals: new Map(),
+            blocks: new Map(),
+            sessions: new Map(),
+          },
+        },
+      });
+    });
+    const { result } = renderHook(() =>
+      useTaskMapDraftActions({
+        dispatch,
+        taskMapDraftRef: { current: { phase: "idle" } },
+        setTaskMapDraft: vi.fn(),
+        stateRef,
+        persistedAreasRef: { current: [] },
+        persistedTaskIdByLocalIdRef: taskAliasRef(prepared),
+        markLocalOnly: vi.fn(),
+        syncPersistedWorkflowRows: sync,
+      }),
+    );
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    act(() => {
+      first = result.current.toggleTaskMapNodeCompletionAction(
+        PERSISTED_TASK_ID,
+        "first",
+      );
+      second = result.current.toggleTaskMapNodeCompletionAction(
+        PERSISTED_TASK_ID,
+        "first",
+      );
+    });
+    const latest = stateRef.current.tasks[0].progression_map;
+    expect(hasSnapshotWork(stateRef.current)).toBe(true);
+    expect(setTaskMapNodeCompletionMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      deliveries[0]();
+      await first;
+    });
+    expect(stateRef.current.tasks[0].progression_map).toEqual(latest);
+    expect(hasSnapshotWork(stateRef.current)).toBe(true);
+    expect(setTaskMapNodeCompletionMock).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      deliveries[1]();
+      await second;
+    });
+    expect(storedGraph).toEqual(latest);
+    expect(stateRef.current.tasks[0].progression_map).toEqual(latest);
+    expect(hasSnapshotWork(stateRef.current)).toBe(false);
+    expect(sync).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not refresh or restore an approval after reset", async () => {
+    const retired = retiredLocalTaskState();
+    const stateRef = { current: retired.state };
+    const dispatch = (action: WorkflowAction) => {
+      stateRef.current = workflowReducer(stateRef.current, action);
+    };
+    let deliver!: (value: unknown) => void;
+    approveTaskMapMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        deliver = resolve;
+      }),
+    );
+    createSupabaseBrowserClientMock.mockReturnValue({});
+    const sync = vi.fn();
+    const { result } = renderHook(() =>
+      useTaskMapDraftActions({
+        dispatch,
+        taskMapDraftRef: { current: { phase: "idle" } },
+        setTaskMapDraft: vi.fn(),
+        stateRef,
+        persistedAreasRef: { current: [] },
+        persistedTaskIdByLocalIdRef: taskAliasRef(retired.state),
+        markLocalOnly: vi.fn(),
+        syncPersistedWorkflowRows: sync,
+      }),
+    );
+    let approval!: Promise<void>;
+    act(() => {
+      approval = result.current.approveTaskMapDraftAction(
+        PERSISTED_TASK_ID,
+        DRAFT,
+      );
+    });
+    const queued = result.current.toggleTaskMapNodeCompletionAction(
+      PERSISTED_TASK_ID,
+      "first",
+    );
+    dispatch({ type: "reset" });
+    await act(async () => {
+      deliver({ provider: "supabase" });
+      await Promise.all([approval, queued]);
+    });
+    expect(stateRef.current.tasks).toEqual([]);
+    expect(hasSnapshotWork(stateRef.current)).toBe(false);
+    expect(sync).not.toHaveBeenCalled();
+    expect(setTaskMapNodeCompletionMock).not.toHaveBeenCalled();
   });
 
   it("starts and completes the offered local task's map after account reconciliation retired that local row", async () => {
@@ -332,11 +530,12 @@ describe("useTaskMapDraftActions (#687)", () => {
       );
     });
 
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "approveTaskMapLocal",
-      taskId: PERSISTED_TASK_ID,
-      graph: DRAFT,
-    });
+    const applied = dispatch.mock.calls[0][0] as WorkflowAction;
+    expect(applied.type).toBe("hydrate");
+    if (applied.type !== "hydrate") throw new Error("Expected applied state");
+    expect(
+      applied.state.tasks.find((task) => task.id === PERSISTED_TASK_ID),
+    ).toMatchObject({ map_status: "approved", progression_map: DRAFT });
     expect(approveTaskMapMock).toHaveBeenCalledWith(
       client,
       expect.objectContaining({
@@ -380,11 +579,12 @@ describe("useTaskMapDraftActions (#687)", () => {
       await result.current.approveTaskMapDraftAction(local.localTaskId, DRAFT);
     });
 
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "approveTaskMapLocal",
-      taskId: local.localTaskId,
-      graph: DRAFT,
-    });
+    const applied = dispatch.mock.calls[0][0] as WorkflowAction;
+    expect(applied.type).toBe("hydrate");
+    if (applied.type !== "hydrate") throw new Error("Expected applied state");
+    expect(
+      applied.state.tasks.find((task) => task.id === local.localTaskId),
+    ).toMatchObject({ map_status: "approved", progression_map: DRAFT });
     expect(approveTaskMapMock).toHaveBeenCalledWith(
       client,
       expect.objectContaining({ task_id: PERSISTED_TASK_ID }),
@@ -395,9 +595,7 @@ describe("useTaskMapDraftActions (#687)", () => {
 // W3-16 finding 9: the stale-response guard compares only `phase` and
 // `taskId`. A request that was dismissed and then re-asked for the SAME task
 // looks identical to the newer one, so whichever response settles first
-// wins. The two KNOWN BUG cases below are `it.fails`: they hold the correct
-// expectation and pass only while the bug is present. When the guard learns
-// to tell two requests for one task apart, they turn red; flip them to `it`.
+// wins. The guard is per-request, so only the newest request may write.
 describe("useTaskMapDraftActions: same-task dismiss and reopen (W3-16 #9)", () => {
   const OLD_DRAFT = {
     schema_version: "1.0" as const,
@@ -478,96 +676,88 @@ describe("useTaskMapDraftActions: same-task dismiss and reopen (W3-16 #9)", () =
     expect(taskMapDraftRef.current).toEqual({ phase: "idle" });
   });
 
-  // KNOWN BUG (W3-16 #9): expected failure until the guard is per-request.
-  it.fails(
-    "only the newer request fills the draft when the dismissed one settles first",
-    async () => {
-      const resolvers = gatedRequests();
-      const { result, taskMapDraftRef, taskId } = renderDraftHook();
+  it("only the newer request fills the draft when the dismissed one settles first", async () => {
+    const resolvers = gatedRequests();
+    const { result, taskMapDraftRef, taskId } = renderDraftHook();
 
-      let first: Promise<void>;
-      act(() => {
-        first = result.current.requestTaskMapDraftAction(taskId);
-      });
-      await act(async () => {
-        await Promise.resolve();
-      });
-      act(() => {
-        result.current.dismissTaskMapDraftAction();
-      });
-      let second: Promise<void>;
-      act(() => {
-        second = result.current.requestTaskMapDraftAction(taskId);
-      });
-      await act(async () => {
-        await Promise.resolve();
-      });
-      expect(resolvers).toHaveLength(2);
+    let first: Promise<void>;
+    act(() => {
+      first = result.current.requestTaskMapDraftAction(taskId);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => {
+      result.current.dismissTaskMapDraftAction();
+    });
+    let second: Promise<void>;
+    act(() => {
+      second = result.current.requestTaskMapDraftAction(taskId);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(resolvers).toHaveLength(2);
 
-      // The dismissed request settles first ...
-      await act(async () => {
-        resolvers[0]!({
-          ok: true,
-          draft: OLD_DRAFT,
-          suggestionRecordId: "old-suggestion",
-        });
-        await first!;
+    // The dismissed request settles first ...
+    await act(async () => {
+      resolvers[0]!({
+        ok: true,
+        draft: OLD_DRAFT,
+        suggestionRecordId: "old-suggestion",
       });
-      // ... and must not occupy the draft the newer request owns.
-      expect(taskMapDraftRef.current).toEqual({ phase: "pending", taskId });
+      await first!;
+    });
+    // ... and must not occupy the draft the newer request owns.
+    expect(taskMapDraftRef.current).toEqual({ phase: "pending", taskId });
 
-      await act(async () => {
-        resolvers[1]!({
-          ok: true,
-          draft: NEW_DRAFT,
-          suggestionRecordId: "new-suggestion",
-        });
-        await second!;
-      });
-
-      expect(taskMapDraftRef.current).toEqual({
-        phase: "ready",
-        taskId,
+    await act(async () => {
+      resolvers[1]!({
+        ok: true,
         draft: NEW_DRAFT,
         suggestionRecordId: "new-suggestion",
       });
-    },
-  );
+      await second!;
+    });
 
-  // KNOWN BUG (W3-16 #9): expected failure until the guard is per-request.
-  it.fails(
-    "a late failure from the dismissed request does not fail the newer request",
-    async () => {
-      const resolvers = gatedRequests();
-      const { result, taskMapDraftRef, taskId } = renderDraftHook();
+    expect(taskMapDraftRef.current).toEqual({
+      phase: "ready",
+      taskId,
+      draft: NEW_DRAFT,
+      suggestionRecordId: "new-suggestion",
+    });
+  });
 
-      let first: Promise<void>;
-      act(() => {
-        first = result.current.requestTaskMapDraftAction(taskId);
-      });
-      await act(async () => {
-        await Promise.resolve();
-      });
-      act(() => {
-        result.current.dismissTaskMapDraftAction();
-      });
-      act(() => {
-        void result.current.requestTaskMapDraftAction(taskId);
-      });
-      await act(async () => {
-        await Promise.resolve();
-      });
+  it("a late failure from the dismissed request does not fail the newer request", async () => {
+    const resolvers = gatedRequests();
+    const { result, taskMapDraftRef, taskId } = renderDraftHook();
 
-      await act(async () => {
-        resolvers[0]!({
-          ok: false,
-          error: "provider timed out",
-          degrade: "breakdown_rail",
-        });
-        await first!;
-      });
+    let first: Promise<void>;
+    act(() => {
+      first = result.current.requestTaskMapDraftAction(taskId);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => {
+      result.current.dismissTaskMapDraftAction();
+    });
+    act(() => {
+      void result.current.requestTaskMapDraftAction(taskId);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
 
-      expect(taskMapDraftRef.current).toEqual({ phase: "pending", taskId });
-    },
-  );
+    await act(async () => {
+      resolvers[0]!({
+        ok: false,
+        error: "provider timed out",
+        degrade: "breakdown_rail",
+      });
+      await first!;
+    });
+
+    expect(taskMapDraftRef.current).toEqual({ phase: "pending", taskId });
+  });
 });

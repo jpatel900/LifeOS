@@ -44,10 +44,10 @@ function readBearerToken(request: Request) {
 // becomes REQUIRED (retrying agents need idempotency) and `area_id` becomes
 // optional for ergonomics (normalized to null before persistence).
 const CreateCaptureRequestSchema = CreateCaptureItemInputSchema.extend({
-  client_capture_id: z.string().uuid({
+  client_capture_id: z.guid({
     message: "client_capture_id must be a UUID (idempotency key)",
   }),
-  area_id: z.string().uuid().nullish(),
+  area_id: z.guid().nullish(),
 });
 
 /**

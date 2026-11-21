@@ -23,6 +23,17 @@ describe("TaskMapGraphDraftSchema", () => {
     expect(TaskMapGraphDraftSchema.safeParse(minimalGraph).success).toBe(true);
   });
 
+  it("rejects an oversized node list before validating individual nodes", () => {
+    const result = TaskMapGraphDraftSchema.safeParse({
+      ...minimalGraph,
+      nodes: Array(14).fill(null),
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toMatchObject([
+      { code: "too_big", path: ["nodes"] },
+    ]);
+  });
+
   it("accepts a valid full graph at all role caps", () => {
     const fullGraph = {
       schema_version: "1.0",

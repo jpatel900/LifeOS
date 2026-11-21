@@ -46,7 +46,10 @@ import {
   journalTaskReviewWrite,
   journalProposalEditWrite,
 } from "../durability/durableWrites";
-import { generateClientWriteId } from "../durability/pendingWriteJournal";
+import {
+  generateClientWriteId,
+  PendingWriteOwnershipError,
+} from "../durability/pendingWriteJournal";
 import {
   savedOnThisDeviceAndSendingBanner,
   savedOnThisDeviceBanner,
@@ -62,7 +65,7 @@ import type { WorkflowState } from "../workflow";
 // surface, and this #844 type is consumed only by the state layer.
 import type { AccountIdAliasFamily } from "../workflow/shared";
 import {
-  persistedAreaIdForWorkflowId,
+  persistedAreaIdForWorkflowId as findPersistedAreaIdForWorkflowId,
   persistedIdForLocalId,
 } from "./reducerCore";
 
@@ -79,6 +82,7 @@ export interface PersistenceSyncDeps {
   persistedBlockIdByLocalIdRef: MutableRefObject<Map<string, string>>;
   persistedSessionIdByLocalIdRef: MutableRefObject<Map<string, string>>;
   selectedAreaId: string | null;
+  resolveWorkflowAreaId?: (areaId: string | null) => string | null;
   /**
    * #844 — the ONE record point for "this local row became this account row".
    * Writes the per-mount ref AND the reducer's durable alias map, so the
@@ -89,6 +93,11 @@ export interface PersistenceSyncDeps {
     family: AccountIdAliasFamily,
     localId: string,
     accountId: string,
+  ) => void;
+  registerDraftTransfer?: (
+    draftId: string,
+    taskId: string,
+    proposalId: string | null,
   ) => void;
   markLocalOnly: (message: string) => void;
   /** The device journal refused the write; account delivery is separate. */
@@ -147,6 +156,14 @@ function recordableOutcomeForStatus(
 }
 
 export function createPersistenceSync(deps: PersistenceSyncDeps) {
+  const persistedAreaIdForWorkflowId = (areaId: string, areas: Area[]) => {
+    const resolved = deps.resolveWorkflowAreaId
+      ? deps.resolveWorkflowAreaId(areaId)
+      : areaId;
+    return resolved === null
+      ? null
+      : findPersistedAreaIdForWorkflowId(resolved, areas);
+  };
   const {
     persistedAreasRef,
     persistedCaptureIdByLocalIdRef,
@@ -217,7 +234,10 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         // per capture; journal replays reuse the key stored in the journal.
         clientCaptureId,
       });
-    } catch {
+    } catch (error) {
+      // An ownership refusal is not a storage failure. A direct POST would
+      // bypass the account boundary that just rejected this replacement.
+      if (error instanceof PendingWriteOwnershipError) throw error;
       // #960 review finding 3: the device itself refused to hold the journal
       // entry (private mode, a full IndexedDB quota, a blocking extension) —
       // but if the capture is otherwise fully RESOLVABLE (no area was chosen,
@@ -308,6 +328,11 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     localProposal: Phase2TimeBlockProposal | null,
     status: "active" | "backlog",
   ) {
+    deps.registerDraftTransfer?.(
+      draft.id,
+      localTask.id,
+      localProposal?.id ?? null,
+    );
     const persistedAreaId = persistedAreaIdForWorkflowId(
       draft.area_id,
       persistedAreasRef.current,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { offsetDatetime } from "@lifeos/schemas";
 import type { WorkflowState } from "@/lib/workflow";
 import { DEFAULT_RE_ENTRY_THRESHOLD_DAYS, type AbsenceResult } from "./detect";
 import type { WhileYouWereOutSummary } from "./summary";
@@ -33,7 +34,7 @@ export function saveReEntryThreshold(value: number): boolean {
   }
 }
 
-const iso = z.string().datetime({ offset: true });
+const iso = offsetDatetime();
 const count = z.number().int().nonnegative();
 const checkpointSchema = z.object({
   version: z.literal(1),
@@ -108,7 +109,7 @@ const checkpointSchema = z.object({
     }),
   ),
   selectedTaskId: z.string().nullable(),
-  edits: z.record(z.string()),
+  edits: z.record(z.string(), z.string()),
 });
 export interface ReturnCheckpoint {
   version: 1;

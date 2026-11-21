@@ -2,10 +2,10 @@
 //
 // The route tells the person to approve again, promising no second event:
 // the event id is derived from the proposal, so Google answers 409 for the
-// same id. The adapter treats that 409 as success WITHOUT reading the event,
-// and the route then records the placement at the proposal's original time.
-// If the event was moved or cancelled on Google between the two attempts,
-// LifeOS would confirm a time Google no longer holds.
+// same id. The adapter used to treat that 409 as success WITHOUT reading the
+// event, and the route then recorded the placement at the proposal's original
+// time, even if the event was moved or cancelled on Google in between. It now
+// reads the event first and refuses plainly when it no longer matches.
 //
 // This file keeps the REAL route and the REAL event adapter. Only the token
 // lookup, the account helpers and the network are fake: an in-memory Google
@@ -15,7 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   acknowledgeGoogleCalendarFirstWriteWarningForAccessToken: vi.fn(),
-  createPendingExternalWriteEventForAccessToken: vi.fn(),
+  claimGoogleCalendarApprovalForAccessToken: vi.fn(),
   findGoogleBackedScheduledBlockForTaskForAccessToken: vi.fn(),
   getCalendarBlockForProposalForAccessToken: vi.fn(),
   getGoogleCalendarConfig: vi.fn(),
@@ -44,8 +44,8 @@ vi.mock("@/lib/googleCalendar/server", () => ({
 }));
 
 vi.mock("@/lib/externalWrites/server", () => ({
-  createPendingExternalWriteEventForAccessToken:
-    mocks.createPendingExternalWriteEventForAccessToken,
+  claimGoogleCalendarApprovalForAccessToken:
+    mocks.claimGoogleCalendarApprovalForAccessToken,
   updateExternalWriteEventResultForAccessToken:
     mocks.updateExternalWriteEventResultForAccessToken,
 }));
@@ -99,6 +99,7 @@ const connection = {
   status: "connected" as const,
   first_write_warning_acknowledged_at: "2026-05-09T00:00:00.000Z",
   connected_at: "2026-05-09T00:00:00.000Z",
+  credential_verified_at: "2026-05-09T00:00:00.000Z",
   disconnected_at: null,
   token_expires_at: "2026-05-09T01:00:00.000Z",
   token_type: "Bearer",
@@ -262,7 +263,7 @@ describe("create-event retry after a partial success (W3-16 #2)", () => {
       id: proposal.task_id,
       title: "Synthetic task",
     });
-    mocks.createPendingExternalWriteEventForAccessToken.mockResolvedValue({
+    mocks.claimGoogleCalendarApprovalForAccessToken.mockResolvedValue({
       id: "550e8400-e29b-41d4-a716-446655440701",
     });
     mocks.updateExternalWriteEventResultForAccessToken.mockResolvedValue({
@@ -291,53 +292,45 @@ describe("create-event retry after a partial success (W3-16 #2)", () => {
     ).toHaveBeenLastCalledWith("supabase-access-token", proposal.id, EVENT_ID);
   });
 
-  // KNOWN BUG (W3-16 #2): expected failure. On 409 the adapter never reads
-  // the event, so the retry confirms the original time. Flip to `it` once a
-  // retry reconciles with the event's current state or refuses plainly.
-  it.fails(
-    "a retry does not confirm the original time after the event moved on Google",
-    async () => {
-      await firstApprovalWithAccountSaveFailure();
-      google.moveTo(T2_START, T2_END);
-      mocks.recordGoogleCalendarPlacementForAccessToken.mockClear();
+  // W3-16 #2: on 409 the adapter reads the existing event and refuses
+  // plainly when it no longer holds the approved time.
+  it("a retry does not confirm the original time after the event moved on Google", async () => {
+    await firstApprovalWithAccountSaveFailure();
+    google.moveTo(T2_START, T2_END);
+    mocks.recordGoogleCalendarPlacementForAccessToken.mockClear();
 
-      const response = await POST(approveRequest());
-      const body = await response.json();
+    const response = await POST(approveRequest());
+    const body = await response.json();
 
-      // Still one remote event: no duplicate was created.
-      expect(google.events.size).toBe(1);
-      // The event's current state was read before anything was recorded ...
-      expect(
-        google.requests.some(
-          (request) =>
-            request.method === "GET" && request.url.endsWith(`/${EVENT_ID}`),
-        ),
-      ).toBe(true);
-      // ... and the original time was not confirmed.
-      expect(
-        mocks.recordGoogleCalendarPlacementForAccessToken,
-      ).not.toHaveBeenCalled();
-      expect(body.ok).toBe(false);
-    },
-  );
+    // Still one remote event: no duplicate was created.
+    expect(google.events.size).toBe(1);
+    // The event's current state was read before anything was recorded ...
+    expect(
+      google.requests.some(
+        (request) =>
+          request.method === "GET" && request.url.endsWith(`/${EVENT_ID}`),
+      ),
+    ).toBe(true);
+    // ... and the original time was not confirmed.
+    expect(
+      mocks.recordGoogleCalendarPlacementForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(body.ok).toBe(false);
+  });
 
-  // KNOWN BUG (W3-16 #2): expected failure, same cause as above.
-  it.fails(
-    "a retry does not record a placement for an event cancelled on Google",
-    async () => {
-      await firstApprovalWithAccountSaveFailure();
-      google.cancel();
-      mocks.recordGoogleCalendarPlacementForAccessToken.mockClear();
+  it("a retry does not record a placement for an event cancelled on Google", async () => {
+    await firstApprovalWithAccountSaveFailure();
+    google.cancel();
+    mocks.recordGoogleCalendarPlacementForAccessToken.mockClear();
 
-      const response = await POST(approveRequest());
-      const body = await response.json();
+    const response = await POST(approveRequest());
+    const body = await response.json();
 
-      expect(google.events.size).toBe(1);
-      expect(
-        mocks.recordGoogleCalendarPlacementForAccessToken,
-      ).not.toHaveBeenCalled();
-      expect(body.ok).toBe(false);
-      expect(response.status).toBeGreaterThanOrEqual(400);
-    },
-  );
+    expect(google.events.size).toBe(1);
+    expect(
+      mocks.recordGoogleCalendarPlacementForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(body.ok).toBe(false);
+    expect(response.status).toBeGreaterThanOrEqual(400);
+  });
 });

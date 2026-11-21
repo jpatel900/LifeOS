@@ -118,6 +118,9 @@ jobs:
       - name: status.test.mjs (campaigns.json / final-ux-loop.md / git-history truth)
         run: node scripts/agent/status.test.mjs
 
+      - name: Builder orientation authority
+        run: node --test scripts/agent/builder-orientation.test.mjs
+
   migration-timestamp-collision:
     name: Migration timestamp collision precheck
     if: github.event_name == 'pull_request'
@@ -173,6 +176,9 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: CLI smoke stdout privacy regression
+        run: node --test scripts/agent/cli-smoke-output.test.mjs
 
       - name: Type-check
         run: pnpm type-check
@@ -291,7 +297,8 @@ jobs:
     name: Playwright E2E
     needs: changes
     if: needs.changes.outputs.heavy == 'true'
-    runs-on: ubuntu-latest
+    # Playwright 1.60 lacks ffmpeg support on the Ubuntu 26.04 runner image.
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -363,7 +370,8 @@ jobs:
     name: Playwright E2E (signed-in tier)
     needs: changes
     if: needs.changes.outputs.heavy == 'true'
-    runs-on: ubuntu-latest
+    # Match the device tier's supported Playwright/ffmpeg runner image.
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
