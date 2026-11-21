@@ -27,9 +27,6 @@ vi.mock("@/lib/reEntry/returnRecord", () => ({
   recordRecoveryResolution: mocks.resolved,
   recordRecoveryEdit: mocks.edited,
 }));
-vi.mock("@/lib/reEntry/briefView", () => ({
-  createBriefViewRecorder: () => ({ recordIfNeeded: vi.fn() }),
-}));
 
 const A = "00000000-0000-4000-8000-000000000011";
 const B = "00000000-0000-4000-8000-000000000012";
@@ -39,8 +36,8 @@ type Listener = (
   event: string,
   session: { user: { id: string } } | null,
 ) => void;
-function authFixture() {
-  let user: string | null = A;
+function authFixture(initialUser: string = A) {
+  let user: string | null = initialUser;
   const listeners = new Set<Listener>();
   const getUser = vi.fn(async () => ({
     data: { user: user ? { id: user } : null },
@@ -52,11 +49,21 @@ function authFixture() {
       data: { subscription: { unsubscribe: () => listeners.delete(listener) } },
     };
   });
+  const upsert = vi.fn(async (_row: { user_id: string }) => ({ error: null }));
   mocks.client = {
-    auth: { getUser, onAuthStateChange },
+    auth: {
+      getUser,
+      onAuthStateChange,
+      getSession: async () => ({
+        data: { session: user ? { user: { id: user } } : null },
+        error: null,
+      }),
+    },
+    from: () => ({ upsert }),
   } as unknown as SupabaseClient;
   return {
     getUser,
+    upsert,
     onAuthStateChange,
     listeners,
     emit(next: string | null) {
@@ -184,6 +191,26 @@ describe("return identity and ready-visit boundaries", () => {
     act(() => hook.result.current.complete());
     expect(mocks.resolved).not.toHaveBeenCalled();
     expect(mocks.opened).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not credit B for A's return when the verified account changes", async () => {
+    const X = "00000000-0000-4000-8000-000000000013";
+    const auth = authFixture(X);
+    const hook = renderHook(
+      ({ user }) => useReEntryRitual({ state: accountState(user), now: NOW }),
+      { initialProps: { user: X } },
+    );
+    await waitFor(() => expect(auth.upsert).toHaveBeenCalledTimes(1));
+    expect(auth.upsert.mock.calls.map(([row]) => row.user_id)).toEqual([X]);
+
+    auth.getUser
+      .mockClear()
+      .mockResolvedValue({ data: { user: { id: B } }, error: null });
+    await act(async () => auth.emit(A));
+    hook.rerender({ user: A });
+    await waitFor(() => expect(hook.result.current.checkpoint?.scope).toBe(A));
+    await waitFor(() => expect(auth.getUser).toHaveBeenCalled());
+    expect(auth.upsert.mock.calls.map(([row]) => row.user_id)).toEqual([X]);
   });
 
   it("old deferral results cannot land after an A-to-B-to-A session generation change", async () => {

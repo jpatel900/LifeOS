@@ -3,7 +3,7 @@
 // path would take the "the device refused to hold it" branch.
 import "fake-indexeddb/auto";
 
-import { fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,20 +14,31 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
 }));
 
-// #292 brief view instrumentation: hoisted so both vi.mock's factory (which
-// runs before this file's other module-scope code) and the dedicated
-// describe block below can reference the same spy. lib/reEntry/briefView.ts
-// itself (the recorder's real once-per-day gate + upsert logic) is unit
-// tested directly in briefView.test.ts; mocking it here isolates TodayMoments'
-// own wiring (calls it while Start is the rendered surface) from Supabase
-// client/network concerns.
-const { recordBriefViewIfNeeded } = vi.hoisted(() => ({
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+const { recordBriefViewIfNeeded, browser } = vi.hoisted(() => ({
   recordBriefViewIfNeeded: vi.fn(),
+  browser: { client: null as SupabaseClient | null },
 }));
-vi.mock("@/lib/reEntry/briefView", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/reEntry/briefView")>()),
-  createBriefViewRecorder: () => ({ recordIfNeeded: recordBriefViewIfNeeded }),
+vi.mock("@/lib/supabase/browser", () => ({
+  createSupabaseBrowserClient: () => browser.client,
 }));
+vi.mock("@/lib/reEntry/briefView", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/reEntry/briefView")>();
+  return {
+    ...actual,
+    createBriefViewRecorder() {
+      const recorder = actual.createBriefViewRecorder();
+      return {
+        recordIfNeeded(...args: Parameters<typeof recorder.recordIfNeeded>) {
+          recordBriefViewIfNeeded(...args);
+          recorder.recordIfNeeded(...args);
+        },
+      };
+    },
+  };
+});
 
 import {
   FIXED_NOW,
@@ -49,13 +60,11 @@ afterEach(() => {
  * fire on the surface a non-absent, daily-engaged user actually sees — the
  * Start moment — not only the rarer post-absence re-entry ritual (that path
  * is covered separately in useReEntryRitual.test.ts). `recordIfNeeded` is
- * mocked at the module boundary so this proves TodayMoments' own wiring
- * (calls it while Start is showing, not while another moment/ritual owns
- * the screen) without depending on Supabase or network behavior, which
- * lib/reEntry/briefView.test.ts already covers directly.
+ * observed at the module boundary and runs against a local auth fixture.
  */
 describe("TodayMoments — #292 brief view instrumentation", () => {
   beforeEach(() => {
+    browser.client = null;
     recordBriefViewIfNeeded.mockClear();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
@@ -74,7 +83,7 @@ describe("TodayMoments — #292 brief view instrumentation", () => {
     renderToday({ initialMoment: "start" });
 
     expect(screen.getByTestId("start-moment")).toBeInTheDocument();
-    expect(recordBriefViewIfNeeded).toHaveBeenCalledWith(null, FIXED_NOW);
+    expect(recordBriefViewIfNeeded).toHaveBeenCalledWith(null, FIXED_NOW, null);
   });
 
   it("does not record while Flow or Close is the rendered surface", () => {
@@ -84,6 +93,66 @@ describe("TodayMoments — #292 brief view instrumentation", () => {
     expect(recordBriefViewIfNeeded).not.toHaveBeenCalled();
   });
 
+  it("attributes Start to the visitor even when verification switches accounts", async () => {
+    renderToday({ initialMoment: "flow" });
+    let visitor = "X";
+    let verified = "X";
+    type Listener = (event: string, session: { user: { id: string } }) => void;
+    const listeners = new Set<Listener>();
+    const getUser = vi.fn(async () => ({
+      data: { user: { id: verified } },
+      error: null,
+    }));
+    const upsert = vi.fn(async (_row: { user_id: string }) => ({
+      error: null,
+    }));
+    const recordedAccounts = () =>
+      upsert.mock.calls.map(([row]) => row.user_id);
+    browser.client = {
+      auth: {
+        getUser,
+        getSession: async () => ({
+          data: { session: { user: { id: visitor } } },
+          error: null,
+        }),
+        onAuthStateChange(listener: Listener) {
+          listeners.add(listener);
+          return {
+            data: {
+              subscription: { unsubscribe: () => listeners.delete(listener) },
+            },
+          };
+        },
+      },
+      from: () => ({ upsert }),
+    } as unknown as SupabaseClient;
+    const go = (moment: string) =>
+      fireEvent.click(screen.getByTestId(`moment-switcher-${moment}`));
+
+    go("start");
+    await waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+    expect(recordedAccounts()).toEqual(["X"]);
+    go("flow");
+    visitor = "A";
+    verified = "B";
+    await act(async () => {
+      for (const notify of listeners)
+        notify("SIGNED_IN", { user: { id: visitor } });
+    });
+    getUser.mockClear();
+    await act(async () => {
+      go("start");
+    });
+    expect(getUser).toHaveBeenCalled();
+    expect(recordedAccounts()).toEqual(["X"]);
+
+    go("flow");
+    verified = "A";
+    go("start");
+    await waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
+    expect(recordedAccounts()).toEqual(["X", "A"]);
+  });
+
   it("records once switching to Start from another moment", () => {
     renderToday({ initialMoment: "close" });
     expect(recordBriefViewIfNeeded).not.toHaveBeenCalled();
@@ -91,6 +160,6 @@ describe("TodayMoments — #292 brief view instrumentation", () => {
     fireEvent.click(screen.getByTestId("moment-switcher-start"));
 
     expect(screen.getByTestId("start-moment")).toBeInTheDocument();
-    expect(recordBriefViewIfNeeded).toHaveBeenCalledWith(null, FIXED_NOW);
+    expect(recordBriefViewIfNeeded).toHaveBeenCalledWith(null, FIXED_NOW, null);
   });
 });

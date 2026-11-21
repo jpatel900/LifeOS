@@ -16,6 +16,7 @@ describe("empty recovery step", () => {
     const task = state.tasks[0];
     task.first_tiny_step = firstStep;
     const ritual: UseReEntryRitualResult = {
+      visitorId: null,
       status: "ready",
       summary: {
         absenceDays: 3,
